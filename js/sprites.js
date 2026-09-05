@@ -1078,6 +1078,252 @@ function drawTurret(x) {
   x.fill();
 }
 
+/* ==================== 場景裝飾物 ==================== */
+
+// 商業街：報廢汽車 / 垃圾桶 / 霓虹招牌
+function drawCar(x) {
+  shadow(x, 26, 12);
+  const g = x.createLinearGradient(0, -12, 0, 12);
+  g.addColorStop(0, '#4a5568');
+  g.addColorStop(1, '#232b38');
+  x.fillStyle = g;
+  x.strokeStyle = '#12171f';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.roundRect(-26, -11, 52, 22, 6);
+  x.fill();
+  x.stroke();
+  x.fillStyle = 'rgba(0,229,255,0.18)';
+  x.beginPath();
+  x.roundRect(-14, -8, 26, 12, 3);
+  x.fill();
+  x.fillStyle = '#0e1218';
+  for (const wx of [-16, 16]) {
+    x.beginPath();
+    x.ellipse(wx, 12, 6, 3.5, 0, 0, Math.PI * 2);
+    x.fill();
+  }
+  // 破損的車頭燈還在閃
+  x.fillStyle = 'rgba(255,214,90,0.5)';
+  x.beginPath();
+  x.arc(25, -3, 3, 0, Math.PI * 2);
+  x.fill();
+}
+
+function drawBin(x) {
+  shadow(x, 11, 11);
+  const g = x.createLinearGradient(-9, 0, 9, 0);
+  g.addColorStop(0, '#2f7d4f');
+  g.addColorStop(1, '#17402a');
+  x.fillStyle = g;
+  x.strokeStyle = '#0d2318';
+  x.lineWidth = 1.6;
+  x.beginPath();
+  x.roundRect(-9, -12, 18, 22, 3);
+  x.fill();
+  x.stroke();
+  x.fillStyle = '#3f9a63';
+  x.beginPath();
+  x.roundRect(-11, -15, 22, 5, 2);
+  x.fill();
+  x.stroke();
+}
+
+function drawNeonSign(x) {
+  shadow(x, 8, 16);
+  x.strokeStyle = '#2a3240';
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(0, 16);
+  x.lineTo(0, -6);
+  x.stroke();
+  const g = x.createRadialGradient(0, -16, 2, 0, -16, 20);
+  g.addColorStop(0, 'rgba(255,0,133,0.55)');
+  g.addColorStop(1, 'rgba(255,0,133,0)');
+  x.fillStyle = g;
+  x.beginPath();
+  x.arc(0, -16, 20, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = '#12171f';
+  x.strokeStyle = '#ff2d95';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.roundRect(-13, -24, 26, 17, 3);
+  x.fill();
+  x.stroke();
+}
+
+// 實驗室：培養槽 / 管線 / 警示標
+function drawTank(x) {
+  shadow(x, 14, 16);
+  x.fillStyle = '#1d2c26';
+  x.strokeStyle = '#0a1410';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.roundRect(-13, -20, 26, 36, 6);
+  x.fill();
+  x.stroke();
+  const g = x.createLinearGradient(0, -18, 0, 14);
+  g.addColorStop(0, 'rgba(0,245,155,0.55)');
+  g.addColorStop(1, 'rgba(0,245,155,0.15)');
+  x.fillStyle = g;
+  x.beginPath();
+  x.roundRect(-9, -16, 18, 28, 4);
+  x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.25)';
+  for (const [bx, by, br] of [[-3, 2, 2], [4, -6, 1.5], [0, -12, 2.5]]) {
+    x.beginPath();
+    x.arc(bx, by, br, 0, Math.PI * 2);
+    x.fill();
+  }
+}
+
+function drawPipes(x) {
+  shadow(x, 22, 8);
+  x.strokeStyle = '#3d4a52';
+  x.lineWidth = 8;
+  x.lineCap = 'round';
+  x.beginPath();
+  x.moveTo(-24, -4);
+  x.lineTo(6, -4);
+  x.lineTo(6, 8);
+  x.stroke();
+  x.strokeStyle = '#5b6b74';
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(-24, -6);
+  x.lineTo(4, -6);
+  x.stroke();
+  x.fillStyle = '#1b2429';
+  for (const px of [-16, -4]) {
+    x.beginPath();
+    x.roundRect(px, -9, 4, 10, 1.5);
+    x.fill();
+  }
+}
+
+function drawHazardSign(x) {
+  shadow(x, 10, 10);
+  x.fillStyle = '#c8b400';
+  x.strokeStyle = '#3a3300';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.moveTo(0, -14); x.lineTo(14, 8); x.lineTo(-14, 8); x.closePath();
+  x.fill();
+  x.stroke();
+  x.fillStyle = '#221e00';
+  x.font = 'bold 14px sans-serif';
+  x.textAlign = 'center';
+  x.fillText('!', 0, 6);
+}
+
+// 極寒：冰柱 / 雪堆 / 雷達碟
+function drawIceSpike(x) {
+  shadow(x, 12, 12);
+  const g = x.createLinearGradient(0, -26, 0, 12);
+  g.addColorStop(0, 'rgba(220,245,255,0.95)');
+  g.addColorStop(1, 'rgba(90,160,210,0.85)');
+  x.fillStyle = g;
+  x.strokeStyle = 'rgba(255,255,255,0.6)';
+  x.lineWidth = 1.4;
+  x.beginPath();
+  x.moveTo(0, -26); x.lineTo(11, 10); x.lineTo(-9, 10); x.closePath();
+  x.fill();
+  x.stroke();
+  x.fillStyle = 'rgba(255,255,255,0.5)';
+  x.beginPath();
+  x.moveTo(-1, -22); x.lineTo(3, 6); x.lineTo(-4, 6); x.closePath();
+  x.fill();
+}
+
+function drawSnowMound(x) {
+  x.fillStyle = 'rgba(200,230,255,0.22)';
+  x.beginPath();
+  x.ellipse(0, 6, 26, 11, 0, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = 'rgba(230,245,255,0.35)';
+  x.beginPath();
+  x.ellipse(-6, 2, 14, 7, 0, 0, Math.PI * 2);
+  x.fill();
+}
+
+function drawRadar(x) {
+  shadow(x, 14, 16);
+  x.strokeStyle = '#41505f';
+  x.lineWidth = 4;
+  x.beginPath();
+  x.moveTo(0, 16); x.lineTo(0, -4);
+  x.stroke();
+  x.fillStyle = 'rgba(150,190,220,0.8)';
+  x.strokeStyle = '#1d2836';
+  x.lineWidth = 1.8;
+  x.beginPath();
+  x.ellipse(0, -12, 15, 8, -0.35, 0, Math.PI * 2);
+  x.fill();
+  x.stroke();
+  x.fillStyle = 'rgba(120,200,255,0.5)';
+  x.beginPath();
+  x.ellipse(0, -12, 8, 4, -0.35, 0, Math.PI * 2);
+  x.fill();
+}
+
+// 熔爐：岩漿裂隙 / 鋼板 / 齒輪
+function drawLavaCrack(x) {
+  const g = x.createLinearGradient(-24, 0, 24, 0);
+  g.addColorStop(0, 'rgba(255,90,0,0)');
+  g.addColorStop(0.5, 'rgba(255,150,20,0.85)');
+  g.addColorStop(1, 'rgba(255,90,0,0)');
+  x.strokeStyle = g;
+  x.lineWidth = 4;
+  x.beginPath();
+  x.moveTo(-24, 4); x.lineTo(-8, -3); x.lineTo(4, 5); x.lineTo(22, -2);
+  x.stroke();
+  x.strokeStyle = 'rgba(255,240,180,0.7)';
+  x.lineWidth = 1.4;
+  x.stroke();
+}
+
+function drawSteelPlate(x) {
+  shadow(x, 22, 12);
+  const g = x.createLinearGradient(0, -14, 0, 14);
+  g.addColorStop(0, '#5a4038');
+  g.addColorStop(1, '#2c1c18');
+  x.fillStyle = g;
+  x.strokeStyle = '#160c0a';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.roundRect(-22, -13, 44, 26, 4);
+  x.fill();
+  x.stroke();
+  x.fillStyle = 'rgba(255,160,80,0.35)';
+  for (const px of [-16, -5, 6, 16]) {
+    x.beginPath();
+    x.arc(px, 0, 2, 0, Math.PI * 2);
+    x.fill();
+  }
+}
+
+function drawGear(x) {
+  shadow(x, 16, 12);
+  x.fillStyle = '#4a3a34';
+  x.strokeStyle = '#1c1210';
+  x.lineWidth = 1.8;
+  x.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const r1 = 17, r2 = 12;
+    x.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    x.lineTo(Math.cos(a + 0.16) * r2, Math.sin(a + 0.16) * r2);
+  }
+  x.closePath();
+  x.fill();
+  x.stroke();
+  x.fillStyle = '#1c1210';
+  x.beginPath();
+  x.arc(0, 0, 5, 0, Math.PI * 2);
+  x.fill();
+}
+
 /* ==================== 對外介面 ==================== */
 
 const BUILDERS = {
@@ -1093,6 +1339,20 @@ const BUILDERS = {
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },
+
+  // 場景裝飾 (只需一格，不做動畫)
+  car:        { w: 64, h: 40, static: true, fn: drawCar },
+  bin:        { w: 30, h: 40, static: true, fn: drawBin },
+  neon:       { w: 48, h: 56, static: true, fn: drawNeonSign },
+  tank:       { w: 34, h: 48, static: true, fn: drawTank },
+  pipes:      { w: 56, h: 28, static: true, fn: drawPipes },
+  hazard:     { w: 34, h: 32, static: true, fn: drawHazardSign },
+  ice_spike:  { w: 30, h: 46, static: true, fn: drawIceSpike },
+  snow:       { w: 60, h: 30, static: true, fn: drawSnowMound },
+  radar:      { w: 38, h: 48, static: true, fn: drawRadar },
+  lava_crack: { w: 56, h: 20, static: true, fn: drawLavaCrack },
+  steel:      { w: 52, h: 34, static: true, fn: drawSteelPlate },
+  gear:       { w: 42, h: 42, static: true, fn: drawGear },
 };
 
 // 取得某角色的 sprite 組 (首次呼叫才烘焙，之後直接命中快取)
@@ -1101,17 +1361,19 @@ export function getSprite(key) {
   if (s) return s;
 
   const b = BUILDERS[key] || BUILDERS.walker;
+  const count = b.static ? 1 : FRAMES;
   const frames = [];
-  for (let i = 0; i < FRAMES; i++) {
+  for (let i = 0; i < count; i++) {
     frames.push(make(b.w, b.h, (x) => b.fn(x, i / FRAMES)));
   }
-  s = { frames, flash: frames.map(whiten), w: b.w, h: b.h };
+  s = { frames, flash: b.static ? frames : frames.map(whiten), w: b.w, h: b.h };
   cache.set(key, s);
   return s;
 }
 
 // 把 sprite 畫到畫布中心點 (sx, sy)
 export function blit(ctx, sprite, frameIndex, sx, sy, useFlash = false) {
-  const img = (useFlash ? sprite.flash : sprite.frames)[frameIndex % FRAMES];
+  const list = useFlash ? sprite.flash : sprite.frames;
+  const img = list[frameIndex % list.length];
   ctx.drawImage(img, sx - sprite.w / 2, sy - sprite.h / 2, sprite.w, sprite.h);
 }

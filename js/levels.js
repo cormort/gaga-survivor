@@ -22,6 +22,7 @@ export const LEVELS = {
       grid: 'rgba(255,255,255,0.035)', major: 'rgba(0,229,255,0.10)',
       bounds: 'rgba(255,0,85,0.65)',
     },
+    decor: ['car', 'bin', 'neon'],
     hpScale: 1.0,
     waves: [
       { until: 120, pool: [['walker', 1]], interval: 0.85, batch: 1 },
@@ -50,6 +51,7 @@ export const LEVELS = {
       grid: 'rgba(180,255,200,0.045)', major: 'rgba(0,245,155,0.12)',
       bounds: 'rgba(120,255,120,0.55)',
     },
+    decor: ['tank', 'pipes', 'hazard'],
     hpScale: 1.3,
     waves: [
       { until: 100, pool: [['walker', 0.7], ['boomer', 0.3]], interval: 0.7, batch: 1 },
@@ -78,6 +80,7 @@ export const LEVELS = {
       grid: 'rgba(200,235,255,0.05)', major: 'rgba(120,200,255,0.14)',
       bounds: 'rgba(120,200,255,0.6)',
     },
+    decor: ['ice_spike', 'snow', 'radar'],
     hpScale: 1.6,
     waves: [
       { until: 100, pool: [['brute', 0.5], ['walker', 0.5]], interval: 0.75, batch: 1 },
@@ -106,6 +109,7 @@ export const LEVELS = {
       grid: 'rgba(255,180,120,0.05)', major: 'rgba(255,120,0,0.16)',
       bounds: 'rgba(255,90,0,0.7)',
     },
+    decor: ['lava_crack', 'steel', 'gear'],
     hpScale: 2.0,
     waves: [
       { until: 90, pool: [['brute', 0.5], ['boomer', 0.5]], interval: 0.6, batch: 1 },

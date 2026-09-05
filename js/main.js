@@ -13,6 +13,7 @@ import { sound } from './audio.js';
 import { CHARACTERS, CHARACTER_ORDER } from './characters.js';
 import { LEVELS, LEVEL_ORDER } from './levels.js';
 import { save } from './save.js';
+import { drawDecor } from './systems/Decor.js';
 
 class Game {
   constructor() {
@@ -541,6 +542,9 @@ class Game {
     // 繪製地板漸層 + 網格 (本身即不透明滿版，不需另外清屏)
     this.drawFloorGrid(renderCam);
 
+    // 繪製場景裝飾 (地板之上、掉落物之下)
+    drawDecor(this.ctx, renderCam, this.level || LEVELS.street, this.vw, this.vh);
+
     // 繪製掉落物
     for (const item of this.dropItems) {
       item.draw(this.ctx, renderCam);
@@ -567,11 +571,14 @@ class Game {
 
     // 畫面後製：暗角 + 玩家聚光，讓視覺焦點集中在主角身上
     this.drawVignette();
+
+    // 小地圖
+    this.drawMinimap();
   }
 
   drawVignette() {
     // ponytail: 暗角烘焙進離屏 canvas，每幀只做一次 drawImage
-    if (!this._vigCanvas || this._vigCanvas.width !== this.vw || this._vigCanvas.height !== this.vh) {
+    if (!this._vigCanvas || this._vigCanvas.width !== Math.round(this.vw) || this._vigCanvas.height !== Math.round(this.vh)) {
       const oc = document.createElement('canvas');
       oc.width = Math.max(1, Math.round(this.vw));
       oc.height = Math.max(1, Math.round(this.vh));
@@ -588,6 +595,97 @@ class Game {
       this._vigCanvas = oc;
     }
     this.ctx.drawImage(this._vigCanvas, 0, 0, this.vw, this.vh);
+  }
+
+  drawMinimap() {
+    const ctx = this.ctx;
+    const size = this.vw < 620 ? 96 : 136;
+    const pad = this.vw < 620 ? 10 : 18;
+    const ox = this.vw - size - pad;
+    const oy = this.vh - size - pad;
+
+    // 以玩家為中心的局部視野。整張地圖 4000 單位縮到 136px 的話所有東西會擠成一團，
+    // 只顯示周圍 RANGE 單位才看得出敵人分佈與 Boss 方位。
+    const RANGE = 1300;
+    const k = size / (RANGE * 2);
+    const cx = ox + size / 2;
+    const cy = oy + size / 2;
+    const toX = (wx) => cx + (wx - this.player.x) * k;
+    const toY = (wy) => cy + (wy - this.player.y) * k;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(6, 10, 18, 0.72)';
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(ox, oy, size, size, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.clip();
+
+    // 地圖邊界 (走近時才會出現在小地圖上，提示別撞牆)
+    const b = GAME_CONFIG.WORLD_BOUNDS;
+    ctx.strokeStyle = 'rgba(255, 0, 85, 0.55)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(toX(b.minX), toY(b.minY), (b.maxX - b.minX) * k, (b.maxY - b.minY) * k);
+
+    // 目前畫面視野
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(toX(this.camera.x), toY(this.camera.y), this.vw * k, this.vh * k);
+
+    // 砲塔
+    ctx.fillStyle = '#00e5ff';
+    for (const t of this.turrets) {
+      ctx.fillRect(toX(t.x) - 2, toY(t.y) - 2, 4, 4);
+    }
+
+    // 稀有掉落物 (經驗水晶太多，標了會糊成一片)
+    ctx.fillStyle = '#ffb703';
+    for (const d of this.dropItems) {
+      if (d.type === 'exp') continue;
+      ctx.fillRect(toX(d.x) - 1.5, toY(d.y) - 1.5, 3, 3);
+    }
+
+    // 敵人
+    ctx.fillStyle = 'rgba(255, 90, 90, 0.9)';
+    for (const e of this.enemies) {
+      if (e.isDead || e.isBoss) continue;
+      ctx.fillRect(toX(e.x) - 1.5, toY(e.y) - 1.5, 3, 3);
+    }
+
+    // Boss：範圍外時貼在小地圖邊緣當方位指示
+    for (const e of this.enemies) {
+      if (e.isDead || !e.isBoss) continue;
+      let bx = toX(e.x);
+      let by = toY(e.y);
+      const outside = bx < ox + 5 || bx > ox + size - 5 || by < oy + 5 || by > oy + size - 5;
+      bx = Math.max(ox + 5, Math.min(ox + size - 5, bx));
+      by = Math.max(oy + 5, Math.min(oy + size - 5, by));
+
+      ctx.fillStyle = '#ff0055';
+      ctx.beginPath();
+      ctx.arc(bx, by, outside ? 3 : 4, 0, Math.PI * 2);
+      ctx.fill();
+      if (outside) {
+        ctx.strokeStyle = 'rgba(255, 0, 85, 0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(bx, by, 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // 玩家
+    ctx.fillStyle = '#ffd60a';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   drawFloorGrid(camera) {
