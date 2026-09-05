@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0e17">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>嘎嘎特攻隊 (Gaga Survivor) - 爽快割草肉鴿動作遊戲</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700;800&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="game-container">
+    <!-- 主遊戲 Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 頂部 HUD (等級、經驗條、計時器、擊殺數) -->
+    <header id="hud">
+      <!-- 經驗條 -->
+      <div id="exp-bar-container">
+        <div id="exp-bar-fill"></div>
+        <div id="exp-text">LV <span id="player-level">1</span></div>
+      </div>
+
+      <!-- 戰況資訊欄 -->
+      <div id="status-bar">
+        <div class="hud-pill timer-pill">
+          <span class="hud-icon">⏱️</span>
+          <span id="game-timer">00:00</span>
+        </div>
+        <div class="hud-pill kills-pill">
+          <span class="hud-icon">💀</span>
+          <span id="kill-count">0</span>
+        </div>
+        <div class="hud-pill gold-pill">
+          <span class="hud-icon">🪙</span>
+          <span id="gold-count">0</span>
+        </div>
+        <button id="btn-build" class="hud-btn build-btn" title="佈署砲塔 (B)">
+          <span class="build-icon">🔫</span><span id="build-cost">60</span>
+        </button>
+        <button id="btn-sound" class="hud-btn" title="切換音效">🔊</button>
+        <button id="btn-pause" class="hud-btn" title="暫停遊戲">⏸️</button>
+      </div>
+
+      <!-- 武器與被動技能欄 -->
+      <div id="skills-tray">
+        <div class="slot-group">
+          <span class="slot-label">武器</span>
+          <div id="weapon-slots" class="slots-container"></div>
+        </div>
+        <div class="slot-group">
+          <span class="slot-label">被動</span>
+          <div id="passive-slots" class="slots-container"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Boss 血條 (Boss 出現時顯示) -->
+    <div id="boss-hud" class="hidden">
+      <div class="boss-info">
+        <span class="boss-icon">👾</span>
+        <span id="boss-name" class="boss-title">變異狂暴巨獸</span>
+      </div>
+      <div class="boss-hp-bar">
+        <div id="boss-hp-fill" class="boss-hp-fill"></div>
+      </div>
+    </div>
+
+    <!-- 角色台詞氣泡 -->
+    <div id="dialogue-bubble" class="hidden"></div>
+
+    <!-- 虛擬搖桿 (觸控/滑鼠支援) -->
+    <div id="joystick-zone">
+      <div id="joystick-base">
+        <div id="joystick-stick"></div>
+      </div>
+    </div>
+
+    <!-- 升級三選一卡牌彈窗 (Roguelike Modal) -->
+    <div id="level-up-modal" class="overlay hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="glow-text">特工升級！</h2>
+          <p class="subtitle">選擇一項特工裝備或支援模組</p>
+        </div>
+        <div id="upgrade-cards" class="cards-grid">
+          <!-- 動態生成 3 張卡牌 -->
+        </div>
+        <button id="btn-reroll" class="game-btn secondary-btn hidden">🎲 刷新選擇 (剩餘 <span id="reroll-count">1</span>)</button>
+      </div>
+    </div>
+
+    <!-- 開局/開始介面 -->
+    <div id="start-screen" class="overlay">
+      <div class="start-box">
+        <div class="title-badge">ROGUELIKE SURVIVOR</div>
+        <h1 class="game-title">嘎嘎特攻隊<br><span class="title-sub">GAGA SURVIVOR</span></h1>
+        <div class="select-label">選擇出擊特工</div>
+        <div id="character-select" class="character-select"></div>
+
+        <div class="select-label">選擇作戰關卡</div>
+        <div id="level-select" class="level-select"></div>
+        <div class="controls-guide">
+          <div class="guide-item"><span class="key-badge">W A S D</span> 或 <span class="key-badge">方向鍵</span> 移動走位</div>
+          <div class="guide-item">行動端/滑鼠可直接拖曳 <span class="key-badge">虛擬搖桿</span></div>
+          <div class="guide-item">武器全部 <strong>自動鎖定敵人攻擊</strong>，走位至上！</div>
+        </div>
+        <button id="btn-start-game" class="game-btn primary-btn pulse">立即出擊 🚀</button>
+      </div>
+    </div>
+
+    <!-- 結算/Game Over 介面 -->
+    <div id="game-over-modal" class="overlay hidden">
+      <div class="start-box result-box">
+        <h2 id="result-title" class="result-title glow-red">任務失敗</h2>
+        <div id="result-level-name" class="result-level"></div>
+        <p id="result-subtitle" class="subtitle">特工小鴨壯烈成仁！</p>
+        <div id="unlock-notice" class="unlock-notice hidden"></div>
+        
+        <div class="stats-card">
+          <div class="stat-row">
+            <span>存活時間</span>
+            <strong id="final-time">00:00</strong>
+          </div>
+          <div class="stat-row">
+            <span>擊殺總數</span>
+            <strong id="final-kills">0</strong>
+          </div>
+          <div class="stat-row">
+            <span>達到等級</span>
+            <strong id="final-level">LV 1</strong>
+          </div>
+          <div class="stat-row">
+            <span>獲得金幣</span>
+            <strong id="final-gold">0</strong>
+          </div>
+          <div class="stat-row">
+            <span>最高紀錄</span>
+            <strong id="best-time">00:00</strong>
+          </div>
+          <div class="stat-row highlight">
+            <span>獲得基因密鑰</span>
+            <strong id="final-dna">+0</strong>
+          </div>
+          <div class="stat-row">
+            <span>密鑰總計</span>
+            <strong id="total-dna">0</strong>
+          </div>
+        </div>
+
+        <div class="weapons-summary">
+          <h3>武器傷害統計</h3>
+          <div id="damage-stats-list"></div>
+        </div>
+
+        <button id="btn-restart" class="game-btn primary-btn">再次挑戰 🔁</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 引入主模組 (ES Modules) -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

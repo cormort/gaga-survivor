@@ -1,0 +1,449 @@
+// UI 介面管理器 (HUD 抬頭顯示、升級三選一卡牌彈窗、技能格槽位與戰鬥統計)
+
+import { WEAPONS, PASSIVES, GAME_CONFIG } from '../config.js';
+import { sound } from '../audio.js';
+
+export class UIManager {
+  constructor() {
+    this.expFill = document.getElementById('exp-bar-fill');
+    this.playerLevel = document.getElementById('player-level');
+    this.timerText = document.getElementById('game-timer');
+    this.killsText = document.getElementById('kill-count');
+    this.goldText = document.getElementById('gold-count');
+    this.weaponSlots = document.getElementById('weapon-slots');
+    this.passiveSlots = document.getElementById('passive-slots');
+
+    this.bossHud = document.getElementById('boss-hud');
+    this.bossHpFill = document.getElementById('boss-hp-fill');
+    this.bossName = document.getElementById('boss-name');
+
+    this.levelUpModal = document.getElementById('level-up-modal');
+    this.cardsGrid = document.getElementById('upgrade-cards');
+
+    this.startScreen = document.getElementById('start-screen');
+    this.gameOverModal = document.getElementById('game-over-modal');
+
+    this.soundBtn = document.getElementById('btn-sound');
+    this.pauseBtn = document.getElementById('btn-pause');
+
+    this.buildBtn = document.getElementById('btn-build');
+    this.buildCost = document.getElementById('build-cost');
+
+    this.charSelect = document.getElementById('character-select');
+    this.levelSelect = document.getElementById('level-select');
+    this.bubble = document.getElementById('dialogue-bubble');
+    this.bubbleTimer = null;
+
+    this.initSlotPlaceholders();
+  }
+
+  // 開始畫面的四位特工選擇卡
+  buildCharacterSelect(characters, order, onPick, initialId = order[0]) {
+    this.charSelect.innerHTML = '';
+
+    order.forEach((id, i) => {
+      const c = characters[id];
+      const card = document.createElement('button');
+      card.className = 'char-card' + (id === initialId ? ' selected' : '');
+      card.style.setProperty('--accent', c.accent);
+      card.innerHTML = `
+        <canvas class="char-portrait" width="128" height="120"></canvas>
+        <div class="char-codename">${c.codename}</div>
+        <div class="char-title">${c.title}</div>
+        <div class="char-trait"><strong>${c.traitName}</strong>${c.traitDesc}</div>
+      `;
+      card.addEventListener('click', () => {
+        sound.playGem();
+        this.charSelect.querySelectorAll('.char-card').forEach((el) => el.classList.remove('selected'));
+        card.classList.add('selected');
+        onPick(id);
+      });
+      this.charSelect.appendChild(card);
+
+      // 直接把遊戲內同一組 sprite 畫成頭像，選角看到的就是實際長相
+      import('../sprites.js').then(({ getSprite }) => {
+        const ctx = card.querySelector('.char-portrait').getContext('2d');
+        const sp = getSprite(c.sprite);
+        ctx.save();
+        ctx.translate(64, 68);
+        ctx.scale(1.5, 1.5);
+        ctx.drawImage(sp.frames[0], -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+        ctx.restore();
+      });
+    });
+  }
+
+  // 佈署砲塔按鈕：金幣不夠就變灰
+  updateBuildBtn(gold, cost) {
+    this.buildCost.textContent = cost;
+    this.buildBtn.classList.toggle('affordable', gold >= cost);
+  }
+
+  // 開始畫面的關卡選擇 (未解鎖的關卡不能點)
+  buildLevelSelect(levels, order, save, onPick, currentId) {
+    this.levelSelect.innerHTML = '';
+
+    order.forEach((id) => {
+      const lv = levels[id];
+      const unlocked = save.isUnlocked(id);
+      const best = save.data.best[id];
+
+      const card = document.createElement('button');
+      card.className = 'level-card' + (id === currentId && unlocked ? ' selected' : '') + (unlocked ? '' : ' locked');
+      card.disabled = !unlocked;
+      const bestLine = best
+        ? `最佳 ${String(Math.floor(best.time / 60)).padStart(2, '0')}:${String(Math.floor(best.time % 60)).padStart(2, '0')}${best.cleared ? ' ✔' : ''}`
+        : '尚未挑戰';
+      card.innerHTML = `
+        <span class="level-icon">${unlocked ? lv.icon : '🔒'}</span>
+        <span class="level-name">${lv.name}</span>
+        <span class="level-sub">${lv.sub} ‧ 難度 ${'★'.repeat(lv.difficulty)}</span>
+        <span class="level-best">${unlocked ? bestLine : '通關前一關即可解鎖'}</span>
+      `;
+      card.addEventListener('click', () => {
+        if (!unlocked) return;
+        sound.playGem();
+        this.levelSelect.querySelectorAll('.level-card').forEach((el) => el.classList.remove('selected'));
+        card.classList.add('selected');
+        onPick(id);
+      });
+      this.levelSelect.appendChild(card);
+    });
+  }
+
+  // 角色台詞氣泡
+  say(text, color = '#00e5ff', seconds = 3.2) {
+    if (!text) return;
+    this.bubble.textContent = text;
+    this.bubble.style.setProperty('--accent', color);
+    this.bubble.classList.remove('hidden');
+    this.bubble.classList.remove('pop');
+    void this.bubble.offsetWidth; // 重啟動畫
+    this.bubble.classList.add('pop');
+
+    clearTimeout(this.bubbleTimer);
+    this.bubbleTimer = setTimeout(() => {
+      this.bubble.classList.add('hidden');
+    }, seconds * 1000);
+  }
+
+  initSlotPlaceholders() {
+    this.weaponSlots.innerHTML = '';
+    this.passiveSlots.innerHTML = '';
+
+    for (let i = 0; i < GAME_CONFIG.MAX_WEAPON_SLOTS; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'skill-slot';
+      slot.id = `weapon-slot-${i}`;
+      this.weaponSlots.appendChild(slot);
+    }
+
+    for (let i = 0; i < GAME_CONFIG.MAX_PASSIVE_SLOTS; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'skill-slot';
+      slot.id = `passive-slot-${i}`;
+      this.passiveSlots.appendChild(slot);
+    }
+  }
+
+  updateHUD(player, gameTime, kills, gold) {
+    // 經驗條
+    const pct = Math.min(100, Math.max(0, (player.exp / player.nextExp) * 100));
+    this.expFill.style.width = `${pct}%`;
+    this.playerLevel.textContent = player.level;
+
+    // 時間
+    const mins = Math.floor(gameTime / 60);
+    const secs = Math.floor(gameTime % 60);
+    this.timerText.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    // 擊殺與金幣
+    this.killsText.textContent = kills;
+    this.goldText.textContent = gold;
+  }
+
+  updateSkillSlots(weaponManager) {
+    // 更新武器欄
+    let wIndex = 0;
+    for (const [id, item] of weaponManager.weapons.entries()) {
+      const slot = document.getElementById(`weapon-slot-${wIndex}`);
+      if (!slot) continue;
+      const def = WEAPONS[id];
+      slot.className = `skill-slot filled ${item.isEvo ? 'evo' : ''}`;
+      slot.innerHTML = `
+        <span class="slot-emoji">${def.icon.split(' ')[0]}</span>
+        <span class="slot-stars">${item.isEvo ? 'MAX' : '★'.repeat(item.level)}</span>
+      `;
+      wIndex++;
+    }
+    // 空槽重置
+    for (let i = wIndex; i < GAME_CONFIG.MAX_WEAPON_SLOTS; i++) {
+      const slot = document.getElementById(`weapon-slot-${i}`);
+      if (slot) {
+        slot.className = 'skill-slot';
+        slot.innerHTML = '';
+      }
+    }
+
+    // 更新被動配件欄
+    let pIndex = 0;
+    for (const [id, item] of weaponManager.passives.entries()) {
+      const slot = document.getElementById(`passive-slot-${pIndex}`);
+      if (!slot) continue;
+      const def = PASSIVES[id];
+      slot.className = 'skill-slot filled';
+      slot.innerHTML = `
+        <span class="slot-emoji">${def.icon}</span>
+        <span class="slot-stars">${item.level >= def.maxLevel ? 'MAX' : '★'.repeat(item.level)}</span>
+      `;
+      pIndex++;
+    }
+    for (let i = pIndex; i < GAME_CONFIG.MAX_PASSIVE_SLOTS; i++) {
+      const slot = document.getElementById(`passive-slot-${i}`);
+      if (slot) {
+        slot.className = 'skill-slot';
+        slot.innerHTML = '';
+      }
+    }
+  }
+
+  updateBossHUD(boss) {
+    if (!boss || boss.isDead) {
+      this.bossHud.classList.add('hidden');
+      return;
+    }
+    this.bossHud.classList.remove('hidden');
+    this.bossName.textContent = boss.name;
+    const hpPct = Math.max(0, (boss.hp / boss.maxHp) * 100);
+    this.bossHpFill.style.width = `${hpPct}%`;
+  }
+
+  // 升級三選一對話框
+  showLevelUpModal(weaponManager, onSelectCallback) {
+    sound.playLevelUp();
+    this.cardsGrid.innerHTML = '';
+
+    const options = this.generateUpgradeOptions(weaponManager);
+
+    options.forEach((opt) => {
+      const card = document.createElement('div');
+      card.className = `upgrade-card ${opt.isEvo ? 'card-evo' : ''}`;
+
+      const stars = opt.isEvo
+        ? '★★★★★ 超武進化'
+        : opt.isNew
+        ? 'NEW 首次獲取'
+        : '★'.repeat(opt.nextLevel) + '☆'.repeat(opt.maxLevel - opt.nextLevel);
+
+      card.innerHTML = `
+        <div class="card-icon-box">${opt.icon}</div>
+        <div class="card-info">
+          <div class="card-title-row">
+            <span class="card-name">${opt.name}</span>
+            <span class="card-tag ${opt.isEvo ? 'tag-evo' : ''}">${opt.tag}</span>
+          </div>
+          <div class="card-desc">${opt.description}</div>
+          <div class="card-level-stars">${stars}</div>
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        this.levelUpModal.classList.add('hidden');
+        onSelectCallback(opt);
+      });
+
+      this.cardsGrid.appendChild(card);
+    });
+
+    this.levelUpModal.classList.remove('hidden');
+  }
+
+  generateUpgradeOptions(weaponManager) {
+    const candidates = [];
+
+    // 1. 檢查是否有滿足條件的超武 (武器滿級 LV5 + 持有對應被動)
+    for (const [id, item] of weaponManager.weapons.entries()) {
+      const def = WEAPONS[id];
+      if (!item.isEvo && item.level >= def.maxLevel && def.evoTarget) {
+        if (weaponManager.passives.has(def.pairPassive)) {
+          const evoDef = WEAPONS[def.evoTarget];
+          candidates.push({
+            type: 'evo',
+            baseId: id,
+            targetId: def.evoTarget,
+            name: evoDef.name,
+            icon: evoDef.icon,
+            description: evoDef.description,
+            tag: '超武 EVO',
+            isEvo: true,
+          });
+        }
+      }
+    }
+
+    // 2. 現有武器升級
+    for (const [id, item] of weaponManager.weapons.entries()) {
+      const def = WEAPONS[id];
+      if (!item.isEvo && item.level < def.maxLevel) {
+        candidates.push({
+          type: 'weapon_upgrade',
+          id: id,
+          name: def.name,
+          icon: def.icon,
+          description: `提升等級至 LV ${item.level + 1}。傷害與彈幕增強。`,
+          tag: '武器升級',
+          nextLevel: item.level + 1,
+          maxLevel: def.maxLevel,
+        });
+      }
+    }
+
+    // 3. 現有被動升級
+    for (const [id, item] of weaponManager.passives.entries()) {
+      const def = PASSIVES[id];
+      if (item.level < def.maxLevel) {
+        candidates.push({
+          type: 'passive_upgrade',
+          id: id,
+          name: def.name,
+          icon: def.icon,
+          description: `提升等級至 LV ${item.level + 1}。效果提升。`,
+          tag: '被動升級',
+          nextLevel: item.level + 1,
+          maxLevel: def.maxLevel,
+        });
+      }
+    }
+
+    // 4. 新武器 (若武器槽未滿)
+    if (weaponManager.weapons.size < GAME_CONFIG.MAX_WEAPON_SLOTS) {
+      for (const [id, def] of Object.entries(WEAPONS)) {
+        if (!def.isEvo && !weaponManager.weapons.has(id)) {
+          candidates.push({
+            type: 'weapon_new',
+            id: id,
+            name: def.name,
+            icon: def.icon,
+            description: def.description,
+            tag: '新武器',
+            isNew: true,
+            nextLevel: 1,
+            maxLevel: def.maxLevel,
+          });
+        }
+      }
+    }
+
+    // 5. 新被動 (若被動槽未滿)
+    if (weaponManager.passives.size < GAME_CONFIG.MAX_PASSIVE_SLOTS) {
+      for (const [id, def] of Object.entries(PASSIVES)) {
+        if (!weaponManager.passives.has(id)) {
+          candidates.push({
+            type: 'passive_new',
+            id: id,
+            name: def.name,
+            icon: def.icon,
+            description: def.description,
+            tag: '新被動',
+            isNew: true,
+            nextLevel: 1,
+            maxLevel: def.maxLevel,
+          });
+        }
+      }
+    }
+
+    // 若全部選滿/無可升級，提供特工急救包
+    if (candidates.length === 0) {
+      candidates.push({
+        type: 'heal',
+        name: '特工應急急救包',
+        icon: '🍖',
+        description: '恢復 50% 生命值，並獲得額外金幣。',
+        tag: '補給',
+      });
+    }
+
+    // 隨機抽取 3 個不重複選項 (優先保證超武排在第一位)
+    const evoList = candidates.filter((c) => c.isEvo);
+    const otherList = candidates.filter((c) => !c.isEvo).sort(() => Math.random() - 0.5);
+
+    const result = [];
+    if (evoList.length > 0) {
+      result.push(evoList[0]);
+    }
+
+    while (result.length < 3 && otherList.length > 0) {
+      result.push(otherList.pop());
+    }
+
+    return result;
+  }
+
+  showGameOver(stats, weaponManager) {
+    sound.playGameOver();
+
+    const resultTitle = document.getElementById('result-title');
+    const resultSub = document.getElementById('result-subtitle');
+    if (stats.isVictory) {
+      resultTitle.textContent = '任務圓滿達成！';
+      resultTitle.className = 'result-title glow-green';
+      resultSub.textContent = stats.line || '成功清剿變異怪物群，凱旋歸來！';
+    } else {
+      resultTitle.textContent = '任務失敗';
+      resultTitle.className = 'result-title glow-red';
+      resultSub.textContent = stats.line || '特工壯烈成仁，重振旗鼓再戰！';
+    }
+
+    const mins = Math.floor(stats.gameTime / 60);
+    const secs = Math.floor(stats.gameTime % 60);
+    const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    document.getElementById('final-time').textContent = timeStr;
+    document.getElementById('final-kills').textContent = stats.kills;
+    document.getElementById('final-level').textContent = `LV ${stats.level}`;
+    document.getElementById('final-gold').textContent = stats.gold;
+
+    // 最高紀錄 (由存檔層提供)
+    const bestSecs = stats.bestTime || stats.gameTime;
+    const bMins = Math.floor(bestSecs / 60);
+    const bSecs = Math.floor(bestSecs % 60);
+    document.getElementById('best-time').textContent = `${String(bMins).padStart(2, '0')}:${String(bSecs).padStart(2, '0')}`;
+
+    // 關卡名與局外收益
+    document.getElementById('result-level-name').textContent = stats.levelName || '';
+    document.getElementById('final-dna').textContent = `+${stats.dna}`;
+    document.getElementById('total-dna').textContent = stats.totalDna;
+
+    const unlockRow = document.getElementById('unlock-notice');
+    if (stats.unlockedName) {
+      unlockRow.textContent = `🎉 解鎖新關卡：${stats.unlockedName}`;
+      unlockRow.classList.remove('hidden');
+    } else {
+      unlockRow.classList.add('hidden');
+    }
+
+    // 武器傷害統計
+    const dmgList = document.getElementById('damage-stats-list');
+    dmgList.innerHTML = '';
+
+    let totalDmg = 0;
+    for (const [id, item] of weaponManager.weapons.entries()) {
+      totalDmg += item.totalDamage;
+    }
+
+    for (const [id, item] of weaponManager.weapons.entries()) {
+      const def = WEAPONS[id];
+      const pct = totalDmg > 0 ? Math.round((item.totalDamage / totalDmg) * 100) : 0;
+      const row = document.createElement('div');
+      row.className = 'damage-stat-item';
+      row.innerHTML = `
+        <span>${def.icon} ${def.name}</span>
+        <strong>${item.totalDamage.toLocaleString()} (${pct}%)</strong>
+      `;
+      dmgList.appendChild(row);
+    }
+
+    this.gameOverModal.classList.remove('hidden');
+  }
+}

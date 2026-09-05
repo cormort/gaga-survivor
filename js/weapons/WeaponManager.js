@@ -1,0 +1,451 @@
+// 武器管理器 (自動鎖定、冷卻計時、投射物生成、超武進化檢測與傷害統計)
+
+import { WEAPONS, PASSIVES } from '../config.js';
+import { Projectile } from '../entities/Projectile.js';
+import { sound } from '../audio.js';
+
+export class WeaponManager {
+  constructor(player) {
+    this.player = player;
+
+    // 擁有的武器: Map<weaponId, { level, cooldownTimer, isEvo, totalDamage }>
+    this.weapons = new Map();
+
+    // 擁有的被動配件: Map<passiveId, { level }>
+    this.passives = new Map();
+
+    // 投射物集合
+    this.projectiles = [];
+
+    // 初始武器由角色決定
+    this.addWeapon(player.character.startWeapon || 'kunai');
+  }
+
+  addWeapon(weaponId) {
+    if (this.weapons.has(weaponId)) return;
+    const def = WEAPONS[weaponId];
+    if (!def) return;
+
+    this.weapons.set(weaponId, {
+      id: weaponId,
+      level: 1,
+      cooldownTimer: 0,
+      isEvo: !!def.isEvo,
+      totalDamage: 0,
+    });
+  }
+
+  upgradeWeapon(weaponId) {
+    const item = this.weapons.get(weaponId);
+    if (!item) {
+      this.addWeapon(weaponId);
+      return;
+    }
+
+    const def = WEAPONS[weaponId];
+    if (item.level < def.maxLevel) {
+      item.level++;
+    }
+  }
+
+  evolveWeapon(baseWeaponId, evoWeaponId) {
+    if (!this.weapons.has(baseWeaponId)) return;
+    const old = this.weapons.get(baseWeaponId);
+
+    // 替換為超武
+    this.weapons.delete(baseWeaponId);
+    this.weapons.set(evoWeaponId, {
+      id: evoWeaponId,
+      level: 1,
+      cooldownTimer: 0,
+      isEvo: true,
+      totalDamage: old.totalDamage,
+    });
+
+    sound.playEvoFanfare();
+  }
+
+  addOrUpgradePassive(passiveId) {
+    const item = this.passives.get(passiveId);
+    const def = PASSIVES[passiveId];
+    if (!def) return;
+
+    if (!item) {
+      this.passives.set(passiveId, { id: passiveId, level: 1 });
+    } else if (item.level < def.maxLevel) {
+      item.level++;
+    }
+
+    this.applyPassives();
+  }
+
+  applyPassives() {
+    // 重置基礎被動倍率
+    this.player.damageMultiplier = 1.0;
+    this.player.speedMultiplier = this.player.baseSpeedMul;
+    this.player.cdrMultiplier = 1.0;
+    this.player.rangeMultiplier = 1.0;
+    this.player.magnetMultiplier = this.player.baseMagnet;
+    this.player.hpRegen = 0;
+
+    for (const [id, data] of this.passives.entries()) {
+      const def = PASSIVES[id];
+      if (!def) continue;
+
+      const lvl = data.level;
+      switch (id) {
+        case 'atk_scroll':
+          this.player.damageMultiplier += def.valuePerLevel * lvl;
+          break;
+        case 'speed_shoes':
+          this.player.speedMultiplier += def.valuePerLevel * lvl;
+          break;
+        case 'max_hp_vest':
+          this.player.maxHp = 100 + def.valuePerLevel * lvl;
+          this.player.hpRegen = 1.2 * lvl;
+          break;
+        case 'magnet':
+          this.player.magnetMultiplier += def.valuePerLevel * lvl;
+          break;
+        case 'cdr_battery':
+          this.player.cdrMultiplier = Math.max(0.4, 1.0 - def.valuePerLevel * lvl);
+          break;
+        case 'range_fuel':
+          this.player.rangeMultiplier += def.valuePerLevel * lvl;
+          break;
+      }
+    }
+
+    // 角色特質的常駐加成 (例如兔兔「跑得越快打越痛」)
+    this.player.character.passive?.(this.player);
+  }
+
+  update(dt, enemies, particleSystem) {
+    // 移除已銷毀投射物
+    this.projectiles = this.projectiles.filter((p) => !p.isDead);
+
+    // 更新各武器冷卻與自動攻擊
+    for (const [id, item] of this.weapons.entries()) {
+      const def = WEAPONS[id];
+      if (!def) continue;
+
+      item.cooldownTimer -= dt;
+
+      // 檢查冷卻完畢
+      if (item.cooldownTimer <= 0) {
+        this.fireWeapon(id, item, def, enemies, particleSystem);
+
+        // 重置冷卻時間 (套用玩家冷卻縮減 cdrMultiplier)
+        const baseCd = def.baseCooldown + (def.cooldownGrowth ? def.cooldownGrowth * (item.level - 1) : 0);
+        const overload = this.player.overloadTimer > 0 ? 0.5 : 1;
+        item.cooldownTimer = Math.max(0.08, baseCd * this.player.cdrMultiplier * overload);
+      }
+    }
+
+    // 更新現有投射物
+    for (const p of this.projectiles) {
+      p.update(dt, this.player, (rocketProj) => {
+        // 火箭到期或碰撞爆炸回呼
+        this.createExplosion(rocketProj, enemies, particleSystem);
+      });
+    }
+  }
+
+  // 統一產生投射物，順手把「這一發是否暴擊」帶下去
+  mkProjectile(options) {
+    const p = new Projectile(options);
+    p.isCrit = this.critShot;
+    return p;
+  }
+
+  fireWeapon(id, item, def, enemies, particleSystem) {
+    if (enemies.length === 0 && id !== 'guardian' && id !== 'eternal_domain') return;
+
+    const baseDmg = def.baseDamage + (def.damageGrowth ? def.damageGrowth * (item.level - 1) : 0);
+    this.critShot = Math.random() < this.player.critChance;
+    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * (this.critShot ? 2 : 1));
+
+    switch (id) {
+      case 'kunai':
+      case 'ghost_shuriken':
+        this.fireKunai(def, item, finalDamage, enemies);
+        break;
+
+      case 'guardian':
+      case 'eternal_domain':
+        this.fireGuardian(def, item, finalDamage);
+        break;
+
+      case 'rocket':
+      case 'shark_torpedo':
+        this.fireRocket(def, item, finalDamage, enemies);
+        break;
+
+      case 'molotov':
+      case 'napalm_sea':
+        this.fireMolotov(def, item, finalDamage, enemies);
+        break;
+
+      case 'lightning':
+      case 'plasma_storm':
+        this.fireLightning(def, item, finalDamage, enemies, particleSystem);
+        break;
+
+      case 'soccer':
+      case 'quantum_sphere':
+        this.fireSoccer(def, item, finalDamage, enemies);
+        break;
+    }
+  }
+
+  // 1. 苦無 / 幽靈手裏劍 (追蹤發射)
+  fireKunai(def, item, damage, enemies) {
+    // 尋找最近的敵人
+    const target = this.getClosestEnemy(enemies);
+    if (!target) return;
+
+    const count = def.isEvo ? 1 : def.projectiles[item.level - 1];
+    const pierce = def.isEvo ? def.pierce : def.pierce[item.level - 1];
+
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        if (!target) return;
+        const dx = target.x - this.player.x;
+        const dy = target.y - this.player.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist === 0) return;
+
+        // 稍微散佈角度
+        const spread = (i - (count - 1) / 2) * 0.12;
+        const baseAngle = Math.atan2(dy, dx) + spread;
+
+        this.projectiles.push(
+          this.mkProjectile({
+            type: 'kunai',
+            weaponId: def.id,
+            x: this.player.x,
+            y: this.player.y,
+            vx: Math.cos(baseAngle) * def.speed,
+            vy: Math.sin(baseAngle) * def.speed,
+            damage: damage,
+            radius: 7 * this.player.rangeMultiplier,
+            pierce: pierce,
+            life: 2.2,
+            isEvo: def.isEvo,
+            knockback: 1.5,
+          })
+        );
+        sound.playShoot();
+      }, i * 70);
+    }
+  }
+
+  // 2. 守護輪盤 / 永恆守護力場
+  fireGuardian(def, item, damage) {
+    // 移除舊的輪盤實體
+    this.projectiles = this.projectiles.filter((p) => p.type !== 'guardian');
+
+    const count = def.isEvo ? def.count : def.count[item.level - 1];
+    const radius = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier;
+
+    for (let i = 0; i < count; i++) {
+      const angle = (i * 2 * Math.PI) / count;
+      this.projectiles.push(
+        this.mkProjectile({
+          type: 'guardian',
+          weaponId: def.id,
+          x: this.player.x,
+          y: this.player.y,
+          damage: damage,
+          radius: 12 * this.player.rangeMultiplier,
+          orbitAngle: angle,
+          orbitRadius: radius,
+          spinSpeed: def.spinSpeed,
+          pierce: 9999,
+          life: def.duration,
+          isEvo: def.isEvo,
+          knockback: 4.5,
+        })
+      );
+    }
+  }
+
+  // 3. 火箭 / 鯊魚核彈
+  fireRocket(def, item, damage, enemies) {
+    const target = this.getRandomEnemy(enemies);
+    if (!target) return;
+
+    const count = def.isEvo ? def.count : def.count[item.level - 1];
+    const expRadius = (def.isEvo ? def.explosionRadius : def.explosionRadius[item.level - 1]) * this.player.rangeMultiplier;
+
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        const dx = target.x + (Math.random() * 60 - 30) - this.player.x;
+        const dy = target.y + (Math.random() * 60 - 30) - this.player.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist === 0) return;
+
+        this.projectiles.push(
+          this.mkProjectile({
+            type: 'rocket',
+            weaponId: def.id,
+            x: this.player.x,
+            y: this.player.y,
+            vx: (dx / dist) * def.speed,
+            vy: (dy / dist) * def.speed,
+            damage: damage,
+            radius: 10,
+            explosionRadius: expRadius,
+            pierce: 1,
+            life: Math.min(2.5, dist / def.speed + 0.1),
+            isEvo: def.isEvo,
+          })
+        );
+        sound.playShoot();
+      }, i * 150);
+    }
+  }
+
+  // 4. 燃燒瓶 / 燃油煉獄
+  fireMolotov(def, item, damage, enemies) {
+    const count = def.isEvo ? def.count : def.count[item.level - 1];
+    const r = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier;
+
+    for (let i = 0; i < count; i++) {
+      const target = this.getRandomEnemy(enemies);
+      const targetX = target ? target.x + (Math.random() * 40 - 20) : this.player.x + (Math.random() * 160 - 80);
+      const targetY = target ? target.y + (Math.random() * 40 - 20) : this.player.y + (Math.random() * 160 - 80);
+
+      this.projectiles.push(
+        this.mkProjectile({
+          type: 'fire_pool',
+          weaponId: def.id,
+          x: targetX,
+          y: targetY,
+          damage: damage,
+          radius: r,
+          pierce: 9999,
+          life: def.duration,
+          isEvo: def.isEvo,
+          knockback: 0.2,
+        })
+      );
+    }
+  }
+
+  // 5. 天降狂雷 / 狂雷星暴
+  fireLightning(def, item, damage, enemies, particleSystem) {
+    const strikes = def.isEvo ? def.strikes : def.strikes[item.level - 1];
+
+    for (let i = 0; i < strikes; i++) {
+      setTimeout(() => {
+        const target = this.getRandomEnemy(enemies);
+        if (!target) return;
+
+        // 造成範圍定點落雷
+        const blastRadius = 45 * this.player.rangeMultiplier;
+        sound.playLightning();
+
+        if (particleSystem) {
+          particleSystem.createLightning(target.x, target.y, blastRadius, def.isEvo);
+        }
+
+        // 傷害周圍怪物
+        for (const enemy of enemies) {
+          const d = Math.hypot(enemy.x - target.x, enemy.y - target.y);
+          if (d <= blastRadius + enemy.radius) {
+            enemy.takeDamage(damage, 2, target.x, target.y);
+            this.recordDamage(def.id, damage);
+            if (particleSystem) {
+              particleSystem.createDamageText(enemy.x, enemy.y, damage, true);
+            }
+          }
+        }
+      }, i * 120);
+    }
+  }
+
+  // 6. 量子足球 / 量子星雲球
+  fireSoccer(def, item, damage, enemies) {
+    const count = def.isEvo ? def.count : def.count[item.level - 1];
+    const bounces = def.isEvo ? def.bounces : def.bounces[item.level - 1];
+
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      this.projectiles.push(
+        this.mkProjectile({
+          type: 'soccer',
+          weaponId: def.id,
+          x: this.player.x,
+          y: this.player.y,
+          vx: Math.cos(angle) * def.speed,
+          vy: Math.sin(angle) * def.speed,
+          damage: damage,
+          radius: 10 * this.player.rangeMultiplier,
+          bounces: bounces,
+          pierce: 9999,
+          life: 8.0,
+          isEvo: def.isEvo,
+          knockback: 3.5,
+        })
+      );
+      sound.playShoot();
+    }
+  }
+
+  // 火箭爆炸處理
+  createExplosion(rocketProj, enemies, particleSystem) {
+    if (rocketProj.hasExploded) return;
+    rocketProj.hasExploded = true;
+    rocketProj.isDead = true;
+
+    sound.playExplosion();
+
+    if (particleSystem) {
+      particleSystem.createExplosion(rocketProj.x, rocketProj.y, rocketProj.explosionRadius, rocketProj.isEvo);
+    }
+
+    // 範圍傷害
+    for (const enemy of enemies) {
+      const dist = Math.hypot(enemy.x - rocketProj.x, enemy.y - rocketProj.y);
+      if (dist <= rocketProj.explosionRadius + enemy.radius) {
+        enemy.takeDamage(rocketProj.damage, 5, rocketProj.x, rocketProj.y);
+        this.recordDamage(rocketProj.weaponId, rocketProj.damage);
+        if (particleSystem) {
+          particleSystem.createDamageText(enemy.x, enemy.y, rocketProj.damage, true);
+        }
+      }
+    }
+  }
+
+  recordDamage(weaponId, amount) {
+    const item = this.weapons.get(weaponId);
+    if (item) {
+      item.totalDamage += amount;
+    }
+  }
+
+  getClosestEnemy(enemies) {
+    let closest = null;
+    let minDist = Infinity;
+    for (const e of enemies) {
+      const d = Math.hypot(e.x - this.player.x, e.y - this.player.y);
+      if (d < minDist) {
+        minDist = d;
+        closest = e;
+      }
+    }
+    return closest;
+  }
+
+  getRandomEnemy(enemies) {
+    if (enemies.length === 0) return null;
+    return enemies[Math.floor(Math.random() * enemies.length)];
+  }
+
+  draw(ctx, camera) {
+    for (const p of this.projectiles) {
+      p.draw(ctx, camera);
+    }
+  }
+}
