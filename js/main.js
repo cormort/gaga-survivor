@@ -373,7 +373,7 @@ class Game {
       const d = Math.hypot(this.player.x - boss.x, this.player.y - boss.y);
       if (d < R + this.player.radius) {
         this.player.takeDamage(14);
-        this.particles.createDamageText(this.player.x, this.player.y, 14, true, true);
+        this.particles.createHurtText(this.player.x, this.player.y, 14);
       }
     } else if (act === 'summon') {
       // 召喚 3 隻當前波次的小怪 (數量逼近上限就不召)
@@ -419,7 +419,7 @@ class Game {
           const dy = p.y - h.y;
           const rr = h.r + p.radius;
           if (dx * dx + dy * dy < rr * rr) {
-            if (p.takeDamage(h.dmg)) this.particles.createDamageText(p.x, p.y, h.dmg, true, true);
+            if (p.takeDamage(h.dmg)) this.particles.createHurtText(p.x, p.y, h.dmg);
           }
         }
         if (h.t >= h.dur) this.hazards.splice(i, 1);

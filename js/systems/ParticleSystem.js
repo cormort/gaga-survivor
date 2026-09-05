@@ -36,8 +36,7 @@ export class ParticleSystem {
         this.damageTexts.splice(i, 1);
         continue;
       }
-      dtText.y -= 25 * dt; // 向上漂浮
-      dtText.scale = Math.max(0.8, dtText.scale * 0.98);
+      dtText.y -= 25 * dt; // 向上漂浮 (字級固定，靠 alpha 淡出即可)
     }
 
     // 更新雷擊閃光
@@ -62,8 +61,26 @@ export class ParticleSystem {
       life: 0.65,
       maxLife: 0.65,
       scale: isRealCrit ? 1.9 : isCrit ? 1.4 : 1.0,
+      bucket: isRealCrit ? 2 : isCrit ? 1 : 0,
       color: isRealCrit ? '#ff3860' : isCrit ? '#ffb703' : '#ffffff',
       suffix: isRealCrit ? '!' : '',
+    });
+  }
+
+  // 玩家受傷的跳字：負號 + 紅字，跟自己打出的暴擊 (大紅字加驚嘆號) 區分開
+  createHurtText(x, y, amount) {
+    if (this.damageTexts.length >= MAX_DAMAGE_TEXTS) this.damageTexts.shift();
+    this.damageTexts.push({
+      x: x + (Math.random() * 10 - 5),
+      y: y - 24,
+      text: `-${Math.round(amount)}`,
+      isCrit: false,
+      life: 0.7,
+      maxLife: 0.7,
+      scale: 1.3,
+      bucket: 1,
+      color: '#ff5c7a',
+      suffix: '',
     });
   }
 
@@ -242,7 +259,7 @@ export class ParticleSystem {
     // (canvas 切字型會清 glyph cache，大量跳字時逐顆設定是主要的繪製成本)
     const buckets = [[], [], []];
     for (const dt of this.damageTexts) {
-      buckets[dt.scale >= 1.7 ? 2 : dt.scale >= 1.3 ? 1 : 0].push(dt);
+      buckets[dt.bucket || 0].push(dt);
     }
     const fonts = [
       "bold 14px 'Chakra Petch', sans-serif",
