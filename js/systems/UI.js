@@ -13,6 +13,8 @@ export class UIManager {
     this.timerText = document.getElementById('game-timer');
     this.killsText = document.getElementById('kill-count');
     this.goldText = document.getElementById('gold-count');
+    this.objectiveEl = document.getElementById('objective');
+    this._objectiveText = null;
     this.weaponSlots = document.getElementById('weapon-slots');
     this.passiveSlots = document.getElementById('passive-slots');
 
@@ -89,6 +91,15 @@ export class UIManager {
     const txt = `🧬 ${dna}`;
     if (this.dnaChip) this.dnaChip.textContent = txt;
     if (this.talentDna) this.talentDna.textContent = txt;
+  }
+
+  // HUD 任務提示列 (文字不變就不碰 DOM，避免每幀寫入)
+  setObjective(text) {
+    if (!this.objectiveEl) return;
+    if (this._objectiveText === text) return;
+    this._objectiveText = text;
+    this.objectiveEl.textContent = text;
+    this.objectiveEl.classList.toggle('urgent', /(終極|降臨)/.test(text));
   }
 
   // 開始畫面的特工選擇卡 (未解鎖的特工要花 DNA 解鎖，點卡即購買)

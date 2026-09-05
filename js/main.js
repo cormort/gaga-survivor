@@ -651,6 +651,25 @@ class Game {
     }
   }
 
+  // 任務目標提示：下一波 Boss 倒數 / 終極首領通關條件 (無盡 = 生存挑戰)
+  objectiveText() {
+    const lv = this.level;
+    if (!lv) return '';
+    const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    if (lv.id === 'endless') {
+      const wait = Math.ceil(this.spawner.nextEndlessBossAt - this.gameTime);
+      return wait > 0 ? `生存挑戰：下一隻深淵首領 ${fmt(wait)}` : '深淵首領降臨 — 撐下去！';
+    }
+    const next = lv.bosses.find((b) => b.at > this.gameTime);
+    if (next) {
+      return next.final
+        ? `撐到 ${fmt(next.at)}，擊敗終極首領即可通關`
+        : `下一波首領：${fmt(next.at)} (${next.name})`;
+    }
+    const finalAlive = this.enemies.some((e) => e.isFinal && !e.isDead);
+    return finalAlive ? '終極首領降臨 — 擊敗它即可通關！' : '';
+  }
+
   loop(currentTime) {
     const dt = Math.min(0.1, (currentTime - this.lastTime) / 1000);
     this.lastTime = currentTime;
@@ -759,6 +778,7 @@ class Game {
     this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
     this.ui.updateBossHUD(this.boss);
+    this.ui.setObjective(this.objectiveText());
 
     // 13. 里程碑獎勵 (擊殺數 / 存活時間)
     this.checkMilestones();

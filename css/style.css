@@ -123,6 +123,27 @@ body, html {
   pointer-events: auto;
 }
 
+/* 任務提示：下一波 Boss 倒數 / 終極首領通關條件 */
+.objective {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  margin-top: -4px;
+  pointer-events: none;
+  min-height: 16px;
+}
+.objective.urgent {
+  color: #ff5e7e;
+  animation: objectivePulse 1s ease-in-out infinite;
+}
+@keyframes objectivePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .hud-pill {
   display: flex;
   align-items: center;
