@@ -319,4 +319,5 @@ export const DROP_TYPES = {
   ROAST_CHICKEN: { type: 'heal', heal: 50, icon: '🍗', radius: 10 },
   GOLD_COIN: { type: 'gold', value: 10, icon: '🪙', radius: 8 },
   SUPPLY: { type: 'supply', icon: '📦', radius: 10 }, // 街頭空投物資箱 (關卡機制)
+  GEAR: { type: 'gear', icon: '🎁', radius: 11 },      // 裝備掉落 (顏色由稀有度覆寫)
 };

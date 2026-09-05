@@ -2,6 +2,8 @@
 
 import { WEAPONS, PASSIVES, GAME_CONFIG } from '../config.js';
 import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
+import { RARITIES, SLOTS, SLOT_ORDER, itemName, affixText, itemScore } from '../items.js';
+import { STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 
 export class UIManager {
@@ -29,6 +31,11 @@ export class UIManager {
     this.dnaChip = document.getElementById('dna-chip');
     this.statusEl = document.getElementById('start-status');
     this.talentStatusEl = document.getElementById('talent-status');
+    this.gearModal = document.getElementById('gear-modal');
+    this.gearSlots = document.getElementById('gear-slots');
+    this.gearList = document.getElementById('gear-list');
+    this.gearCount = document.getElementById('gear-count');
+    this.gearStatus = document.getElementById('gear-status');
     this.talentModal = document.getElementById('talent-modal');
     this.talentList = document.getElementById('talent-list');
     this.talentDna = document.getElementById('talent-dna');
@@ -54,6 +61,9 @@ export class UIManager {
     document.getElementById('btn-close-talents')?.addEventListener('click', () => {
       this.talentModal?.classList.add('hidden');
     });
+    document.getElementById('btn-close-gear')?.addEventListener('click', () => {
+      this.gearModal?.classList.add('hidden');
+    });
 
     this.initSlotPlaceholders();
   }
@@ -61,14 +71,14 @@ export class UIManager {
   // 選單狀態提示 (主選單 + 天賦彈窗各一列；訊息寫在看得見的那一層)
   sayStatus(text, isError = false) {
     clearTimeout(this._statusTimer);
-    for (const el of [this.statusEl, this.talentStatusEl]) {
+    for (const el of [this.statusEl, this.talentStatusEl, this.gearStatus]) {
       if (!el) continue;
       el.textContent = text || '';
       el.classList.toggle('err', !!isError);
     }
     if (text) {
       this._statusTimer = setTimeout(() => {
-        for (const el of [this.statusEl, this.talentStatusEl]) {
+        for (const el of [this.statusEl, this.talentStatusEl, this.gearStatus]) {
           if (el && el.textContent === text) el.textContent = '';
         }
       }, 2600);
@@ -164,6 +174,84 @@ export class UIManager {
         });
       }
       this.talentList.appendChild(row);
+    });
+  }
+
+  // 裝備倉庫彈窗
+  openGearModal(save, handlers) {
+    this._gearHandlers = handlers;
+    this.rebuildGearView(save);
+    this.gearModal?.classList.remove('hidden');
+  }
+
+  rebuildGearView(save) {
+    if (!this.gearSlots || !this.gearList) return;
+    const stash = save.data.stash;
+    const equipped = save.data.equipped;
+    const byId = new Map(stash.map((it) => [it.id, it]));
+
+    // 三個裝備槽
+    this.gearSlots.innerHTML = '';
+    SLOT_ORDER.forEach((slotKey) => {
+      const def = SLOTS[slotKey];
+      const item = byId.get(equipped[slotKey]);
+      const cell = document.createElement('div');
+      cell.className = 'gear-slot' + (item ? ' filled' : '');
+      if (item) cell.style.setProperty('--rarity', RARITIES[item.rarity].color);
+      cell.innerHTML = `
+        <div class="gear-slot-icon">${def.icon}</div>
+        <div class="gear-slot-name">${def.name}</div>
+        ${item
+          ? `<div class="gear-slot-item">${RARITIES[item.rarity].name}</div>
+             <div class="gear-slot-affixes">${item.affixes.map(affixText).join('<br>')}</div>
+             <button class="gear-mini-btn" data-unequip="${slotKey}">脫下</button>`
+          : '<div class="gear-slot-empty">未裝備</div>'}
+      `;
+      this.gearSlots.appendChild(cell);
+    });
+    this.gearSlots.querySelectorAll('[data-unequip]').forEach((btn) => {
+      btn.addEventListener('click', () => this._gearHandlers?.onUnequip(btn.dataset.unequip));
+    });
+
+    // 倉庫清單 (依稀有度與戰力排序)
+    this.gearCount.textContent = `倉庫 ${stash.length} / ${STASH_CAP}`;
+    this.gearCount.classList.toggle('full', stash.length >= STASH_CAP);
+    this.gearList.innerHTML = '';
+
+    if (stash.length === 0) {
+      this.gearList.innerHTML = '<div class="gear-empty">還沒有任何裝備 —— 擊敗精英怪與 Boss 就會掉落。</div>';
+      return;
+    }
+
+    const rank = { legendary: 3, epic: 2, rare: 1 };
+    const sorted = [...stash].sort(
+      (a, b) => (rank[b.rarity] - rank[a.rarity]) || (itemScore(b) - itemScore(a))
+    );
+
+    sorted.forEach((item) => {
+      const isOn = equipped[item.slot] === item.id;
+      const row = document.createElement('div');
+      row.className = 'gear-row' + (isOn ? ' equipped' : '');
+      row.style.setProperty('--rarity', RARITIES[item.rarity].color);
+      row.innerHTML = `
+        <span class="gear-row-icon">${SLOTS[item.slot].icon}</span>
+        <div class="gear-row-info">
+          <div class="gear-row-name">${itemName(item)}${isOn ? ' <span class="gear-on">裝備中</span>' : ''}</div>
+          <div class="gear-row-affixes">${item.affixes.map(affixText).join(' ‧ ')}</div>
+        </div>
+        <div class="gear-row-actions">
+          ${isOn ? '' : `<button class="gear-mini-btn equip" data-equip="${item.id}">裝備</button>`}
+          <button class="gear-mini-btn drop" data-discard="${item.id}">丟棄</button>
+        </div>
+      `;
+      this.gearList.appendChild(row);
+    });
+
+    this.gearList.querySelectorAll('[data-equip]').forEach((btn) => {
+      btn.addEventListener('click', () => this._gearHandlers?.onEquip(btn.dataset.equip));
+    });
+    this.gearList.querySelectorAll('[data-discard]').forEach((btn) => {
+      btn.addEventListener('click', () => this._gearHandlers?.onDiscard(btn.dataset.discard));
     });
   }
 

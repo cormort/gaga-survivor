@@ -33,6 +33,7 @@ export class Player {
     // 被動加成倍率 (升級被動時更新)
     this.damageMultiplier = 1.0;
     this.metaDmg = 0; // 局外天賦「火力核心」的常駐傷害加成 (applyPassives 重置時要加回去)
+    this.metaCdr = 0; // 局外裝備的冷卻縮減 (0~1)，在被動算完之後再乘上去
     this.speedMultiplier = 1.0;
     this.cdrMultiplier = 1.0; // 冷卻縮減 (例如 0.84 代表 CD 變成 84%)
     this.rangeMultiplier = 1.0;

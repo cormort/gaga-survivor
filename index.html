@@ -108,6 +108,21 @@
       </div>
     </div>
 
+    <!-- 裝備倉庫彈窗 -->
+    <div id="gear-modal" class="overlay hidden">
+      <div class="modal-content gear-content">
+        <div class="modal-header">
+          <h2 class="glow-text">裝備倉庫 🎒</h2>
+          <p class="subtitle">精英與 Boss 會掉落裝備，穿上即永久生效</p>
+        </div>
+        <div id="gear-slots" class="gear-slots"></div>
+        <div id="gear-status" class="menu-status"></div>
+        <div id="gear-count" class="gear-count">倉庫 0 / 30</div>
+        <div id="gear-list" class="gear-list"></div>
+        <button id="btn-close-gear" class="game-btn secondary-btn">關閉</button>
+      </div>
+    </div>
+
     <!-- 開局/開始介面 -->
     <div id="start-screen" class="overlay">
       <div class="start-box">
@@ -126,6 +141,7 @@
         <div class="menu-meta">
           <span id="dna-chip" class="dna-chip">🧬 0</span>
           <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
+          <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
         </div>
         <div class="audio-row">
           <label class="vol-item">🔊<input id="sfx-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音效音量"></label>

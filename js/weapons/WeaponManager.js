@@ -129,6 +129,11 @@ export class WeaponManager {
       this.player.hpRegen = 1.2 * vestLevel;
     }
 
+    // 局外裝備的冷卻縮減：被動算完後再乘 (被動是直接指派，不能相加)
+    if (this.player.metaCdr > 0) {
+      this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * (1 - this.player.metaCdr));
+    }
+
     // 角色特質的常駐加成 (例如兔兔「跑得越快打越痛」)
     this.player.character.passive?.(this.player);
   }

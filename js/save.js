@@ -1,16 +1,20 @@
 // 局外存檔層：整份進度存在單一 localStorage key，其他系統一律走這裡讀寫。
 
 import { TALENTS, talentCost } from './meta.js';
+import { SLOT_ORDER } from './items.js';
+
+export const STASH_CAP = 30;
 
 const KEY = 'gaga_save';
-const VERSION = 2;
+const VERSION = 3;
 
 function blank() {
   return {
     version: VERSION,
     dna: 0,                 // 局外貨幣「基因密鑰」(局內金幣只用於砲塔等戰場消耗)
     talents: {},            // 天賦樹等級 (基因強化)
-    equipment: {},          // 裝備工坊 (Phase G，尚未開放)
+    stash: [],              // 打寶倉庫 (最多 STASH_CAP 件)
+    equipped: {},           // 已穿裝備 { slotKey: itemId }
     unlocked: ['street'],   // 已解鎖關卡
     unlockedChars: ['duck'], // 已解鎖特工
     best: {},               // { levelId: { time, kills, cleared } }
@@ -40,6 +44,12 @@ function ensureDefaults(d) {
   // 舊存檔已選了某特工 → 視為已擁有，避免改版後被鎖住
   if (d.character && !d.unlockedChars.includes(d.character)) d.unlockedChars.push(d.character);
   if (!d.talents || typeof d.talents !== 'object') d.talents = {};
+  if (!Array.isArray(d.stash)) d.stash = [];
+  if (!d.equipped || typeof d.equipped !== 'object') d.equipped = {};
+  // 已穿的裝備若已不在倉庫 (手動改存檔等情況) 就清掉，避免加成算到幽靈物品
+  for (const slot of SLOT_ORDER) {
+    if (d.equipped[slot] && !d.stash.some((it) => it.id === d.equipped[slot])) delete d.equipped[slot];
+  }
   if (!d.settings || typeof d.settings !== 'object') d.settings = {};
   d.settings = { sfx: 1, bgm: 0.8, ...d.settings };
   // 舊存檔展開時會把自己的 version 蓋回來，這裡收尾補正，
@@ -115,6 +125,45 @@ export const save = {
     if (this.data.dna < cost) return false;
     this.data.dna -= cost;
     this.data.unlockedChars.push(id);
+    this.flush();
+    return true;
+  },
+
+  // ----- 打寶倉庫 -----
+  stashFull() {
+    return this.data.stash.length >= STASH_CAP;
+  },
+
+  addItem(item) {
+    if (this.stashFull()) return false;
+    this.data.stash.push(item);
+    this.flush();
+    return true;
+  },
+
+  discardItem(id) {
+    const i = this.data.stash.findIndex((it) => it.id === id);
+    if (i < 0) return false;
+    // 丟棄的若正穿著，同步脫下
+    for (const slot of SLOT_ORDER) {
+      if (this.data.equipped[slot] === id) delete this.data.equipped[slot];
+    }
+    this.data.stash.splice(i, 1);
+    this.flush();
+    return true;
+  },
+
+  equipItem(id) {
+    const item = this.data.stash.find((it) => it.id === id);
+    if (!item) return false;
+    this.data.equipped[item.slot] = id;
+    this.flush();
+    return true;
+  },
+
+  unequipSlot(slot) {
+    if (!this.data.equipped[slot]) return false;
+    delete this.data.equipped[slot];
     this.flush();
     return true;
   },

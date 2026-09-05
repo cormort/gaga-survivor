@@ -1,9 +1,10 @@
 // 掉落物實體 (經驗水晶、磁鐵、炸彈、烤雞回血、金幣)
 
 import { DROP_TYPES } from '../config.js';
+import { RARITIES } from '../items.js';
 
 export class DropItem {
-  constructor(x, y, kind = 'EXP_GREEN') {
+  constructor(x, y, kind = 'EXP_GREEN', payload = null) {
     this.x = x;
     this.y = y;
     this.kind = kind;
@@ -15,6 +16,12 @@ export class DropItem {
     this.type = conf.type || 'exp';
     this.heal = conf.heal || 0;
     this.icon = conf.icon || '';
+
+    // 裝備掉落：帶著整件物品，顏色改用稀有度色
+    this.item = payload;
+    if (this.type === 'gear' && payload) {
+      this.color = RARITIES[payload.rarity].color;
+    }
 
     // 吸附飛行狀態
     this.isAttracted = false;
@@ -93,6 +100,28 @@ export class DropItem {
       ctx.lineTo(-this.radius * 0.4, 0);
       ctx.closePath();
       ctx.fill();
+    } else if (this.type === 'gear') {
+      // 裝備：稀有度光暈 + 寶箱圖示，遠遠就看得出值不值得繞路
+      const g = ctx.createRadialGradient(0, 0, 2, 0, 0, this.radius * 2.6);
+      g.addColorStop(0, this.color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.55 + Math.sin(this.animTime * 1.4) * 0.15;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 2.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 1.35, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.font = `${this.radius * 1.7}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.icon, 0, 0);
     } else {
       // 道具 (磁鐵、炸彈、烤雞、金幣)
       ctx.font = `${this.radius * 2}px sans-serif`;

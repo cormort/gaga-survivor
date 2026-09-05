@@ -16,6 +16,7 @@ import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy } from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
+import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, RARITIES } from './items.js';
 
 // #rrggbb + alpha → rgba() 字串 (地形機制的半透明渲染用)
 function hexToRgba(hex, a) {
@@ -105,6 +106,28 @@ class Game {
     document.getElementById('btn-talents').addEventListener('click', () => {
       sound.playGem();
       this.ui.openTalentModal(save, (id) => this.investTalent(id));
+    });
+
+    // 裝備倉庫
+    document.getElementById('btn-gear').addEventListener('click', () => {
+      sound.playGem();
+      this.ui.openGearModal(save, {
+        onEquip: (id) => {
+          save.equipItem(id);
+          sound.playEvoFanfare();
+          this.ui.rebuildGearView(save);
+        },
+        onUnequip: (slot) => {
+          save.unequipSlot(slot);
+          sound.playGem();
+          this.ui.rebuildGearView(save);
+        },
+        onDiscard: (id) => {
+          save.discardItem(id);
+          sound.playHurt();
+          this.ui.rebuildGearView(save);
+        },
+      });
     });
 
     // 主選單音量滑桿 (直接寫入存檔)
@@ -244,9 +267,19 @@ class Game {
 
   // 把局外天賦加成套進這一局的玩家身上 (傷害天賦需在被動重算時保留 → 寫進 metaDmg)
   applyMetaTalents() {
-    const m = metaBonuses(save.data.talents);
+    const t = metaBonuses(save.data.talents);
+    const g = gearBonuses(save.data.stash, save.data.equipped);
+    const m = {
+      dmg: t.dmg + g.dmg,
+      hp: t.hp + g.hp,
+      speed: t.speed + g.speed,
+      magnet: t.magnet + g.magnet,
+      gold: t.gold + g.gold,
+      cdr: g.cdr,
+    };
     const p = this.player;
     p.metaDmg = m.dmg;
+    p.metaCdr = m.cdr;
     p.damageMultiplier = 1 + m.dmg; // 開場就生效；之後 applyPassives 重置時也會加回 metaDmg
     p.baseSpeedMul += m.speed;
     p.baseMagnet += m.magnet;
@@ -256,6 +289,8 @@ class Game {
     p.baseMaxHp += m.hp;
     p.hp = p.maxHp;
     this.metaGoldMul = 1 + m.gold;
+    // 冷卻加成要在被動重算時才會套用，開局先跑一次
+    this.weaponManager.applyPassives();
   }
 
   start() {
@@ -790,6 +825,30 @@ class Game {
     }
 
     this.dropItems.push(new DropItem(enemy.x, enemy.y, kind));
+    this.rollGearDrop(enemy);
+  }
+
+  // 打寶掉落：只有精英與 Boss 會噴裝備 (雜兵噴裝會讓倉庫瞬間爆掉且毫無驚喜感)
+  rollGearDrop(enemy) {
+    let chance = 0;
+    let rarityBoost = 0;
+
+    if (enemy.isFinal) {
+      chance = 1;
+      rarityBoost = 3;          // 終極首領保底一件，且大幅偏向高稀有度
+    } else if (enemy.isBoss) {
+      chance = 1;
+      rarityBoost = 1.2;
+    } else if (enemy.isElite) {
+      chance = 0.22;
+      rarityBoost = 0;
+    }
+    if (chance === 0 || Math.random() >= chance) return;
+
+    const ilvl = itemLevelFor(this.level ? this.level.difficulty : 1, this.gameTime);
+    const item = rollItem({ rarity: rollRarity(rarityBoost), ilvl });
+    const offset = enemy.isBoss ? 34 : 0;
+    this.dropItems.push(new DropItem(enemy.x + offset, enemy.y, 'GEAR', item));
   }
 
   updateDropItems(dt) {
@@ -835,6 +894,18 @@ class Game {
     } else if (item.type === 'gold') {
       sound.playGem();
       this.gold += Math.round(item.value * (this.metaGoldMul || 1));
+    } else if (item.type === 'gear') {
+      const gear = item.item;
+      if (!gear) return;
+      if (!save.addItem(gear)) {
+        this.ui.say('倉庫已滿！回主選單丟棄不要的裝備才能再撿', '#ff0055', 3);
+        sound.playHurt();
+        return;
+      }
+      const color = RARITIES[gear.rarity].color;
+      sound.playEvoFanfare();
+      this.particles.createShockwave(this.player.x, this.player.y, 130, color);
+      this.ui.say(`獲得 ${itemName(gear)}！`, color, 2.6);
     } else if (item.type === 'supply') {
       // 街頭空投物資箱：金幣 + 回血 + 金色衝擊波
       const gold = Math.round(30 * (this.metaGoldMul || 1));

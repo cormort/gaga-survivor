@@ -715,6 +715,119 @@ body, html {
   color: var(--color-green);
 }
 
+/* 主選單上疊開的彈窗要蓋過 #start-screen。
+   兩者同為 .overlay (z-index 100)，DOM 順序在後的開始畫面會蓋掉先宣告的彈窗，
+   結果就是點「基因強化 / 裝備倉庫」看起來沒反應。 */
+#talent-modal,
+#gear-modal {
+  z-index: 200;
+}
+
+/* ==================== 裝備倉庫 ==================== */
+.gear-content { max-width: 620px; }
+
+.gear-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.gear-slot {
+  --rarity: rgba(255, 255, 255, 0.15);
+  padding: 10px 8px;
+  background: rgba(8, 13, 24, 0.7);
+  border: 2px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.gear-slot.filled {
+  border-style: solid;
+  border-color: var(--rarity);
+  box-shadow: 0 0 16px -6px var(--rarity);
+}
+
+.gear-slot-icon { font-size: 22px; }
+.gear-slot-name { font-size: 11px; color: var(--text-muted); }
+.gear-slot-item { font-family: var(--font-display); font-size: 13px; font-weight: 800; color: var(--rarity); }
+.gear-slot-empty { font-size: 11px; color: var(--text-muted); opacity: 0.6; margin-top: 6px; }
+.gear-slot-affixes { font-size: 10px; line-height: 1.5; color: var(--text-main); margin: 4px 0 6px; }
+
+.gear-count {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-bottom: 6px;
+}
+
+.gear-count.full { color: var(--color-accent); }
+
+.gear-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.gear-empty {
+  padding: 18px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.gear-row {
+  --rarity: #00b4d8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(10, 16, 30, 0.75);
+  border-left: 3px solid var(--rarity);
+  border-radius: 8px;
+  text-align: left;
+}
+
+.gear-row.equipped { background: rgba(0, 229, 255, 0.08); }
+.gear-row-icon { font-size: 18px; }
+.gear-row-info { flex: 1; min-width: 0; }
+.gear-row-name { font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--rarity); }
+.gear-on { font-size: 10px; color: var(--color-green); }
+.gear-row-affixes { font-size: 11px; color: var(--text-muted); }
+.gear-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.gear-mini-btn {
+  padding: 5px 10px;
+  min-height: 30px;
+  font-family: var(--font-text);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.gear-mini-btn.equip { border-color: var(--color-primary); color: var(--color-primary); }
+.gear-mini-btn.drop { border-color: rgba(255, 0, 85, 0.5); color: #ff6b8a; }
+.gear-mini-btn:hover { background: rgba(255, 255, 255, 0.16); }
+
+@media (max-width: 620px) {
+  .gear-slots { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .gear-slot { padding: 7px 4px; }
+  .gear-slot-affixes { font-size: 9px; }
+  .gear-row-name { font-size: 12px; }
+  .gear-row-affixes { font-size: 10px; }
+  .gear-mini-btn { padding: 5px 7px; font-size: 10px; }
+  .gear-list { max-height: 34vh; }
+}
+
 /* ==================== 佈署砲塔按鈕 ==================== */
 .build-btn {
   display: flex;
