@@ -195,8 +195,9 @@ export class WeaponManager {
     if (enemies.length === 0 && id !== 'guardian' && id !== 'eternal_domain') return;
 
     const baseDmg = def.baseDamage + (def.damageGrowth ? def.damageGrowth * (item.level - 1) : 0);
-    this.critShot = Math.random() < this.player.critChance;
-    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * (this.critShot ? 2 : 1));
+    this.critShot = Math.random() < (this.player.critChance || 0) + (this.player.metaCrit || 0);
+    const critMul = 2 + (this.player.metaCritDmg || 0);
+    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * (this.critShot ? critMul : 1));
 
     switch (id) {
       case 'kunai':

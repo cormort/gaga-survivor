@@ -838,7 +838,9 @@ body, html {
 
 .gear-mini-btn.equip { border-color: var(--color-primary); color: var(--color-primary); }
 .gear-mini-btn.drop { border-color: rgba(255, 0, 85, 0.5); color: #ff6b8a; }
-.gear-mini-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.gear-mini-btn.reforge { border-color: rgba(199, 125, 255, 0.6); color: #d6a6ff; }
+.gear-mini-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.gear-mini-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }
 
 @media (max-width: 620px) {
   .gear-slots { grid-template-columns: repeat(3, 1fr); gap: 5px; }

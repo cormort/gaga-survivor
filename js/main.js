@@ -134,6 +134,18 @@ class Game {
           this.ui.updateDnaChip(save.data.dna);
           this.ui.rebuildGearView(save);
         },
+        onReforge: (id) => {
+          const res = save.reforgeItem(id);
+          if (!res.ok) {
+            this.ui.sayStatus(res.reason, true);
+            sound.playHurt();
+            return;
+          }
+          sound.playEvoFanfare();
+          this.ui.sayStatus(`重鑄完成：詞條已重新洗牌 (花費 ${res.cost} 🧬)`);
+          this.ui.updateDnaChip(save.data.dna);
+          this.ui.rebuildGearView(save);
+        },
         onSalvageAll: (rarity) => {
           const res = save.salvageAll(rarity);
           if (res.count === 0) return;
@@ -291,10 +303,18 @@ class Game {
       magnet: t.magnet + g.magnet,
       gold: t.gold + g.gold,
       cdr: g.cdr,
+      crit: g.crit,
+      critdmg: g.critdmg,
+      armor: g.armor,
+      exp: g.exp,
     };
     const p = this.player;
     p.metaDmg = m.dmg;
     p.metaCdr = m.cdr;
+    p.metaCrit = m.crit;
+    p.metaCritDmg = m.critdmg;
+    p.metaArmor = Math.min(0.5, m.armor);   // 減傷上限 50%，防止堆滿免疫
+    p.metaExp = m.exp;
     p.damageMultiplier = 1 + m.dmg; // 開場就生效；之後 applyPassives 重置時也會加回 metaDmg
     p.baseSpeedMul += m.speed;
     p.baseMagnet += m.magnet;
@@ -881,7 +901,9 @@ class Game {
   handleItemPickup(item) {
     if (item.type === 'exp') {
       sound.playGem();
-      const leveledUp = this.player.gainExp(item.value);
+      // 裝備「領悟」詞條放大經驗水晶 (每顆至少 1)
+      const val = Math.max(1, Math.round(item.value * (1 + (this.player.metaExp || 0))));
+      const leveledUp = this.player.gainExp(val);
       if (leveledUp) {
         this.triggerLevelUp();
       }

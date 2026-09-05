@@ -2,7 +2,7 @@
 
 import { WEAPONS, PASSIVES, GAME_CONFIG } from '../config.js';
 import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
-import { RARITIES, SLOTS, SLOT_ORDER, itemName, affixText, itemScore, salvageValue } from '../items.js';
+import { RARITIES, SLOTS, SLOT_ORDER, itemName, affixText, itemScore, salvageValue, reforgeCost } from '../items.js';
 import { STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 
@@ -218,7 +218,7 @@ export class UIManager {
     const bulk = document.getElementById('gear-bulk');
     if (bulk) {
       bulk.innerHTML = '';
-      for (const rk of ['rare', 'epic']) {
+      for (const rk of ['common', 'rare', 'epic']) {
         const n = stash.filter((it) => it.rarity === rk && !worn.has(it.id)).length;
         if (n === 0) continue;
         const btn = document.createElement('button');
@@ -240,13 +240,14 @@ export class UIManager {
       return;
     }
 
-    const rank = { legendary: 3, epic: 2, rare: 1 };
+    const rank = { mythic: 4, legendary: 3, epic: 2, rare: 1, common: 0 };
     const sorted = [...stash].sort(
       (a, b) => (rank[b.rarity] - rank[a.rarity]) || (itemScore(b) - itemScore(a))
     );
 
     sorted.forEach((item) => {
       const isOn = equipped[item.slot] === item.id;
+      const reforge = reforgeCost(item); // null = 普通 (0 詞綴) 不能重鑄
       const row = document.createElement('div');
       row.className = 'gear-row' + (isOn ? ' equipped' : '');
       row.style.setProperty('--rarity', RARITIES[item.rarity].color);
@@ -254,11 +255,14 @@ export class UIManager {
         <span class="gear-row-icon">${SLOTS[item.slot].icon}</span>
         <div class="gear-row-info">
           <div class="gear-row-name">${itemName(item)}${isOn ? ' <span class="gear-on">裝備中</span>' : ''}</div>
-          <div class="gear-row-affixes">${item.affixes.map(affixText).join(' ‧ ')}</div>
+          <div class="gear-row-affixes">${item.affixes.length > 0 ? item.affixes.map(affixText).join(' ‧ ') : '無詞條 (可分解)'}</div>
         </div>
         <div class="gear-row-actions">
+          ${reforge !== null
+            ? `<button class="gear-mini-btn reforge" data-reforge="${item.id}" ${save.data.dna < reforge ? 'disabled' : ''} title="花 ${reforge} 🧬 重骰全部詞條">🔁 ${reforge}🧬</button>`
+            : ''}
           ${isOn
-            ? '<span class="gear-locked-hint">脫下才能分解</span>'
+            ? (reforge === null ? '<span class="gear-locked-hint">脫下才能分解</span>' : '')
             : `<button class="gear-mini-btn equip" data-equip="${item.id}">裝備</button>
                <button class="gear-mini-btn drop" data-salvage="${item.id}">分解 +${salvageValue(item)} 🧬</button>`}
         </div>
@@ -271,6 +275,9 @@ export class UIManager {
     });
     this.gearList.querySelectorAll('[data-salvage]').forEach((btn) => {
       btn.addEventListener('click', () => this._gearHandlers?.onSalvage(btn.dataset.salvage));
+    });
+    this.gearList.querySelectorAll('[data-reforge]').forEach((btn) => {
+      btn.addEventListener('click', () => this._gearHandlers?.onReforge(btn.dataset.reforge));
     });
   }
 

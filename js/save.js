@@ -1,7 +1,7 @@
 // 局外存檔層：整份進度存在單一 localStorage key，其他系統一律走這裡讀寫。
 
 import { TALENTS, talentCost } from './meta.js';
-import { SLOT_ORDER, salvageValue } from './items.js';
+import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes } from './items.js';
 
 export const STASH_CAP = 30;
 
@@ -152,6 +152,19 @@ export const save = {
     this.data.dna += dna;
     this.flush();
     return dna;
+  },
+
+  // 重鑄：花 DNA 把一件裝備的詞條整組重骰 (穿在身上也可以，下一場生效)
+  reforgeItem(id) {
+    const item = this.data.stash.find((it) => it.id === id);
+    if (!item) return { ok: false, reason: '物品不存在' };
+    const cost = reforgeCost(item);
+    if (cost === null) return { ok: false, reason: '普通裝備沒有詞條可以重鑄' };
+    if (this.data.dna < cost) return { ok: false, reason: `DNA 不足：重鑄需要 ${cost} 🧬` };
+    this.data.dna -= cost;
+    rerollAffixes(item);
+    this.flush();
+    return { ok: true, cost };
   },
 
   // 批次分解某稀有度 (略過已裝備的)

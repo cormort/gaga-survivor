@@ -34,6 +34,10 @@ export class Player {
     this.damageMultiplier = 1.0;
     this.metaDmg = 0; // 局外天賦「火力核心」的常駐傷害加成 (applyPassives 重置時要加回去)
     this.metaCdr = 0; // 局外裝備的冷卻縮減 (0~1)，在被動算完之後再乘上去
+    this.metaCrit = 0;     // 局外裝備的暴擊率 (0~1)
+    this.metaCritDmg = 0;  // 局外裝備的暴擊傷害加值 (2 之外的額外倍率)
+    this.metaArmor = 0;    // 局外裝備的減傷 (0~1，乘在 damageTakenMul 之後)
+    this.metaExp = 0;      // 局外裝備的經驗加成 (0~1)
     this.speedMultiplier = 1.0;
     this.cdrMultiplier = 1.0; // 冷卻縮減 (例如 0.84 代表 CD 變成 84%)
     this.rangeMultiplier = 1.0;
@@ -102,7 +106,7 @@ export class Player {
   takeDamage(amount) {
     if (this.invulnerableTimer > 0 || this.isDead) return false;
 
-    this.hp -= Math.round(amount * this.damageTakenMul);
+    this.hp -= Math.round(amount * this.damageTakenMul * (1 - (this.metaArmor || 0)));
     this.invulnerableTimer = 0.5; // 0.5 秒無敵時間
     sound.playHurt();
 
