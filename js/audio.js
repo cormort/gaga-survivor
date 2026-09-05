@@ -1,5 +1,14 @@
 // Web Audio API 即時程序化音效與背景音樂合成引擎 (零外掛依賴)
 
+// 各關卡的 BGM 主題 (bass 音階 + 速度)；關卡 id 沒對到就回 street 預設
+const BGM_THEMES = {
+  street:  { bpm: 128, bass: [110, 110, 130.81, 146.83, 110, 110, 164.81, 146.83] },
+  lab:     { bpm: 118, bass: [87.31, 87.31, 98, 110, 87.31, 87.31, 123.47, 110] },
+  frost:   { bpm: 124, bass: [98, 98, 123.47, 146.83, 98, 98, 130.81, 123.47] },
+  core:    { bpm: 142, bass: [65.41, 65.41, 73.42, 98, 65.41, 65.41, 82.41, 73.42] },
+  endless: { bpm: 138, bass: [73.42, 73.42, 87.31, 110, 73.42, 73.42, 98, 87.31] },
+};
+
 class SoundEngine {
   constructor() {
     this.ctx = null;
@@ -8,6 +17,31 @@ class SoundEngine {
     this.sfxGain = null;
     this.bgmInterval = null;
     this.bgmStep = 0;
+    this.bgmMuted = false;   // 暫停時 BGM 靜音 (音效開關獨立)
+    this.sfxVol = 1;         // 使用者音量 (0~1，主選單滑桿)
+    this.bgmVol = 0.8;
+    this._lastSfx = {};      // 各音效最近播放時間 (節流用)
+  }
+
+  // 同一音效在 gapMs 內只播第一次；尾聲大量同時命中時避免破音與 CPU 暴衝
+  _throttle(name, gapMs) {
+    const now = performance.now();
+    if (now - (this._lastSfx[name] || -Infinity) < gapMs) return true;
+    this._lastSfx[name] = now;
+    return false;
+  }
+
+  // 把「開關 × 音量 × 暫停靜音」一次算成實際 gain；任何一項改變都走這裡
+  _applyGains() {
+    if (!this.ctx) return;
+    if (this.sfxGain) this.sfxGain.gain.value = this.enabled ? 0.25 * this.sfxVol : 0;
+    if (this.bgmGain) this.bgmGain.gain.value = this.enabled && !this.bgmMuted ? 0.12 * this.bgmVol : 0;
+  }
+
+  setVolumes(sfxVol, bgmVol) {
+    this.sfxVol = Math.max(0, Math.min(1, +sfxVol || 0));
+    this.bgmVol = Math.max(0, Math.min(1, +bgmVol || 0));
+    this._applyGains();
   }
 
   init() {
@@ -16,11 +50,11 @@ class SoundEngine {
     this.ctx = new AudioContext();
 
     this.sfxGain = this.ctx.createGain();
-    this.sfxGain.gain.value = 0.25;
+    this.sfxGain.gain.value = 0.25 * this.sfxVol;
     this.sfxGain.connect(this.ctx.destination);
 
     this.bgmGain = this.ctx.createGain();
-    this.bgmGain.gain.value = 0.12;
+    this.bgmGain.gain.value = 0.12 * this.bgmVol;
     this.bgmGain.connect(this.ctx.destination);
   }
 
@@ -33,21 +67,24 @@ class SoundEngine {
 
   toggleSound() {
     this.enabled = !this.enabled;
-    if (this.ctx) {
-      if (this.enabled) {
-        this.sfxGain.gain.value = 0.25;
-        this.bgmGain.gain.value = 0.12;
-      } else {
-        this.sfxGain.gain.value = 0;
-        this.bgmGain.gain.value = 0;
-      }
-    }
+    this._applyGains();
     return this.enabled;
+  }
+
+  // 暫停/恢復 BGM (遊戲內暫停鍵用；與音效總開關互不干擾)
+  pauseBGM() {
+    this.bgmMuted = true;
+    this._applyGains();
+  }
+
+  resumeBGM() {
+    this.bgmMuted = false;
+    this._applyGains();
   }
 
   // 射擊音效 (苦無、飛刀)
   playShoot() {
-    if (!this.enabled) return;
+    if (!this.enabled || this._throttle('shoot', 35)) return;
     this.ensureContext();
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
@@ -69,7 +106,7 @@ class SoundEngine {
 
   // 擊中怪物
   playHit() {
-    if (!this.enabled) return;
+    if (!this.enabled || this._throttle('hit', 50)) return;
     this.ensureContext();
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
@@ -91,7 +128,7 @@ class SoundEngine {
 
   // 拾取經驗寶石 (清脆晶瑩水晶音)
   playGem() {
-    if (!this.enabled) return;
+    if (!this.enabled || this._throttle('gem', 40)) return;
     this.ensureContext();
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
@@ -116,7 +153,7 @@ class SoundEngine {
 
   // 爆炸音效 (火箭、地雷、手榴彈)
   playExplosion() {
-    if (!this.enabled) return;
+    if (!this.enabled || this._throttle('explosion', 90)) return;
     this.ensureContext();
     const t = this.ctx.currentTime;
 
@@ -158,7 +195,7 @@ class SoundEngine {
 
   // 雷擊電弧
   playLightning() {
-    if (!this.enabled) return;
+    if (!this.enabled || this._throttle('lightning', 60)) return;
     this.ensureContext();
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
@@ -232,7 +269,7 @@ class SoundEngine {
 
   // 玩家受傷
   playHurt() {
-    if (!this.enabled) return;
+    if (!this.enabled || this._throttle('hurt', 150)) return;
     this.ensureContext();
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
@@ -278,14 +315,17 @@ class SoundEngine {
     });
   }
 
-  // 動態程序化 Synthwave 循環音樂 (BGM)
-  startBGM() {
+  // 動態程序化 Synthwave 循環音樂 (BGM)：不同關卡不同音階與速度
+  startBGM(levelId = 'street') {
     if (this.bgmInterval) return;
+    this.bgmMuted = false;
     this.ensureContext();
 
-    const bassNotes = [110, 110, 130.81, 146.83, 110, 110, 164.81, 146.83];
-    const bpm = 128;
+    const theme = BGM_THEMES[levelId] || BGM_THEMES.street;
+    const bassNotes = theme.bass;
+    const bpm = theme.bpm;
     const stepTime = (60 / bpm) / 2; // 8分音符
+    this._applyGains();
 
     this.bgmInterval = setInterval(() => {
       if (!this.enabled || !this.ctx) return;

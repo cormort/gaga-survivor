@@ -641,7 +641,8 @@ body, html {
 /* ==================== 關卡選擇 ==================== */
 .level-select {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* 關卡數量會增加 (目前 5 關)，用 auto-fit 讓欄數自己長，不要寫死 */
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
   gap: 8px;
   margin-bottom: 18px;
 }
@@ -682,7 +683,7 @@ body, html {
 
 .level-name {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -930,12 +931,204 @@ body, html {
   display: none !important;
 }
 
+/* ==================== 主選單強化 (基因/DNA/特工解鎖) ==================== */
+.menu-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 2px 0 8px;
+}
+.dna-chip {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--color-gold);
+  background: rgba(255, 183, 3, 0.1);
+  border: 1px solid rgba(255, 183, 3, 0.4);
+  padding: 8px 16px;
+  border-radius: 999px;
+  box-shadow: 0 0 14px -4px var(--color-gold);
+}
+.talent-btn {
+  width: auto;
+  padding: 8px 18px;
+  font-size: 14px;
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--color-primary);
+}
+.talent-btn:hover {
+  background: rgba(0, 229, 255, 0.18);
+}
+.menu-status {
+  height: 20px;
+  margin: -2px 0 8px;
+  font-size: 13px;
+  color: var(--color-green);
+  font-weight: 700;
+}
+.menu-status.err {
+  color: #ff5e7e;
+}
+
+/* 主選單音量滑桿 */
+.audio-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin: 0 0 4px;
+}
+.vol-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.vol-slider {
+  width: 110px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.talent-content {
+  max-width: 540px;
+}
+.talent-dna {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--color-gold);
+  margin-bottom: 4px;
+  text-shadow: 0 0 12px rgba(255, 183, 3, 0.5);
+}
+.talent-status {
+  height: 18px;
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.talent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 16px;
+  text-align: left;
+}
+.talent-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: rgba(20, 30, 52, 0.75);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+.talent-row.maxed {
+  border-color: rgba(0, 245, 155, 0.45);
+}
+.talent-icon {
+  font-size: 26px;
+  width: 44px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.talent-info {
+  flex-grow: 1;
+}
+.talent-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  color: #ffffff;
+}
+.talent-lv {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.talent-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.talent-up {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  min-width: 92px;
+  transition: all 0.15s;
+}
+.talent-up.affordable {
+  color: #06111e;
+  background: linear-gradient(90deg, #00b4d8, #00f59b);
+  border-color: transparent;
+  box-shadow: 0 0 12px -2px rgba(0, 245, 155, 0.6);
+}
+.talent-up[disabled] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* 鎖定特工卡 (DNA 解鎖) */
+.char-card.locked .char-portrait {
+  filter: grayscale(1) brightness(0.65);
+  opacity: 0.85;
+}
+.char-lock-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid var(--color-gold);
+  color: var(--color-gold);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.lock-hint {
+  font-size: 9px;
+  color: var(--color-gold);
+  font-weight: 900;
+}
+
+/* 升級 reroll 按鈕狀態 */
+#btn-reroll.reroll-affordable {
+  background: linear-gradient(90deg, #00b4d8, #00f59b);
+  color: #06111e;
+  border-color: transparent;
+}
+#btn-reroll:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+#btn-reroll.reroll-denied {
+  background: rgba(255, 0, 85, 0.18);
+  color: #ff5e7e;
+  border-color: #ff0055;
+}
+
+/* 結算畫面回主選單 */
+.menu-btn {
+  margin-top: 10px;
+}
+
 /* 行動端與小螢幕優化 */
 /* ==================== 行動裝置適配 ==================== */
 @media (max-width: 620px) {
   #hud { padding: calc(8px + env(safe-area-inset-top)) 8px 8px; gap: 6px; }
   #exp-bar-container { height: 18px; }
   #exp-text { font-size: 11px; }
+  .audio-row { gap: 10px; }
+  .vol-slider { width: 84px; }
 
   #status-bar { gap: 5px; flex-wrap: wrap; }
   .hud-pill { padding: 4px 9px; font-size: 12px; gap: 4px; }

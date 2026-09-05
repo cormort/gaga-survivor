@@ -17,6 +17,10 @@ export class WeaponManager {
     // 投射物集合
     this.projectiles = [];
 
+    // 延遲射擊佇列：以遊戲時間倒數 (取代 setTimeout)。暫停/升級選卡時 update()
+    // 不會執行 → 佇列自然凍結；重開新局時舊 manager 直接棄置，不會有殘留射擊。
+    this.delayed = [];
+
     // 初始武器由角色決定
     this.addWeapon(player.character.startWeapon || 'kunai');
   }
@@ -80,14 +84,15 @@ export class WeaponManager {
   }
 
   applyPassives() {
-    // 重置基礎被動倍率
-    this.player.damageMultiplier = 1.0;
+    // 重置基礎被動倍率 (天賦的常駐傷害加成不被重置)
+    this.player.damageMultiplier = 1.0 + (this.player.metaDmg || 0);
     this.player.speedMultiplier = this.player.baseSpeedMul;
     this.player.cdrMultiplier = 1.0;
     this.player.rangeMultiplier = 1.0;
     this.player.magnetMultiplier = this.player.baseMagnet;
     this.player.hpRegen = 0;
 
+    let vestLevel = 0;
     for (const [id, data] of this.passives.entries()) {
       const def = PASSIVES[id];
       if (!def) continue;
@@ -101,8 +106,7 @@ export class WeaponManager {
           this.player.speedMultiplier += def.valuePerLevel * lvl;
           break;
         case 'max_hp_vest':
-          this.player.maxHp = 100 + def.valuePerLevel * lvl;
-          this.player.hpRegen = 1.2 * lvl;
+          vestLevel = lvl;
           break;
         case 'magnet':
           this.player.magnetMultiplier += def.valuePerLevel * lvl;
@@ -116,11 +120,30 @@ export class WeaponManager {
       }
     }
 
+    // 防彈護甲：生命上限以角色基礎值往上加 (企鵝 130 不會被覆寫回 100)，
+    // 升級瞬間把多出來的上限同步補進當前 HP，玩家會立刻有感
+    if (vestLevel > 0) {
+      const prevMax = this.player.maxHp;
+      this.player.maxHp = this.player.baseMaxHp + PASSIVES.max_hp_vest.valuePerLevel * vestLevel;
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + (this.player.maxHp - prevMax));
+      this.player.hpRegen = 1.2 * vestLevel;
+    }
+
     // 角色特質的常駐加成 (例如兔兔「跑得越快打越痛」)
     this.player.character.passive?.(this.player);
   }
 
   update(dt, enemies, particleSystem) {
+    // 推進延遲射擊佇列 (倒數完才開火，吃暫停也吃遊戲結束)
+    for (let i = this.delayed.length - 1; i >= 0; i--) {
+      const d = this.delayed[i];
+      d.t -= dt;
+      if (d.t <= 0) {
+        this.delayed.splice(i, 1);
+        d.fn();
+      }
+    }
+
     // 移除已銷毀投射物
     this.projectiles = this.projectiles.filter((p) => !p.isDead);
 
@@ -156,6 +179,11 @@ export class WeaponManager {
     const p = new Projectile(options);
     p.isCrit = this.critShot;
     return p;
+  }
+
+  // 排入一發延遲開火 (秒)，由 update() 依遊戲時間觸發
+  schedule(delay, fn) {
+    this.delayed.push({ t: delay, fn });
   }
 
   fireWeapon(id, item, def, enemies, particleSystem) {
@@ -208,7 +236,7 @@ export class WeaponManager {
     const pierce = def.isEvo ? def.pierce : def.pierce[item.level - 1];
 
     for (let i = 0; i < count; i++) {
-      setTimeout(() => {
+      this.schedule(i * 0.07, () => {
         if (!target) return;
         const dx = target.x - this.player.x;
         const dy = target.y - this.player.y;
@@ -236,7 +264,7 @@ export class WeaponManager {
           })
         );
         sound.playShoot();
-      }, i * 70);
+      });
     }
   }
 
@@ -279,7 +307,7 @@ export class WeaponManager {
     const expRadius = (def.isEvo ? def.explosionRadius : def.explosionRadius[item.level - 1]) * this.player.rangeMultiplier;
 
     for (let i = 0; i < count; i++) {
-      setTimeout(() => {
+      this.schedule(i * 0.15, () => {
         const dx = target.x + (Math.random() * 60 - 30) - this.player.x;
         const dy = target.y + (Math.random() * 60 - 30) - this.player.y;
         const dist = Math.hypot(dx, dy);
@@ -302,7 +330,7 @@ export class WeaponManager {
           })
         );
         sound.playShoot();
-      }, i * 150);
+      });
     }
   }
 
@@ -338,7 +366,7 @@ export class WeaponManager {
     const strikes = def.isEvo ? def.strikes : def.strikes[item.level - 1];
 
     for (let i = 0; i < strikes; i++) {
-      setTimeout(() => {
+      this.schedule(i * 0.12, () => {
         const target = this.getRandomEnemy(enemies);
         if (!target) return;
 
@@ -361,7 +389,7 @@ export class WeaponManager {
             }
           }
         }
-      }, i * 120);
+      });
     }
   }
 
@@ -429,6 +457,7 @@ export class WeaponManager {
     let closest = null;
     let minDist = Infinity;
     for (const e of enemies) {
+      if (e.isDead) continue; // 本幀剛死、還沒被清除的屍體不鎖定
       const d = Math.hypot(e.x - this.player.x, e.y - this.player.y);
       if (d < minDist) {
         minDist = d;
@@ -439,8 +468,15 @@ export class WeaponManager {
   }
 
   getRandomEnemy(enemies) {
-    if (enemies.length === 0) return null;
-    return enemies[Math.floor(Math.random() * enemies.length)];
+    let alive = 0;
+    for (const e of enemies) if (!e.isDead) alive++;
+    if (alive === 0) return null;
+    let pick = Math.floor(Math.random() * alive);
+    for (const e of enemies) {
+      if (e.isDead) continue;
+      if (pick-- === 0) return e;
+    }
+    return null;
   }
 
   draw(ctx, camera) {

@@ -24,6 +24,8 @@ export const LEVELS = {
     },
     decor: ['car', 'bin', 'neon'],
     hpScale: 1.0,
+    // 關卡機制：街頭定期空投物資箱
+    mech: { type: 'supply', interval: 45, jitter: 20 },
     waves: [
       { until: 120, pool: [['walker', 1]], interval: 0.85, batch: 1 },
       { until: 240, pool: [['walker', 0.6], ['bat', 0.4]], interval: 0.6, batch: 1 },
@@ -32,8 +34,8 @@ export const LEVELS = {
     ],
     bosses: [
       { at: 120, hp: 4000, name: '狂暴推土喪屍' },
-      { at: 300, hp: 14000, name: '變異清潔工' },
-      { at: 480, hp: 42000, name: '巨神‧暴虐霸王龍', final: true },
+      { at: 300, hp: 14000, name: '變異清潔工', behaviors: ['summon'] },
+      { at: 480, hp: 42000, name: '巨神‧暴虐霸王龍', final: true, behaviors: ['nova', 'summon'] },
     ],
   },
 
@@ -53,6 +55,8 @@ export const LEVELS = {
     },
     decor: ['tank', 'pipes', 'hazard'],
     hpScale: 1.3,
+    // 關卡機制：實驗室毒霧池 (玩家踩到持續扣血)
+    mech: { type: 'pool', interval: 24, jitter: 8, radius: 115, dur: 6, dmg: 6, color: '#b5179e' },
     waves: [
       { until: 100, pool: [['walker', 0.7], ['boomer', 0.3]], interval: 0.7, batch: 1 },
       { until: 240, pool: [['walker', 0.4], ['boomer', 0.35], ['bat', 0.25]], interval: 0.5, batch: 1 },
@@ -60,9 +64,9 @@ export const LEVELS = {
       { until: 480, pool: [['boomer', 0.35], ['brute', 0.35], ['walker', 0.3]], interval: 0.28, batch: 2 },
     ],
     bosses: [
-      { at: 120, hp: 5500, name: '生化軟泥聚合體' },
-      { at: 300, hp: 19000, name: '外骨骼改造猩猩' },
-      { at: 480, hp: 55000, name: '母體‧零號實驗體', final: true },
+      { at: 120, hp: 5500, name: '生化軟泥聚合體', behaviors: ['summon'] },
+      { at: 300, hp: 19000, name: '外骨骼改造猩猩', behaviors: ['nova'] },
+      { at: 480, hp: 55000, name: '母體‧零號實驗體', final: true, behaviors: ['summon', 'nova'] },
     ],
   },
 
@@ -82,6 +86,8 @@ export const LEVELS = {
     },
     decor: ['ice_spike', 'snow', 'radar'],
     hpScale: 1.6,
+    // 關卡機制：冰爆地雷 (短暫警示後爆炸，敵我皆傷)
+    mech: { type: 'mine', interval: 30, jitter: 12, radius: 125, fuse: 1.8, dmg: 10, dmgEnemy: 600, color: '#90e0ef' },
     waves: [
       { until: 100, pool: [['brute', 0.5], ['walker', 0.5]], interval: 0.75, batch: 1 },
       { until: 240, pool: [['brute', 0.4], ['bat', 0.4], ['walker', 0.2]], interval: 0.5, batch: 2 },
@@ -90,8 +96,8 @@ export const LEVELS = {
     ],
     bosses: [
       { at: 120, hp: 7000, name: '冰霜機甲' },
-      { at: 300, hp: 24000, name: '極地穿山甲王' },
-      { at: 480, hp: 68000, name: '冰霜暴君‧雪帝', final: true },
+      { at: 300, hp: 24000, name: '極地穿山甲王', behaviors: ['nova'] },
+      { at: 480, hp: 68000, name: '冰霜暴君‧雪帝', final: true, behaviors: ['summon', 'nova'] },
     ],
   },
 
@@ -103,7 +109,7 @@ export const LEVELS = {
     desc: '漂浮在熔岩湖上的鋼鐵平台，各關精英怪的狂暴版齊聚。',
     difficulty: 4,
     dnaMult: 2.4,
-    next: null,
+    next: 'endless',
     theme: {
       top: '#301410', mid: '#1c0b09', bottom: '#0d0504',
       grid: 'rgba(255,180,120,0.05)', major: 'rgba(255,120,0,0.16)',
@@ -111,6 +117,8 @@ export const LEVELS = {
     },
     decor: ['lava_crack', 'steel', 'gear'],
     hpScale: 2.0,
+    // 關卡機制：熔岩噴發 (大範圍、對敵傷害高，幫你清場但要閃)
+    mech: { type: 'geyser', interval: 22, jitter: 8, radius: 170, fuse: 1.5, dmg: 14, dmgEnemy: 1300, color: '#ff7700' },
     waves: [
       { until: 90, pool: [['brute', 0.5], ['boomer', 0.5]], interval: 0.6, batch: 1 },
       { until: 220, pool: [['brute', 0.4], ['boomer', 0.3], ['bat', 0.3]], interval: 0.42, batch: 2 },
@@ -118,14 +126,43 @@ export const LEVELS = {
       { until: 480, pool: [['brute', 0.4], ['boomer', 0.35], ['bat', 0.25]], interval: 0.22, batch: 3 },
     ],
     bosses: [
-      { at: 120, hp: 9000, name: '烈焰暴君' },
-      { at: 300, hp: 30000, name: '熔核巨獸' },
-      { at: 480, hp: 88000, name: '毀滅特工‧暗影鴨', final: true },
+      { at: 120, hp: 9000, name: '烈焰暴君', behaviors: ['nova'] },
+      { at: 300, hp: 30000, name: '熔核巨獸', behaviors: ['summon', 'nova'] },
+      { at: 480, hp: 88000, name: '毀滅特工‧暗影鴨', final: true, behaviors: ['summon', 'nova'] },
     ],
+  },
+
+  endless: {
+    id: 'endless',
+    name: '深淵無盡戰',
+    sub: '極限生存',
+    icon: '🌀',
+    desc: '擊敗核心首腦後解鎖。無限波次、Boss 每 90 秒輪播降臨，撐得越久拿得越多。',
+    difficulty: 5,
+    dnaMult: 3,
+    next: null,
+    theme: {
+      top: '#241637', mid: '#140b24', bottom: '#07030f',
+      grid: 'rgba(200,160,255,0.05)', major: 'rgba(180,120,255,0.14)',
+      bounds: 'rgba(180,90,255,0.6)',
+    },
+    decor: ['lava_crack', 'gear', 'radar'],
+    hpScale: 1,
+    waves: [
+      { until: 1e9, pool: [['walker', 0.3], ['bat', 0.25], ['brute', 0.2], ['boomer', 0.25]], interval: 0.55, batch: 2 },
+    ],
+    bosses: [],
   },
 };
 
-export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core'];
+export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'endless'];
+
+// 無盡模式輪播的 Boss 池 (四關 Boss 全收錄)
+export const ENDLESS_BOSS_CYCLE = []
+  .concat(LEVELS.street.bosses, LEVELS.lab.bosses, LEVELS.frost.bosses, LEVELS.core.bosses)
+  .map((b) => ({ ...b }));
+
+export const ENDLESS_BOSS_INTERVAL = 90;
 
 // 依時間取出當前波次設定
 export function currentWave(level, gameTime) {

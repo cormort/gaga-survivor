@@ -32,6 +32,7 @@ export class Player {
 
     // 被動加成倍率 (升級被動時更新)
     this.damageMultiplier = 1.0;
+    this.metaDmg = 0; // 局外天賦「火力核心」的常駐傷害加成 (applyPassives 重置時要加回去)
     this.speedMultiplier = 1.0;
     this.cdrMultiplier = 1.0; // 冷卻縮減 (例如 0.84 代表 CD 變成 84%)
     this.rangeMultiplier = 1.0;
@@ -49,6 +50,8 @@ export class Player {
     this.character.init?.(this);
     this.speedMultiplier = this.baseSpeedMul;
     this.magnetMultiplier = this.baseMagnet;
+    // 被動(防彈護甲)重算生命上限的基準：角色 init 若抬高 maxHp (企鵝 130) 要留在這裡
+    this.baseMaxHp = this.maxHp;
   }
 
   get pickupRadius() {

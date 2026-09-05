@@ -33,14 +33,18 @@ export class Turret {
 
     // 鎖定範圍內最近的敵人 (Boss 優先，避免砲塔一直打雜兵)
     let target = null;
-    let bestDist = TURRET.range;
+    const range2 = TURRET.range * TURRET.range;
+    let bestScore = range2;
     for (const e of enemies) {
       if (e.isDead) continue;
-      const d = Math.hypot(e.x - this.x, e.y - this.y);
-      if (d > TURRET.range) continue;
-      const score = e.isBoss ? d * 0.5 : d;
-      if (score < bestDist) {
-        bestDist = score;
+      const dx = e.x - this.x;
+      const dy = e.y - this.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > range2) continue;
+      // 平方距離排序即可：Boss 加權 0.25 等效原版 (d*0.5)，免每幀開根號
+      const score = e.isBoss ? d2 * 0.25 : d2;
+      if (score < bestScore) {
+        bestScore = score;
         target = e;
       }
     }

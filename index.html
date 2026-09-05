@@ -94,6 +94,20 @@
       </div>
     </div>
 
+    <!-- 基因強化 (DNA 天賦) 彈窗 -->
+    <div id="talent-modal" class="overlay hidden">
+      <div class="modal-content talent-content">
+        <div class="modal-header">
+          <h2 class="glow-text">基因強化 🧬</h2>
+          <p class="subtitle">消耗局外 DNA 永久強化特工 — 每場自動生效</p>
+        </div>
+        <div id="talent-dna" class="talent-dna">🧬 0</div>
+        <div id="talent-status" class="menu-status talent-status"></div>
+        <div id="talent-list" class="talent-list"></div>
+        <button id="btn-close-talents" class="game-btn secondary-btn">關閉</button>
+      </div>
+    </div>
+
     <!-- 開局/開始介面 -->
     <div id="start-screen" class="overlay">
       <div class="start-box">
@@ -109,6 +123,15 @@
           <div class="guide-item">行動端/滑鼠可直接拖曳 <span class="key-badge">虛擬搖桿</span></div>
           <div class="guide-item">武器全部 <strong>自動鎖定敵人攻擊</strong>，走位至上！</div>
         </div>
+        <div class="menu-meta">
+          <span id="dna-chip" class="dna-chip">🧬 0</span>
+          <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
+        </div>
+        <div class="audio-row">
+          <label class="vol-item">🔊<input id="sfx-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音效音量"></label>
+          <label class="vol-item">🎵<input id="bgm-vol" class="vol-slider" type="range" min="0" max="100" value="80" aria-label="音樂音量"></label>
+        </div>
+        <div id="start-status" class="menu-status"></div>
         <button id="btn-start-game" class="game-btn primary-btn pulse">立即出擊 🚀</button>
       </div>
     </div>
@@ -158,6 +181,7 @@
         </div>
 
         <button id="btn-restart" class="game-btn primary-btn">再次挑戰 🔁</button>
+        <button id="btn-menu" class="game-btn secondary-btn menu-btn">回主選單 🏠</button>
       </div>
     </div>
   </div>

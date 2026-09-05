@@ -42,6 +42,7 @@ export const CHARACTERS = {
     traitName: '兔子快跑',
     traitDesc: '跑速每 +10%，全傷害 +5%；奔跑時留下灼燒火痕',
     startWeapon: 'molotov',
+    unlockCost: 60,
     accent: '#ff6b35',
     lines: {
       start: '引擎拉滿！吃我一記超光速蘿蔔啦！',
@@ -87,6 +88,7 @@ export const CHARACTERS = {
     traitName: '厚脂肪裝甲',
     traitDesc: '碰撞傷害 -20%，受擊時裝甲反震引發全場衝擊波',
     startWeapon: 'guardian',
+    unlockCost: 150,
     accent: '#9fb3c8',
     lines: {
       start: '防禦力場就緒。放馬過來吧，我皮很厚的。',
@@ -123,8 +125,9 @@ export const CHARACTERS = {
     title: '賽博駭客',
     role: '技能 CD 縮減極致 / 全螢幕連鎖天罰',
     traitName: '超頻過載',
-    traitDesc: '擊殺菁英怪觸發過載，5 秒內所有冷卻減半',
+    traitDesc: '擊殺菁英怪 (巨漢/詞綴怪/Boss) 觸發過載，5 秒內所有冷卻減半',
     startWeapon: 'lightning',
+    unlockCost: 300,
     accent: '#00e5ff',
     lines: {
       start: '正在入侵戰場協議……系統權限已獲取，準備降下天罰，喵。',
@@ -142,8 +145,8 @@ export const CHARACTERS = {
       if (game.player.overloadTimer > 0) game.player.overloadTimer -= dt;
     },
     onKill(enemy, game) {
-      // 菁英怪 = 生化巨漢與 Boss
-      if (enemy.typeKey !== 'brute' && !enemy.isBoss) return;
+      // 菁英怪 = 生化巨漢 / 詞綴精英 / Boss
+      if (enemy.typeKey !== 'brute' && !enemy.isBoss && !enemy.isElite) return;
       game.player.overloadTimer = 5;
       game.particles.createShockwave(game.player.x, game.player.y, 150, '#00e5ff');
       game.ui.say('超頻過載！冷卻減半 5 秒', '#00e5ff');

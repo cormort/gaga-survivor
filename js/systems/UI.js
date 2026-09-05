@@ -1,6 +1,7 @@
 // UI 介面管理器 (HUD 抬頭顯示、升級三選一卡牌彈窗、技能格槽位與戰鬥統計)
 
 import { WEAPONS, PASSIVES, GAME_CONFIG } from '../config.js';
+import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
 import { sound } from '../audio.js';
 
 export class UIManager {
@@ -19,9 +20,18 @@ export class UIManager {
 
     this.levelUpModal = document.getElementById('level-up-modal');
     this.cardsGrid = document.getElementById('upgrade-cards');
+    this.rerollBtn = document.getElementById('btn-reroll');
 
     this.startScreen = document.getElementById('start-screen');
     this.gameOverModal = document.getElementById('game-over-modal');
+
+    // 主選單基因強化 (天賦)
+    this.dnaChip = document.getElementById('dna-chip');
+    this.statusEl = document.getElementById('start-status');
+    this.talentStatusEl = document.getElementById('talent-status');
+    this.talentModal = document.getElementById('talent-modal');
+    this.talentList = document.getElementById('talent-list');
+    this.talentDna = document.getElementById('talent-dna');
 
     this.soundBtn = document.getElementById('btn-sound');
     this.pauseBtn = document.getElementById('btn-pause');
@@ -34,25 +44,70 @@ export class UIManager {
     this.bubble = document.getElementById('dialogue-bubble');
     this.bubbleTimer = null;
 
+    // 升級彈窗內的 reroll 按鈕 (純金幣消耗，遊戲端驗收)
+    if (this.rerollBtn) {
+      this.rerollBtn.addEventListener('click', () => {
+        if (this._rerollCb) this._rerollCb();
+      });
+    }
+    // 天賦彈窗關閉
+    document.getElementById('btn-close-talents')?.addEventListener('click', () => {
+      this.talentModal?.classList.add('hidden');
+    });
+
     this.initSlotPlaceholders();
   }
 
-  // 開始畫面的四位特工選擇卡
-  buildCharacterSelect(characters, order, onPick, initialId = order[0]) {
+  // 選單狀態提示 (主選單 + 天賦彈窗各一列；訊息寫在看得見的那一層)
+  sayStatus(text, isError = false) {
+    clearTimeout(this._statusTimer);
+    for (const el of [this.statusEl, this.talentStatusEl]) {
+      if (!el) continue;
+      el.textContent = text || '';
+      el.classList.toggle('err', !!isError);
+    }
+    if (text) {
+      this._statusTimer = setTimeout(() => {
+        for (const el of [this.statusEl, this.talentStatusEl]) {
+          if (el && el.textContent === text) el.textContent = '';
+        }
+      }, 2600);
+    }
+  }
+
+  updateDnaChip(dna) {
+    const txt = `🧬 ${dna}`;
+    if (this.dnaChip) this.dnaChip.textContent = txt;
+    if (this.talentDna) this.talentDna.textContent = txt;
+  }
+
+  // 開始畫面的特工選擇卡 (未解鎖的特工要花 DNA 解鎖，點卡即購買)
+  buildCharacterSelect(characters, order, save, onPick, onUnlock, initialId = order[0]) {
     this.charSelect.innerHTML = '';
 
     order.forEach((id, i) => {
       const c = characters[id];
+      const unlocked = save.characterUnlocked(id);
+      const cost = c.unlockCost || 0;
+
       const card = document.createElement('button');
-      card.className = 'char-card' + (id === initialId ? ' selected' : '');
+      card.className = 'char-card'
+        + (unlocked && id === initialId ? ' selected' : '')
+        + (unlocked ? '' : ' locked');
       card.style.setProperty('--accent', c.accent);
       card.innerHTML = `
         <canvas class="char-portrait" width="128" height="120"></canvas>
-        <div class="char-codename">${c.codename}</div>
+        ${unlocked ? '' : `<div class="char-lock-badge">🔒 ${cost} 🧬</div>`}
+        <div class="char-codename">${c.codename}${unlocked ? '' : ' <span class="lock-hint">未解鎖</span>'}</div>
         <div class="char-title">${c.title}</div>
         <div class="char-trait"><strong>${c.traitName}</strong>${c.traitDesc}</div>
       `;
       card.addEventListener('click', () => {
+        if (!unlocked) {
+          // 鎖定卡：有給解鎖回呼就試買 (DNA 不足時由遊戲端顯示提示)
+          if (typeof onUnlock === 'function') onUnlock(id, cost);
+          return;
+        }
         sound.playGem();
         this.charSelect.querySelectorAll('.char-card').forEach((el) => el.classList.remove('selected'));
         card.classList.add('selected');
@@ -70,6 +125,45 @@ export class UIManager {
         ctx.drawImage(sp.frames[0], -sp.w / 2, -sp.h / 2, sp.w, sp.h);
         ctx.restore();
       });
+    });
+  }
+
+  // 基因強化 (天賦樹) 彈窗
+  openTalentModal(save, onInvest) {
+    this._onTalentInvest = onInvest || null;
+    this.rebuildTalentView(save);
+    this.talentModal?.classList.remove('hidden');
+  }
+
+  rebuildTalentView(save) {
+    const dna = save.data.dna;
+    this.updateDnaChip(dna);
+    if (!this.talentList) return;
+    this.talentList.innerHTML = '';
+
+    TALENT_ORDER.forEach((id) => {
+      const def = TALENTS[id];
+      const lvl = save.talentLevel(id);
+      const maxed = lvl >= def.maxLevel;
+      const cost = maxed ? 0 : talentCost(def, lvl);
+
+      const row = document.createElement('div');
+      row.className = 'talent-row' + (maxed ? ' maxed' : '');
+      const affordable = !maxed && dna >= cost;
+      row.innerHTML = `
+        <span class="talent-icon">${def.icon}</span>
+        <div class="talent-info">
+          <div class="talent-name">${def.name}<span class="talent-lv">LV ${lvl}/${def.maxLevel}</span></div>
+          <div class="talent-desc">${def.desc}</div>
+        </div>
+        <button class="talent-up${affordable ? ' affordable' : ''}"${maxed ? ' disabled' : ''}>${maxed ? 'MAX' : `升級 ${cost} 🧬`}</button>
+      `;
+      if (!maxed) {
+        row.querySelector('.talent-up').addEventListener('click', () => {
+          if (this._onTalentInvest) this._onTalentInvest(id);
+        });
+      }
+      this.talentList.appendChild(row);
     });
   }
 
@@ -218,12 +312,12 @@ export class UIManager {
     this.bossHpFill.style.width = `${hpPct}%`;
   }
 
-  // 升級三選一對話框
-  showLevelUpModal(weaponManager, onSelectCallback) {
+  // 升級三選一對話框：渲染卡牌 + reroll 按鈕狀態
+  showUpgradeCards(options, gold, rerollCost, onSelect, onReroll) {
     sound.playLevelUp();
     this.cardsGrid.innerHTML = '';
-
-    const options = this.generateUpgradeOptions(weaponManager);
+    this._rerollCb = onReroll || null;
+    this._rerollCost = rerollCost || 0;
 
     options.forEach((opt) => {
       const card = document.createElement('div');
@@ -249,16 +343,50 @@ export class UIManager {
 
       card.addEventListener('click', () => {
         this.levelUpModal.classList.add('hidden');
-        onSelectCallback(opt);
+        onSelect(opt);
       });
 
       this.cardsGrid.appendChild(card);
     });
 
+    // 金幣 reroll：花錢重抽三選一 (不重複目前顯示的卡)
+    const rr = this.rerollBtn;
+    if (rr) {
+      rr.classList.remove('hidden', 'reroll-denied');
+      rr.textContent = `🎲 刷新選擇 (${rerollCost} 🪙)`;
+      this.updateRerollState(gold);
+    }
+
     this.levelUpModal.classList.remove('hidden');
   }
 
-  generateUpgradeOptions(weaponManager) {
+  updateRerollState(gold) {
+    const rr = this.rerollBtn;
+    if (!rr) return;
+    const cost = this._rerollCost || 0;
+    rr.disabled = gold < cost;
+    rr.classList.toggle('reroll-affordable', gold >= cost);
+    if (gold < cost) {
+      rr.title = '金幣不足';
+    } else {
+      rr.title = '重新抽三張不同的升級卡';
+    }
+  }
+
+  flashRerollDenied(message = '金幣不足！') {
+    const rr = this.rerollBtn;
+    if (!rr) return;
+    const original = `🎲 刷新選擇 (${this._rerollCost || 0} 🪙)`;
+    rr.textContent = message;
+    rr.classList.add('reroll-denied');
+    clearTimeout(this._denyTimer);
+    this._denyTimer = setTimeout(() => {
+      rr.classList.remove('reroll-denied');
+      if (!rr.disabled) rr.textContent = original;
+    }, 900);
+  }
+
+  generateUpgradeOptions(weaponManager, excludeKeys = null) {
     const candidates = [];
 
     // 1. 檢查是否有滿足條件的超武 (武器滿級 LV5 + 持有對應被動)
@@ -358,7 +486,7 @@ export class UIManager {
       candidates.push({
         type: 'heal',
         name: '特工應急急救包',
-        icon: '🍖',
+        icon: '🧰',
         description: '恢復 50% 生命值，並獲得額外金幣。',
         tag: '補給',
       });
@@ -373,10 +501,17 @@ export class UIManager {
       result.push(evoList[0]);
     }
 
-    while (result.length < 3 && otherList.length > 0) {
-      result.push(otherList.pop());
-    }
+    // reroll 時優先抽上一輪沒出現過的；不夠三張才用出現過的補滿。
+    // (先抽三張再濾掉重複會讓玩家花了錢只拿到一兩張，等於付費降級)
+    const seen = excludeKeys && excludeKeys.length > 0 ? new Set(excludeKeys) : null;
+    const fresh = seen ? otherList.filter((o) => !seen.has(upgradeKeyOf(o))) : otherList;
+    const reused = seen ? otherList.filter((o) => seen.has(upgradeKeyOf(o))) : [];
 
+    for (const list of [fresh, reused]) {
+      while (result.length < 3 && list.length > 0) {
+        result.push(list.pop());
+      }
+    }
     return result;
   }
 

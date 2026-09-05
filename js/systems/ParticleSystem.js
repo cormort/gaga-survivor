@@ -1,5 +1,11 @@
 // 粒子與視覺特效系統 (浮動傷害數字、爆炸火花、落雷電弧、受傷碎片)
 
+// 特效數量上限：避免滿級燃燒瓶×大批怪、全場炸彈等極端場面把行動裝置壓垮。
+// 跳字用「丟最舊保留最新」；粒子用「容量不足就少生幾顆」。
+const MAX_PARTICLES = 900;
+const MAX_DAMAGE_TEXTS = 110;
+const MAX_LIGHTNINGS = 12;
+
 export class ParticleSystem {
   constructor() {
     this.particles = [];
@@ -45,6 +51,8 @@ export class ParticleSystem {
   }
 
   createDamageText(x, y, text, isCrit = false, isRealCrit = false) {
+    // 跳字太多時丟掉最舊的 (已淡出大半)，保留最新傷害反饋
+    if (this.damageTexts.length >= MAX_DAMAGE_TEXTS) this.damageTexts.shift();
     const displayText = typeof text === 'number' ? String(Math.round(text)) : String(text);
     this.damageTexts.push({
       x: x + (Math.random() * 16 - 8),
@@ -61,6 +69,7 @@ export class ParticleSystem {
 
   createDeathParticles(x, y, color = '#38b000', count = 8) {
     for (let i = 0; i < count; i++) {
+      if (this.particles.length >= MAX_PARTICLES) break;
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 140 + 40;
       this.particles.push({
@@ -78,21 +87,24 @@ export class ParticleSystem {
   }
 
   createExplosion(x, y, radius, isEvo = false) {
-    // 衝擊波環
-    this.particles.push({
-      type: 'shockwave',
-      x: x,
-      y: y,
-      radius: 5,
-      maxRadius: radius,
-      color: isEvo ? '#ff0055' : '#ff9900',
-      life: 0.35,
-      maxLife: 0.35,
-    });
+    // 衝擊波環 (容量滿就略過視覺，傷害計算不受影響)
+    if (this.particles.length < MAX_PARTICLES) {
+      this.particles.push({
+        type: 'shockwave',
+        x: x,
+        y: y,
+        radius: 5,
+        maxRadius: radius,
+        color: isEvo ? '#ff0055' : '#ff9900',
+        life: 0.35,
+        maxLife: 0.35,
+      });
+    }
 
     // 破片與火花
     const count = isEvo ? 24 : 14;
     for (let i = 0; i < count; i++) {
+      if (this.particles.length >= MAX_PARTICLES) break;
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 220 + 60;
       this.particles.push({
@@ -111,6 +123,7 @@ export class ParticleSystem {
 
   // 純衝擊波環 (角色特質用)
   createShockwave(x, y, radius, color = '#00e5ff') {
+    if (this.particles.length >= MAX_PARTICLES) return;
     this.particles.push({
       type: 'shockwave',
       x, y,
@@ -125,6 +138,7 @@ export class ParticleSystem {
   // 腳下小火花 (兔兔火痕用)
   createHitSpark(x, y, color = '#ff6b00') {
     for (let i = 0; i < 4; i++) {
+      if (this.particles.length >= MAX_PARTICLES) break;
       const angle = Math.random() * Math.PI * 2;
       this.particles.push({
         x, y,
@@ -140,6 +154,7 @@ export class ParticleSystem {
   }
 
   createLightning(x, y, radius, isEvo = false) {
+    if (this.lightnings.length >= MAX_LIGHTNINGS) return;
     // 生成折線落雷節點
     const points = [];
     const startY = y - 400;
@@ -223,21 +238,34 @@ export class ParticleSystem {
       }
     }
 
-    // 繪製浮動傷害跳字
+    // 繪製浮動傷害跳字：依大小分三桶，每桶只設一次 canvas font。
+    // (canvas 切字型會清 glyph cache，大量跳字時逐顆設定是主要的繪製成本)
+    const buckets = [[], [], []];
     for (const dt of this.damageTexts) {
-      const screenX = dt.x - camera.x;
-      const screenY = dt.y - camera.y;
-      const alpha = Math.max(0, dt.life / dt.maxLife);
-
+      buckets[dt.scale >= 1.7 ? 2 : dt.scale >= 1.3 ? 1 : 0].push(dt);
+    }
+    const fonts = [
+      "bold 14px 'Chakra Petch', sans-serif",
+      "bold 20px 'Chakra Petch', sans-serif",
+      "bold 27px 'Chakra Petch', sans-serif",
+    ];
+    for (let b = 0; b < 3; b++) {
+      const list = buckets[b];
+      if (list.length === 0) continue;
       ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.font = `bold ${Math.round(14 * dt.scale)}px 'Chakra Petch', sans-serif`;
-      ctx.fillStyle = dt.color;
+      ctx.font = fonts[b];
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 3;
-      ctx.strokeText(dt.text, screenX, screenY);
-      ctx.fillText(dt.text + (dt.suffix || ''), screenX, screenY);
+      for (const dt of list) {
+        const screenX = dt.x - camera.x;
+        const screenY = dt.y - camera.y;
+        const alpha = Math.max(0, dt.life / dt.maxLife);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = dt.color;
+        ctx.strokeText(dt.text, screenX, screenY);
+        ctx.fillText(dt.text + (dt.suffix || ''), screenX, screenY);
+      }
       ctx.restore();
     }
   }

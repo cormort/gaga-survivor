@@ -300,6 +300,14 @@ export const ENEMY_TYPES = {
   },
 };
 
+// 精英詞綴：普通怪低機率帶詞綴，體型/顏色/掉落與行為都升級
+export const ELITE_AFFIXES = {
+  fast:    { name: '疾風', color: '#00e5ff', speedMul: 1.5, expMul: 2 },
+  armored: { name: '裝甲', color: '#9fb3c8', hpMul: 1.6, damageTakenMul: 0.5, expMul: 2.5 },
+  giant:   { name: '巨獸', color: '#ffb703', hpMul: 2.5, radiusMul: 1.45, damageMul: 1.35, expMul: 3 },
+  toxic:   { name: '劇毒', color: '#b5179e', hpMul: 1.2, speedMul: 1.2, damageMul: 1.25, expMul: 2 },
+};
+
 // 掉落道具類型
 export const DROP_TYPES = {
   EXP_GREEN: { value: 1, color: '#00f59b', radius: 4 },
@@ -310,4 +318,5 @@ export const DROP_TYPES = {
   BOMB: { type: 'bomb', icon: '💣', radius: 10 },
   ROAST_CHICKEN: { type: 'heal', heal: 50, icon: '🍗', radius: 10 },
   GOLD_COIN: { type: 'gold', value: 10, icon: '🪙', radius: 8 },
+  SUPPLY: { type: 'supply', icon: '📦', radius: 10 }, // 街頭空投物資箱 (關卡機制)
 };
