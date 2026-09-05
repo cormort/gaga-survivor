@@ -1,7 +1,7 @@
 // 局外存檔層：整份進度存在單一 localStorage key，其他系統一律走這裡讀寫。
 
 import { TALENTS, talentCost } from './meta.js';
-import { SLOT_ORDER } from './items.js';
+import { SLOT_ORDER, salvageValue } from './items.js';
 
 export const STASH_CAP = 30;
 
@@ -141,16 +141,31 @@ export const save = {
     return true;
   },
 
-  discardItem(id) {
-    const i = this.data.stash.findIndex((it) => it.id === id);
-    if (i < 0) return false;
-    // 丟棄的若正穿著，同步脫下
-    for (const slot of SLOT_ORDER) {
-      if (this.data.equipped[slot] === id) delete this.data.equipped[slot];
-    }
-    this.data.stash.splice(i, 1);
+  // 分解單件：換 DNA。正穿著的要先脫下，避免手滑把主力裝拆了
+  salvageItem(id) {
+    const item = this.data.stash.find((it) => it.id === id);
+    if (!item) return 0;
+    if (Object.values(this.data.equipped).includes(id)) return -1;
+
+    const dna = salvageValue(item);
+    this.data.stash = this.data.stash.filter((it) => it.id !== id);
+    this.data.dna += dna;
     this.flush();
-    return true;
+    return dna;
+  },
+
+  // 批次分解某稀有度 (略過已裝備的)
+  salvageAll(rarity) {
+    const worn = new Set(Object.values(this.data.equipped));
+    const targets = this.data.stash.filter((it) => it.rarity === rarity && !worn.has(it.id));
+    if (targets.length === 0) return { count: 0, dna: 0 };
+
+    const dna = targets.reduce((sum, it) => sum + salvageValue(it), 0);
+    const ids = new Set(targets.map((it) => it.id));
+    this.data.stash = this.data.stash.filter((it) => !ids.has(it.id));
+    this.data.dna += dna;
+    this.flush();
+    return { count: targets.length, dna };
   },
 
   equipItem(id) {

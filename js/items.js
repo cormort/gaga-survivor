@@ -106,6 +106,14 @@ export function itemScore(item) {
   }, 0);
 }
 
+// 分解回收的 DNA：稀有度為主、物品等級為輔
+const SALVAGE_BASE = { rare: 5, epic: 14, legendary: 32 };
+
+export function salvageValue(item) {
+  const base = SALVAGE_BASE[item.rarity] || 5;
+  return Math.max(1, Math.round(base * (0.6 + (item.ilvl || 1) * 0.4)));
+}
+
 // 已穿裝備 → 加成總和 (與 meta.js 的 metaBonuses 同格式，直接相加即可)
 export function gearBonuses(stash = [], equipped = {}) {
   const m = { dmg: 0, hp: 0, speed: 0, magnet: 0, gold: 0, cdr: 0 };

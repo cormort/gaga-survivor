@@ -16,7 +16,7 @@ import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy } from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
-import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, RARITIES } from './items.js';
+import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, salvageValue, RARITIES } from './items.js';
 
 // #rrggbb + alpha → rgba() 字串 (地形機制的半透明渲染用)
 function hexToRgba(hex, a) {
@@ -122,9 +122,24 @@ class Game {
           sound.playGem();
           this.ui.rebuildGearView(save);
         },
-        onDiscard: (id) => {
-          save.discardItem(id);
-          sound.playHurt();
+        onSalvage: (id) => {
+          const dna = save.salvageItem(id);
+          if (dna < 0) {
+            this.ui.sayStatus('這件正穿在身上，要先脫下才能分解', true);
+            sound.playHurt();
+            return;
+          }
+          sound.playGem();
+          this.ui.sayStatus(`分解完成，回收 ${dna} 🧬`);
+          this.ui.updateDnaChip(save.data.dna);
+          this.ui.rebuildGearView(save);
+        },
+        onSalvageAll: (rarity) => {
+          const res = save.salvageAll(rarity);
+          if (res.count === 0) return;
+          sound.playEvoFanfare();
+          this.ui.sayStatus(`分解 ${res.count} 件，回收 ${res.dna} 🧬`);
+          this.ui.updateDnaChip(save.data.dna);
           this.ui.rebuildGearView(save);
         },
       });
@@ -898,8 +913,11 @@ class Game {
       const gear = item.item;
       if (!gear) return;
       if (!save.addItem(gear)) {
-        this.ui.say('倉庫已滿！回主選單丟棄不要的裝備才能再撿', '#ff0055', 3);
-        sound.playHurt();
+        // 倉庫滿了就地分解，總比讓玩家白撿一場好
+        save.data.dna += salvageValue(gear);
+        save.flush();
+        sound.playGem();
+        this.ui.say(`倉庫已滿 — ${itemName(gear)} 就地分解，回收 ${salvageValue(gear)} 🧬`, '#ffb703', 3);
         return;
       }
       const color = RARITIES[gear.rarity].color;

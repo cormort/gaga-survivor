@@ -2,7 +2,7 @@
 
 import { WEAPONS, PASSIVES, GAME_CONFIG } from '../config.js';
 import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
-import { RARITIES, SLOTS, SLOT_ORDER, itemName, affixText, itemScore } from '../items.js';
+import { RARITIES, SLOTS, SLOT_ORDER, itemName, affixText, itemScore, salvageValue } from '../items.js';
 import { STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 
@@ -213,6 +213,23 @@ export class UIManager {
       btn.addEventListener('click', () => this._gearHandlers?.onUnequip(btn.dataset.unequip));
     });
 
+    // 批次分解：只掃沒穿在身上的
+    const worn = new Set(Object.values(equipped));
+    const bulk = document.getElementById('gear-bulk');
+    if (bulk) {
+      bulk.innerHTML = '';
+      for (const rk of ['rare', 'epic']) {
+        const n = stash.filter((it) => it.rarity === rk && !worn.has(it.id)).length;
+        if (n === 0) continue;
+        const btn = document.createElement('button');
+        btn.className = 'gear-mini-btn bulk';
+        btn.style.setProperty('--rarity', RARITIES[rk].color);
+        btn.textContent = `分解全部${RARITIES[rk].name} (${n})`;
+        btn.addEventListener('click', () => this._gearHandlers?.onSalvageAll(rk));
+        bulk.appendChild(btn);
+      }
+    }
+
     // 倉庫清單 (依稀有度與戰力排序)
     this.gearCount.textContent = `倉庫 ${stash.length} / ${STASH_CAP}`;
     this.gearCount.classList.toggle('full', stash.length >= STASH_CAP);
@@ -240,8 +257,10 @@ export class UIManager {
           <div class="gear-row-affixes">${item.affixes.map(affixText).join(' ‧ ')}</div>
         </div>
         <div class="gear-row-actions">
-          ${isOn ? '' : `<button class="gear-mini-btn equip" data-equip="${item.id}">裝備</button>`}
-          <button class="gear-mini-btn drop" data-discard="${item.id}">丟棄</button>
+          ${isOn
+            ? '<span class="gear-locked-hint">脫下才能分解</span>'
+            : `<button class="gear-mini-btn equip" data-equip="${item.id}">裝備</button>
+               <button class="gear-mini-btn drop" data-salvage="${item.id}">分解 +${salvageValue(item)} 🧬</button>`}
         </div>
       `;
       this.gearList.appendChild(row);
@@ -250,8 +269,8 @@ export class UIManager {
     this.gearList.querySelectorAll('[data-equip]').forEach((btn) => {
       btn.addEventListener('click', () => this._gearHandlers?.onEquip(btn.dataset.equip));
     });
-    this.gearList.querySelectorAll('[data-discard]').forEach((btn) => {
-      btn.addEventListener('click', () => this._gearHandlers?.onDiscard(btn.dataset.discard));
+    this.gearList.querySelectorAll('[data-salvage]').forEach((btn) => {
+      btn.addEventListener('click', () => this._gearHandlers?.onSalvage(btn.dataset.salvage));
     });
   }
 
