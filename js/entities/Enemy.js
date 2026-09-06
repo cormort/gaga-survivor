@@ -328,17 +328,45 @@ export class Enemy {
       ctx.restore();
     }
 
-    // Boss 專屬技能前搖警示 (光圈越亮越接近施放)
+    // Boss 專屬技能前搖警示 (Soulstone 風格：旋轉虛線外環 + 內縮實圈 + 角標輻條)
     if (this.isBoss && this.behaviors && this.behaviors.length > 0 &&
         this.skillTimer > 0 && this.skillTimer < 1.5) {
-      const warn = 1 - this.skillTimer / 1.5;
+      const warn = 1 - this.skillTimer / 1.5; // 0→1 越接近施放
+      const R = this.radius * 7 * (1 - warn * 0.28);
       ctx.save();
       ctx.translate(screenX, screenY);
-      ctx.strokeStyle = '#ff0055';
-      ctx.globalAlpha = 0.15 + warn * 0.5;
-      ctx.lineWidth = 3;
+
+      // 內縮實圈 (主警示)
+      ctx.strokeStyle = '#ff3860';
+      ctx.globalAlpha = 0.35 + warn * 0.55;
+      ctx.lineWidth = 3 + warn * 2;
       ctx.beginPath();
-      ctx.arc(0, 0, this.radius * 7 * (1 - warn * 0.25), 0, Math.PI * 2);
+      ctx.arc(0, 0, R, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 旋轉虛線外環 (方向感)
+      ctx.setLineDash([12, 10]);
+      ctx.lineDashOffset = -this.animTimer * 24;
+      ctx.strokeStyle = '#ff0055';
+      ctx.globalAlpha = 0.4 + warn * 0.4;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, R + 12, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 12 支輻條角標 (越接近越明顯)
+      ctx.globalAlpha = 0.2 + warn * 0.5;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ff3860';
+      ctx.beginPath();
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + this.animTimer * 0.15;
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        ctx.moveTo(ca * (R + 18), sa * (R + 18));
+        ctx.lineTo(ca * (R + 24 + warn * 6), sa * (R + 24 + warn * 6));
+      }
       ctx.stroke();
       ctx.restore();
     }

@@ -55,6 +55,7 @@ class Game {
 
     // 遊戲性增強系統狀態
     this.hitstopTimer = 0;
+    this.redFlash = 0; // Boss 大招紅閃
     this.combo = 0;
     this.comboTimer = 0;
     this.frenzyTimer = 0;
@@ -657,6 +658,7 @@ class Game {
     this.gold = 0;
     this.boss = null;
     this.hitstopTimer = 0;
+    this.redFlash = 0; // Boss 大招紅閃
     this.combo = 0;
     this.comboTimer = 0;
     this.frenzyTimer = 0;
@@ -756,6 +758,8 @@ class Game {
 
   // Boss 專屬技能效果 (由 Enemy.updateBoss 依冷卻觸發)
   handleBossSkill(boss, act) {
+    // Boss 大招紅閃 (Soulstone 風格：施法瞬間畫面邊緣泛紅；召喚較輕)
+    this.redFlash = Math.max(this.redFlash, act === 'summon' ? 0.3 : 0.55);
     if (act === 'nova') {
       // 範圍震波：光圈內受傷 + 震屏
       const R = boss.radius * 7;
@@ -1010,19 +1014,46 @@ class Game {
         ctx.arc(0, 0, h.r * wob, 0, Math.PI * 2);
         ctx.stroke();
       } else {
-        // 地雷/噴發：倒數警示圈 (越接近引爆收得越緊、越亮)
-        const prog = Math.min(1, h.t / h.fuse);
+        // 地雷/噴發：倒數警示 (Soulstone 風格刻紋圓陣：旋轉虛線外環 + 內縮實圈 + 輻條)
+        const prog = Math.min(1, h.t / h.fuse); // 0→1 越接近引爆
+        const R = h.r * (1.3 - prog * 0.3);
         ctx.strokeStyle = h.color;
-        ctx.globalAlpha = 0.35 + prog * 0.45;
-        ctx.lineWidth = 3;
+        // 外環旋轉虛線
+        ctx.globalAlpha = 0.25 + prog * 0.4;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 9]);
+        ctx.lineDashOffset = -h.t * 40;
         ctx.beginPath();
-        ctx.arc(0, 0, h.r * (1.25 - prog * 0.25), 0, Math.PI * 2);
+        ctx.arc(0, 0, R + 14, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = h.color;
-        ctx.globalAlpha = 0.45 + prog * 0.3;
+        ctx.setLineDash([]);
+        // 內縮主警示圈
+        ctx.globalAlpha = 0.4 + prog * 0.5;
+        ctx.lineWidth = 3 + prog * 2;
         ctx.beginPath();
-        ctx.arc(0, 0, 6 + prog * 12, 0, Math.PI * 2);
+        ctx.arc(0, 0, R, 0, Math.PI * 2);
+        ctx.stroke();
+        // 8 支輻條
+        ctx.globalAlpha = 0.2 + prog * 0.45;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + h.t * 1.2;
+          const ca = Math.cos(a);
+          const sa = Math.sin(a);
+          ctx.moveTo(ca * (R + 18), sa * (R + 18));
+          ctx.lineTo(ca * (R + 24 + prog * 4), sa * (R + 24 + prog * 4));
+        }
+        ctx.stroke();
+        // 中央核心點 (越接近越亮越大)
+        ctx.fillStyle = h.color;
+        ctx.globalAlpha = 0.5 + prog * 0.4;
+        ctx.shadowColor = h.color;
+        ctx.shadowBlur = 10 + prog * 10;
+        ctx.beginPath();
+        ctx.arc(0, 0, 5 + prog * 13, 0, Math.PI * 2);
         ctx.fill();
+        ctx.shadowBlur = 0;
       }
       ctx.restore();
     }
@@ -1330,6 +1361,7 @@ class Game {
       }
       this.ui.updateCombo(this.combo, this.frenzyTimer > 0);
     }
+    if (this.redFlash > 0) this.redFlash = Math.max(0, this.redFlash - dt * 1.6);
     if (this.frenzyTimer > 0) {
       this.frenzyTimer -= dt;
       if (Math.random() < 0.25) {
@@ -1797,6 +1829,18 @@ class Game {
 
     // 畫面後製：暗角 + 玩家聚光，讓視覺焦點集中在主角身上
     this.drawVignette();
+
+    // Boss 大招紅閃 (畫面邊緣泛紅，最上層)
+    if (this.redFlash > 0) {
+      const ctx = this.ctx;
+      const g = ctx.createRadialGradient(
+        this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.35,
+        this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.75);
+      g.addColorStop(0, 'rgba(255,0,60,0)');
+      g.addColorStop(1, `rgba(255,0,60,${(0.3 * this.redFlash).toFixed(3)})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, this.vw, this.vh);
+    }
 
     // 小地圖
     this.drawMinimap();
