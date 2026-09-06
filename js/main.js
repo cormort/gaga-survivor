@@ -5,6 +5,8 @@ import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
 import { DropItem } from './entities/DropItem.js';
+import { Mercenary, MERC } from './entities/Mercenary.js';
+import { Projectile } from './entities/Projectile.js';
 import { Turret, TURRET, TURRET_VARIANTS } from './entities/Turret.js';
 import { InputController } from './input.js';
 import { WeaponManager } from './weapons/WeaponManager.js';
@@ -48,6 +50,7 @@ class Game {
     this.enemyProjectiles = [];
     this.dropItems = [];
     this.turrets = [];
+    this.mercenaries = [];
 
     // 遊戲性增強系統狀態
     this.hitstopTimer = 0;
@@ -219,6 +222,7 @@ class Game {
     window.addEventListener('keydown', (e) => {
       if (e.key === 'b' || e.key === 'B') this.buildTurret();
       if (e.key === 't' || e.key === 'T') this.tryUpgradeNearestTurret();
+      if (e.key === 'g' || e.key === 'G') this.hireMercenary();
     });
     this.ui.buildBtn.addEventListener('click', () => this.buildTurret());
 
@@ -226,10 +230,16 @@ class Game {
     this.input.onDash = () => this.triggerDash();
     this.ui.dashBtn?.addEventListener('click', () => this.triggerDash());
 
+    // 僱傭傭兵 (G / 行動端按鈕)
+    this.ui.hireBtn?.addEventListener('click', () => this.hireMercenary());
+
     // 砲塔進化專精按鈕 (UI 建構子已掛 click，走 _turretUpCb；這裡不要再掛，避免一次點擊雙重觸發)
 
     // 每日挑戰入口按鈕
     this.ui.dailyBtn?.addEventListener('click', () => this.startDailyChallenge());
+
+    // 超武合成圖鑑 (主選單查閱配方)
+    this.ui.recipeBtn?.addEventListener('click', () => this.ui.openRecipeModal(save.data));
 
     // 音效切換按鈕
     this.ui.soundBtn.addEventListener('click', () => {
@@ -272,6 +282,86 @@ class Game {
     sound.playEvoFanfare();
     this.ui.say(`砲塔進化完畢：【${TURRET_VARIANTS[chosen].name}】！`, TURRET_VARIANTS[chosen].color, 2.8);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
+  }
+
+  // 僱傭傭兵 (局內金幣消耗；最多 MERC.maxCount 名，費用隨人數成長)
+  hireMercenary() {
+    if (this.state !== 'PLAYING' || !this.player) return;
+    if (this.mercenaries.length >= MERC.maxCount) {
+      this.ui.say(`傭兵小隊已滿員 (${MERC.maxCount}/${MERC.maxCount})`, '#8a9bb0', 1.6);
+      sound.playHurt();
+      return;
+    }
+    const cost = this.mercCost;
+    if (this.gold < cost) {
+      this.ui.say(`金幣不足，僱傭傭兵需要 ${cost} 🪙`, '#ff0055', 1.8);
+      sound.playHurt();
+      return;
+    }
+    this.gold -= cost;
+    const m = new Mercenary(this.player.x, this.player.y, this.mercenaries.length);
+    this.mercenaries.push(m);
+    this.particles.createShockwave(this.player.x, this.player.y, 90, '#3ddc84');
+    sound.playEvoFanfare();
+    this.ui.say(`💂 傭兵報到！(${cost} 🪙) 擊殺敵人可升級`, '#3ddc84', 2.4);
+    this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
+    this.ui.updateBuildBtn(this.gold, this.turretCost);
+    this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
+  }
+
+  get mercCost() {
+    const n = this.mercenaries.length;
+    return n >= MERC.maxCount ? null : MERC.baseCost + MERC.costGrowth * n;
+  }
+
+  // 傭兵 AI 更新：跟隨/索敵開火 + 被敵人啃食；陣亡清掉
+  updateMercenaries(dt) {
+    for (let i = this.mercenaries.length - 1; i >= 0; i--) {
+      const m = this.mercenaries[i];
+      m.update(dt, this.player, this.enemies, (merc, target) => {
+        const dx = target.x - merc.x;
+        const dy = target.y - merc.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        this.weaponManager.projectiles.push(new Projectile({
+          type: 'merc',
+          weaponId: 'merc',
+          x: merc.x + (dx / dist) * 10,
+          y: merc.y + (dy / dist) * 10,
+          vx: (dx / dist) * MERC.bulletSpeed,
+          vy: (dy / dist) * MERC.bulletSpeed,
+          damage: merc.damage,
+          radius: 6,
+          pierce: 1,
+          life: 1.7,
+          knockback: 1,
+          mercOwner: merc,
+        }));
+        sound.playShoot();
+      });
+
+      // 敵人貼身啃傭兵 (比照砲塔被啃)：推開 + 持續傷害
+      for (const e of this.enemies) {
+        if (e.isDead) continue;
+        const dx = e.x - m.x;
+        const dy = e.y - m.y;
+        const minD = 11 + e.radius;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= minD * minD || d2 === 0) continue;
+        const d = Math.sqrt(d2);
+        e.x = m.x + (dx / d) * minD;
+        e.y = m.y + (dy / d) * minD;
+        m.takeDamage(e.damage * dt * 1.5);
+      }
+
+      if (m.isDead) {
+        this.particles.createExplosion(m.x, m.y, 40);
+        this.particles.createShockwave(m.x, m.y, 80, '#4a7c3f');
+        sound.playHurt();
+        this.ui.say('💂 傭兵陣亡！重新僱傭一位吧', '#ff5e5e', 2.2);
+        this.mercenaries.splice(i, 1);
+        this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
+      }
+    }
   }
 
   // 啟動每日挑戰
@@ -467,6 +557,7 @@ class Game {
     this.enemyProjectiles = [];
     this.dropItems = [];
     this.turrets = [];
+    this.mercenaries = [];
     this.hazards = [];
     this.boss = null;
     this.particles.clear();
@@ -552,6 +643,7 @@ class Game {
     this.enemyProjectiles = [];
     this.dropItems = [];
     this.turrets = [];
+    this.mercenaries = [];
     this.initExplodableProps();
     this.extractionWell = null;
 
@@ -585,6 +677,7 @@ class Game {
     }
 
     this.ui.updateBuildBtn(this.gold, this.turretCost);
+    this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
     this.state = 'PLAYING';
   }
 
@@ -762,15 +855,33 @@ class Game {
       if (ep.isDead) continue;
 
       const dist = Math.hypot(p.x - ep.x, p.y - ep.y);
+      let consumed = false;
+      // 優先判定玩家 (含無敵幀擋彈)
       if (dist < p.radius + ep.radius) {
-        ep.isDead = true;
-        this.enemyProjectiles.splice(i, 1);
+        consumed = true;
         if (p.takeDamage(ep.damage)) {
           this.camera.shake = Math.max(this.camera.shake, 6);
           this.particles.createHurtText(p.x, p.y, ep.damage);
           this.particles.createDeathParticles(ep.x, ep.y, ep.color || '#06d6a0', 6);
           p.character.onHit?.(this);
         }
+      }
+      // 沒打到玩家就檢查傭兵 (酸液/彈幕會打傭兵)
+      if (!consumed) {
+        for (const m of this.mercenaries) {
+          if (m.isDead) continue;
+          const dm = Math.hypot(m.x - ep.x, m.y - ep.y);
+          if (dm < 11 + ep.radius) {
+            consumed = true;
+            m.takeDamage(ep.damage);
+            this.particles.createDeathParticles(ep.x, ep.y, ep.color || '#06d6a0', 3);
+            break;
+          }
+        }
+      }
+      if (consumed) {
+        ep.isDead = true;
+        this.enemyProjectiles.splice(i, 1);
       }
     }
   }
@@ -1094,6 +1205,9 @@ class Game {
     // 4.5 砲塔開火與被啃
     this.updateTurrets(dt);
 
+    // 4.6 傭兵 AI (跟隨/索敵/被啃)
+    this.updateMercenaries(dt);
+
     // 檢測是否在標準砲塔附近 (顯示進化按鈕)
     const nearStandardTurret = this.turrets.find(
       (t) => t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125
@@ -1212,6 +1326,7 @@ class Game {
     // 13. 更新 UI
     this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
+    this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
     this.ui.updateBossHUD(this.boss);
     this.ui.setObjective(this.objectiveText());
 
@@ -1261,7 +1376,8 @@ class Game {
         p.hitEnemies.add(enemy);
 
         // 給予傷害與擊退
-        enemy.takeDamage(p.damage, p.knockback, p.x, p.y);
+        const died = enemy.takeDamage(p.damage, p.knockback, p.x, p.y);
+        if (died && p.mercOwner) p.mercOwner.gainKill(); // 傭兵擊殺 → 經驗升級
         this.weaponManager.recordDamage(p.weaponId, p.damage);
         this.particles.createDamageText(enemy.x, enemy.y, p.damage, p.isCrit || p.isEvo, p.isCrit);
         sound.playHit();
@@ -1513,6 +1629,7 @@ class Game {
     // 應用升級選項
     if (selectedOption.type === 'evo') {
       this.weaponManager.evolveWeapon(selectedOption.baseId, selectedOption.targetId);
+      save.markEvolved(selectedOption.targetId); // 圖鑑 ★ 標記 (跨局保留)
       this.ui.say(this.player.character.lines.evolve, this.player.character.accent);
     } else if (selectedOption.type === 'weapon_upgrade' || selectedOption.type === 'weapon_new') {
       this.weaponManager.upgradeWeapon(selectedOption.id);
@@ -1636,6 +1753,11 @@ class Game {
     // 繪製敵方投射物
     for (const ep of this.enemyProjectiles) {
       ep.draw(this.ctx, renderCam);
+    }
+
+    // 繪製傭兵 (隊友，畫在敵人之上、特工之下)
+    for (const m of this.mercenaries) {
+      m.draw(this.ctx, renderCam);
     }
 
     // 繪製主角特工鴨

@@ -21,6 +21,7 @@ function blank() {
     character: 'duck',
     settings: { sfx: 1, bgm: 0.8 }, // 音量 (主選單滑桿)
     daily: { date: '', bestTime: 0, completed: false },
+    evolvedEver: [],            // 歷史上合成過的超武 id (合成圖鑑打勾用)
   };
 }
 
@@ -48,6 +49,7 @@ function ensureDefaults(d) {
   if (!Array.isArray(d.stash)) d.stash = [];
   if (!d.equipped || typeof d.equipped !== 'object') d.equipped = {};
   if (!d.daily || typeof d.daily !== 'object') d.daily = { date: '', bestTime: 0, completed: false };
+  if (!Array.isArray(d.evolvedEver)) d.evolvedEver = [];
   // 已穿的裝備若已不在倉庫 (手動改存檔等情況) 就清掉，避免加成算到幽靈物品
   for (const slot of SLOT_ORDER) {
     if (d.equipped[slot] && !d.stash.some((it) => it.id === d.equipped[slot])) delete d.equipped[slot];
@@ -231,6 +233,15 @@ export const save = {
     }
     this.flush();
     return this.data.daily;
+  },
+
+  // 記錄合成過的超武 (圖鑑 ★ 標記，跨局保留)
+  markEvolved(evoId) {
+    if (!this.data.evolvedEver) this.data.evolvedEver = [];
+    if (!this.data.evolvedEver.includes(evoId)) {
+      this.data.evolvedEver.push(evoId);
+      this.flush();
+    }
   },
 };
 

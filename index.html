@@ -95,6 +95,10 @@
         <span class="action-key">SPACE</span>
         <div id="dash-cooldown-overlay"></div>
       </button>
+      <button id="btn-hire" class="action-btn hire-btn" title="僱傭傭兵 (G)">
+        <span class="action-icon">💂</span>
+        <span class="action-key">80🪙</span>
+      </button>
       <button id="btn-turret-upgrade" class="action-btn turret-up-btn hidden" title="升級鄰近砲塔 (T)">
         <span class="action-icon">⚙️</span>
         <span class="action-key">50🪙</span>
@@ -161,6 +165,18 @@
       </div>
     </div>
 
+    <!-- 超武合成圖鑑 (邪惡秘典精神：查閱武器→配件→超武配方) -->
+    <div id="recipe-modal" class="overlay hidden">
+      <div class="modal-content recipe-content">
+        <div class="modal-header">
+          <h2 class="glow-text">✨ 超武合成圖鑑</h2>
+          <p class="subtitle">武器升滿 + 對應配件升滿，即可在升級三選一合成超武</p>
+        </div>
+        <div id="recipe-list" class="recipe-list"></div>
+        <button id="btn-close-recipe" class="game-btn secondary-btn">關閉</button>
+      </div>
+    </div>
+
     <!-- 開局/開始介面 -->
     <div id="start-screen" class="overlay">
       <div class="start-box">
@@ -180,6 +196,7 @@
           <span id="dna-chip" class="dna-chip">🧬 0</span>
           <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
           <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
+          <button id="btn-recipe" class="game-btn talent-btn">✨ 超武配方</button>
           <button id="btn-daily" class="game-btn talent-btn">📅 每日挑戰</button>
         </div>
         <div class="audio-row">

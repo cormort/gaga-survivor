@@ -37,6 +37,9 @@ export class Projectile {
 
     // 足球專屬
     this.bounces = options.bounces || 6;
+
+    // 傭兵專屬 (擊殺升級 credit)
+    this.mercOwner = options.mercOwner || null;
   }
 
   update(dt, player, onExplosion = null) {
@@ -52,6 +55,7 @@ export class Projectile {
 
     switch (this.type) {
       case 'kunai':
+      case 'merc':
         this.x += this.vx * dt;
         this.y += this.vy * dt;
         break;
@@ -123,6 +127,10 @@ export class Projectile {
         this.drawKunai(ctx);
         break;
 
+      case 'merc':
+        this.drawMerc(ctx);
+        break;
+
       case 'guardian':
         this.drawGuardian(ctx);
         break;
@@ -148,6 +156,23 @@ export class Projectile {
     }
 
     ctx.restore();
+  }
+
+  // 傭兵能量彈 (金色曳光)
+  drawMerc(ctx) {
+    const angle = Math.atan2(this.vy, this.vx);
+    ctx.rotate(angle);
+    ctx.shadowColor = '#ffd60a';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#ffd60a';
+    ctx.beginPath();
+    ctx.ellipse(4, 0, 7, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff3c4';
+    ctx.beginPath();
+    ctx.arc(-1, 0, 2.4, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   drawKunai(ctx) {

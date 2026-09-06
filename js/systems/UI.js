@@ -51,6 +51,7 @@ export class UIManager {
     this.dashBtn = document.getElementById('btn-dash');
     this.dashOverlay = document.getElementById('dash-cooldown-overlay');
     this.turretUpBtn = document.getElementById('btn-turret-upgrade');
+    this.hireBtn = document.getElementById('btn-hire');
     this.comboHud = document.getElementById('combo-hud');
     this.comboCount = document.getElementById('combo-count');
 
@@ -59,6 +60,9 @@ export class UIManager {
     this.chestSubtitle = document.getElementById('chest-subtitle');
     this.chestClaimBtn = document.getElementById('btn-chest-claim');
     this.dailyBtn = document.getElementById('btn-daily');
+    this.recipeBtn = document.getElementById('btn-recipe');
+    this.recipeModal = document.getElementById('recipe-modal');
+    this.recipeList = document.getElementById('recipe-list');
 
     this.charSelect = document.getElementById('character-select');
     this.levelSelect = document.getElementById('level-select');
@@ -77,6 +81,9 @@ export class UIManager {
     });
     document.getElementById('btn-close-gear')?.addEventListener('click', () => {
       this.gearModal?.classList.add('hidden');
+    });
+    document.getElementById('btn-close-recipe')?.addEventListener('click', () => {
+      this.recipeModal?.classList.add('hidden');
     });
 
     if (this.turretUpBtn) {
@@ -353,6 +360,17 @@ export class UIManager {
     }
   }
 
+  // 僱傭傭兵按鈕狀態 (cost=null 表示滿員)
+  updateHireBtn(cost, affordable) {
+    if (!this.hireBtn) return;
+    const key = this.hireBtn.querySelector('.action-key');
+    if (key) key.textContent = cost === null ? 'MAX' : `${cost}🪙`;
+    this.hireBtn.disabled = cost === null || !affordable;
+    this.hireBtn.title = cost === null
+      ? '傭兵小隊已滿員'
+      : affordable ? `僱傭傭兵 (${cost} 🪙, G)` : `金幣不足 (需要 ${cost} 🪙)`;
+  }
+
   // 幸運物資箱抽獎彈窗
   showLuckyChest(count, rewards, onClaim) {
     if (!this.luckyChestModal) return;
@@ -389,6 +407,54 @@ export class UIManager {
       this.luckyChestModal.classList.add('hidden');
       if (onClaim) onClaim();
     };
+  }
+
+  // 超武合成圖鑑：列出所有 武器→配件→超武 配方 (★ = 歷史合成過)
+  buildRecipeList(saveData) {
+    if (!this.recipeList) return;
+    this.recipeList.innerHTML = '';
+    const evolved = saveData && Array.isArray(saveData.evolvedEver) ? new Set(saveData.evolvedEver) : new Set();
+
+    for (const [id, def] of Object.entries(WEAPONS)) {
+      if (!def.evoTarget || def.isEvo) continue;
+      const evoDef = WEAPONS[def.evoTarget];
+      if (!evoDef) continue;
+      const pairDef = PASSIVES[def.pairPassive] || WEAPONS[def.pairPassive];
+      if (!pairDef) continue;
+
+      const row = document.createElement('div');
+      row.className = 'recipe-row';
+
+      const cell = (cls, icon, text) => {
+        const span = document.createElement('span');
+        span.className = cls;
+        span.textContent = icon ? `${icon} ${text}` : text;
+        return span;
+      };
+      row.appendChild(cell('recipe-item', def.icon, def.name));
+      row.appendChild(cell('recipe-plus', null, '＋'));
+      row.appendChild(cell('recipe-item recipe-pair', pairDef.icon, `${pairDef.name} LV${pairDef.maxLevel}`));
+      row.appendChild(cell('recipe-equals', null, '＝'));
+      row.appendChild(cell('recipe-item recipe-evo', evoDef.icon, evoDef.name));
+
+      const chip = document.createElement('span');
+      chip.className = 'recipe-chip' + (evolved.has(evoDef.id) ? ' done' : '');
+      chip.textContent = evolved.has(evoDef.id) ? '★ 已合成過' : '未合成';
+      row.appendChild(chip);
+
+      const desc = document.createElement('div');
+      desc.className = 'recipe-desc';
+      desc.textContent = evoDef.description;
+      row.appendChild(desc);
+
+      this.recipeList.appendChild(row);
+    }
+  }
+
+  openRecipeModal(saveData) {
+    if (!this.recipeModal) return;
+    this.buildRecipeList(saveData);
+    this.recipeModal.classList.remove('hidden');
   }
 
   // 開始畫面的關卡選擇 (未解鎖的關卡不能點)
@@ -607,11 +673,25 @@ export class UIManager {
   generateUpgradeOptions(weaponManager, excludeKeys = null) {
     const candidates = [];
 
-    // 1. 檢查是否有滿足條件的超武 (武器滿級 LV5 + 持有對應被動)
+    // ── 超武配方狀態 (VS 精神：武器滿級 + 對應配件也滿級才可合成) ──
+    // pairInfo: 回傳該武器配方配件的持有/滿級狀態；缺件的配方記錄下來做提示
+    const pairInfo = (baseId) => {
+      const def = WEAPONS[baseId];
+      if (!def || !def.evoTarget) return null;
+      const pairId = def.pairPassive;
+      const pItem = weaponManager.passives.get(pairId) || weaponManager.weapons.get(pairId);
+      const pDef = PASSIVES[pairId] || WEAPONS[pairId];
+      if (!pItem || !pDef) return { pairId, owned: false, maxed: false };
+      return { pairId, owned: true, maxed: pItem.level >= pDef.maxLevel };
+    };
+    const recipeHints = new Map(); // pairId -> { weaponName, evoName }：武器滿級但配件還沒滿級
+
+    // 1. 檢查是否有滿足條件的超武 (武器滿級 + 配件滿級)
     for (const [id, item] of weaponManager.weapons.entries()) {
       const def = WEAPONS[id];
       if (!item.isEvo && item.level >= def.maxLevel && def.evoTarget) {
-        if (weaponManager.passives.has(def.pairPassive)) {
+        const pair = pairInfo(id);
+        if (pair && pair.owned && pair.maxed) {
           const evoDef = WEAPONS[def.evoTarget];
           candidates.push({
             type: 'evo',
@@ -623,38 +703,49 @@ export class UIManager {
             tag: '超武 EVO',
             isEvo: true,
           });
+        } else if (pair && !pair.maxed) {
+          // 武器已滿級但配件的等級不夠 → 提示缺件，引導玩家補配件
+          recipeHints.set(pair.pairId, { weaponName: def.name, evoName: WEAPONS[def.evoTarget].name, owned: pair.owned });
         }
       }
     }
 
-    // 2. 現有武器升級
+    // 2. 現有武器升級 (升級到滿級前一張會提示配方狀態)
     for (const [id, item] of weaponManager.weapons.entries()) {
       const def = WEAPONS[id];
       if (!item.isEvo && item.level < def.maxLevel) {
+        const isLastLevel = item.level + 1 === def.maxLevel;
+        const pair = pairInfo(id);
+        const recipeReady = pair && pair.maxed && isLastLevel;
         candidates.push({
           type: 'weapon_upgrade',
           id: id,
           name: def.name,
           icon: def.icon,
-          description: `提升等級至 LV ${item.level + 1}。傷害與彈幕增強。`,
-          tag: '武器升級',
+          description: recipeReady
+            ? `提升至滿級！配方齊備，可合成【${WEAPONS[def.evoTarget].name}】`
+            : `提升等級至 LV ${item.level + 1}。傷害與彈幕增強。`,
+          tag: recipeReady ? '武器升級 · 配方就緒' : '武器升級',
           nextLevel: item.level + 1,
           maxLevel: def.maxLevel,
         });
       }
     }
 
-    // 3. 現有被動升級
+    // 3. 現有被動升級 (若正是某把滿級武器的缺件，特別標註)
     for (const [id, item] of weaponManager.passives.entries()) {
       const def = PASSIVES[id];
       if (item.level < def.maxLevel) {
+        const hint = recipeHints.get(id);
         candidates.push({
           type: 'passive_upgrade',
           id: id,
           name: def.name,
           icon: def.icon,
-          description: `提升等級至 LV ${item.level + 1}。效果提升。`,
-          tag: '被動升級',
+          description: hint
+            ? `提升等級至 LV ${item.level + 1}。完成後即可合成【${hint.evoName}】`
+            : `提升等級至 LV ${item.level + 1}。效果提升。`,
+          tag: hint ? '被動升級 · 超武缺件' : '被動升級',
           nextLevel: item.level + 1,
           maxLevel: def.maxLevel,
         });
@@ -684,13 +775,16 @@ export class UIManager {
     if (weaponManager.passives.size < GAME_CONFIG.MAX_PASSIVE_SLOTS) {
       for (const [id, def] of Object.entries(PASSIVES)) {
         if (!weaponManager.passives.has(id)) {
+          const hint = recipeHints.get(id); // 某把滿級武器的配方配件還沒拿
           candidates.push({
             type: 'passive_new',
             id: id,
             name: def.name,
             icon: def.icon,
-            description: def.description,
-            tag: '新被動',
+            description: hint
+              ? `${def.description}（缺件：取得並升滿即可合成【${hint.evoName}】）`
+              : def.description,
+            tag: hint ? '新被動 · 超武缺件' : '新被動',
             isNew: true,
             nextLevel: 1,
             maxLevel: def.maxLevel,
@@ -728,6 +822,18 @@ export class UIManager {
     for (const list of [fresh, reused]) {
       while (result.length < 3 && list.length > 0) {
         result.push(list.pop());
+      }
+    }
+
+    // 超武配方缺件引導：武器已滿級但配件未滿級 → 該配件卡保證在三選一內 (取代一張非 EVO 卡)
+    if (recipeHints.size > 0) {
+      const hintId = recipeHints.keys().next().value;
+      if (!result.some((o) => o.id === hintId)) {
+        const hintCard = otherList.find((o) => o.id === hintId);
+        const slot = result.findIndex((o) => !o.isEvo);
+        if (hintCard && slot >= 0) {
+          result[slot] = hintCard;
+        }
       }
     }
     return result;
