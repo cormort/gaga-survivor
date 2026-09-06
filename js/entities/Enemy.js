@@ -17,12 +17,17 @@ export class Enemy {
     this.exp = config.exp;
     this.isBoss = !!config.isBoss;
     this.explodes = !!config.explodes;
+    this.dash = config.dash || null;          // 狂奔感染者：週期衝刺
+    this.splitInto = config.splitInto || null; // 孢子母體：死亡裂解
+    this.splitCount = config.splitCount || 0;
+    this.dashTimer = this.dash ? Math.random() * this.dash.every : 0;
+    this.dashLeft = 0;
 
     // 精英詞綴 (由 Spawner 隨機賦予；Boss 不會有)
     this.isElite = false;
     this.affixKey = null;
     this.eliteColor = null;
-    this.damageTakenMul = 1; // 裝甲詞綴會降到 0.5
+    this.damageTakenMul = config.damageTakenMul || 1; // 盾衛自帶減傷，裝甲詞綴再疊乘
     this.spriteScale = 1;    // 巨獸詞綴放大繪製用
 
     this.x = x;
@@ -61,7 +66,7 @@ export class Enemy {
     this.damage = Math.round(this.damage * (a.damageMul || 1));
     this.radius = Math.round(this.radius * (a.radiusMul || 1));
     this.spriteScale = a.radiusMul || 1; // 巨獸體型跟著放大 (碰撞半徑同步)
-    this.damageTakenMul = a.damageTakenMul || 1;
+    this.damageTakenMul *= a.damageTakenMul || 1;
     this.exp = Math.round(this.exp * (a.expMul || 1));
   }
 
@@ -82,9 +87,10 @@ export class Enemy {
     if (this.isBoss) {
       this.updateBoss(dt, dx, dy, dist, onBossSkill);
     } else {
+      const spd = this.speed * this.dashSpeedMul(dt); // 每幀只推進一次衝刺計時
       if (dist > 0.1) {
-        moveX = (dx / dist) * this.speed;
-        moveY = (dy / dist) * this.speed;
+        moveX = (dx / dist) * spd;
+        moveY = (dy / dist) * spd;
       }
     }
 
@@ -104,6 +110,22 @@ export class Enemy {
     // 擊退力道衰減
     this.kbX *= Math.pow(0.05, dt);
     this.kbY *= Math.pow(0.05, dt);
+  }
+
+  // 衝刺怪：平時走路，冷卻到就短暫加速直撲玩家 (回傳當幀速度倍率)
+  dashSpeedMul(dt) {
+    if (!this.dash) return 1;
+    if (this.dashLeft > 0) {
+      this.dashLeft -= dt;
+      return this.dash.mul;
+    }
+    this.dashTimer += dt;
+    if (this.dashTimer >= this.dash.every) {
+      this.dashTimer = 0;
+      this.dashLeft = this.dash.dur;
+      return this.dash.mul;
+    }
+    return 1;
   }
 
   updateBoss(dt, dx, dy, dist, onBossSkill = null) {
@@ -205,6 +227,19 @@ export class Enemy {
       ctx.restore();
     } else {
       blit(ctx, sprite, frame, screenX, screenY, this.flashTimer > 0);
+    }
+
+    // 衝刺中的紅色尾焰警示
+    if (this.dashLeft > 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.strokeStyle = this.color;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius + 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
     // 非滿血且非 Boss 時顯示小血條 (Boss 有頂部專屬 HUD)

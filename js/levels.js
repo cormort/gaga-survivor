@@ -28,9 +28,9 @@ export const LEVELS = {
     mech: { type: 'supply', interval: 45, jitter: 20 },
     waves: [
       { until: 120, pool: [['walker', 1]], interval: 0.85, batch: 1 },
-      { until: 240, pool: [['walker', 0.6], ['bat', 0.4]], interval: 0.6, batch: 1 },
-      { until: 360, pool: [['walker', 0.45], ['bat', 0.3], ['brute', 0.25]], interval: 0.45, batch: 1 },
-      { until: 480, pool: [['walker', 0.35], ['bat', 0.25], ['brute', 0.2], ['boomer', 0.2]], interval: 0.3, batch: 2 },
+      { until: 240, pool: [['walker', 0.5], ['bat', 0.3], ['runner', 0.2]], interval: 0.6, batch: 1 },
+      { until: 360, pool: [['walker', 0.35], ['bat', 0.25], ['brute', 0.2], ['runner', 0.2]], interval: 0.45, batch: 1 },
+      { until: 480, pool: [['walker', 0.28], ['bat', 0.2], ['brute', 0.17], ['boomer', 0.17], ['runner', 0.18]], interval: 0.3, batch: 2 },
     ],
     bosses: [
       { at: 120, hp: 4000, name: '狂暴推土喪屍' },
@@ -59,9 +59,9 @@ export const LEVELS = {
     mech: { type: 'pool', interval: 24, jitter: 8, radius: 115, dur: 6, dmg: 6, color: '#b5179e' },
     waves: [
       { until: 100, pool: [['walker', 0.7], ['boomer', 0.3]], interval: 0.7, batch: 1 },
-      { until: 240, pool: [['walker', 0.4], ['boomer', 0.35], ['bat', 0.25]], interval: 0.5, batch: 1 },
-      { until: 360, pool: [['boomer', 0.4], ['brute', 0.3], ['bat', 0.3]], interval: 0.4, batch: 2 },
-      { until: 480, pool: [['boomer', 0.35], ['brute', 0.35], ['walker', 0.3]], interval: 0.28, batch: 2 },
+      { until: 240, pool: [['walker', 0.35], ['boomer', 0.3], ['bat', 0.2], ['spore_host', 0.15]], interval: 0.5, batch: 1 },
+      { until: 360, pool: [['boomer', 0.32], ['brute', 0.24], ['bat', 0.22], ['spore_host', 0.22]], interval: 0.4, batch: 2 },
+      { until: 480, pool: [['boomer', 0.3], ['brute', 0.28], ['walker', 0.2], ['spore_host', 0.22]], interval: 0.28, batch: 2 },
     ],
     bosses: [
       { at: 120, hp: 5500, name: '生化軟泥聚合體', behaviors: ['summon'] },
@@ -90,9 +90,9 @@ export const LEVELS = {
     mech: { type: 'mine', interval: 30, jitter: 12, radius: 125, fuse: 1.8, dmg: 10, dmgEnemy: 600, color: '#90e0ef' },
     waves: [
       { until: 100, pool: [['brute', 0.5], ['walker', 0.5]], interval: 0.75, batch: 1 },
-      { until: 240, pool: [['brute', 0.4], ['bat', 0.4], ['walker', 0.2]], interval: 0.5, batch: 2 },
-      { until: 360, pool: [['brute', 0.45], ['bat', 0.35], ['boomer', 0.2]], interval: 0.38, batch: 2 },
-      { until: 480, pool: [['brute', 0.4], ['bat', 0.3], ['boomer', 0.3]], interval: 0.26, batch: 2 },
+      { until: 240, pool: [['brute', 0.35], ['bat', 0.3], ['walker', 0.15], ['warden', 0.2]], interval: 0.5, batch: 2 },
+      { until: 360, pool: [['brute', 0.35], ['bat', 0.25], ['boomer', 0.18], ['warden', 0.22]], interval: 0.38, batch: 2 },
+      { until: 480, pool: [['brute', 0.3], ['bat', 0.22], ['boomer', 0.22], ['warden', 0.26]], interval: 0.26, batch: 2 },
     ],
     bosses: [
       { at: 120, hp: 7000, name: '冰霜機甲' },
@@ -121,9 +121,9 @@ export const LEVELS = {
     mech: { type: 'geyser', interval: 22, jitter: 8, radius: 170, fuse: 1.5, dmg: 14, dmgEnemy: 1300, color: '#ff7700' },
     waves: [
       { until: 90, pool: [['brute', 0.5], ['boomer', 0.5]], interval: 0.6, batch: 1 },
-      { until: 220, pool: [['brute', 0.4], ['boomer', 0.3], ['bat', 0.3]], interval: 0.42, batch: 2 },
-      { until: 360, pool: [['brute', 0.45], ['boomer', 0.3], ['bat', 0.25]], interval: 0.3, batch: 2 },
-      { until: 480, pool: [['brute', 0.4], ['boomer', 0.35], ['bat', 0.25]], interval: 0.22, batch: 3 },
+      { until: 220, pool: [['brute', 0.3], ['boomer', 0.24], ['bat', 0.22], ['runner', 0.24]], interval: 0.42, batch: 2 },
+      { until: 360, pool: [['brute', 0.3], ['boomer', 0.2], ['bat', 0.16], ['warden', 0.18], ['spore_host', 0.16]], interval: 0.3, batch: 2 },
+      { until: 480, pool: [['brute', 0.26], ['boomer', 0.22], ['bat', 0.14], ['warden', 0.16], ['spore_host', 0.12], ['runner', 0.1]], interval: 0.22, batch: 3 },
     ],
     bosses: [
       { at: 120, hp: 9000, name: '烈焰暴君', behaviors: ['nova'] },
@@ -149,7 +149,7 @@ export const LEVELS = {
     decor: ['lava_crack', 'gear', 'radar'],
     hpScale: 1,
     waves: [
-      { until: 1e9, pool: [['walker', 0.3], ['bat', 0.25], ['brute', 0.2], ['boomer', 0.25]], interval: 0.55, batch: 2 },
+      { until: 1e9, pool: [['walker', 0.2], ['bat', 0.16], ['brute', 0.14], ['boomer', 0.16], ['runner', 0.14], ['warden', 0.1], ['spore_host', 0.1]], interval: 0.55, batch: 2 },
     ],
     bosses: [],
   },

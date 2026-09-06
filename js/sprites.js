@@ -1324,6 +1324,370 @@ function drawGear(x) {
   x.fill();
 }
 
+
+function drawRunner(x, t, r) {
+  const p = t * Math.PI * 2;
+  const gallop = Math.sin(p);          // 前後腿交替
+  const lunge = Math.cos(p) * 2.2;     // 撲擊時身體前後伸縮
+  shadow(x, r * 0.95, r * 0.85);
+
+  // 後方拖曳的火焰速度線
+  for (const [ty, len, a] of [[-r * 0.4, 1.1, 0.5], [r * 0.05, 1.6, 0.65], [r * 0.45, 0.9, 0.4]]) {
+    const tg = x.createLinearGradient(-r * (1.1 + len), 0, -r * 0.9, 0);
+    tg.addColorStop(0, 'rgba(255,60,0,0)');
+    tg.addColorStop(1, `rgba(255,170,60,${a})`);
+    x.strokeStyle = tg;
+    x.lineWidth = 2.6;
+    x.beginPath();
+    x.moveTo(-r * (1.1 + len) - lunge, ty + gallop * 2);
+    x.lineTo(-r * 0.9 - lunge, ty + gallop);
+    x.stroke();
+  }
+
+  // 四足 (前後交錯擺動)
+  x.strokeStyle = '#59200a';
+  x.lineWidth = 3.4;
+  const legs = [[-r * 0.55, 1], [-r * 0.2, -1], [r * 0.3, -1], [r * 0.62, 1]];
+  for (const [lx, phase] of legs) {
+    const swing = gallop * phase * 4;
+    x.beginPath();
+    x.moveTo(lx, r * 0.35);
+    x.lineTo(lx + swing, r * 0.95);
+    x.lineTo(lx + swing * 1.6 + 2, r * 1.25);
+    x.stroke();
+  }
+
+  // 拉長低伏的軀幹
+  x.fillStyle = sphere(x, '#ff6b35', r * 1.1, -r * 0.1, 0);
+  x.beginPath();
+  x.moveTo(-r * 1.25, r * 0.1);
+  x.quadraticCurveTo(-r * 1.1, -r * 0.75, -r * 0.1, -r * 0.7);
+  x.quadraticCurveTo(r * 0.95 + lunge, -r * 0.72, r * 1.3 + lunge, -r * 0.05);
+  x.quadraticCurveTo(r * 0.9 + lunge, r * 0.72, -r * 0.2, r * 0.66);
+  x.quadraticCurveTo(-r * 1.05, r * 0.62, -r * 1.25, r * 0.1);
+  x.closePath();
+  x.fill();
+  x.strokeStyle = '#4a1704';
+  x.lineWidth = 2;
+  x.stroke();
+
+  // 背脊骨刺
+  x.fillStyle = '#ffd6a5';
+  x.strokeStyle = '#4a1704';
+  x.lineWidth = 1.1;
+  for (let i = 0; i < 4; i++) {
+    const bx = -r * 0.8 + i * r * 0.52;
+    const h = r * (0.42 - i * 0.05);
+    x.beginPath();
+    x.moveTo(bx - 2.6, -r * 0.62);
+    x.lineTo(bx, -r * 0.62 - h);
+    x.lineTo(bx + 2.6, -r * 0.62);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  }
+
+  // 前伸的顎部與獠牙
+  x.fillStyle = '#c9400f';
+  x.beginPath();
+  x.moveTo(r * 0.75 + lunge, -r * 0.35);
+  x.quadraticCurveTo(r * 1.7 + lunge, -r * 0.2, r * 1.62 + lunge, r * 0.12);
+  x.quadraticCurveTo(r * 1.2 + lunge, r * 0.45, r * 0.72 + lunge, r * 0.3);
+  x.closePath();
+  x.fill();
+  x.strokeStyle = '#4a1704';
+  x.lineWidth = 1.6;
+  x.stroke();
+  x.fillStyle = '#fff2d0';
+  for (let i = 0; i < 3; i++) {
+    const tx = r * (0.95 + i * 0.28) + lunge;
+    x.beginPath();
+    x.moveTo(tx, r * 0.02);
+    x.lineTo(tx + 2, r * 0.32);
+    x.lineTo(tx + 3.6, r * 0.02);
+    x.closePath();
+    x.fill();
+  }
+
+  // 燃燒般的獨目
+  const eg = x.createRadialGradient(r * 0.55 + lunge, -r * 0.42, 0, r * 0.55 + lunge, -r * 0.42, r * 0.7);
+  eg.addColorStop(0, 'rgba(255,240,150,0.75)');
+  eg.addColorStop(1, 'rgba(255,120,0,0)');
+  x.fillStyle = eg;
+  x.beginPath();
+  x.arc(r * 0.55 + lunge, -r * 0.42, r * 0.7, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = '#fff3b0';
+  x.beginPath();
+  x.ellipse(r * 0.55 + lunge, -r * 0.42, 3.4, 2.2, -0.3, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = '#5c1c05';
+  x.beginPath();
+  x.ellipse(r * 0.6 + lunge, -r * 0.42, 1.1, 2.2, -0.3, 0, Math.PI * 2);
+  x.fill();
+}
+
+function drawWarden(x, t, r) {
+  const p = t * Math.PI * 2;
+  const step = Math.sin(p) * 1.4;
+  const guard = Math.sin(p) * 1.2; // 盾牌隨步伐微晃
+  shadow(x, r * 1.0, r * 1.05);
+
+  // 靴子
+  x.fillStyle = '#123449';
+  for (const sgn of [-1, 1]) {
+    x.beginPath();
+    x.roundRect(sgn * r * 0.42 - r * 0.26, r * 0.75 - step * sgn, r * 0.52, r * 0.4, 3);
+    x.fill();
+  }
+
+  // 軀幹裝甲 (梯形，上寬下窄)
+  x.fillStyle = sphere(x, '#2a6f97', r * 1.2, 0, step);
+  x.beginPath();
+  x.moveTo(-r * 0.82, -r * 0.62 + step);
+  x.lineTo(r * 0.82, -r * 0.62 + step);
+  x.lineTo(r * 0.66, r * 0.82 + step);
+  x.lineTo(-r * 0.66, r * 0.82 + step);
+  x.closePath();
+  x.fill();
+  x.strokeStyle = '#08202e';
+  x.lineWidth = 2.4;
+  x.stroke();
+
+  // 胸甲分線與能量核心
+  x.strokeStyle = 'rgba(0,0,0,0.4)';
+  x.lineWidth = 1.6;
+  x.beginPath();
+  x.moveTo(-r * 0.74, r * 0.12 + step);
+  x.lineTo(r * 0.74, r * 0.12 + step);
+  x.stroke();
+  const cg = x.createRadialGradient(0, r * 0.4 + step, 0, 0, r * 0.4 + step, r * 0.45);
+  cg.addColorStop(0, 'rgba(76,201,240,0.9)');
+  cg.addColorStop(1, 'rgba(76,201,240,0)');
+  x.fillStyle = cg;
+  x.beginPath();
+  x.arc(0, r * 0.4 + step, r * 0.45, 0, Math.PI * 2);
+  x.fill();
+
+  // 厚重肩甲
+  x.fillStyle = '#1b5a7d';
+  x.strokeStyle = '#08202e';
+  x.lineWidth = 2;
+  for (const sgn of [-1, 1]) {
+    x.beginPath();
+    x.ellipse(sgn * r * 0.92, -r * 0.55 + step, r * 0.38, r * 0.3, sgn * 0.3, 0, Math.PI * 2);
+    x.fill();
+    x.stroke();
+  }
+
+  // 頭盔與發光觀察縫
+  x.fillStyle = '#1b5a7d';
+  x.beginPath();
+  x.roundRect(-r * 0.42, -r * 1.12 + step, r * 0.84, r * 0.58, 5);
+  x.fill();
+  x.strokeStyle = '#08202e';
+  x.lineWidth = 2;
+  x.stroke();
+  const vg = x.createLinearGradient(-r * 0.34, 0, r * 0.34, 0);
+  vg.addColorStop(0, '#4cc9f0');
+  vg.addColorStop(0.5, '#d8f6ff');
+  vg.addColorStop(1, '#4cc9f0');
+  x.fillStyle = vg;
+  x.fillRect(-r * 0.32, -r * 0.92 + step, r * 0.64, r * 0.16);
+
+  // 正面大盾 (減傷的視覺依據)：六角板 + 警示斜紋 + 高光
+  const sy = step + guard;
+  x.fillStyle = '#4cc9f0';
+  x.strokeStyle = '#08202e';
+  x.lineWidth = 2.6;
+  x.beginPath();
+  x.moveTo(r * 0.55, -r * 1.05 + sy);
+  x.lineTo(r * 1.32, -r * 0.68 + sy);
+  x.lineTo(r * 1.32, r * 0.68 + sy);
+  x.lineTo(r * 0.55, r * 1.05 + sy);
+  x.lineTo(r * 0.4, sy);
+  x.closePath();
+  x.fill();
+  x.stroke();
+  x.save();
+  x.clip();
+  x.strokeStyle = 'rgba(10,30,45,0.45)';
+  x.lineWidth = 4;
+  for (let i = -3; i <= 4; i++) {
+    x.beginPath();
+    x.moveTo(r * 0.4 + i * 9, -r * 1.2 + sy);
+    x.lineTo(r * 0.4 + i * 9 + r * 0.8, r * 1.2 + sy);
+    x.stroke();
+  }
+  x.restore();
+  x.strokeStyle = 'rgba(255,255,255,0.6)';
+  x.lineWidth = 1.8;
+  x.beginPath();
+  x.moveTo(r * 0.72, -r * 0.78 + sy);
+  x.lineTo(r * 1.18, -r * 0.56 + sy);
+  x.stroke();
+}
+
+function drawSporeHost(x, t, r) {
+  const p = t * Math.PI * 2;
+  const breathe = 1 + Math.sin(p) * 0.07;
+  shadow(x, r * 0.95, r * 1.0);
+
+  // 短觸足
+  x.strokeStyle = '#3d5a08';
+  x.lineWidth = 3;
+  for (let i = -2; i <= 2; i++) {
+    const lx = i * r * 0.32;
+    x.beginPath();
+    x.moveTo(lx, r * 0.6);
+    x.quadraticCurveTo(lx + Math.sin(p + i) * 3, r * 0.95, lx + Math.sin(p + i) * 6, r * 1.15);
+    x.stroke();
+  }
+
+  x.save();
+  x.scale(breathe, breathe);
+
+  // 半透明孢囊 (看得見裡面的胚胎)
+  x.fillStyle = sphere(x, '#7cb518', r, 0, 0);
+  x.beginPath();
+  x.ellipse(0, 0, r, r * 0.95, 0, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#2f4a06';
+  x.lineWidth = 2.2;
+  x.stroke();
+
+  // 內部待孵幼體 (緩慢繞行)
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + p * 0.4;
+    const ex = Math.cos(a) * r * 0.42;
+    const ey = Math.sin(a) * r * 0.38;
+    x.fillStyle = sphere(x, '#d8ff7a', r * 0.3, ex, ey);
+    x.beginPath();
+    x.arc(ex, ey, r * 0.3, 0, Math.PI * 2);
+    x.fill();
+    x.strokeStyle = 'rgba(47,74,6,0.8)';
+    x.lineWidth = 1.2;
+    x.stroke();
+    x.fillStyle = '#243a04';
+    x.beginPath();
+    x.arc(ex + r * 0.06, ey, r * 0.11, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = 'rgba(255,255,255,0.8)';
+    x.beginPath();
+    x.arc(ex - r * 0.1, ey - r * 0.11, r * 0.06, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 囊壁血管
+  x.strokeStyle = 'rgba(47,74,6,0.5)';
+  x.lineWidth = 1.2;
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    x.beginPath();
+    x.moveTo(Math.cos(a) * r * 0.2, Math.sin(a) * r * 0.2);
+    x.quadraticCurveTo(Math.cos(a + 0.5) * r * 0.7, Math.sin(a + 0.5) * r * 0.7,
+                       Math.cos(a) * r * 0.95, Math.sin(a) * r * 0.9);
+    x.stroke();
+  }
+  x.restore();
+
+  // 頂部菌傘
+  x.fillStyle = '#5d8a10';
+  x.strokeStyle = '#2f4a06';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.ellipse(0, -r * 0.75, r * 0.95, r * 0.45, 0, Math.PI, Math.PI * 2);
+  x.closePath();
+  x.fill();
+  x.stroke();
+  x.fillStyle = 'rgba(197,240,76,0.75)';
+  for (const [dx, dy, dr] of [[-r * 0.45, -r * 0.9, 3], [0, -r * 1.02, 3.6], [r * 0.48, -r * 0.88, 2.6]]) {
+    x.beginPath();
+    x.arc(dx, dy, dr, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 噴孢管與飄散的孢子霧
+  x.fillStyle = '#4a6b12';
+  for (const a of [-2.5, -0.6, 2.5]) {
+    x.save();
+    x.translate(Math.cos(a) * r * 0.92, Math.sin(a) * r * 0.88);
+    x.rotate(a);
+    x.beginPath();
+    x.roundRect(-3, -4.5, 9, 9, 3);
+    x.fill();
+    x.restore();
+  }
+  x.fillStyle = `rgba(197,240,76,${0.28 + Math.sin(p) * 0.14})`;
+  for (let i = 0; i < 4; i++) {
+    const a = p * 0.5 + i * 1.6;
+    x.beginPath();
+    x.arc(Math.cos(a) * r * 1.25, Math.sin(a) * r * 1.15, 2.4, 0, Math.PI * 2);
+    x.fill();
+  }
+}
+
+function drawSporeling(x, t, r) {
+  const p = t * Math.PI * 2;
+  const wag = Math.sin(p) * 5;   // 尾巴擺動
+  const hop = Math.sin(p * 2) * 1.8;
+  shadow(x, r * 0.75, r * 0.95);
+
+  // 擺動的尾鰭
+  x.strokeStyle = '#6e9e0d';
+  x.lineWidth = 2.4;
+  x.beginPath();
+  x.moveTo(-r * 0.6, hop);
+  x.quadraticCurveTo(-r * 1.3, hop + wag * 0.5, -r * 1.7, hop + wag);
+  x.stroke();
+  x.fillStyle = 'rgba(197,240,76,0.6)';
+  x.beginPath();
+  x.moveTo(-r * 1.45, hop + wag * 0.85);
+  x.lineTo(-r * 2.1, hop + wag - 4);
+  x.lineTo(-r * 2.1, hop + wag + 4);
+  x.closePath();
+  x.fill();
+
+  // 水滴狀身體
+  x.fillStyle = sphere(x, '#c5f04c', r * 1.05, r * 0.1, hop);
+  x.beginPath();
+  x.moveTo(-r * 0.7, hop);
+  x.quadraticCurveTo(-r * 0.5, hop - r, r * 0.35, hop - r * 0.85);
+  x.quadraticCurveTo(r * 1.15, hop - r * 0.3, r * 1.1, hop + r * 0.15);
+  x.quadraticCurveTo(r * 0.9, hop + r * 0.95, -r * 0.2, hop + r * 0.9);
+  x.quadraticCurveTo(-r * 0.6, hop + r * 0.6, -r * 0.7, hop);
+  x.closePath();
+  x.fill();
+  x.strokeStyle = '#42600a';
+  x.lineWidth = 1.6;
+  x.stroke();
+
+  // 背上的孢子點
+  x.fillStyle = 'rgba(66,96,10,0.55)';
+  for (const [dx, dy, dr] of [[-r * 0.1, -r * 0.42, 2], [r * 0.4, -r * 0.2, 1.5], [r * 0.05, r * 0.35, 1.7]]) {
+    x.beginPath();
+    x.arc(dx, dy + hop, dr, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 單顆大眼
+  x.fillStyle = '#f6ffe0';
+  x.beginPath();
+  x.arc(r * 0.45, hop - r * 0.1, r * 0.42, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#42600a';
+  x.lineWidth = 1.2;
+  x.stroke();
+  x.fillStyle = '#1d2b04';
+  x.beginPath();
+  x.arc(r * 0.58, hop - r * 0.1, r * 0.2, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.9)';
+  x.beginPath();
+  x.arc(r * 0.5, hop - r * 0.24, r * 0.09, 0, Math.PI * 2);
+  x.fill();
+}
+
 /* ==================== 對外介面 ==================== */
 
 const BUILDERS = {
@@ -1336,6 +1700,10 @@ const BUILDERS = {
   brute:  { w: 76, h: 72, fn: (x, t) => drawBrute(x, t, 22) },
   boomer: { w: 60, h: 68, fn: (x, t) => drawBoomer(x, t, 16, false) },
   boomer_armed: { w: 60, h: 68, fn: (x, t) => drawBoomer(x, t, 16, true) },
+  runner: { w: 84, h: 56, fn: (x, t) => drawRunner(x, t, 13) },
+  warden: { w: 76, h: 64, fn: (x, t) => drawWarden(x, t, 20) },
+  spore_host: { w: 64, h: 60, fn: (x, t) => drawSporeHost(x, t, 19) },
+  sporeling:  { w: 44, h: 34, fn: (x, t) => drawSporeling(x, t, 8) },
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },

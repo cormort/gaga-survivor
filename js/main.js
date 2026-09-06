@@ -1,6 +1,6 @@
 // 嘎嘎特攻 (Gaga Survivor) - 遊戲核心主循環與遊戲狀態機
 
-import { GAME_CONFIG } from './config.js';
+import { GAME_CONFIG, ENEMY_TYPES } from './config.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { DropItem } from './entities/DropItem.js';
@@ -826,6 +826,20 @@ class Game {
 
         // 掉落經驗寶石或稀有道具
         this.spawnDropItem(enemy);
+
+        // 孢子母體死亡裂解成幼體 (沿用母體的血量成長係數)
+        if (enemy.splitInto && this.enemies.length < 240) {
+          const hpMul = enemy.maxHp / ENEMY_TYPES[enemy.typeKey].hp;
+          for (let n = 0; n < enemy.splitCount; n++) {
+            const ang = (n / enemy.splitCount) * Math.PI * 2 + Math.random();
+            this.enemies.push(new Enemy(
+              enemy.splitInto,
+              enemy.x + Math.cos(ang) * 26,
+              enemy.y + Math.sin(ang) * 26,
+              hpMul
+            ));
+          }
+        }
 
         // 若 Boss 死亡，判定勝利或給予超級大寶箱
         if (enemy.isBoss) {

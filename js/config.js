@@ -288,6 +288,46 @@ export const ENEMY_TYPES = {
     exp: 2,
     explodes: true,
   },
+  runner: {
+    name: '狂奔感染者',
+    hp: 26,
+    speed: 105,
+    damage: 10,
+    color: '#ff6b35',
+    radius: 13,
+    exp: 2,
+    dash: { every: 3.2, dur: 0.45, mul: 3.4 }, // 週期性衝刺，逼玩家提早轉向
+  },
+  warden: {
+    name: '防暴盾衛',
+    hp: 140,
+    speed: 55,
+    damage: 14,
+    color: '#4cc9f0',
+    radius: 20,
+    exp: 4,
+    damageTakenMul: 0.55, // 盾牌減傷，靠爆發或穿透才好處理
+  },
+  spore_host: {
+    name: '孢子母體',
+    hp: 60,
+    speed: 80,
+    damage: 12,
+    color: '#7cb518',
+    radius: 19,
+    exp: 3,
+    splitInto: 'sporeling',
+    splitCount: 3, // 死亡裂解成三隻幼體
+  },
+  sporeling: {
+    name: '孢子幼體',
+    hp: 8,
+    speed: 175,
+    damage: 5,
+    color: '#c5f04c',
+    radius: 8,
+    exp: 1,
+  },
   boss: {
     name: '毀滅巨神‧暴君',
     hp: 1400,
