@@ -20,6 +20,7 @@ function blank() {
     best: {},               // { levelId: { time, kills, cleared } }
     character: 'duck',
     settings: { sfx: 1, bgm: 0.8 }, // 音量 (主選單滑桿)
+    daily: { date: '', bestTime: 0, completed: false },
   };
 }
 
@@ -46,6 +47,7 @@ function ensureDefaults(d) {
   if (!d.talents || typeof d.talents !== 'object') d.talents = {};
   if (!Array.isArray(d.stash)) d.stash = [];
   if (!d.equipped || typeof d.equipped !== 'object') d.equipped = {};
+  if (!d.daily || typeof d.daily !== 'object') d.daily = { date: '', bestTime: 0, completed: false };
   // 已穿的裝備若已不在倉庫 (手動改存檔等情況) 就清掉，避免加成算到幽靈物品
   for (const slot of SLOT_ORDER) {
     if (d.equipped[slot] && !d.stash.some((it) => it.id === d.equipped[slot])) delete d.equipped[slot];
@@ -197,20 +199,38 @@ export const save = {
   },
 
   // 單局結算：回傳這場拿到多少 DNA、是否破紀錄、是否解鎖新關卡
-  recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null }) {
+  // skipProgress=true (每日挑戰) 時只發 DNA，不寫該關最佳紀錄、不解鎖下一關
+  recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null, skipProgress = false }) {
     const dna = Math.max(1, Math.round((time / 10 + kills / 20 + level * 2) * dnaMult * (cleared ? 1.5 : 1)));
     this.data.dna += dna;
 
-    const prev = this.data.best[levelId];
-    const isRecord = !prev || time > prev.time;
-    this.data.best[levelId] = {
-      time: Math.max(time, prev ? prev.time : 0),
-      kills: Math.max(kills, prev ? prev.kills : 0),
-      cleared: cleared || (prev ? prev.cleared : false),
-    };
+    if (!skipProgress) {
+      const prev = this.data.best[levelId];
+      const isRecord = !prev || time > prev.time;
+      this.data.best[levelId] = {
+        time: Math.max(time, prev ? prev.time : 0),
+        kills: Math.max(kills, prev ? prev.kills : 0),
+        cleared: cleared || (prev ? prev.cleared : false),
+      };
 
-    const unlockedNew = cleared ? this.unlock(nextLevel) : false;
+      const unlockedNew = cleared ? this.unlock(nextLevel) : false;
+      this.flush();
+      return { dna, isRecord, unlockedNew };
+    }
     this.flush();
-    return { dna, isRecord, unlockedNew };
+    return { dna, isRecord: false, unlockedNew: false };
+  },
+
+  recordDailyRun({ date, time, cleared }) {
+    if (!this.data.daily) this.data.daily = { date: '', bestTime: 0, completed: false };
+    if (this.data.daily.date !== date) {
+      this.data.daily = { date, bestTime: time, completed: cleared };
+    } else {
+      this.data.daily.bestTime = Math.max(this.data.daily.bestTime, time);
+      if (cleared) this.data.daily.completed = true;
+    }
+    this.flush();
+    return this.data.daily;
   },
 };
+

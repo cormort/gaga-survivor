@@ -39,6 +39,11 @@
           <span class="hud-icon">🪙</span>
           <span id="gold-count">0</span>
         </div>
+        <div id="combo-hud" class="hud-pill combo-pill hidden">
+          <span class="hud-icon">⚡</span>
+          <span id="combo-count">0</span>
+          <span class="combo-unit">斬</span>
+        </div>
         <button id="btn-build" class="hud-btn build-btn" title="佈署砲塔 (B)">
           <span class="build-icon">🔫</span><span id="build-cost">60</span>
         </button>
@@ -83,6 +88,19 @@
       </div>
     </div>
 
+    <!-- 戰術動作按鈕 (閃避翻滾 / 砲塔升級) -->
+    <div id="action-bar">
+      <button id="btn-dash" class="action-btn dash-btn" title="戰術閃避 (Space)">
+        <span class="action-icon">💨</span>
+        <span class="action-key">SPACE</span>
+        <div id="dash-cooldown-overlay"></div>
+      </button>
+      <button id="btn-turret-upgrade" class="action-btn turret-up-btn hidden" title="升級鄰近砲塔 (T)">
+        <span class="action-icon">⚙️</span>
+        <span class="action-key">50🪙</span>
+      </button>
+    </div>
+
     <!-- 升級三選一卡牌彈窗 (Roguelike Modal) -->
     <div id="level-up-modal" class="overlay hidden">
       <div class="modal-content">
@@ -94,6 +112,20 @@
           <!-- 動態生成 3 張卡牌 -->
         </div>
         <button id="btn-reroll" class="game-btn secondary-btn hidden">🎲 刷新選擇</button>
+      </div>
+    </div>
+
+    <!-- 幸運物資箱抽獎彈窗 (Lucky Chest Modal) -->
+    <div id="lucky-chest-modal" class="overlay hidden">
+      <div class="modal-content chest-modal-content">
+        <div class="modal-header">
+          <h2 class="glow-text chest-title">🎁 特工幸運補給！ 🎁</h2>
+          <p id="chest-subtitle" class="subtitle">幸運輪盤揭曉中...</p>
+        </div>
+        <div id="chest-cards" class="cards-grid chest-cards-grid">
+          <!-- 動態生成 1/3/5 張抽獎卡牌 -->
+        </div>
+        <button id="btn-chest-claim" class="game-btn primary-btn hidden">確認領取 🚀</button>
       </div>
     </div>
 
@@ -148,6 +180,7 @@
           <span id="dna-chip" class="dna-chip">🧬 0</span>
           <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
           <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
+          <button id="btn-daily" class="game-btn talent-btn">📅 每日挑戰</button>
         </div>
         <div class="audio-row">
           <label class="vol-item">🔊<input id="sfx-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音效音量"></label>

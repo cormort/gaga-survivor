@@ -328,6 +328,23 @@ export const ENEMY_TYPES = {
     radius: 8,
     exp: 1,
   },
+  spitter: {
+    name: '酸液噴吐者',
+    hp: 42,
+    speed: 75,
+    damage: 8,
+    color: '#06d6a0',
+    radius: 15,
+    exp: 2,
+    ranged: {
+      range: 270,        // 保持在射程外射擊
+      cd: 2.4,           // 射擊冷卻 (秒)
+      speed: 230,        // 投射物速度
+      damage: 12,        // 投射物傷害
+      radius: 6,         // 投射物半徑
+      color: '#06d6a0',  // 螢光酸液綠
+    },
+  },
   boss: {
     name: '毀滅巨神‧暴君',
     hp: 1400,
@@ -360,4 +377,5 @@ export const DROP_TYPES = {
   GOLD_COIN: { type: 'gold', value: 10, icon: '🪙', radius: 8 },
   SUPPLY: { type: 'supply', icon: '📦', radius: 10 }, // 街頭空投物資箱 (關卡機制)
   GEAR: { type: 'gear', icon: '🎁', radius: 11 },      // 裝備掉落 (顏色由稀有度覆寫)
+  CHEST: { type: 'chest', icon: '🧰', radius: 14, color: '#ffb703' }, // 幸運補給箱 (Boss/精英掉落)
 };

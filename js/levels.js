@@ -35,7 +35,7 @@ export const LEVELS = {
     bosses: [
       { at: 120, hp: 4000, name: '狂暴推土喪屍' },
       { at: 300, hp: 14000, name: '變異清潔工', behaviors: ['summon'] },
-      { at: 480, hp: 42000, name: '巨神‧暴虐霸王龍', final: true, behaviors: ['nova', 'summon'] },
+      { at: 480, hp: 42000, name: '巨神‧暴虐霸王龍', final: true, behaviors: ['nova', 'summon', 'barrage'] },
     ],
   },
 
@@ -58,15 +58,15 @@ export const LEVELS = {
     // 關卡機制：實驗室毒霧池 (玩家踩到持續扣血)
     mech: { type: 'pool', interval: 24, jitter: 8, radius: 115, dur: 6, dmg: 6, color: '#b5179e' },
     waves: [
-      { until: 100, pool: [['walker', 0.7], ['boomer', 0.3]], interval: 0.7, batch: 1 },
-      { until: 240, pool: [['walker', 0.35], ['boomer', 0.3], ['bat', 0.2], ['spore_host', 0.15]], interval: 0.5, batch: 1 },
-      { until: 360, pool: [['boomer', 0.32], ['brute', 0.24], ['bat', 0.22], ['spore_host', 0.22]], interval: 0.4, batch: 2 },
-      { until: 480, pool: [['boomer', 0.3], ['brute', 0.28], ['walker', 0.2], ['spore_host', 0.22]], interval: 0.28, batch: 2 },
+      { until: 100, pool: [['walker', 0.6], ['boomer', 0.25], ['spitter', 0.15]], interval: 0.7, batch: 1 },
+      { until: 240, pool: [['walker', 0.3], ['boomer', 0.25], ['bat', 0.18], ['spore_host', 0.15], ['spitter', 0.12]], interval: 0.5, batch: 1 },
+      { until: 360, pool: [['boomer', 0.26], ['brute', 0.22], ['bat', 0.18], ['spore_host', 0.18], ['spitter', 0.16]], interval: 0.4, batch: 2 },
+      { until: 480, pool: [['boomer', 0.24], ['brute', 0.24], ['walker', 0.16], ['spore_host', 0.18], ['spitter', 0.18]], interval: 0.28, batch: 2 },
     ],
     bosses: [
       { at: 120, hp: 5500, name: '生化軟泥聚合體', behaviors: ['summon'] },
-      { at: 300, hp: 19000, name: '外骨骼改造猩猩', behaviors: ['nova'] },
-      { at: 480, hp: 55000, name: '母體‧零號實驗體', final: true, behaviors: ['summon', 'nova'] },
+      { at: 300, hp: 19000, name: '外骨骼改造猩猩', behaviors: ['nova', 'barrage'] },
+      { at: 480, hp: 55000, name: '母體‧零號實驗體', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'] },
     ],
   },
 
@@ -95,9 +95,9 @@ export const LEVELS = {
       { until: 480, pool: [['brute', 0.3], ['bat', 0.22], ['boomer', 0.22], ['warden', 0.26]], interval: 0.26, batch: 2 },
     ],
     bosses: [
-      { at: 120, hp: 7000, name: '冰霜機甲' },
-      { at: 300, hp: 24000, name: '極地穿山甲王', behaviors: ['nova'] },
-      { at: 480, hp: 68000, name: '冰霜暴君‧雪帝', final: true, behaviors: ['summon', 'nova'] },
+      { at: 120, hp: 7000, name: '冰霜機甲', behaviors: ['ground'] },
+      { at: 300, hp: 24000, name: '極地穿山甲王', behaviors: ['nova', 'barrage'] },
+      { at: 480, hp: 68000, name: '冰霜暴君‧雪帝', final: true, behaviors: ['summon', 'nova', 'barrage'] },
     ],
   },
 
@@ -120,15 +120,15 @@ export const LEVELS = {
     // 關卡機制：熔岩噴發 (大範圍、對敵傷害高，幫你清場但要閃)
     mech: { type: 'geyser', interval: 22, jitter: 8, radius: 170, fuse: 1.5, dmg: 14, dmgEnemy: 1300, color: '#ff7700' },
     waves: [
-      { until: 90, pool: [['brute', 0.5], ['boomer', 0.5]], interval: 0.6, batch: 1 },
-      { until: 220, pool: [['brute', 0.3], ['boomer', 0.24], ['bat', 0.22], ['runner', 0.24]], interval: 0.42, batch: 2 },
-      { until: 360, pool: [['brute', 0.3], ['boomer', 0.2], ['bat', 0.16], ['warden', 0.18], ['spore_host', 0.16]], interval: 0.3, batch: 2 },
-      { until: 480, pool: [['brute', 0.26], ['boomer', 0.22], ['bat', 0.14], ['warden', 0.16], ['spore_host', 0.12], ['runner', 0.1]], interval: 0.22, batch: 3 },
+      { until: 90, pool: [['brute', 0.45], ['boomer', 0.4], ['spitter', 0.15]], interval: 0.6, batch: 1 },
+      { until: 220, pool: [['brute', 0.28], ['boomer', 0.22], ['bat', 0.18], ['runner', 0.18], ['spitter', 0.14]], interval: 0.42, batch: 2 },
+      { until: 360, pool: [['brute', 0.26], ['boomer', 0.18], ['bat', 0.14], ['warden', 0.16], ['spore_host', 0.14], ['spitter', 0.12]], interval: 0.3, batch: 2 },
+      { until: 480, pool: [['brute', 0.22], ['boomer', 0.18], ['bat', 0.12], ['warden', 0.16], ['spore_host', 0.12], ['runner', 0.08], ['spitter', 0.12]], interval: 0.22, batch: 3 },
     ],
     bosses: [
-      { at: 120, hp: 9000, name: '烈焰暴君', behaviors: ['nova'] },
-      { at: 300, hp: 30000, name: '熔核巨獸', behaviors: ['summon', 'nova'] },
-      { at: 480, hp: 88000, name: '毀滅特工‧暗影鴨', final: true, behaviors: ['summon', 'nova'] },
+      { at: 120, hp: 9000, name: '烈焰暴君', behaviors: ['nova', 'ground'] },
+      { at: 300, hp: 30000, name: '熔核巨獸', behaviors: ['summon', 'nova', 'barrage'] },
+      { at: 480, hp: 88000, name: '毀滅特工‧暗影鴨', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'] },
     ],
   },
 
@@ -149,7 +149,7 @@ export const LEVELS = {
     decor: ['lava_crack', 'gear', 'radar'],
     hpScale: 1,
     waves: [
-      { until: 1e9, pool: [['walker', 0.2], ['bat', 0.16], ['brute', 0.14], ['boomer', 0.16], ['runner', 0.14], ['warden', 0.1], ['spore_host', 0.1]], interval: 0.55, batch: 2 },
+      { until: 1e9, pool: [['walker', 0.18], ['bat', 0.14], ['brute', 0.12], ['boomer', 0.14], ['runner', 0.12], ['warden', 0.1], ['spore_host', 0.1], ['spitter', 0.1]], interval: 0.55, batch: 2 },
     ],
     bosses: [],
   },
@@ -181,4 +181,35 @@ export function pickEnemy(pool) {
     if (r <= 0) return key;
   }
   return pool[0][0];
+}
+
+// 每日挑戰詞綴庫與種子生成
+export const DAILY_MODIFIERS = [
+  { id: 'hyper_speed', name: '⚡ 極速狂飆', desc: '玩家與怪物速度 +35%', playerSpeedMul: 1.35, enemySpeedMul: 1.35 },
+  { id: 'glass_cannon', name: '💥 玻璃大砲', desc: '全武器傷害 +75%，受到傷害 +60%', playerDmgMul: 1.75, damageTakenMul: 1.6 },
+  { id: 'gold_rush', name: '🪙 淘金狂熱', desc: '金幣獲取 +100%，砲塔冷卻縮短 35%', goldMul: 2.0, turretCdr: 0.65 },
+  { id: 'dense_swarm', name: '🧟 狂暴怪海', desc: '怪物數量 +40%，雜兵血量 -25%', spawnMul: 1.4, hpMul: 0.75 },
+  { id: 'vampiric', name: '🩸 吸血盛宴', desc: '生命上限 -25，擊殺精英怪立即回血 30', maxHpOffset: -25, eliteHeal: 30 },
+];
+
+export function getDailyChallenge(dateStr = null) {
+  const d = dateStr || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  let seed = 0;
+  for (let i = 0; i < d.length; i++) seed = (seed * 31 + d.charCodeAt(i)) >>> 0;
+
+  const lcg = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const baseLevelKeys = ['street', 'lab', 'frost', 'core'];
+  const levelKey = baseLevelKeys[Math.floor(lcg() * baseLevelKeys.length)];
+
+  const mods = [...DAILY_MODIFIERS];
+  const m1Idx = Math.floor(lcg() * mods.length);
+  const m1 = mods.splice(m1Idx, 1)[0];
+  const m2Idx = Math.floor(lcg() * mods.length);
+  const m2 = mods.splice(m2Idx, 1)[0];
+
+  return {
+    date: d,
+    levelKey,
+    modifiers: [m1, m2],
+  };
 }

@@ -22,6 +22,8 @@ export class Enemy {
     this.splitCount = config.splitCount || 0;
     this.dashTimer = this.dash ? Math.random() * this.dash.every : 0;
     this.dashLeft = 0;
+    this.ranged = config.ranged ? { ...config.ranged } : null; // 遠程噴吐怪
+    this.shootTimer = this.ranged ? Math.random() * this.ranged.cd : 0;
 
     // 精英詞綴 (由 Spawner 隨機賦予；Boss 不會有)
     this.isElite = false;
@@ -41,6 +43,7 @@ export class Enemy {
     this.flashTimer = 0;
     this.animTimer = Math.random() * 10;
     this.fuseTimer = 0; // 自爆倒數
+    this.slowTimer = 0; // 極寒脈衝減速剩餘秒數 (遊戲時間倒數)
     this.isDead = false;
 
     // Boss 專屬技能冷卻
@@ -68,10 +71,17 @@ export class Enemy {
     this.spriteScale = a.radiusMul || 1; // 巨獸體型跟著放大 (碰撞半徑同步)
     this.damageTakenMul *= a.damageTakenMul || 1;
     this.exp = Math.round(this.exp * (a.expMul || 1));
+    if (this.ranged) {
+      this.ranged.damage = Math.round(this.ranged.damage * (a.damageMul || 1));
+      this.ranged.speed *= a.speedMul || 1;
+    }
   }
 
-  update(dt, player, onExplodeCallback = null, onBossSkill = null) {
+  update(dt, player, onExplodeCallback = null, onBossSkill = null, onEnemyShoot = null) {
     if (this.isDead) return;
+
+    // 極寒減速倒數 (遊戲時間驅動：暫停/升級/開箱時同步凍結)
+    if (this.slowTimer > 0) this.slowTimer = Math.max(0, this.slowTimer - dt);
 
     this.animTimer += dt * 8;
     if (this.flashTimer > 0) this.flashTimer -= dt;
@@ -86,8 +96,42 @@ export class Enemy {
 
     if (this.isBoss) {
       this.updateBoss(dt, dx, dy, dist, onBossSkill);
+    } else if (this.ranged) {
+      // 遠程怪邏輯：在射程外保持距離開火，太近則後撤
+      const desiredRange = this.ranged.range;
+      const spd = this.speed * this.speedFactor() * this.dashSpeedMul(dt);
+      if (dist > desiredRange) {
+        moveX = (dx / dist) * spd;
+        moveY = (dy / dist) * spd;
+      } else if (dist < desiredRange * 0.45) {
+        moveX = -(dx / dist) * spd * 0.6;
+        moveY = -(dy / dist) * spd * 0.6;
+      } else {
+        moveX = -(dy / dist) * spd * 0.25;
+        moveY = (dx / dist) * spd * 0.25;
+      }
+
+      // 遠程射擊冷卻與發射
+      this.shootTimer += dt;
+      if (this.shootTimer >= this.ranged.cd) {
+        this.shootTimer = 0;
+        if (dist > 0 && dist <= desiredRange * 1.6 && onEnemyShoot) {
+          const pDirX = dx / dist;
+          const pDirY = dy / dist;
+          onEnemyShoot(this, {
+            x: this.x + pDirX * (this.radius + 6),
+            y: this.y + pDirY * (this.radius + 6),
+            vx: pDirX * this.ranged.speed,
+            vy: pDirY * this.ranged.speed,
+            damage: this.ranged.damage,
+            radius: this.ranged.radius,
+            color: this.eliteColor || this.ranged.color,
+            glow: this.eliteColor || this.ranged.color,
+          });
+        }
+      }
     } else {
-      const spd = this.speed * this.dashSpeedMul(dt); // 每幀只推進一次衝刺計時
+      const spd = this.speed * this.speedFactor() * this.dashSpeedMul(dt); // 每幀只推進一次衝刺計時
       if (dist > 0.1) {
         moveX = (dx / dist) * spd;
         moveY = (dy / dist) * spd;
@@ -128,6 +172,11 @@ export class Enemy {
     return 1;
   }
 
+  // 極寒脈衝減速：回傳當幀速度倍率 (0.5 = 半速；slowTimer 由遊戲時間倒數，暫停即凍結)
+  speedFactor() {
+    return this.slowTimer > 0 ? 0.5 : 1;
+  }
+
   updateBoss(dt, dx, dy, dist, onBossSkill = null) {
     this.chargeTimer += dt;
 
@@ -141,16 +190,16 @@ export class Enemy {
     }
 
     if (this.isCharging) {
-      this.x += this.chargeDir.x * this.speed * 3.2 * dt;
-      this.y += this.chargeDir.y * this.speed * 3.2 * dt;
+      this.x += this.chargeDir.x * this.speed * this.speedFactor() * 3.2 * dt;
+      this.y += this.chargeDir.y * this.speed * this.speedFactor() * 3.2 * dt;
       if (this.chargeTimer >= 1.2) {
         this.isCharging = false;
         this.chargeTimer = 0;
       }
     } else {
       if (dist > 0.1) {
-        this.x += (dx / dist) * this.speed * dt;
-        this.y += (dy / dist) * this.speed * dt;
+        this.x += (dx / dist) * this.speed * this.speedFactor() * dt;
+        this.y += (dy / dist) * this.speed * this.speedFactor() * dt;
       }
     }
 
@@ -247,6 +296,21 @@ export class Enemy {
       ctx.save();
       ctx.translate(screenX, screenY);
       this.drawMiniHpBar(ctx);
+      ctx.restore();
+    }
+
+    // 被極寒塔減速中：冰藍虛線光圈提示
+    if (this.slowTimer > 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.strokeStyle = 'rgba(127, 216, 255, 0.8)';
+      ctx.globalAlpha = 0.45 + Math.sin(this.animTimer * 5) * 0.2;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
       ctx.restore();
     }
 

@@ -48,6 +48,18 @@ export class UIManager {
     this.buildBtn = document.getElementById('btn-build');
     this.buildCost = document.getElementById('build-cost');
 
+    this.dashBtn = document.getElementById('btn-dash');
+    this.dashOverlay = document.getElementById('dash-cooldown-overlay');
+    this.turretUpBtn = document.getElementById('btn-turret-upgrade');
+    this.comboHud = document.getElementById('combo-hud');
+    this.comboCount = document.getElementById('combo-count');
+
+    this.luckyChestModal = document.getElementById('lucky-chest-modal');
+    this.chestCards = document.getElementById('chest-cards');
+    this.chestSubtitle = document.getElementById('chest-subtitle');
+    this.chestClaimBtn = document.getElementById('btn-chest-claim');
+    this.dailyBtn = document.getElementById('btn-daily');
+
     this.charSelect = document.getElementById('character-select');
     this.levelSelect = document.getElementById('level-select');
     this.bubble = document.getElementById('dialogue-bubble');
@@ -66,6 +78,12 @@ export class UIManager {
     document.getElementById('btn-close-gear')?.addEventListener('click', () => {
       this.gearModal?.classList.add('hidden');
     });
+
+    if (this.turretUpBtn) {
+      this.turretUpBtn.addEventListener('click', () => {
+        if (this._turretUpCb) this._turretUpCb();
+      });
+    }
 
     this.initSlotPlaceholders();
   }
@@ -296,6 +314,81 @@ export class UIManager {
   updateBuildBtn(gold, cost) {
     this.buildCost.textContent = cost;
     this.buildBtn.classList.toggle('affordable', gold >= cost);
+  }
+
+  // 戰術閃避冷卻進度
+  updateDash(cdRatio) {
+    if (!this.dashOverlay || !this.dashBtn) return;
+    if (cdRatio > 0) {
+      this.dashOverlay.style.height = `${Math.min(100, cdRatio * 100)}%`;
+      this.dashBtn.classList.remove('ready');
+    } else {
+      this.dashOverlay.style.height = '0%';
+      this.dashBtn.classList.add('ready');
+    }
+  }
+
+  // 連擊 Combo 與暴走狀態
+  updateCombo(combo, isFrenzy) {
+    if (!this.comboHud) return;
+    if (combo >= 5) {
+      this.comboHud.classList.remove('hidden');
+      this.comboCount.textContent = combo;
+      this.comboHud.classList.toggle('frenzy', !!isFrenzy);
+    } else {
+      this.comboHud.classList.add('hidden');
+      this.comboHud.classList.remove('frenzy');
+    }
+  }
+
+  // 砲塔升級互動按鈕
+  showTurretUpgrade(show, onUpgrade = null) {
+    if (!this.turretUpBtn) return;
+    if (show) {
+      this.turretUpBtn.classList.remove('hidden');
+      this._turretUpCb = onUpgrade;
+    } else {
+      this.turretUpBtn.classList.add('hidden');
+      this._turretUpCb = null;
+    }
+  }
+
+  // 幸運物資箱抽獎彈窗
+  showLuckyChest(count, rewards, onClaim) {
+    if (!this.luckyChestModal) return;
+    this.luckyChestModal.classList.remove('hidden');
+    this.chestCards.innerHTML = '';
+    this.chestClaimBtn.classList.add('hidden');
+    this.chestSubtitle.textContent = `恭喜獲得 ${count} 連抽特工物資！`;
+
+    sound.playGem();
+
+    rewards.forEach((r, idx) => {
+      setTimeout(() => {
+        const card = document.createElement('div');
+        card.className = 'chest-card' + (r.isGold ? ' gold-tier' : '');
+        const title = r.title || r.name || '神秘獎勵';
+        card.innerHTML = `
+          <div class="chest-item-icon">${r.icon}</div>
+          <div class="chest-item-title">${title}</div>
+          <div class="chest-item-desc">${r.desc}</div>
+        `;
+        this.chestCards.appendChild(card);
+        sound.playHit();
+
+        if (idx === rewards.length - 1) {
+          setTimeout(() => {
+            this.chestClaimBtn.classList.remove('hidden');
+            sound.playLevelUp();
+          }, 300);
+        }
+      }, (idx + 1) * 350);
+    });
+
+    this.chestClaimBtn.onclick = () => {
+      this.luckyChestModal.classList.add('hidden');
+      if (onClaim) onClaim();
+    };
   }
 
   // 開始畫面的關卡選擇 (未解鎖的關卡不能點)

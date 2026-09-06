@@ -1688,6 +1688,107 @@ function drawSporeling(x, t, r) {
   x.fill();
 }
 
+function drawSpitter(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2;
+  const crawl = Math.sin(p);
+
+  shadow(x, r * 1.15, r * 0.85 + 4);
+
+  // 4 隻生化節肢蟲腿 (前後交替爬行)
+  x.strokeStyle = '#0b291e';
+  x.lineWidth = 2.2;
+  x.lineCap = 'round';
+  const legPairs = [
+    { side: -1, fore: 1, angle: -0.65, legStep: crawl },
+    { side: 1, fore: 1, angle: 0.65, legStep: -crawl },
+    { side: -1, fore: -1, angle: -2.35, legStep: -crawl },
+    { side: 1, fore: -1, angle: 2.35, legStep: crawl },
+  ];
+  for (const lp of legPairs) {
+    const lx = Math.cos(lp.angle) * (r * 0.7);
+    const ly = Math.sin(lp.angle) * (r * 0.6) + bob;
+    const kneeX = lx * 1.6 + lp.legStep * 3;
+    const kneeY = ly * 1.1 - 4;
+    const footX = lx * 2.1 + lp.legStep * 5;
+    const footY = ly + 8;
+
+    x.beginPath();
+    x.moveTo(lx, ly);
+    x.lineTo(kneeX, kneeY);
+    x.lineTo(footX, footY);
+    x.stroke();
+  }
+
+  // 背部蓄積酸液的半透明發光囊球 (隨呼吸脈動)
+  const sacPulse = Math.sin(p) * 1.2;
+  const sacR = r * 0.85 + sacPulse;
+  const sacX = -r * 0.35;
+  const sacY = bob - 2;
+
+  x.save();
+  x.fillStyle = sphere(x, '#06d6a0', sacR, sacX, sacY);
+  x.beginPath();
+  x.arc(sacX, sacY, sacR, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#024b30';
+  x.lineWidth = 1.6;
+  x.stroke();
+
+  // 囊球內部酸液高光與氣泡
+  x.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  x.beginPath();
+  x.arc(sacX - sacR * 0.35, sacY - sacR * 0.35, sacR * 0.28, 0, Math.PI * 2);
+  x.fill();
+
+  x.fillStyle = '#b7efc5';
+  for (let i = 0; i < 3; i++) {
+    const bubbleAng = p * 0.6 + i * 2.1;
+    const bx = sacX + Math.cos(bubbleAng) * (sacR * 0.45);
+    const by = sacY + Math.sin(bubbleAng) * (sacR * 0.4);
+    x.beginPath();
+    x.arc(bx, by, 2, 0, Math.PI * 2);
+    x.fill();
+  }
+  x.restore();
+
+  // 前身幾丁質硬甲 (深橄欖綠)
+  x.fillStyle = sphere(x, '#1b4332', r * 0.75, r * 0.3, bob);
+  x.strokeStyle = '#081c15';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.ellipse(r * 0.3, bob, r * 0.65, r * 0.55, 0.1, 0, Math.PI * 2);
+  x.fill();
+  x.stroke();
+
+  // 噴酸管口器 (朝前開口)
+  x.fillStyle = '#06d6a0';
+  x.strokeStyle = '#0b291e';
+  x.lineWidth = 1.6;
+  x.beginPath();
+  x.moveTo(r * 0.75, bob - 4);
+  x.lineTo(r * 1.15, bob - 2);
+  x.lineTo(r * 1.15, bob + 2);
+  x.lineTo(r * 0.75, bob + 4);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 口器滴垂的酸液滴
+  const dripY = bob + 4 + (Math.sin(p * 2) > 0 ? Math.sin(p * 2) * 3 : 0);
+  x.fillStyle = '#38b000';
+  x.beginPath();
+  x.arc(r * 1.05, dripY, 2, 0, Math.PI * 2);
+  x.fill();
+
+  // 雙眼 (螢光劇毒紅)
+  x.fillStyle = '#ff0055';
+  x.beginPath();
+  x.arc(r * 0.55, bob - 5, 2.2, 0, Math.PI * 2);
+  x.arc(r * 0.55, bob + 2, 2.2, 0, Math.PI * 2);
+  x.fill();
+}
+
 /* ==================== 對外介面 ==================== */
 
 const BUILDERS = {
@@ -1704,6 +1805,7 @@ const BUILDERS = {
   warden: { w: 76, h: 64, fn: (x, t) => drawWarden(x, t, 20) },
   spore_host: { w: 64, h: 60, fn: (x, t) => drawSporeHost(x, t, 19) },
   sporeling:  { w: 44, h: 34, fn: (x, t) => drawSporeling(x, t, 8) },
+  spitter:    { w: 68, h: 58, fn: (x, t) => drawSpitter(x, t, 15) },
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },

@@ -122,6 +122,28 @@ export class DropItem {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(this.icon, 0, 0);
+    } else if (this.type === 'chest') {
+      // 幸運補給箱：奪目金黃光暈與外圈旋轉金環
+      const g = ctx.createRadialGradient(0, 0, 4, 0, 0, this.radius * 3.2);
+      g.addColorStop(0, '#ffb703');
+      g.addColorStop(1, 'rgba(255, 183, 3, 0)');
+      ctx.globalAlpha = 0.65 + Math.sin(this.animTime * 2) * 0.2;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = '#ffe066';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 1.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.font = `${this.radius * 2.2}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.icon || '🧰', 0, 0);
     } else {
       // 道具 (磁鐵、炸彈、烤雞、金幣)
       ctx.font = `${this.radius * 2}px sans-serif`;

@@ -1331,3 +1331,176 @@ body, html {
   #joystick-zone { width: 104px; height: 104px; bottom: calc(14px + env(safe-area-inset-bottom)); }
   #dialogue-bubble { bottom: 12%; }
 }
+
+/* ==================== 戰術動作欄 (翻滾/閃避 & 砲塔升級) ==================== */
+#action-bar {
+  position: absolute;
+  bottom: calc(30px + env(safe-area-inset-bottom));
+  right: calc(28px + env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+.action-btn {
+  position: relative;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: rgba(13, 22, 40, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 2px solid rgba(0, 245, 255, 0.45);
+  box-shadow: 0 4px 18px rgba(0, 245, 255, 0.25), inset 0 0 12px rgba(0, 245, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+  touch-action: manipulation;
+  transition: transform 0.1s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.action-btn:active {
+  transform: scale(0.92);
+}
+
+.action-btn .action-icon {
+  font-size: 24px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.action-btn .action-key {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  color: #00f5ff;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  pointer-events: none;
+}
+
+#dash-cooldown-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 0%;
+  background: rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+  transition: height 0.05s linear;
+}
+
+.action-btn.ready {
+  border-color: #00f5ff;
+  box-shadow: 0 0 20px rgba(0, 245, 255, 0.6);
+}
+
+.action-btn.turret-up-btn {
+  border-color: #ffb703;
+  box-shadow: 0 4px 18px rgba(255, 183, 3, 0.35);
+}
+
+.action-btn.turret-up-btn .action-key {
+  color: #ffb703;
+}
+
+/* ==================== Combo 連擊計量 ==================== */
+.combo-pill {
+  background: linear-gradient(135deg, rgba(255, 84, 0, 0.35), rgba(255, 0, 85, 0.45));
+  border: 1px solid rgba(255, 100, 0, 0.6);
+  box-shadow: 0 0 14px rgba(255, 84, 0, 0.35);
+  transition: transform 0.1s ease;
+}
+
+.combo-pill.frenzy {
+  background: linear-gradient(135deg, rgba(0, 245, 255, 0.45), rgba(181, 23, 158, 0.55));
+  border-color: #00f5ff;
+  box-shadow: 0 0 22px rgba(0, 245, 255, 0.7);
+  animation: frenzyPulse 0.4s infinite alternate ease-in-out;
+}
+
+@keyframes frenzyPulse {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.1); }
+}
+
+.combo-unit {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* ==================== 幸運物資箱抽獎彈窗 ==================== */
+.chest-modal-content {
+  max-width: 680px;
+  background: radial-gradient(circle at center, rgba(20, 28, 52, 0.96) 0%, rgba(8, 12, 22, 0.98) 100%);
+  border: 2px solid #ffb703;
+  box-shadow: 0 0 45px rgba(255, 183, 3, 0.4);
+}
+
+.chest-title {
+  color: #ffb703;
+  text-shadow: 0 0 18px rgba(255, 183, 3, 0.8);
+}
+
+.chest-cards-grid {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 24px 0;
+  perspective: 1000px;
+}
+
+.chest-card {
+  flex: 1;
+  max-width: 170px;
+  min-height: 210px;
+  background: rgba(15, 22, 40, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: cardFlipIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.chest-card.gold-tier {
+  border-color: #ffb703;
+  box-shadow: 0 0 25px rgba(255, 183, 3, 0.5);
+}
+
+.chest-card .chest-item-icon {
+  font-size: 38px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+}
+
+.chest-card .chest-item-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.chest-card .chest-item-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+@keyframes cardFlipIn {
+  0% { transform: rotateY(90deg) scale(0.6); opacity: 0; }
+  100% { transform: rotateY(0deg) scale(1); opacity: 1; }
+}
+

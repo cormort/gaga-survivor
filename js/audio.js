@@ -104,6 +104,28 @@ class SoundEngine {
     osc.stop(t + 0.08);
   }
 
+  // 戰術閃避翻滾音效 (呼嘯氣流聲)
+  playDash() {
+    if (!this.enabled || this._throttle('dash', 150)) return;
+    this.ensureContext();
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(340, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.18);
+
+    gain.gain.setValueAtTime(0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+
+    osc.start(t);
+    osc.stop(t + 0.18);
+  }
+
   // 擊中怪物
   playHit() {
     if (!this.enabled || this._throttle('hit', 50)) return;

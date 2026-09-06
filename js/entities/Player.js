@@ -51,6 +51,15 @@ export class Player {
     this.isDead = false;
     this.regenTimer = 0;
 
+    // 戰術閃避翻滾 (Dash)
+    this.dashCooldown = 3.8;
+    this.dashMaxTimer = this.dashCooldown; // 含 CDR 後的本輪實際冷卻 (UI 覆蓋層比例用)
+    this.dashTimer = 0;
+    this.dashDuration = 0.22;
+    this.dashTimeLeft = 0;
+    this.dashDir = { x: 1, y: 0 };
+    this.dashGhosts = [];
+
     // 套用角色專屬特質的初始值
     this.character.init?.(this);
     this.speedMultiplier = this.baseSpeedMul;
@@ -67,11 +76,52 @@ export class Player {
     return this.baseSpeed * this.speedMultiplier;
   }
 
+  // 觸發戰術閃避翻滾
+  dash(inputVector) {
+    if (this.dashTimer > 0 || this.dashTimeLeft > 0 || this.isDead) return false;
+
+    let dirX = inputVector?.x || 0;
+    let dirY = inputVector?.y || 0;
+    const len = Math.hypot(dirX, dirY);
+
+    if (len > 0.1) {
+      this.dashDir = { x: dirX / len, y: dirY / len };
+    } else {
+      this.dashDir = { x: this.facing, y: 0 };
+    }
+
+    this.dashTimeLeft = this.dashDuration;
+    // 局外 CDR 可微幅減免翻滾冷卻，至多 -30%
+    const cdrMod = Math.max(0.7, 1 - (this.metaCdr || 0) * 0.5);
+    this.dashMaxTimer = this.dashCooldown * cdrMod;
+    this.dashTimer = this.dashCooldown * cdrMod;
+    this.invulnerableTimer = Math.max(this.invulnerableTimer, this.dashDuration + 0.1);
+    sound.playDash();
+    return true;
+  }
+
   update(dt, inputVector) {
     if (this.isDead) return;
 
-    // 移動
-    if (inputVector.x !== 0 || inputVector.y !== 0) {
+    // 閃避冷卻計時
+    if (this.dashTimer > 0) this.dashTimer -= dt;
+
+    // 翻滾狀態 vs 普通移動
+    if (this.dashTimeLeft > 0) {
+      this.dashTimeLeft -= dt;
+      const dashSpeed = this.speed * 3.6;
+      this.x += this.dashDir.x * dashSpeed * dt;
+      this.y += this.dashDir.y * dashSpeed * dt;
+
+      // 產生殘影
+      this.dashGhosts.push({
+        x: this.x,
+        y: this.y,
+        facing: this.facing,
+        alpha: 0.6,
+      });
+      this.walkCycle += dt * 25;
+    } else if (inputVector.x !== 0 || inputVector.y !== 0) {
       this.x += inputVector.x * this.speed * dt;
       this.y += inputVector.y * this.speed * dt;
 
@@ -81,6 +131,15 @@ export class Player {
       this.walkCycle += dt * 14;
     } else {
       this.walkCycle = 0;
+    }
+
+    // 更新殘影透明度
+    for (let i = this.dashGhosts.length - 1; i >= 0; i--) {
+      const g = this.dashGhosts[i];
+      g.alpha -= dt * 3.8;
+      if (g.alpha <= 0) {
+        this.dashGhosts.splice(i, 1);
+      }
     }
 
     // 地圖邊界限制
@@ -162,6 +221,16 @@ export class Player {
     const frame = this.walkCycle > 0
       ? Math.floor(this.walkCycle / (Math.PI * 2) * FRAMES) % FRAMES
       : 0;
+
+    // 繪製翻滾殘影 (白色電光幻影)
+    for (const g of this.dashGhosts) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, g.alpha));
+      ctx.translate(g.x - camera.x, g.y - camera.y);
+      if (g.facing < 0) ctx.scale(-1, 1);
+      blit(ctx, sprite, frame, 0, 0, true);
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(screenX, screenY);

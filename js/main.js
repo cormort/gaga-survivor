@@ -1,10 +1,11 @@
 // 嘎嘎特攻 (Gaga Survivor) - 遊戲核心主循環與遊戲狀態機
 
-import { GAME_CONFIG, ENEMY_TYPES } from './config.js';
+import { GAME_CONFIG, ENEMY_TYPES, WEAPONS } from './config.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
+import { EnemyProjectile } from './entities/EnemyProjectile.js';
 import { DropItem } from './entities/DropItem.js';
-import { Turret, TURRET } from './entities/Turret.js';
+import { Turret, TURRET, TURRET_VARIANTS } from './entities/Turret.js';
 import { InputController } from './input.js';
 import { WeaponManager } from './weapons/WeaponManager.js';
 import { Spawner } from './systems/Spawner.js';
@@ -12,7 +13,7 @@ import { ParticleSystem } from './systems/ParticleSystem.js';
 import { UIManager } from './systems/UI.js';
 import { sound } from './audio.js';
 import { CHARACTERS, CHARACTER_ORDER } from './characters.js';
-import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy } from './levels.js';
+import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy, getDailyChallenge } from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
@@ -29,7 +30,7 @@ class Game {
     this.canvas = document.getElementById('gameCanvas');
     this.ctx = this.canvas.getContext('2d');
 
-    // 狀態機: 'START', 'PLAYING', 'LEVEL_UP', 'PAUSED', 'GAME_OVER'
+    // 狀態機: 'START', 'PLAYING', 'LEVEL_UP', 'PAUSED', 'GAME_OVER', 'CHEST_MODAL'
     this.state = 'START';
 
     this.input = new InputController();
@@ -44,8 +45,19 @@ class Game {
 
     // 實體清單
     this.enemies = [];
+    this.enemyProjectiles = [];
     this.dropItems = [];
     this.turrets = [];
+
+    // 遊戲性增強系統狀態
+    this.hitstopTimer = 0;
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.frenzyTimer = 0;
+    this.explodableProps = [];
+    this.extractionWell = null;
+    this.isDaily = false;
+    this.dailyConfig = null;
 
     // 地形機制 (毒霧/地雷/噴發) 與里程碑排程
     this.hazards = [];
@@ -206,13 +218,192 @@ class Game {
     // 佈署砲塔 (鍵盤 B / HUD 按鈕，行動端用按鈕)
     window.addEventListener('keydown', (e) => {
       if (e.key === 'b' || e.key === 'B') this.buildTurret();
+      if (e.key === 't' || e.key === 'T') this.tryUpgradeNearestTurret();
     });
     this.ui.buildBtn.addEventListener('click', () => this.buildTurret());
+
+    // 戰術閃避翻滾 (Space / 行動端按鈕)
+    this.input.onDash = () => this.triggerDash();
+    this.ui.dashBtn?.addEventListener('click', () => this.triggerDash());
+
+    // 砲塔進化專精按鈕 (UI 建構子已掛 click，走 _turretUpCb；這裡不要再掛，避免一次點擊雙重觸發)
+
+    // 每日挑戰入口按鈕
+    this.ui.dailyBtn?.addEventListener('click', () => this.startDailyChallenge());
 
     // 音效切換按鈕
     this.ui.soundBtn.addEventListener('click', () => {
       const enabled = sound.toggleSound();
       this.ui.soundBtn.textContent = enabled ? '🔊' : '🔇';
+    });
+  }
+
+  // 戰術閃避翻滾
+  triggerDash() {
+    if (this.state !== 'PLAYING' || !this.player) return;
+    if (this.player.dash(this.input.vector)) {
+      this.camera.shake = Math.max(this.camera.shake, 4);
+      this.ui.updateDash(this.player.dashMaxTimer ? this.player.dashTimer / this.player.dashMaxTimer : 0);
+    }
+  }
+
+  // 砲塔專精進化 (消耗 50 金幣)
+  tryUpgradeNearestTurret() {
+    if (this.state !== 'PLAYING' || !this.player) return;
+    const upgradeCost = 50;
+    const standardTurrets = this.turrets.filter(
+      (t) => t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125
+    );
+    if (standardTurrets.length === 0) {
+      this.ui.say('附近沒有可進化的標準砲塔', '#ffb703', 1.5);
+      return;
+    }
+    if (this.gold < upgradeCost) {
+      this.ui.say(`金幣不足，砲塔進化需要 ${upgradeCost} 🪙`, '#ff0055', 1.8);
+      sound.playHurt();
+      return;
+    }
+    const target = standardTurrets[0];
+    const variants = ['flame', 'cryo', 'tesla'];
+    const chosen = variants[Math.floor(Math.random() * variants.length)];
+    this.gold -= upgradeCost;
+    target.upgrade(chosen);
+    this.particles.createShockwave(target.x, target.y, 140, TURRET_VARIANTS[chosen].color);
+    sound.playEvoFanfare();
+    this.ui.say(`砲塔進化完畢：【${TURRET_VARIANTS[chosen].name}】！`, TURRET_VARIANTS[chosen].color, 2.8);
+    this.ui.updateBuildBtn(this.gold, this.turretCost);
+  }
+
+  // 啟動每日挑戰
+  startDailyChallenge() {
+    this.dailyConfig = getDailyChallenge();
+    this.ui.startScreen.classList.add('hidden');
+    this.start(true);
+  }
+
+  // 打擊微頓挫 (Hitstop)
+  triggerHitstop(duration = 0.05) {
+    this.hitstopTimer = Math.max(this.hitstopTimer, duration);
+  }
+
+  // 連擊計算與狂潮觸發
+  addCombo() {
+    this.combo++;
+    this.comboTimer = 3.6;
+    if (this.combo === 30 || (this.combo > 30 && (this.combo - 30) % 25 === 0)) {
+      this.frenzyTimer = 7.5;
+      sound.playEvoFanfare();
+      this.particles.createShockwave(this.player.x, this.player.y, 160, '#00e5ff');
+      this.ui.say('🔥 連擊狂潮！急速射擊！', '#00e5ff', 2.2);
+    }
+    this.ui.updateCombo(this.combo, this.frenzyTimer > 0);
+  }
+
+  // 初始化全圖可引爆場景物件
+  initExplodableProps() {
+    this.explodableProps = [];
+    const bounds = GAME_CONFIG.WORLD_BOUNDS;
+    const count = 14;
+    const types = ['tank', 'car', 'hazard'];
+    for (let i = 0; i < count; i++) {
+      let px = 0, py = 0;
+      let tries = 0;
+      do {
+        px = bounds.minX + 250 + Math.random() * (bounds.maxX - bounds.minX - 500);
+        py = bounds.minY + 250 + Math.random() * (bounds.maxY - bounds.minY - 500);
+        tries++;
+      } while (Math.hypot(px, py) < 320 && tries < 20);
+
+      const type = types[Math.floor(Math.random() * types.length)];
+      this.explodableProps.push({
+        x: px,
+        y: py,
+        hp: 45,
+        maxHp: 45,
+        radius: type === 'car' ? 32 : 24,
+        type: type,
+        flashTimer: 0,
+      });
+    }
+  }
+
+  // 引爆場景油桶/載具
+  triggerPropExplosion(prop) {
+    this.particles.createExplosion(prop.x, prop.y, 140);
+    this.particles.createShockwave(prop.x, prop.y, 180, '#ff9e00');
+    sound.playExplosion();
+    this.camera.shake = Math.max(this.camera.shake, 14);
+
+    const blastR = 175;
+    for (const enemy of this.enemies) {
+      if (enemy.isDead) continue;
+      const d = Math.hypot(enemy.x - prop.x, enemy.y - prop.y);
+      if (d < blastR + enemy.radius) {
+        this.damageEnemy(enemy, 350, 16, prop.x, prop.y);
+      }
+    }
+    const playerDist = Math.hypot(this.player.x - prop.x, this.player.y - prop.y);
+    if (playerDist < blastR && this.player.takeDamage(12)) {
+      this.particles.createHurtText(this.player.x, this.player.y, 12);
+    }
+  }
+
+  // 拾取幸運補給箱抽獎
+  openLuckyChest() {
+    this.state = 'CHEST_MODAL';
+    sound.pauseBGM();
+    sound.playEvoFanfare();
+
+    const roll = Math.random();
+    const count = roll < 0.2 ? 1 : roll < 0.85 ? 3 : 5;
+
+    const rewardPool = [
+      { name: '金幣大獎', desc: '+120 🪙 戰備金', icon: '🪙', isGold: true, apply: () => { this.gold += Math.round(120 * this.metaGoldMul); } },
+      { name: '急救補給包', desc: '+45 HP 治療', icon: '🩹', apply: () => { this.player.heal(45); } },
+      { name: '超導磁石', desc: '瞬間吸收全圖寶石', icon: '🧲', apply: () => { for (const d of this.dropItems) d.isAttracted = true; } },
+      { name: '基因碎片', desc: '+35 🧬 密鑰', icon: '🧬', apply: () => { save.data.dna += 35; save.flush(); } },
+      { name: '全頻震盪波', desc: '消滅全螢幕雜兵', icon: '💣', apply: () => {
+        for (const e of this.enemies) {
+          if (!e.isBoss) e.takeDamage(9999, 10, this.player.x, this.player.y);
+          else e.takeDamage(300, 5, this.player.x, this.player.y);
+        }
+      }},
+    ];
+
+    // 可升級的既有武器 (不含超武；level 已滿的也排除)
+    const upgradeable = [];
+    for (const [id, item] of this.weaponManager.weapons) {
+      const def = WEAPONS[id];
+      if (def && !item.isEvo && item.level < def.maxLevel) upgradeable.push(id);
+    }
+    if (upgradeable.length > 0) {
+      rewardPool.push({
+        name: '武器突變',
+        desc: '隨機在場武器立即升級 +1',
+        icon: '⚡',
+        apply: () => {
+          const wid = upgradeable[Math.floor(Math.random() * upgradeable.length)];
+          this.weaponManager.upgradeWeapon(wid);
+          this.ui.updateSkillSlots(this.weaponManager);
+        }
+      });
+    }
+
+    const pickedRewards = [];
+    for (let i = 0; i < count; i++) {
+      const rw = rewardPool[Math.floor(Math.random() * rewardPool.length)];
+      pickedRewards.push(rw);
+    }
+
+    this.ui.showLuckyChest(count, pickedRewards, () => {
+      for (const r of pickedRewards) {
+        r.apply();
+      }
+      this.state = 'PLAYING';
+      sound.resumeBGM();
+      this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
+      this.ui.updateBuildBtn(this.gold, this.turretCost);
+      this.particles.createShockwave(this.player.x, this.player.y, 160, '#ffd60a');
     });
   }
 
@@ -273,6 +464,7 @@ class Game {
     this.ui.startScreen.classList.remove('hidden');
 
     this.enemies = [];
+    this.enemyProjectiles = [];
     this.dropItems = [];
     this.turrets = [];
     this.hazards = [];
@@ -328,26 +520,49 @@ class Game {
     this.weaponManager.applyPassives();
   }
 
-  start() {
-    sound.ensureContext();
-    sound.startBGM(this.levelId);
+  start(isDaily = false) {
+    this.isDaily = isDaily;
+    this.dailyConfig = isDaily ? (this.dailyConfig || getDailyChallenge()) : null;
 
-    this.level = LEVELS[this.levelId] || LEVELS.street;
-    this.spawner.setLevel(this.levelId);
+    sound.ensureContext();
+    const activeLevelId = this.isDaily ? this.dailyConfig.levelKey : this.levelId;
+    sound.startBGM(activeLevelId);
+
+    this.level = LEVELS[activeLevelId] || LEVELS.street;
+    this.spawner.setLevel(activeLevelId);
 
     this.player = new Player(0, 0, this.characterId);
     this.weaponManager = new WeaponManager(this.player);
     this.applyMetaTalents();
+
+    // 每日挑戰詞條套用
+    if (this.isDaily && this.dailyConfig) {
+      for (const mod of this.dailyConfig.modifiers) {
+        if (mod.playerSpeedMul) this.player.speedMultiplier *= mod.playerSpeedMul;
+        if (mod.playerHpMul) {
+          this.player.maxHp = Math.round(this.player.maxHp * mod.playerHpMul);
+          this.player.hp = this.player.maxHp;
+        }
+      }
+    }
+
     this.lowHpWarned = false;
     this.particles.clear();
     this.enemies = [];
+    this.enemyProjectiles = [];
     this.dropItems = [];
     this.turrets = [];
+    this.initExplodableProps();
+    this.extractionWell = null;
 
     this.gameTime = 0;
     this.kills = 0;
     this.gold = 0;
     this.boss = null;
+    this.hitstopTimer = 0;
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.frenzyTimer = 0;
     this.camera.x = 0;
     this.camera.y = 0;
     this.camera.shake = 0;
@@ -359,7 +574,16 @@ class Game {
 
     this.ui.updateSkillSlots(this.weaponManager);
     this.ui.updateBossHUD(null);
-    this.ui.say(this.player.character.lines.start, this.player.character.accent);
+    this.ui.updateDash(0);
+    this.ui.updateCombo(0, false);
+    this.ui.showTurretUpgrade(false);
+
+    if (this.isDaily && this.dailyConfig) {
+      this.ui.say(`每日挑戰啟動！【${this.dailyConfig.modifiers.map((m) => m.name).join(' | ')}】`, '#00e5ff', 4.5);
+    } else {
+      this.ui.say(this.player.character.lines.start, this.player.character.accent);
+    }
+
     this.ui.updateBuildBtn(this.gold, this.turretCost);
     this.state = 'PLAYING';
   }
@@ -461,6 +685,93 @@ class Game {
         }
       }
       this.particles.createShockwave(boss.x, boss.y, 130, '#b5179e');
+    } else if (act === 'barrage') {
+      // 扇形散彈幕 (7 發)
+      const count = 7;
+      const spread = Math.PI * 0.55;
+      const baseAngle = Math.atan2(this.player.y - boss.y, this.player.x - boss.x);
+      sound.playShoot();
+      for (let i = 0; i < count; i++) {
+        const angle = baseAngle - spread / 2 + (spread / (count - 1)) * i;
+        const spd = 260;
+        this.spawnEnemyProjectile(boss, {
+          x: boss.x + Math.cos(angle) * (boss.radius + 12),
+          y: boss.y + Math.sin(angle) * (boss.radius + 12),
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd,
+          damage: 16,
+          radius: 8,
+          life: 4.5,
+          color: '#ff0055',
+          glow: '#ff5400',
+        });
+      }
+      this.particles.createShockwave(boss.x, boss.y, boss.radius * 2, '#ff0055');
+    } else if (act === 'vortex') {
+      // 引力漩渦：短暫強烈吸引玩家往 Boss 靠近
+      boss.vortexTimer = 2.2;
+      this.particles.createShockwave(boss.x, boss.y, 220, '#7209b7');
+      sound.playExplosion();
+      this.camera.shake = Math.max(this.camera.shake, 8);
+    } else if (act === 'ground') {
+      // 地面預警雷區：在特工附近召喚定時爆破地雷 (與關卡 mech 地雷同 schema：kind/r/t)
+      const offsetAng = Math.random() * Math.PI * 2;
+      const offsetDist = Math.random() * 80 + 35;
+      const b = GAME_CONFIG.WORLD_BOUNDS;
+      const mx = Math.max(b.minX + 60, Math.min(b.maxX - 60, this.player.x + Math.cos(offsetAng) * offsetDist));
+      const my = Math.max(b.minY + 60, Math.min(b.maxY - 60, this.player.y + Math.sin(offsetAng) * offsetDist));
+      this.hazards.push({
+        kind: 'mine',
+        x: mx,
+        y: my,
+        r: 110,
+        color: '#ff0055',
+        t: 0,
+        tick: 0.5,
+        fuse: 1.6,
+        dur: 0,
+        dmg: 18,
+        dmgEnemy: 450,
+      });
+      this.particles.createShockwave(boss.x, boss.y, 90, '#ff0055');
+    }
+  }
+
+  spawnEnemyProjectile(shooter, projData) {
+    if (this.enemyProjectiles.length < 150) {
+      this.enemyProjectiles.push(new EnemyProjectile(projData));
+    }
+  }
+
+  updateEnemyProjectiles(dt) {
+    for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+      const ep = this.enemyProjectiles[i];
+      ep.update(dt);
+      if (ep.isDead) {
+        this.enemyProjectiles.splice(i, 1);
+      }
+    }
+  }
+
+  checkEnemyProjectileHits() {
+    const p = this.player;
+    if (p.isDead) return;
+
+    for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+      const ep = this.enemyProjectiles[i];
+      if (ep.isDead) continue;
+
+      const dist = Math.hypot(p.x - ep.x, p.y - ep.y);
+      if (dist < p.radius + ep.radius) {
+        ep.isDead = true;
+        this.enemyProjectiles.splice(i, 1);
+        if (p.takeDamage(ep.damage)) {
+          this.camera.shake = Math.max(this.camera.shake, 6);
+          this.particles.createHurtText(p.x, p.y, ep.damage);
+          this.particles.createDeathParticles(ep.x, ep.y, ep.color || '#06d6a0', 6);
+          p.character.onHit?.(this);
+        }
+      }
     }
   }
 
@@ -678,8 +989,13 @@ class Game {
     // 畫布每幀變動會逼瀏覽器每幀重做全螢幕模糊 → 死亡/升級時直接卡死。
     // 停止重繪後畫布保留最後一幀，視覺上完全一樣。
     if (this.state === 'PLAYING') {
-      this.update(dt);
-      this.render();
+      if (this.hitstopTimer > 0) {
+        this.hitstopTimer -= dt;
+        this.render();
+      } else {
+        this.update(dt);
+        this.render();
+      }
     }
 
     requestAnimationFrame(this.loop);
@@ -720,18 +1036,45 @@ class Game {
       );
     });
 
-    // 4. 更新怪物行動與自爆回呼
+    // 4. 更新怪物行動、遠程射擊與自爆回呼
     for (const enemy of this.enemies) {
-      enemy.update(dt, this.player, (boomer) => {
-        // 自爆蟲引爆
-        this.particles.createExplosion(boomer.x, boomer.y, 75);
-        sound.playExplosion();
-        const dist = Math.hypot(this.player.x - boomer.x, this.player.y - boomer.y);
-        if (dist <= 75 + this.player.radius) {
-          this.player.takeDamage(20);
-          this.camera.shake = 8;
+      enemy.update(
+        dt,
+        this.player,
+        (boomer) => {
+          // 自爆蟲引爆
+          this.particles.createExplosion(boomer.x, boomer.y, 75);
+          sound.playExplosion();
+          const dist = Math.hypot(this.player.x - boomer.x, this.player.y - boomer.y);
+          if (dist <= 75 + this.player.radius) {
+            this.player.takeDamage(20);
+            this.camera.shake = 8;
+          }
+        },
+        (boss, act) => this.handleBossSkill(boss, act),
+        (shooter, projData) => this.spawnEnemyProjectile(shooter, projData)
+      );
+
+      // Boss 引力漩渦吸附判定
+      if (enemy.isBoss && enemy.vortexTimer > 0) {
+        enemy.vortexTimer -= dt;
+        const vdx = enemy.x - this.player.x;
+        const vdy = enemy.y - this.player.y;
+        const vdist = Math.hypot(vdx, vdy);
+        if (vdist > 15) {
+          const pullSpeed = 165 * dt;
+          this.player.x += (vdx / vdist) * pullSpeed;
+          this.player.y += (vdy / vdist) * pullSpeed;
         }
-      }, (boss, act) => this.handleBossSkill(boss, act));
+        if (Math.random() < 0.4) {
+          this.particles.createDeathParticles(
+            enemy.x + (Math.random() - 0.5) * 160,
+            enemy.y + (Math.random() - 0.5) * 160,
+            '#b5179e',
+            2
+          );
+        }
+      }
 
       // 怪物撞擊特工傷害檢測
       const dist = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
@@ -744,16 +1087,91 @@ class Game {
       }
     }
 
+    // 4.2 更新敵方投射物與判定
+    this.updateEnemyProjectiles(dt);
+    this.checkEnemyProjectileHits();
+
     // 4.5 砲塔開火與被啃
     this.updateTurrets(dt);
+
+    // 檢測是否在標準砲塔附近 (顯示進化按鈕)
+    const nearStandardTurret = this.turrets.find(
+      (t) => t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125
+    );
+    if (nearStandardTurret && this.gold >= 50) {
+      // 第二參數才是點擊回呼 (UI 簽名 showTurretUpgrade(show, onUpgrade)) — 別把砲塔物件當回呼傳
+      this.ui.showTurretUpgrade(true, () => this.tryUpgradeNearestTurret());
+    } else {
+      this.ui.showTurretUpgrade(false);
+    }
 
     // 4.6 關卡地形機制 (毒霧/地雷/噴發/空投)
     this.updateHazards(dt);
 
-    // 5. 武器庫冷卻與攻擊
-    this.weaponManager.update(dt, this.enemies, this.particles);
+    // 4.7 可引爆物件受傷閃白更新
+    for (const prop of this.explodableProps) {
+      if (prop.flashTimer > 0) prop.flashTimer -= dt;
+    }
 
-    // 6. 投射物與怪物碰撞檢測
+    // 4.8 撤離井刷新與倒數 (生成位置 clamp 在世界邊界內，避免貼牆時開在界外)
+    if (!this.extractionWell && ((this.gameTime >= 150 && this.gameTime < 155) || (this.gameTime >= 330 && this.gameTime < 335))) {
+      const ang = Math.random() * Math.PI * 2;
+      const d = 360 + Math.random() * 120;
+      const b = GAME_CONFIG.WORLD_BOUNDS;
+      this.extractionWell = {
+        x: Math.max(b.minX + 90, Math.min(b.maxX - 90, this.player.x + Math.cos(ang) * d)),
+        y: Math.max(b.minY + 90, Math.min(b.maxY - 90, this.player.y + Math.sin(ang) * d)),
+        radius: 75,
+        holdTime: 0,
+        requiredTime: 4.0,
+        life: 25, // 25 秒沒人進去就關閉，讓 5:30 的第二窗口能再開
+        active: true,
+      };
+      sound.playEvoFanfare();
+      this.ui.say('🚨 戰術撤離井已開啟！前往光環完成撤離獲取巨額獎勵！', '#00e5ff', 4.5);
+    }
+
+    if (this.extractionWell && this.extractionWell.active) {
+      this.extractionWell.life -= dt;
+      if (this.extractionWell.life <= 0) {
+        // 錯過窗口：關閉並清掉，下一窗口才能再開
+        this.extractionWell = null;
+        this.ui.say('🚁 戰術撤離井已關閉', '#8a9bb0', 2);
+      } else {
+        const dist = Math.hypot(this.player.x - this.extractionWell.x, this.player.y - this.extractionWell.y);
+        if (dist <= this.extractionWell.radius) {
+          this.extractionWell.holdTime += dt;
+          if (Math.random() < 0.4) {
+            this.particles.createShockwave(this.extractionWell.x, this.extractionWell.y, this.extractionWell.radius, '#00e5ff');
+          }
+          if (this.extractionWell.holdTime >= this.extractionWell.requiredTime) {
+            this.extractionWell.active = false;
+            sound.playEvoFanfare();
+            this.particles.createShockwave(this.extractionWell.x, this.extractionWell.y, 600, '#00e5ff');
+            const rewardDna = 180;
+            save.data.dna += rewardDna;
+            save.flush();
+            this.gold += 150;
+            this.ui.say(`🚁 戰術撤離成功！+${rewardDna} 🧬 DNA, +150 🪙`, '#ffd60a', 4);
+            for (const e of this.enemies) {
+              if (!e.isBoss && Math.hypot(e.x - this.player.x, e.y - this.player.y) < 500) {
+                e.takeDamage(9999, 10, this.player.x, this.player.y);
+              }
+            }
+            // 撤離成功後清掉，讓 5:30 的第二窗口能再開一次
+            this.extractionWell = null;
+          }
+        } else {
+          this.extractionWell.holdTime = Math.max(0, this.extractionWell.holdTime - dt * 0.8);
+        }
+      }
+    }
+
+    // 5. 武器庫冷卻與攻擊 (連擊狂潮下攻速加速 35%)
+    const weaponDt = this.frenzyTimer > 0 ? dt * 1.35 : dt;
+    this.weaponManager.update(weaponDt, this.enemies, this.particles);
+
+    // 6. 投射物與怪物/環境碰撞檢測
     this.checkProjectileCollisions();
 
     // 7. 清除死亡怪物並產出掉落物
@@ -774,13 +1192,30 @@ class Game {
       this.ui.say(this.player.character.lines.lowhp, '#ff0055');
     }
 
-    // 12. 更新 UI
+    // 12. 翻滾冷卻與連擊倒數更新
+    this.ui.updateDash(this.player.dashMaxTimer ? this.player.dashTimer / this.player.dashMaxTimer : 0);
+    if (this.combo > 0) {
+      this.comboTimer -= dt;
+      if (this.comboTimer <= 0) {
+        this.combo = 0;
+        this.comboTimer = 0;
+      }
+      this.ui.updateCombo(this.combo, this.frenzyTimer > 0);
+    }
+    if (this.frenzyTimer > 0) {
+      this.frenzyTimer -= dt;
+      if (Math.random() < 0.25) {
+        this.particles.createShockwave(this.player.x, this.player.y, 25, '#00e5ff');
+      }
+    }
+
+    // 13. 更新 UI
     this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
     this.ui.updateBossHUD(this.boss);
     this.ui.setObjective(this.objectiveText());
 
-    // 13. 里程碑獎勵 (擊殺數 / 存活時間)
+    // 14. 里程碑獎勵 (擊殺數 / 存活時間)
     this.checkMilestones();
   }
 
@@ -790,7 +1225,31 @@ class Game {
 
       const hitR = p.radius;
 
+      // 投射物與可引爆物判定
+      for (let i = this.explodableProps.length - 1; i >= 0; i--) {
+        const prop = this.explodableProps[i];
+        const dx = prop.x - p.x;
+        const dy = prop.y - p.y;
+        const rr = hitR + prop.radius;
+        if (dx * dx + dy * dy < rr * rr) {
+          prop.hp -= p.damage;
+          prop.flashTimer = 0.12;
+          this.particles.createDamageText(prop.x, prop.y, p.damage, false);
+          sound.playHit();
+          p.pierce--;
+          if (p.pierce <= 0) {
+            p.isDead = true;
+          }
+          if (prop.hp <= 0) {
+            this.triggerPropExplosion(prop);
+            this.explodableProps.splice(i, 1);
+          }
+          break;
+        }
+      }
+
       for (const enemy of this.enemies) {
+        if (p.isDead) break; // 投射物已撞爆可引爆物件身亡，不再繼續掃怪
         if (enemy.isDead || p.hitEnemies.has(enemy)) continue;
 
         // 平方距離比較：省掉每組碰撞一次的開根號 (滿級彈幕×兩百隻怪是每幀幾萬次運算)
@@ -821,6 +1280,12 @@ class Game {
       const enemy = this.enemies[i];
       if (enemy.isDead) {
         this.kills++;
+        this.addCombo();
+        if (enemy.isBoss) {
+          this.triggerHitstop(0.08);
+        } else if (enemy.isElite) {
+          this.triggerHitstop(0.035);
+        }
         this.player.character.onKill?.(enemy, this);
         this.particles.createDeathParticles(enemy.x, enemy.y, enemy.color, enemy.isBoss ? 28 : 8);
 
@@ -873,6 +1338,10 @@ class Game {
 
     if (enemy.isBoss) {
       kind = 'EXP_GOLD';
+      // Boss 必掉幸運輪盤補給箱 (終極首領打完直接勝利，箱子撿不到，略過)
+      if (!enemy.isFinal) {
+        this.dropItems.push(new DropItem(enemy.x + 24, enemy.y + 24, 'CHEST'));
+      }
     } else if (enemy.exp >= 3) {
       kind = 'EXP_PURPLE';
     } else if (rand < 0.015) {
@@ -887,10 +1356,15 @@ class Game {
       kind = 'EXP_BLUE'; // 藍色水晶
     }
 
-    // 精英怪掉得更好：保底紫水晶，另有機率改噴金幣
+    // 精英怪掉得更好：保底紫水晶，22% 機率掉幸運補給箱，另有機率改噴金幣
     if (enemy.isElite && !enemy.isBoss) {
-      if (Math.random() < 0.25) kind = 'GOLD_COIN';
-      else if (kind === 'EXP_GREEN' || kind === 'EXP_BLUE') kind = 'EXP_PURPLE';
+      if (Math.random() < 0.22) {
+        this.dropItems.push(new DropItem(enemy.x + 18, enemy.y, 'CHEST'));
+      } else if (Math.random() < 0.25) {
+        kind = 'GOLD_COIN';
+      } else if (kind === 'EXP_GREEN' || kind === 'EXP_BLUE') {
+        kind = 'EXP_PURPLE';
+      }
     }
 
     this.dropItems.push(new DropItem(enemy.x, enemy.y, kind));
@@ -928,6 +1402,9 @@ class Game {
       if (item.collected) {
         this.handleItemPickup(item);
         this.dropItems.splice(i, 1);
+        // 開箱/升級會切換狀態機 (CHEST_MODAL/LEVEL_UP)：剩餘掉落物等恢復後再撿，
+        // 避免同幀疊加 (雙箱互蓋、升級卡被箱子蓋掉)
+        if (this.state !== 'PLAYING') break;
       }
     }
   }
@@ -965,6 +1442,8 @@ class Game {
     } else if (item.type === 'gold') {
       sound.playGem();
       this.gold += Math.round(item.value * (this.metaGoldMul || 1));
+    } else if (item.type === 'chest') {
+      this.openLuckyChest();
     } else if (item.type === 'gear') {
       const gear = item.item;
       if (!gear) return;
@@ -1066,7 +1545,17 @@ class Game {
       cleared: isVictory,
       dnaMult: this.level.dnaMult,
       nextLevel: this.level.next,
+      // 每日挑戰成績獨立 (daily 欄位)：不寫入該關 best、不解鎖下一關，但 DNA 照發
+      skipProgress: this.isDaily,
     });
+
+    if (this.isDaily && this.dailyConfig) {
+      save.recordDailyRun({
+        date: this.dailyConfig.date,
+        time: this.gameTime,
+        cleared: isVictory,
+      });
+    }
 
     this.ui.showGameOver(
       {
@@ -1077,10 +1566,14 @@ class Game {
         gold: this.gold,
         line: isVictory ? lines.win : lines.death,
         codename: this.player.character.codename,
-        levelName: this.level.name,
+        levelName: this.isDaily
+          ? `每日挑戰·${this.level.name} (${this.dailyConfig?.date || ''})`
+          : this.level.name,
         dna: result.dna,
         totalDna: save.data.dna,
-        bestTime: save.data.best[this.level.id].time,
+        bestTime: this.isDaily
+          ? (save.data.daily && save.data.daily.date === this.dailyConfig?.date ? save.data.daily.bestTime || 0 : 0)
+          : (save.data.best[this.level.id]?.time || 0),
         unlockedName: result.unlockedNew ? LEVELS[this.level.next].name : null,
       },
       this.weaponManager
@@ -1116,6 +1609,14 @@ class Game {
       item.draw(this.ctx, renderCam);
     }
 
+    // 繪製可引爆場景物件 (油桶/載具)
+    this.drawExplodableProps(renderCam);
+
+    // 繪製戰術撤離井
+    if (this.extractionWell && this.extractionWell.active) {
+      this.drawExtractionWell(renderCam);
+    }
+
     // 繪製地形機制 (毒霧圈 / 地雷警示)
     this.drawHazards(renderCam);
 
@@ -1132,6 +1633,11 @@ class Game {
       enemy.draw(this.ctx, renderCam);
     }
 
+    // 繪製敵方投射物
+    for (const ep of this.enemyProjectiles) {
+      ep.draw(this.ctx, renderCam);
+    }
+
     // 繪製主角特工鴨
     this.player.draw(this.ctx, renderCam);
 
@@ -1143,6 +1649,140 @@ class Game {
 
     // 小地圖
     this.drawMinimap();
+  }
+
+  drawExplodableProps(camera) {
+    const ctx = this.ctx;
+    for (const p of this.explodableProps) {
+      const rx = p.x - camera.x;
+      const ry = p.y - camera.y;
+      if (rx < -80 || rx > this.vw + 80 || ry < -80 || ry > this.vh + 80) continue;
+
+      ctx.save();
+      ctx.translate(rx, ry);
+
+      // 陰影
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(0, p.radius * 0.7, p.radius, p.radius * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 受擊閃白
+      if (p.flashTimer > 0) {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
+      if (p.type === 'tank') {
+        // 紅色高爆汽油桶
+        ctx.fillStyle = '#d90429';
+        ctx.strokeStyle = '#2b2d42';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect(-16, -22, 32, 44, 5);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffd166';
+        ctx.fillRect(-14, -8, 28, 6);
+        ctx.fillRect(-14, 6, 28, 6);
+
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🛢️', 0, 0);
+      } else if (p.type === 'hazard') {
+        // 毒素生化廢料桶
+        ctx.fillStyle = '#06d6a0';
+        ctx.strokeStyle = '#073b4c';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect(-18, -20, 36, 40, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('☣️', 0, 0);
+      } else {
+        // 廢棄裝甲車
+        ctx.fillStyle = '#3a5a40';
+        ctx.strokeStyle = '#1b263b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(-28, -18, 56, 36, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#1b263b';
+        ctx.fillRect(-20, -10, 40, 20);
+
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🚨', 0, 0);
+      }
+
+      // 血條
+      if (p.hp < p.maxHp) {
+        const bw = p.radius * 1.5;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(-bw / 2, -p.radius - 10, bw, 4);
+        ctx.fillStyle = '#ef233c';
+        ctx.fillRect(-bw / 2, -p.radius - 10, bw * (p.hp / p.maxHp), 4);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  drawExtractionWell(camera) {
+    const ctx = this.ctx;
+    const well = this.extractionWell;
+    const rx = well.x - camera.x;
+    const ry = well.y - camera.y;
+
+    ctx.save();
+    ctx.translate(rx, ry);
+
+    const pulse = (Math.sin(this.gameTime * 4) + 1) * 0.5;
+    ctx.strokeStyle = `rgba(0, 229, 255, ${0.4 + pulse * 0.4})`;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.arc(0, 0, well.radius + pulse * 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const progress = Math.min(1, well.holdTime / well.requiredTime);
+    ctx.fillStyle = 'rgba(0, 229, 255, 0.18)';
+    ctx.beginPath();
+    ctx.arc(0, 0, well.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (progress > 0) {
+      ctx.strokeStyle = '#ffd60a';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(0, 0, well.radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+      ctx.stroke();
+    }
+
+    ctx.font = '22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🚁', 0, 0);
+
+    ctx.fillStyle = '#00e5ff';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText(`撤離進度 ${Math.round(progress * 100)}%`, 0, well.radius + 18);
+
+    ctx.restore();
   }
 
   drawVignette() {
