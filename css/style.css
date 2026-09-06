@@ -1333,9 +1333,10 @@ body, html {
 }
 
 /* ==================== 戰術動作欄 (翻滾/閃避 & 砲塔升級) ==================== */
+/* bottom 讓開 canvas 小地圖 (desktop 136px + pad 18px，見 main.js drawMinimap)：墊在小地圖上方 */
 #action-bar {
   position: absolute;
-  bottom: calc(30px + env(safe-area-inset-bottom));
+  bottom: calc(162px + env(safe-area-inset-bottom));
   right: calc(28px + env(safe-area-inset-right));
   display: flex;
   flex-direction: column;
@@ -1343,6 +1344,14 @@ body, html {
   gap: 14px;
   z-index: 100;
   pointer-events: auto;
+}
+
+@media (max-width: 619px) {
+  /* 手機小地圖較小 (96px + pad 10px)：動作欄同步下移貼齊其上方 */
+  #action-bar {
+    bottom: calc(114px + env(safe-area-inset-bottom));
+    right: calc(14px + env(safe-area-inset-right));
+  }
 }
 
 .action-btn {
@@ -1435,6 +1444,13 @@ body, html {
   font-size: 11px;
   font-weight: 700;
   opacity: 0.85;
+}
+
+/* combo pill 切換時保留版面空間 (visibility 取代 display:none)：
+   避免手機窄寬度下狀態列在 1 列/2 列之間反覆跳動 */
+#combo-hud.hidden {
+  display: flex !important;
+  visibility: hidden;
 }
 
 /* ==================== 幸運物資箱抽獎彈窗 ==================== */
