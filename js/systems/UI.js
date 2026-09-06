@@ -594,8 +594,8 @@ export class UIManager {
 
     order.forEach((id) => {
       const lv = levels[id];
-      const unlocked = save.isUnlocked(id);
-      const best = save.data.best[id];
+      const unlocked = save.isUnlocked(id, save.data.mode);
+      const best = save.bestOf(id, save.data.mode);
 
       const card = document.createElement('button');
       card.className = 'level-card' + (id === currentId && unlocked ? ' selected' : '') + (unlocked ? '' : ' locked');
@@ -618,6 +618,60 @@ export class UIManager {
       });
       this.levelSelect.appendChild(card);
     });
+  }
+
+  // 開始畫面的模式選擇 (切模式會連帶重繪關卡卡片，因為解鎖與紀錄依模式而分)
+  buildModeSelect(modes, order, currentId, onPick) {
+    const box = document.getElementById('mode-select');
+    if (!box) return;
+    box.innerHTML = '';
+
+    order.forEach((id) => {
+      const m = modes[id];
+      const card = document.createElement('button');
+      card.className = 'mode-card' + (id === currentId ? ' selected' : '');
+      card.style.setProperty('--mode-accent', m.accent);
+      card.innerHTML = `
+        <span class="mode-icon">${m.icon}</span>
+        <span class="mode-name">${m.name}</span>
+        <span class="mode-sub">${m.sub}</span>
+        <span class="mode-desc">${m.desc}</span>
+      `;
+      card.addEventListener('click', () => {
+        sound.playGem();
+        box.querySelectorAll('.mode-card').forEach((el) => el.classList.remove('selected'));
+        card.classList.add('selected');
+        onPick(id);
+      });
+      box.appendChild(card);
+    });
+  }
+
+  // 依模式顯示/隱藏砲塔與傭兵按鈕 (生存者模式兩者都沒有)
+  setModeButtons(mode) {
+    this.buildBtn?.classList.toggle('hidden', !mode.turrets);
+    this.hireBtn?.classList.toggle('hidden', !mode.mercs);
+    if (!mode.turrets) this.showTurretUpgrade(false);
+  }
+
+  // 基地核心血條 (守塔模式)
+  updateCoreHUD(core) {
+    if (!this.coreHud) {
+      this.coreHud = document.getElementById('core-hud');
+      this.coreHpFill = document.getElementById('core-hp-fill');
+      this.coreHpText = document.getElementById('core-hp-text');
+    }
+    if (!this.coreHud) return;
+    if (!core) {
+      this.coreHud.classList.add('hidden');
+      return;
+    }
+    this.coreHud.classList.remove('hidden');
+    const pct = Math.max(0, (core.hp / core.maxHp) * 100);
+    this.coreHpFill.style.width = `${pct}%`;
+    // 危險時整條轉紅提示
+    this.coreHud.classList.toggle('danger', pct < 30);
+    this.coreHpText.textContent = Math.ceil(core.hp);
   }
 
   // 角色台詞氣泡

@@ -77,7 +77,8 @@ export class Enemy {
     }
   }
 
-  update(dt, player, onExplodeCallback = null, onBossSkill = null, onEnemyShoot = null) {
+  // target 是要追擊的對象：生存者模式為玩家，守塔模式的雜兵為基地核心 (兩者都有 x/y)
+  update(dt, target, onExplodeCallback = null, onBossSkill = null, onEnemyShoot = null) {
     if (this.isDead) return;
 
     // 極寒減速倒數 (遊戲時間驅動：暫停/升級/開箱時同步凍結)
@@ -86,9 +87,9 @@ export class Enemy {
     this.animTimer += dt * 8;
     if (this.flashTimer > 0) this.flashTimer -= dt;
 
-    // 計算朝向玩家的向量
-    const dx = player.x - this.x;
-    const dy = player.y - this.y;
+    // 計算朝向目標的向量
+    const dx = target.x - this.x;
+    const dy = target.y - this.y;
     const dist = Math.hypot(dx, dy);
 
     let moveX = 0;

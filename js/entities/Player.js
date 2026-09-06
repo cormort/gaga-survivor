@@ -38,6 +38,7 @@ export class Player {
     this.metaCritDmg = 0;  // 局外裝備的暴擊傷害加值 (2 之外的額外倍率)
     this.metaArmor = 0;    // 局外裝備的減傷 (0~1，乘在 damageTakenMul 之後)
     this.metaExp = 0;      // 局外裝備的經驗加成 (0~1)
+    this.modeDmgMul = 1;   // 模式的武器輸出倍率 (js/modes.js 的 weaponMul)
     this.speedMultiplier = 1.0;
     this.cdrMultiplier = 1.0; // 冷卻縮減 (例如 0.84 代表 CD 變成 84%)
     this.rangeMultiplier = 1.0;

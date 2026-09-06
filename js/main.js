@@ -20,6 +20,11 @@ import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
 import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, salvageValue, RARITIES } from './items.js';
+import { MODES, MODE_ORDER, getMode } from './modes.js';
+import { Core } from './entities/Core.js';
+
+// 核心外圈實際擠得下的同時攻擊數 (半徑 46 的六角形一圈約十幾隻)
+const CORE_MAX_ATTACKERS = 16;
 
 // #rrggbb + alpha → rgba() 字串 (地形機制的半透明渲染用)
 function hexToRgba(hex, a) {
@@ -38,7 +43,10 @@ class Game {
     this.input = new InputController();
     save.load();
     this.characterId = CHARACTERS[save.data.character] ? save.data.character : 'duck';
-    this.levelId = save.isUnlocked(save.data.lastLevel) ? save.data.lastLevel : 'street';
+    this.modeId = MODES[save.data.mode] ? save.data.mode : 'survivor';
+    this.mode = getMode(this.modeId);
+    this.levelId = save.isUnlocked(save.data.lastLevel, this.modeId) ? save.data.lastLevel : 'street';
+    this.core = null;
     this.player = new Player(0, 0, this.characterId);
     this.weaponManager = new WeaponManager(this.player);
     this.spawner = new Spawner();
@@ -116,6 +124,7 @@ class Game {
 
   bindEvents() {
     // 特工 / 關卡選擇 (可重繪：解鎖或回主選單時刷新)
+    this.refreshModeSelect();
     this.refreshCharSelect();
     this.refreshLevelSelect();
     this.ui.updateDnaChip(save.data.dna);
@@ -274,7 +283,7 @@ class Game {
 
   // 砲塔專精進化 (消耗 50 金幣)
   tryUpgradeNearestTurret() {
-    if (this.state !== 'PLAYING' || !this.player) return;
+    if (this.state !== 'PLAYING' || !this.player || !this.mode.turrets) return;
     const upgradeCost = 50;
     const standardTurrets = this.turrets
       .filter((t) => t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125)
@@ -304,6 +313,10 @@ class Game {
   // 僱傭傭兵 (局內金幣消耗；最多 MERC.maxCount 名，費用隨人數成長)
   hireMercenary() {
     if (this.state !== 'PLAYING' || !this.player) return;
+    if (!this.mode.mercs) {
+      this.ui.say('生存者模式沒有傭兵 —— 靠走位活下來', '#8a9bb0', 1.6);
+      return;
+    }
     if (this.mercenaries.length >= MERC.maxCount) {
       this.ui.say(`傭兵小隊已滿員 (${MERC.maxCount}/${MERC.maxCount})`, '#8a9bb0', 1.6);
       sound.playHurt();
@@ -381,9 +394,12 @@ class Game {
     }
   }
 
-  // 啟動每日挑戰
+  // 啟動每日挑戰。固定跑生存者模式 —— 每日挑戰的賣點是「同一天所有人條件一致」，
+  // 讓它跟著當前選的模式跑就破功了。
   startDailyChallenge() {
     this.dailyConfig = getDailyChallenge();
+    this.modeId = 'survivor';
+    this.mode = getMode('survivor');
     this.ui.startScreen.classList.add('hidden');
     this.start(true);
   }
@@ -529,6 +545,21 @@ class Game {
     );
   }
 
+  // 切模式：解鎖清單與最佳紀錄都依模式而分，所以要連帶重繪關卡卡片
+  refreshModeSelect() {
+    this.ui.buildModeSelect(MODES, MODE_ORDER, this.modeId, (id) => {
+      this.modeId = id;
+      this.mode = getMode(id);
+      save.set({ mode: id });
+      // 換模式後原本選的關卡可能還沒在這個模式解鎖
+      if (!save.isUnlocked(this.levelId, id)) {
+        this.levelId = 'street';
+        save.set({ lastLevel: 'street' });
+      }
+      this.refreshLevelSelect();
+    });
+  }
+
   refreshLevelSelect() {
     this.ui.buildLevelSelect(LEVELS, LEVEL_ORDER, save, (id) => {
       this.levelId = id;
@@ -569,6 +600,10 @@ class Game {
   // 結算畫面 → 回主選單：清掉戰局殘留並重繪選單 (DNA 等資料已由 recordRun 更新)
   returnToMenu() {
     this.state = 'START';
+    // 每日挑戰會強制切成生存者，回選單要把玩家自己選的模式還原回來
+    this.modeId = MODES[save.data.mode] ? save.data.mode : 'survivor';
+    this.mode = getMode(this.modeId);
+    this.isDaily = false;
     this.ui.gameOverModal.classList.add('hidden');
     this.ui.startScreen.classList.remove('hidden');
 
@@ -580,6 +615,8 @@ class Game {
     this.decals = [];
     this.hazards = [];
     this.boss = null;
+    this.core = null;
+    this.ui.updateCoreHUD(null);
     this.particles.clear();
     this.camera.x = 0;
     this.camera.y = 0;
@@ -589,6 +626,7 @@ class Game {
     this.ui.updateHUD(this.player, 0, 0, 0);
     this.ui.pauseBtn.textContent = '⏸️';
     this.ui.updateDnaChip(save.data.dna);
+    this.refreshModeSelect();
     this.refreshCharSelect();
     this.refreshLevelSelect();
     this.ui.sayStatus('');
@@ -627,7 +665,7 @@ class Game {
     p.maxHp += m.hp;
     p.baseMaxHp += m.hp;
     p.hp = p.maxHp;
-    this.metaGoldMul = 1 + m.gold;
+    this.metaGoldMul = (1 + m.gold) * (this.mode ? this.mode.goldMul : 1);
     // 冷卻加成要在被動重算時才會套用，開局先跑一次
     this.weaponManager.applyPassives();
   }
@@ -643,9 +681,15 @@ class Game {
     this.level = LEVELS[activeLevelId] || LEVELS.street;
     this.spawner.setLevel(activeLevelId);
 
-    this.player = new Player(0, 0, this.characterId);
+    // 模式：守塔在場中央生出基地核心，玩家開場站在核心下方讓出位置
+    this.mode = getMode(this.modeId);
+    this.core = this.mode.core ? new Core(this.mode.core) : null;
+    const spawnY = this.core ? this.core.y + this.core.radius + 90 : 0;
+    this.player = new Player(this.core ? this.core.x : 0, spawnY, this.characterId);
     this.weaponManager = new WeaponManager(this.player);
     this.applyMetaTalents();
+    this.player.modeDmgMul = this.mode.weaponMul;
+    this.weaponManager.applyPassives();
 
     // 每日挑戰詞條套用
     if (this.isDaily && this.dailyConfig) {
@@ -703,17 +747,24 @@ class Game {
       this.ui.say(this.player.character.lines.start, this.player.character.accent);
     }
 
+    this.ui.setModeButtons(this.mode);
+    this.ui.updateCoreHUD(this.core);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
     this.state = 'PLAYING';
   }
 
   get turretCost() {
-    return TURRET.baseCost + TURRET.costGrowth * this.turrets.length;
+    const raw = TURRET.baseCost + TURRET.costGrowth * this.turrets.length;
+    return Math.round(raw * (this.mode ? this.mode.turretCostMul : 1));
   }
 
   buildTurret() {
     if (this.state !== 'PLAYING') return;
+    if (!this.mode.turrets) {
+      this.ui.say('生存者模式沒有砲塔 —— 靠走位活下來', '#8a9bb0', 1.6);
+      return;
+    }
 
     if (this.gold < this.turretCost) {
       this.ui.say(`金幣不足，佈署砲塔需要 ${this.turretCost} 🪙`, '#ffb703', 1.6);
@@ -1303,10 +1354,12 @@ class Game {
     });
 
     // 4. 更新怪物行動、遠程射擊與自爆回呼
+    // 守塔模式：雜兵朝基地核心進攻；Boss 仍鎖玩家 (技能全以玩家為原點，且核心撐不住 Boss)
+    const mobTarget = this.core && this.mode.enemyTarget === 'core' ? this.core : this.player;
     for (const enemy of this.enemies) {
       enemy.update(
         dt,
-        this.player,
+        enemy.isBoss ? this.player : mobTarget,
         (boomer) => {
           // 自爆蟲引爆
           this.particles.createExplosion(boomer.x, boomer.y, 75);
@@ -1359,6 +1412,41 @@ class Game {
 
     // 4.5 砲塔開火與被啃
     this.updateTurrets(dt);
+
+    // 4.55 基地核心 (守塔模式)：雜兵貼上來就啃，破了即任務失敗。
+    // 推擠對所有貼上來的怪都生效 (物理阻擋)，但「打得到核心」的只有最外圈的
+    // CORE_MAX_ATTACKERS 隻 —— 否則傷害會隨怪數無上限累加 (實測不防守時會衝到
+    // 2,972 DPS、249 隻同時啃)，核心開多少血都是幾十秒內被秒。
+    if (this.core) {
+      this.core.update(dt);
+      let attackers = 0;
+      for (const e of this.enemies) {
+        if (e.isDead) continue;
+        const dx = e.x - this.core.x;
+        const dy = e.y - this.core.y;
+        const minD = this.core.radius + e.radius;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= minD * minD || d2 === 0) continue;
+        const d = Math.sqrt(d2);
+        // 推開，讓怪圍在核心外圈啃 (比照砲塔被啃的處理)
+        e.x = this.core.x + (dx / d) * minD;
+        e.y = this.core.y + (dy / d) * minD;
+        if (attackers < CORE_MAX_ATTACKERS) {
+          attackers++;
+          this.core.takeDamage(e.damage * dt * 1.5);
+        }
+      }
+      if (this.core.isDead) {
+        this.particles.createExplosion(this.core.x, this.core.y, 220);
+        this.particles.createShockwave(this.core.x, this.core.y, 420, '#ff0055');
+        sound.playExplosion();
+        this.camera.shake = 24;
+        this.ui.say('💥 基地核心被摧毀！任務失敗', '#ff0055', 3);
+        this.handleGameOver(false);
+        return;
+      }
+      this.ui.updateCoreHUD(this.core);
+    }
 
     // 4.6 傭兵 AI (跟隨/索敵/被啃)
     this.updateMercenaries(dt);
@@ -1864,6 +1952,7 @@ class Game {
       nextLevel: this.level.next,
       // 每日挑戰成績獨立 (daily 欄位)：不寫入該關 best、不解鎖下一關，但 DNA 照發
       skipProgress: this.isDaily,
+      modeId: this.modeId,
     });
 
     if (this.isDaily && this.dailyConfig) {
@@ -1915,7 +2004,7 @@ class Game {
         totalDna: save.data.dna,
         bestTime: this.isDaily
           ? (save.data.daily && save.data.daily.date === this.dailyConfig?.date ? save.data.daily.bestTime || 0 : 0)
-          : (save.data.best[this.level.id]?.time || 0),
+          : (save.bestOf(this.level.id, this.modeId)?.time || 0),
         unlockedName: result.unlockedNew ? LEVELS[this.level.next].name : null,
       },
       this.weaponManager,
@@ -1971,6 +2060,9 @@ class Game {
 
     // 繪製武器投射物 (地面積火最底層)
     this.weaponManager.draw(this.ctx, renderCam);
+
+    // 繪製基地核心 (守塔模式)
+    if (this.core) this.core.draw(this.ctx, renderCam);
 
     // 繪製砲塔
     for (const t of this.turrets) {

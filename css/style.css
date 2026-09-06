@@ -1742,3 +1742,123 @@ body, html {
   justify-content: center;
 }
 
+/* ===== 作戰模式選擇 (生存者 / 守塔) ===== */
+.mode-select {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 12px 10px;
+  background: rgba(10, 16, 30, 0.75);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: var(--text-main);
+  font-family: var(--font-text);
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.mode-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--mode-accent, var(--color-primary));
+}
+
+.mode-card.selected {
+  border-color: var(--mode-accent, var(--color-primary));
+  background: rgba(20, 32, 56, 0.95);
+  box-shadow: 0 0 18px -4px var(--mode-accent, var(--color-primary));
+}
+
+.mode-icon { font-size: 26px; }
+
+.mode-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--mode-accent, var(--text-main));
+}
+
+.mode-sub {
+  font-size: 10px;
+  letter-spacing: 1px;
+  opacity: 0.75;
+}
+
+.mode-desc {
+  font-size: 10px;
+  line-height: 1.45;
+  opacity: 0.6;
+}
+
+/* ===== 基地核心血條 (守塔模式) ===== */
+#core-hud {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 96px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(8, 13, 24, 0.72);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  font-family: var(--font-text);
+  pointer-events: none;
+}
+
+.core-icon { font-size: 14px; }
+
+.core-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-main);
+}
+
+.core-hp-bar {
+  width: 170px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.core-hp-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #00e5ff, #00f59b);
+  transition: width 0.18s linear;
+}
+
+.core-hp-text {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+/* 核心告急：整條轉紅並呼吸 */
+#core-hud.danger {
+  border-color: rgba(255, 0, 85, 0.6);
+  animation: corePulse 0.7s ease-in-out infinite;
+}
+
+#core-hud.danger .core-hp-fill {
+  background: linear-gradient(90deg, #ff0055, #ff7b00);
+}
+
+@keyframes corePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.35); }
+  50%      { box-shadow: 0 0 16px 2px rgba(255, 0, 85, 0.5); }
+}

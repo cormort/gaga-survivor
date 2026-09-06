@@ -6,7 +6,11 @@ import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes, FUSION_COST, fuse
 export const STASH_CAP = 30;
 
 const KEY = 'gaga_save';
-const VERSION = 3;
+const VERSION = 4;
+
+// 兩種模式的進度分開記 (最佳紀錄與關卡解鎖)，但養成完全共用：
+// DNA、天賦、裝備倉庫、已解鎖特工都跨模式共享。
+export const MODE_IDS = ['survivor', 'defense'];
 
 function blank() {
   return {
@@ -15,10 +19,11 @@ function blank() {
     talents: {},            // 天賦樹等級 (基因強化)
     stash: [],              // 打寶倉庫 (最多 STASH_CAP 件)
     equipped: {},           // 已穿裝備 { slotKey: itemId }
-    unlocked: ['street'],   // 已解鎖關卡
+    unlocked: { survivor: ['street'], defense: ['street'] }, // 已解鎖關卡 (依模式)
     unlockedChars: ['duck'], // 已解鎖特工
-    best: {},               // { levelId: { time, kills, cleared } }
+    best: { survivor: {}, defense: {} }, // { modeId: { levelId: { time, kills, cleared } } }
     character: 'duck',
+    mode: 'survivor',       // 上次選的模式
     settings: { sfx: 1, bgm: 0.8 }, // 音量 (主選單滑桿)
     daily: { date: '', bestTime: 0, completed: false },
     evolvedEver: [],            // 歷史上合成過的超武 id (合成圖鑑打勾用)
@@ -28,8 +33,8 @@ function blank() {
 function migrate(save) {
   // 舊版本把資料散在兩個 key，這裡一次搬進來
   const oldTime = Number(localStorage.getItem('gaga_best_time') || 0);
-  if (oldTime > 0 && !save.best.street) {
-    save.best.street = { time: oldTime, kills: 0, cleared: false };
+  if (oldTime > 0 && !save.best.survivor.street) {
+    save.best.survivor.street = { time: oldTime, kills: 0, cleared: false };
   }
   const oldChar = localStorage.getItem('gaga_character');
   if (oldChar) save.character = oldChar;
@@ -41,6 +46,26 @@ function migrate(save) {
 
 // 新版本補欄位：解鎖清單、天賦物件不存在時給預設值 (舊存檔直接升級)
 function ensureDefaults(d) {
+  // v3 → v4：best 與 unlocked 由「單一份」變成「依模式各一份」。
+  // 舊紀錄搬進 survivor；解鎖清單兩個模式都複製一份，老玩家不會突然被鎖回第一關。
+  if (Array.isArray(d.unlocked)) {
+    const old = d.unlocked.length ? d.unlocked : ['street'];
+    d.unlocked = { survivor: [...old], defense: [...old] };
+  }
+  if (!d.unlocked || typeof d.unlocked !== 'object') d.unlocked = {};
+  for (const m of MODE_IDS) {
+    if (!Array.isArray(d.unlocked[m])) d.unlocked[m] = ['street'];
+    if (!d.unlocked[m].includes('street')) d.unlocked[m].unshift('street');
+  }
+  if (!d.best || typeof d.best !== 'object') d.best = {};
+  // 舊的扁平 best 是 { levelId: {time,...} }，值帶 time 就代表是舊格式
+  const looksFlat = Object.values(d.best).some((v) => v && typeof v === 'object' && typeof v.time === 'number');
+  if (looksFlat) d.best = { survivor: d.best, defense: {} };
+  for (const m of MODE_IDS) {
+    if (!d.best[m] || typeof d.best[m] !== 'object') d.best[m] = {};
+  }
+  if (!MODE_IDS.includes(d.mode)) d.mode = 'survivor';
+
   if (!Array.isArray(d.unlockedChars)) d.unlockedChars = ['duck'];
   if (!d.unlockedChars.includes('duck')) d.unlockedChars.unshift('duck');
   // 舊存檔已選了某特工 → 視為已擁有，避免改版後被鎖住
@@ -90,15 +115,22 @@ export const save = {
     this.flush();
   },
 
-  isUnlocked(levelId) {
-    return this.data.unlocked.includes(levelId);
+  isUnlocked(levelId, modeId = this.data.mode) {
+    const list = this.data.unlocked[modeId] || this.data.unlocked.survivor || [];
+    return list.includes(levelId);
   },
 
-  unlock(levelId) {
-    if (!levelId || this.isUnlocked(levelId)) return false;
-    this.data.unlocked.push(levelId);
+  unlock(levelId, modeId = this.data.mode) {
+    if (!levelId || this.isUnlocked(levelId, modeId)) return false;
+    if (!Array.isArray(this.data.unlocked[modeId])) this.data.unlocked[modeId] = ['street'];
+    this.data.unlocked[modeId].push(levelId);
     this.flush();
     return true;
+  },
+
+  // 某模式的關卡最佳紀錄 (沒打過回 undefined)
+  bestOf(levelId, modeId = this.data.mode) {
+    return (this.data.best[modeId] || {})[levelId];
   },
 
   // ----- 天賦 (基因強化) -----
@@ -238,20 +270,21 @@ export const save = {
 
   // 單局結算：回傳這場拿到多少 DNA、是否破紀錄、是否解鎖新關卡
   // skipProgress=true (每日挑戰) 時只發 DNA，不寫該關最佳紀錄、不解鎖下一關
-  recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null, skipProgress = false }) {
+  recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null, skipProgress = false, modeId = 'survivor' }) {
     const dna = Math.max(1, Math.round((time / 10 + kills / 20 + level * 2) * dnaMult * (cleared ? 1.5 : 1)));
     this.data.dna += dna;
 
     if (!skipProgress) {
-      const prev = this.data.best[levelId];
+      if (!this.data.best[modeId]) this.data.best[modeId] = {};
+      const prev = this.data.best[modeId][levelId];
       const isRecord = !prev || time > prev.time;
-      this.data.best[levelId] = {
+      this.data.best[modeId][levelId] = {
         time: Math.max(time, prev ? prev.time : 0),
         kills: Math.max(kills, prev ? prev.kills : 0),
         cleared: cleared || (prev ? prev.cleared : false),
       };
 
-      const unlockedNew = cleared ? this.unlock(nextLevel) : false;
+      const unlockedNew = cleared ? this.unlock(nextLevel, modeId) : false;
       this.flush();
       return { dna, isRecord, unlockedNew };
     }

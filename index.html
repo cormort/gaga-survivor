@@ -71,6 +71,14 @@
       </div>
     </header>
 
+    <!-- 基地核心血條 (守塔模式顯示) -->
+    <div id="core-hud" class="hidden">
+      <span class="core-icon">🗼</span>
+      <span class="core-title">基地核心</span>
+      <div class="core-hp-bar"><div id="core-hp-fill" class="core-hp-fill"></div></div>
+      <span id="core-hp-text" class="core-hp-text">3000</span>
+    </div>
+
     <!-- Boss 血條 (Boss 出現時顯示) -->
     <div id="boss-hud" class="hidden">
       <div class="boss-info">
@@ -186,6 +194,9 @@
       <div class="start-box">
         <div class="title-badge">ROGUELIKE SURVIVOR</div>
         <h1 class="game-title">嘎嘎特攻隊<br><span class="title-sub">GAGA SURVIVOR</span></h1>
+        <div class="select-label">選擇作戰模式</div>
+        <div id="mode-select" class="mode-select"></div>
+
         <div class="select-label">選擇出擊特工</div>
         <div id="character-select" class="character-select"></div>
 
