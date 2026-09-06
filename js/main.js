@@ -2040,6 +2040,9 @@ class Game {
     ctx.fillStyle = this._floorGrad;
     ctx.fillRect(0, 0, W, H);
 
+    // Soulstone 風格地面質感層：汙漬色塊 + 每關專屬地表紋理 (畫在網格之下)
+    this.drawGroundDetail(ctx, camera, theme, W, H);
+
     // 細格線 + 每 4 格一條主格線，強化移動感
     const grid = 64;
     const ox = -(((camera.x % grid) + grid) % grid);
@@ -2079,6 +2082,149 @@ class Game {
     ctx.lineWidth = 3;
     ctx.strokeRect(bMinX, bMinY, bMaxX - bMinX, bMaxY - bMinY);
 
+    ctx.restore();
+  }
+
+  // 程序化地面質感 (Soulstone 風格參考)：世界座標雜湊決定汙漬與紋理，
+  // 不佔記憶體、不隨相機漂移。紋理種類由 levels.js theme.ground.motif 資料決定。
+  drawGroundDetail(ctx, camera, theme, W, H) {
+    const g = theme && theme.ground;
+    if (!g) return;
+    const key = (this.level || LEVELS.street).id || 'street';
+    let seed = 0;
+    for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
+    const h = (cx, cy, k) => {
+      const s = Math.sin(cx * 127.1 + cy * 311.7 + (seed + k * 74.7)) * 43758.5453;
+      return s - Math.floor(s);
+    };
+    const cell = 240;
+    const c0x = Math.floor(camera.x / cell) - 1;
+    const c0y = Math.floor(camera.y / cell) - 1;
+    const cols = Math.ceil(W / cell) + 3;
+    const rows = Math.ceil(H / cell) + 3;
+
+    for (let ry = 0; ry < rows; ry++) {
+      for (let rx = 0; rx < cols; rx++) {
+        const cx = c0x + rx;
+        const cy = c0y + ry;
+        const x = cx * cell - camera.x;
+        const y = cy * cell - camera.y;
+        const r = h(cx, cy, 1);
+
+        // 1) 大面積柔光汙漬 (約 6 成格子有一團)
+        if (r < 0.6) {
+          const p = g.patches[r < 0.25 ? 0 : 1];
+          const px = x + r * cell * 2.6 - cell * 0.8;
+          const py = y + h(cx, cy, 2) * cell * 2.6 - cell * 0.8;
+          const rad = 90 + r * 170;
+          const grad = ctx.createRadialGradient(px, py, 0, px, py, rad);
+          grad.addColorStop(0, `rgba(${p.c},${p.a})`);
+          grad.addColorStop(1, `rgba(${p.c},0)`);
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(px, py, rad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 2) 專屬地表紋理 (每格 1-2 筆)
+        const n = 1 + Math.floor(h(cx, cy, 3) * 2);
+        for (let k = 0; k < n; k++) {
+          this._groundMotif(ctx, g, x, y, cell, h(cx, cy, 4 + k), h(cx, cy, 9 + k));
+        }
+      }
+    }
+  }
+
+  _groundMotif(ctx, g, x, y, cell, r1, r2) {
+    const mx = x + r1 * cell;
+    const my = y + r2 * cell;
+    ctx.save();
+    switch (g.motif) {
+      case 'panel': {
+        // 實驗室金屬板接縫 (與主網格錯位的淡框) + 少數鉚釘
+        ctx.strokeStyle = g.motifColor;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(mx - cell * 0.22, my - cell * 0.22, cell * 0.44, cell * 0.44);
+        if (r2 > 0.72) {
+          ctx.fillStyle = g.accent;
+          ctx.beginPath();
+          ctx.arc(mx, my, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'crystal': {
+        // 雪地冰晶簇: 3-4 支半透明藍白三角
+        ctx.fillStyle = g.motifColor;
+        const base = r1 > 0.5 ? 4 : 3;
+        for (let i = 0; i < base; i++) {
+          const a = -Math.PI / 2 + (i - (base - 1) / 2) * 0.55 + (r2 - 0.5) * 0.4;
+          const len = 5 + r1 * 12 + i * 2;
+          ctx.beginPath();
+          ctx.moveTo(mx + Math.cos(a + Math.PI / 2) * 3.4, my + Math.sin(a + Math.PI / 2) * 3.4);
+          ctx.lineTo(mx + Math.cos(a) * len, my + Math.sin(a) * len);
+          ctx.lineTo(mx - Math.cos(a + Math.PI / 2) * 3.4, my - Math.sin(a + Math.PI / 2) * 3.4);
+          ctx.closePath();
+          ctx.fill();
+        }
+        break;
+      }
+      case 'lava': {
+        // 熔爐龜裂地殼: 暗色裂縫 + 透出橙紅餘燼光點
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = 1.6;
+        for (let i = 0; i < 2; i++) {
+          ctx.beginPath();
+          ctx.moveTo(mx - 13, my + (i ? 11 : -7));
+          ctx.lineTo(mx - 3, my + (i ? 4 : 2));
+          ctx.lineTo(mx + 9, my + (i ? -7 : 10));
+          ctx.stroke();
+        }
+        ctx.shadowColor = g.accent;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = g.accent;
+        ctx.beginPath();
+        ctx.arc(mx + (r2 - 0.5) * 15, my + (r1 - 0.5) * 15, 1.4 + r2 * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        break;
+      }
+      case 'void': {
+        // 深淵虛空: 淡紫同心弧符文 + 星塵點
+        ctx.strokeStyle = g.motifColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(mx, my, 5 + r2 * 7, r1 * 6.283, r1 * 6.283 + 2.4);
+        ctx.stroke();
+        ctx.fillStyle = g.accent;
+        ctx.beginPath();
+        ctx.arc(mx + 11, my - 7, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      default: {
+        // 商業街柏油裂紋 + 偶發霓虹微光裂縫
+        ctx.strokeStyle = g.motifColor;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(mx - 15, my + (r2 - 0.5) * 17);
+        ctx.lineTo(mx - 4, my + (r1 - 0.5) * 10);
+        ctx.lineTo(mx + 11, my + (r2 - 0.5) * 19);
+        ctx.stroke();
+        if (r1 > 0.62) {
+          ctx.strokeStyle = g.accent;
+          ctx.lineWidth = 1;
+          ctx.shadowColor = g.accent;
+          ctx.shadowBlur = 6;
+          ctx.beginPath();
+          ctx.moveTo(mx - 6, my + 4);
+          ctx.lineTo(mx + 6, my - 3);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+        break;
+      }
+    }
     ctx.restore();
   }
 }

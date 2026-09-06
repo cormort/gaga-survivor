@@ -21,6 +21,12 @@ export const LEVELS = {
       top: '#141d30', mid: '#0b1220', bottom: '#070a11',
       grid: 'rgba(255,255,255,0.035)', major: 'rgba(0,229,255,0.10)',
       bounds: 'rgba(255,0,85,0.65)',
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.02 }, { c: '120,80,220', a: 0.045 }],
+        motif: 'crack',        // 柏油裂紋 + 偶發霓虹微光裂縫
+        motifColor: 'rgba(0,0,0,0.28)',
+        accent: 'rgba(0,229,255,0.10)',
+      },
     },
     decor: ['car', 'bin', 'neon'],
     hpScale: 1.0,
@@ -52,6 +58,12 @@ export const LEVELS = {
       top: '#12251c', mid: '#0a1712', bottom: '#050c09',
       grid: 'rgba(180,255,200,0.045)', major: 'rgba(0,245,155,0.12)',
       bounds: 'rgba(120,255,120,0.55)',
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.02 }, { c: '0,245,155', a: 0.035 }],
+        motif: 'panel',      // 金屬板接縫 + 偶發腐蝕斑
+        motifColor: 'rgba(140,255,190,0.07)',
+        accent: 'rgba(0,245,155,0.08)',
+      },
     },
     decor: ['tank', 'pipes', 'hazard'],
     hpScale: 1.3,
@@ -83,6 +95,12 @@ export const LEVELS = {
       top: '#16283d', mid: '#0d1a2a', bottom: '#060c14',
       grid: 'rgba(200,235,255,0.05)', major: 'rgba(120,200,255,0.14)',
       bounds: 'rgba(120,200,255,0.6)',
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.025 }, { c: '120,200,255', a: 0.04 }],
+        motif: 'crystal',    // 凍土冰晶簇 + 霜紋
+        motifColor: 'rgba(200,240,255,0.5)',
+        accent: 'rgba(160,220,255,0.22)',
+      },
     },
     decor: ['ice_spike', 'snow', 'radar'],
     hpScale: 1.6,
@@ -114,6 +132,12 @@ export const LEVELS = {
       top: '#301410', mid: '#1c0b09', bottom: '#0d0504',
       grid: 'rgba(255,180,120,0.05)', major: 'rgba(255,120,0,0.16)',
       bounds: 'rgba(255,90,0,0.7)',
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.015 }, { c: '255,120,0', a: 0.05 }],
+        motif: 'lava',       // 龜裂熔岩地殼，裂縫透出橙紅餘燼
+        motifColor: 'rgba(255,120,0,0.28)',
+        accent: 'rgba(255,170,40,0.5)',
+      },
     },
     decor: ['lava_crack', 'steel', 'gear'],
     hpScale: 2.0,
@@ -145,6 +169,12 @@ export const LEVELS = {
       top: '#241637', mid: '#140b24', bottom: '#07030f',
       grid: 'rgba(200,160,255,0.05)', major: 'rgba(180,120,255,0.14)',
       bounds: 'rgba(180,90,255,0.6)',
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.018 }, { c: '180,120,255', a: 0.05 }],
+        motif: 'void',       // 虛空符文刻痕與星塵
+        motifColor: 'rgba(200,160,255,0.16)',
+        accent: 'rgba(255,255,255,0.14)',
+      },
     },
     decor: ['lava_crack', 'gear', 'radar'],
     hpScale: 1,
