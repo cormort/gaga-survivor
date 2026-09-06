@@ -716,16 +716,24 @@ export class UIManager {
       if (!item.isEvo && item.level < def.maxLevel) {
         const isLastLevel = item.level + 1 === def.maxLevel;
         const pair = pairInfo(id);
+        const hint = recipeHints.get(id); // 自己是別把武器的雙武合成缺件 (如 苦無 for 相位風暴)
         const recipeReady = pair && pair.maxed && isLastLevel;
+        let desc = `提升等級至 LV ${item.level + 1}。傷害與彈幕增強。`;
+        let tag = '武器升級';
+        if (recipeReady) {
+          desc = `提升至滿級！配方齊備，可合成【${WEAPONS[def.evoTarget].name}】`;
+          tag = '武器升級 · 配方就緒';
+        } else if (hint) {
+          desc = `提升等級至 LV ${item.level + 1}。完成後即可與【${hint.weaponName}】合成【${hint.evoName}】`;
+          tag = '武器升級 · 超武缺件';
+        }
         candidates.push({
           type: 'weapon_upgrade',
           id: id,
           name: def.name,
           icon: def.icon,
-          description: recipeReady
-            ? `提升至滿級！配方齊備，可合成【${WEAPONS[def.evoTarget].name}】`
-            : `提升等級至 LV ${item.level + 1}。傷害與彈幕增強。`,
-          tag: recipeReady ? '武器升級 · 配方就緒' : '武器升級',
+          description: desc,
+          tag,
           nextLevel: item.level + 1,
           maxLevel: def.maxLevel,
         });
@@ -756,13 +764,16 @@ export class UIManager {
     if (weaponManager.weapons.size < GAME_CONFIG.MAX_WEAPON_SLOTS) {
       for (const [id, def] of Object.entries(WEAPONS)) {
         if (!def.isEvo && !weaponManager.weapons.has(id)) {
+          const hint = recipeHints.get(id);
           candidates.push({
             type: 'weapon_new',
             id: id,
             name: def.name,
             icon: def.icon,
-            description: def.description,
-            tag: '新武器',
+            description: hint
+              ? `${def.description}（缺件：取得並升滿即可與【${hint.weaponName}】合成【${hint.evoName}】）`
+              : def.description,
+            tag: hint ? '新武器 · 超武缺件' : '新武器',
             isNew: true,
             nextLevel: 1,
             maxLevel: def.maxLevel,

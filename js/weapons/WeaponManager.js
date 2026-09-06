@@ -66,6 +66,13 @@ export class WeaponManager {
       totalDamage: old.totalDamage,
     });
 
+    // 彩鴿式雙武合成：配方是另一把武器 → 一併消耗，空出兩個武器槽
+    const baseDef = WEAPONS[baseWeaponId];
+    const partnerDef = baseDef ? WEAPONS[baseDef.pairPassive] : null;
+    if (partnerDef && !partnerDef.isEvo && this.weapons.has(baseDef.pairPassive)) {
+      this.weapons.delete(baseDef.pairPassive);
+    }
+
     sound.playEvoFanfare();
   }
 
@@ -192,7 +199,9 @@ export class WeaponManager {
   }
 
   fireWeapon(id, item, def, enemies, particleSystem) {
-    if (enemies.length === 0 && id !== 'guardian' && id !== 'eternal_domain') return;
+    // 環繞型武器沒有敵人也要維持旋轉
+    if (enemies.length === 0 && id !== 'guardian' && id !== 'eternal_domain' &&
+        id !== 'orbit_saw' && id !== 'singularity_ring') return;
 
     const baseDmg = def.baseDamage + (def.damageGrowth ? def.damageGrowth * (item.level - 1) : 0);
     this.critShot = Math.random() < (this.player.critChance || 0) + (this.player.metaCrit || 0);
@@ -202,11 +211,15 @@ export class WeaponManager {
     switch (id) {
       case 'kunai':
       case 'ghost_shuriken':
+      case 'phase_blade':
+      case 'phase_storm':
         this.fireKunai(def, item, finalDamage, enemies);
         break;
 
       case 'guardian':
       case 'eternal_domain':
+      case 'orbit_saw':
+      case 'singularity_ring':
         this.fireGuardian(def, item, finalDamage);
         break;
 
@@ -255,7 +268,7 @@ export class WeaponManager {
 
         this.projectiles.push(
           this.mkProjectile({
-            type: 'kunai',
+            type: def.projType || 'kunai',
             weaponId: def.id,
             x: this.player.x,
             y: this.player.y,
@@ -276,8 +289,9 @@ export class WeaponManager {
 
   // 2. 守護輪盤 / 永恆守護力場
   fireGuardian(def, item, damage) {
-    // 移除舊的輪盤實體
-    this.projectiles = this.projectiles.filter((p) => p.type !== 'guardian');
+    const fam = def.projType || 'guardian';
+    // 移除同家族的舊環體 (守護輪盤/重力環鋸各自獨立，不會互清)
+    this.projectiles = this.projectiles.filter((p) => p.type !== fam);
 
     const count = def.isEvo ? def.count : def.count[item.level - 1];
     const radius = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier;
@@ -286,7 +300,7 @@ export class WeaponManager {
       const angle = (i * 2 * Math.PI) / count;
       this.projectiles.push(
         this.mkProjectile({
-          type: 'guardian',
+          type: fam,
           weaponId: def.id,
           x: this.player.x,
           y: this.player.y,

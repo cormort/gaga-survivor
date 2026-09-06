@@ -195,6 +195,78 @@ export const WEAPONS = {
     bounces: 24,
     count: 4,
   },
+
+  // 新增武器 (內容擴充批)：開路穿透型 ─ 相位飛刃
+  // 彩鴿式雙武合成：相位飛刃滿級 + 苦無滿級 → 相位風暴 (兩把都消耗，騰出一個武器槽)
+  phase_blade: {
+    id: 'phase_blade',
+    name: '相位飛刃',
+    icon: '💠',
+    description: '朝最近敵人擲出高速相位刃，貫穿成群敵人。與苦無可合體為超武。',
+    isEvo: false,
+    evoTarget: 'phase_storm',
+    pairPassive: 'kunai',          // 武器+武器合成 (VS 黑白鴿精神)
+    maxLevel: 5,
+    baseDamage: 34,
+    damageGrowth: 12,
+    baseCooldown: 1.4,
+    cooldownGrowth: -0.08,
+    speed: 560,
+    projectiles: [1, 1, 1, 2, 2],
+    pierce: [3, 4, 5, 6, 8],
+    projType: 'drill',
+  },
+  // 新增武器 (內容擴充批)：護身環繞型 ─ 重力環鋸
+  orbit_saw: {
+    id: 'orbit_saw',
+    name: '重力環鋸',
+    icon: '🪚',
+    description: '兩把高速環鋸繞體旋轉，割裂所有靠近的敵人。',
+    isEvo: false,
+    evoTarget: 'singularity_ring',
+    pairPassive: 'cdr_battery',
+    maxLevel: 5,
+    baseDamage: 18,
+    damageGrowth: 6,
+    baseCooldown: 1.9,
+    duration: 3.2,
+    spinSpeed: 3.2,
+    count: [2, 2, 3, 3, 4],
+    radius: [70, 80, 85, 95, 100],
+    projType: 'saw',
+  },
+
+  // 雙武合體超武：相位風暴 (消耗 相位飛刃 + 苦無)
+  phase_storm: {
+    id: 'phase_storm',
+    name: '相位風暴 (超武)',
+    icon: '🌀💠',
+    description: '雙武合體！相位飛刃與苦無融合成不間斷的全自動相位風暴，貫穿一切。',
+    isEvo: true,
+    baseWeapon: 'phase_blade',
+    baseDamage: 55,
+    baseCooldown: 0.15,
+    speed: 720,
+    projectiles: 1,
+    pierce: 6,
+    projType: 'drill',
+  },
+  // 護身超武：重力奇點環 (重力環鋸的永續型態)
+  singularity_ring: {
+    id: 'singularity_ring',
+    name: '重力奇點環 (超武)',
+    icon: '🌌🪚',
+    description: '環鋸化為永續運轉的奇點軌道，範圍更大、轉速更快，切割一切近身之物。',
+    isEvo: true,
+    baseWeapon: 'orbit_saw',
+    baseDamage: 38,
+    baseCooldown: 0,
+    duration: 999999,
+    spinSpeed: 5.2,
+    count: 6,
+    radius: 120,
+    projType: 'saw',
+  },
 };
 
 // 被動配件定義

@@ -61,6 +61,7 @@ export class Projectile {
         break;
 
       case 'guardian':
+      case 'saw':
         // 環繞玩家旋轉
         this.orbitAngle += this.spinSpeed * dt;
         this.x = player.x + Math.cos(this.orbitAngle) * this.orbitRadius;
@@ -133,6 +134,14 @@ export class Projectile {
 
       case 'guardian':
         this.drawGuardian(ctx);
+        break;
+
+      case 'saw':
+        this.drawSaw(ctx);
+        break;
+
+      case 'drill':
+        this.drawDrill(ctx);
         break;
 
       case 'rocket':
@@ -232,6 +241,65 @@ export class Projectile {
       ctx.beginPath();
       ctx.moveTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
       ctx.lineTo(Math.cos(a) * (this.radius + 6), Math.sin(a) * (this.radius + 6));
+      ctx.stroke();
+    }
+  }
+
+  // 相位飛刃 (旋轉鑽刃)
+  drawDrill(ctx) {
+    const angle = Math.atan2(this.vy, this.vx);
+    ctx.rotate(angle);
+
+    if (this.isEvo) {
+      ctx.fillStyle = '#b5179e';
+      ctx.shadowColor = '#e0aaff';
+      ctx.shadowBlur = 10;
+    } else {
+      ctx.fillStyle = '#7fb2a5';
+      ctx.shadowColor = '#4a7c3f';
+      ctx.shadowBlur = 4;
+    }
+    ctx.beginPath();
+    ctx.moveTo(16, 0);
+    ctx.lineTo(-6, -4);
+    ctx.lineTo(-2, 0);
+    ctx.lineTo(-6, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(9, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 重力環鋸 (紫色旋轉鋸輪)
+  drawSaw(ctx) {
+    ctx.rotate(this.orbitAngle * 5);
+
+    if (this.isEvo) {
+      // 重力奇點環 (金色)
+      ctx.fillStyle = '#ffd60a';
+      ctx.shadowColor = '#ffe066';
+      ctx.shadowBlur = 12;
+    } else {
+      ctx.fillStyle = '#9d4edd';
+      ctx.shadowColor = '#c77dff';
+      ctx.shadowBlur = 6;
+    }
+
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 外圈鋸齒刀刃
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
+      ctx.lineTo(Math.cos(a) * (this.radius + 5), Math.sin(a) * (this.radius + 5));
       ctx.stroke();
     }
   }
