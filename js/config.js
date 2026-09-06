@@ -230,9 +230,10 @@ export const WEAPONS = {
     damageGrowth: 6,
     baseCooldown: 1.9,
     duration: 3.2,
-    spinSpeed: 3.2,
+    spinSpeed: 4.2,
     count: [2, 2, 3, 3, 4],
-    radius: [70, 80, 85, 95, 100],
+    // 貼身護體軌道：緊貼角色旋轉，與守護輪盤的寬軌道明顯區隔
+    radius: [34, 40, 46, 52, 58],
     projType: 'saw',
   },
 
@@ -262,9 +263,9 @@ export const WEAPONS = {
     baseDamage: 38,
     baseCooldown: 0,
     duration: 999999,
-    spinSpeed: 5.2,
+    spinSpeed: 6.2,
     count: 6,
-    radius: 120,
+    radius: 62,
     projType: 'saw',
   },
 };
