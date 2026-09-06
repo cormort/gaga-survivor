@@ -86,18 +86,152 @@ function pickAffixes(slotKey, affixCount, ilvl) {
   return affixes;
 }
 
-export function rollItem({ slot = null, rarity = null, ilvl = 1 } = {}) {
+// 三大套裝定義 (每套集齊 3 件額外啟動專屬強力效果)
+export const SETS = {
+  agent: {
+    key: 'agent',
+    name: '特工套裝',
+    color: '#4cc9f0',
+    bonusText: '火力 +10%',
+    bonus: { dmg: 0.10 },
+  },
+  shadow: {
+    key: 'shadow',
+    name: '暗影套裝',
+    color: '#b5179e',
+    bonusText: '要害率 +8%',
+    bonus: { crit: 0.08 },
+  },
+  core: {
+    key: 'core',
+    name: '熔核套裝',
+    color: '#ff7700',
+    bonusText: '減傷 +12%',
+    bonus: { armor: 0.12 },
+  },
+};
+
+export const SET_KEYS = ['agent', 'shadow', 'core'];
+
+// 傳奇與神話特效池 (開火/擊殺/屬性特化)
+export const LEGENDARY_EFFECTS = {
+  pierce_all: {
+    key: 'pierce_all',
+    name: '貫穿全場',
+    desc: '投射物穿透數提升至 999',
+    icon: '⚡',
+  },
+  cdr_burst: {
+    key: 'cdr_burst',
+    name: '極限超頻',
+    desc: '冷卻縮減額外 +15%',
+    icon: '⏱️',
+    bonus: { cdr: 0.15 },
+  },
+  kill_heal: {
+    key: 'kill_heal',
+    name: '生命汲取',
+    desc: '擊殺敵人時回復 3 點生命',
+    icon: '🩸',
+  },
+  crit_blast: {
+    key: 'crit_blast',
+    name: '連環爆裂',
+    desc: '暴擊命中引發範圍衝擊波',
+    icon: '💥',
+  },
+  speed_rush: {
+    key: 'speed_rush',
+    name: '音速突進',
+    desc: '移動速度額外 +12%',
+    icon: '👟',
+    bonus: { speed: 0.12 },
+  },
+  magnet_nova: {
+    key: 'magnet_nova',
+    name: '引力漩渦',
+    desc: '拾取範圍額外 +35%',
+    icon: '🧲',
+    bonus: { magnet: 0.35 },
+  },
+};
+
+export const LEGENDARY_EFFECT_KEYS = Object.keys(LEGENDARY_EFFECTS);
+
+// 三合一升階消耗 DNA
+export const FUSION_COST = {
+  common: 30,
+  rare: 80,
+  epic: 200,
+  legendary: 450,
+};
+
+export function rollItem({ slot = null, rarity = null, ilvl = 1, setKey = null, legendaryEffect = null } = {}) {
   const slotKey = slot || SLOT_ORDER[Math.floor(Math.random() * SLOT_ORDER.length)];
   const rarityKey = rarity || rollRarity();
   const rarityDef = RARITIES[rarityKey];
+
+  // 套裝標記 (三組隨機之一)
+  const assignedSet = setKey || SET_KEYS[Math.floor(Math.random() * SET_KEYS.length)];
+
+  // 傳奇/神話額外隨機附加一條傳奇特效
+  let assignedEffect = null;
+  if (rarityKey === 'legendary' || rarityKey === 'mythic') {
+    assignedEffect = legendaryEffect || LEGENDARY_EFFECT_KEYS[Math.floor(Math.random() * LEGENDARY_EFFECT_KEYS.length)];
+  }
 
   return {
     id: newId(),
     slot: slotKey,
     rarity: rarityKey,
     ilvl: Math.round(ilvl * 100) / 100,
+    setKey: assignedSet,
+    legendaryEffect: assignedEffect,
     affixes: pickAffixes(slotKey, rarityDef.affixes, ilvl),
   };
+}
+
+// 三合一升階：3 件同部位、同稀有度 → 1 件高一階裝備 (ilvl 取平均 × 1.15)
+export function fuseItems(items) {
+  if (!items || items.length !== 3) {
+    return { ok: false, reason: '合成需要選中 3 件裝備' };
+  }
+  const [a, b, c] = items;
+  if (a.slot !== b.slot || b.slot !== c.slot) {
+    return { ok: false, reason: '3 件裝備部位必須相同' };
+  }
+  if (a.rarity !== b.rarity || b.rarity !== c.rarity) {
+    return { ok: false, reason: '3 件裝備稀有度必須相同' };
+  }
+  const currIdx = RARITY_ORDER.indexOf(a.rarity);
+  if (currIdx < 0 || currIdx >= RARITY_ORDER.length - 1) {
+    return { ok: false, reason: '神話裝備已是最高階，無法再升階' };
+  }
+  const nextRarity = RARITY_ORDER[currIdx + 1];
+  const avgIlvl = (a.ilvl + b.ilvl + c.ilvl) / 3;
+  const newIlvl = Math.round(avgIlvl * 1.15 * 100) / 100;
+
+  // 套裝繼承：若 2 件或以上同套裝則優先繼承，否則隨機
+  const setCounts = {};
+  for (const it of items) {
+    if (it.setKey) setCounts[it.setKey] = (setCounts[it.setKey] || 0) + 1;
+  }
+  let inheritedSet = null;
+  for (const [k, count] of Object.entries(setCounts)) {
+    if (count >= 2) {
+      inheritedSet = k;
+      break;
+    }
+  }
+
+  const newItem = rollItem({
+    slot: a.slot,
+    rarity: nextRarity,
+    ilvl: newIlvl,
+    setKey: inheritedSet,
+  });
+
+  return { ok: true, item: newItem };
 }
 
 // 重鑄：保留稀有度/部位/等級，把整組詞條重骰一次 (DNA 出口)
@@ -115,7 +249,14 @@ export function rerollAffixes(item) {
 }
 
 export function itemName(item) {
-  return `${RARITIES[item.rarity].name} ${SLOTS[item.slot].name}`;
+  const setDef = item.setKey ? SETS[item.setKey] : null;
+  const setPrefix = setDef ? `[${setDef.name}] ` : '';
+  return `${setPrefix}${RARITIES[item.rarity].name} ${SLOTS[item.slot].name}`;
+}
+
+export function legendaryEffectText(effectKey) {
+  const def = LEGENDARY_EFFECTS[effectKey];
+  return def ? `${def.icon} ${def.name}：${def.desc}` : '';
 }
 
 export function affixText(a) {
@@ -126,11 +267,12 @@ export function affixText(a) {
 
 // 粗略戰力值：只用來排序倉庫與比較好壞，不參與實際計算
 export function itemScore(item) {
+  const legBonus = item.legendaryEffect ? 30 : 0;
   return item.affixes.reduce((sum, a) => {
     const def = AFFIXES[a.key];
     if (!def) return sum;
     return sum + (def.pct ? a.value * 100 : a.value);
-  }, 0);
+  }, legBonus);
 }
 
 // 分解回收的 DNA：稀有度為主、物品等級為輔
@@ -141,18 +283,60 @@ export function salvageValue(item) {
   return Math.max(1, Math.round(base * (0.6 + (item.ilvl || 1) * 0.4)));
 }
 
-// 已穿裝備 → 加成總和 (與 meta.js 的 metaBonuses 同格式，直接相加即可)
+// 已穿裝備 → 加成總和 (含套裝效果、傳奇特效屬性加成與特效清單)
 export function gearBonuses(stash = [], equipped = {}) {
-  const m = { dmg: 0, hp: 0, speed: 0, magnet: 0, gold: 0, cdr: 0, crit: 0, critdmg: 0, armor: 0, exp: 0 };
+  const m = {
+    dmg: 0, hp: 0, speed: 0, magnet: 0, gold: 0,
+    cdr: 0, crit: 0, critdmg: 0, armor: 0, exp: 0,
+    effects: [],
+    activeSets: [],
+  };
+  const setCounts = {};
+
   for (const slotKey of SLOT_ORDER) {
     const id = equipped[slotKey];
     if (!id) continue;
     const item = stash.find((it) => it.id === id);
     if (!item) continue;
+
+    // 詞條加成
     for (const a of item.affixes) {
       const def = AFFIXES[a.key];
       if (def && m[def.stat] !== undefined) m[def.stat] += a.value;
     }
+
+    // 傳奇特效加成
+    if (item.legendaryEffect) {
+      if (!m.effects.includes(item.legendaryEffect)) {
+        m.effects.push(item.legendaryEffect);
+      }
+      const legDef = LEGENDARY_EFFECTS[item.legendaryEffect];
+      if (legDef && legDef.bonus) {
+        for (const [stat, val] of Object.entries(legDef.bonus)) {
+          if (m[stat] !== undefined) m[stat] += val;
+        }
+      }
+    }
+
+    // 套裝部位計數
+    if (item.setKey) {
+      setCounts[item.setKey] = (setCounts[item.setKey] || 0) + 1;
+    }
   }
+
+  // 套裝達成 (集齊 3 件同一套裝)
+  for (const [sKey, count] of Object.entries(setCounts)) {
+    if (count >= 3 && SETS[sKey]) {
+      const sDef = SETS[sKey];
+      m.activeSets.push(sDef);
+      if (sDef.bonus) {
+        for (const [stat, val] of Object.entries(sDef.bonus)) {
+          if (m[stat] !== undefined) m[stat] += val;
+        }
+      }
+    }
+  }
+
   return m;
 }
+

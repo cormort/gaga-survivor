@@ -1,7 +1,7 @@
 // 局外存檔層：整份進度存在單一 localStorage key，其他系統一律走這裡讀寫。
 
 import { TALENTS, talentCost } from './meta.js';
-import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes } from './items.js';
+import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes, FUSION_COST, fuseItems } from './items.js';
 
 export const STASH_CAP = 30;
 
@@ -183,6 +183,42 @@ export const save = {
     this.data.dna += dna;
     this.flush();
     return { count: targets.length, dna };
+  },
+
+  // 三合一升階：消耗 DNA 將 3 件同部位同稀有度裝備合成為高一階裝備
+  fuseItems(ids) {
+    if (!Array.isArray(ids) || ids.length !== 3) {
+      return { ok: false, reason: '請選擇 3 件裝備進行合成' };
+    }
+    const items = ids.map((id) => this.data.stash.find((it) => it.id === id));
+    if (items.some((it) => !it)) {
+      return { ok: false, reason: '選取的裝備不存在或已不在倉庫' };
+    }
+    const wornIds = new Set(Object.values(this.data.equipped));
+    if (items.some((it) => wornIds.has(it.id))) {
+      return { ok: false, reason: '穿戴中的裝備無法進行合成，請先脫下' };
+    }
+    const rarity = items[0].rarity;
+    const cost = FUSION_COST[rarity];
+    if (cost === undefined) {
+      return { ok: false, reason: '該稀有度無法升階' };
+    }
+    if (this.data.dna < cost) {
+      return { ok: false, reason: `DNA 不足：合成需要 ${cost} 🧬` };
+    }
+
+    const fuseRes = fuseItems(items);
+    if (!fuseRes.ok) {
+      return fuseRes;
+    }
+
+    this.data.dna -= cost;
+    const removeIds = new Set(ids);
+    this.data.stash = this.data.stash.filter((it) => !removeIds.has(it.id));
+    this.data.stash.push(fuseRes.item);
+    this.flush();
+
+    return { ok: true, item: fuseRes.item, cost };
   },
 
   equipItem(id) {

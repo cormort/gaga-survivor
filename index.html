@@ -44,6 +44,10 @@
           <span id="combo-count">0</span>
           <span class="combo-unit">斬</span>
         </div>
+        <div id="pending-gear-chip" class="hud-pill hidden">
+          <span class="hud-icon">📦</span>
+          <span id="pending-gear-count">0</span>
+        </div>
         <button id="btn-build" class="hud-btn build-btn" title="佈署砲塔 (B)">
           <span class="build-icon">🔫</span><span id="build-cost">60</span>
         </button>
@@ -250,6 +254,14 @@
         <div class="weapons-summary">
           <h3>武器傷害統計</h3>
           <div id="damage-stats-list"></div>
+        </div>
+
+        <div id="game-over-gear-box" class="game-over-gear-box hidden">
+          <div class="game-over-gear-title">
+            <span>📦 本局裝備回收</span>
+            <span id="game-over-gear-status"></span>
+          </div>
+          <div id="game-over-gear-items" class="game-over-gear-items"></div>
         </div>
 
         <button id="btn-restart" class="game-btn primary-btn">再次挑戰 🔁</button>

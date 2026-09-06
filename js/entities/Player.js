@@ -51,6 +51,10 @@ export class Player {
     this.isDead = false;
     this.regenTimer = 0;
 
+    // 冰面滑行慣性 (地形機制 'ice')：iceFriction > 0 時操控改為加速度模型
+    this.velocity = { x: 0, y: 0 };
+    this.iceFriction = 0;
+
     // 戰術閃避翻滾 (Dash)
     this.dashCooldown = 3.8;
     this.dashMaxTimer = this.dashCooldown; // 含 CDR 後的本輪實際冷卻 (UI 覆蓋層比例用)
@@ -122,15 +126,36 @@ export class Player {
       });
       this.walkCycle += dt * 25;
     } else if (inputVector.x !== 0 || inputVector.y !== 0) {
-      this.x += inputVector.x * this.speed * dt;
-      this.y += inputVector.y * this.speed * dt;
+      if (this.iceFriction > 0) {
+        // 冰面慣性：向目標速度漸進 (lerp 0.12)，鬆手後速度指數衰減
+        const tx = inputVector.x * this.speed;
+        const ty = inputVector.y * this.speed;
+        this.velocity.x += (tx - this.velocity.x) * 0.12;
+        this.velocity.y += (ty - this.velocity.y) * 0.12;
+        this.x += this.velocity.x * dt;
+        this.y += this.velocity.y * dt;
+      } else {
+        this.x += inputVector.x * this.speed * dt;
+        this.y += inputVector.y * this.speed * dt;
+      }
 
       if (inputVector.x > 0.1) this.facing = 1;
       else if (inputVector.x < -0.1) this.facing = -1;
 
       this.walkCycle += dt * 14;
     } else {
-      this.walkCycle = 0;
+      if (this.iceFriction > 0 && (Math.abs(this.velocity.x) > 1 || Math.abs(this.velocity.y) > 1)) {
+        // 冰面：鬆手時速度指數衰減
+        this.velocity.x *= this.iceFriction;
+        this.velocity.y *= this.iceFriction;
+        this.x += this.velocity.x * dt;
+        this.y += this.velocity.y * dt;
+        this.walkCycle += dt * 8;
+      } else {
+        this.velocity.x = 0;
+        this.velocity.y = 0;
+        this.walkCycle = 0;
+      }
     }
 
     // 更新殘影透明度

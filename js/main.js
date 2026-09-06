@@ -66,7 +66,8 @@ class Game {
 
     // 地形機制 (毒霧/地雷/噴發) 與里程碑排程
     this.hazards = [];
-    this.hazardTimer = 10;
+    this._mechTimers = {};
+    this._shrinkCircle = null;
     this.killMilestoneAt = 100;
     this.timeMilestoneAt = 120;
 
@@ -168,6 +169,18 @@ class Game {
           if (res.count === 0) return;
           sound.playEvoFanfare();
           this.ui.sayStatus(`分解 ${res.count} 件，回收 ${res.dna} 🧬`);
+          this.ui.updateDnaChip(save.data.dna);
+          this.ui.rebuildGearView(save);
+        },
+        onFuse: (ids) => {
+          const res = save.fuseItems(ids);
+          if (!res.ok) {
+            this.ui.sayStatus(res.reason, true);
+            sound.playHurt();
+            return;
+          }
+          sound.playEvoFanfare();
+          this.ui.sayStatus(`合成成功！獲得【${itemName(res.item)}】(消耗 ${res.cost} 🧬)`);
           this.ui.updateDnaChip(save.data.dna);
           this.ui.rebuildGearView(save);
         },
@@ -597,6 +610,7 @@ class Game {
       exp: g.exp,
     };
     const p = this.player;
+    p.legendaryEffects = g.effects || [];
     p.metaDmg = m.dmg;
     p.metaCdr = m.cdr;
     p.metaCrit = m.crit;
@@ -666,9 +680,14 @@ class Game {
     this.camera.y = 0;
     this.camera.shake = 0;
     this.hazards = [];
-    this.hazardTimer = 10;      // 開場 10 秒再放第一波地形機制
+    this._mechTimers = {};       // 每種 mech 各自計時
+    this._shrinkCircle = null;   // 深淵縮圈狀態
+    this.player.iceFriction = 0; // 重設冰面慣性
     this.killMilestoneAt = 100;
     this.timeMilestoneAt = 120;
+    this.pendingGear = [];       // 局內拾獲待回收裝備 (暫存區)
+    this.evacuated = false;      // 是否透過撤離井成功撤退
+    this.ui.updatePendingGear(0);
     this.input.reset();
 
     this.ui.updateSkillSlots(this.weaponManager);
@@ -895,13 +914,50 @@ class Game {
     }
   }
 
-  // 關卡地形機制更新 (levels.mech)：毒霧持續傷害、地雷/噴發倒數引爆
+  // 關卡地形機制更新 (levels.mechs 陣列)：毒霧、地雷、噴發 + 冰面/安全高台/縮圈
   updateHazards(dt) {
-    const mech = (this.level || LEVELS.street).mech;
-    if (mech) {
-      this.hazardTimer -= dt;
-      if (this.hazardTimer <= 0) {
-        this.hazardTimer = mech.interval + Math.random() * (mech.jitter || 0);
+    const level = this.level || LEVELS.street;
+    // 向下相容：舊的 mech 單物件自動包成陣列
+    const mechs = level.mechs || (level.mech ? [level.mech] : []);
+
+    for (const mech of mechs) {
+      // 冰面慣性：只需每幀設定玩家的 iceFriction
+      if (mech.type === 'ice') {
+        this.player.iceFriction = mech.friction || 0.92;
+        continue;
+      }
+      // 縮圈結界：每幀縮小半徑，圈外扣血 + 向圈心微推
+      if (mech.type === 'shrinkCircle') {
+        if (!this._shrinkCircle) {
+          this._shrinkCircle = { radius: mech.startRadius, tick: 0 };
+        }
+        const sc = this._shrinkCircle;
+        sc.radius = Math.max(mech.endRadius, sc.radius - mech.shrinkRate * dt);
+        sc.tick -= dt;
+        const p = this.player;
+        const dist = Math.hypot(p.x, p.y); // 圈心固定在世界原點
+        if (dist > sc.radius) {
+          if (sc.tick <= 0) {
+            sc.tick = mech.dmgInterval || 0.4;
+            if (p.takeDamage(mech.dmg)) this.particles.createHurtText(p.x, p.y, mech.dmg);
+          }
+          // 微推向圈心
+          if (dist > 0) {
+            p.x -= (p.x / dist) * 30 * dt;
+            p.y -= (p.y / dist) * 30 * dt;
+          }
+        }
+        continue;
+      }
+
+      // 需要計時器的機制 (pool/mine/geyser/supply/safeZone)
+      const timerKey = mech.type;
+      if (this._mechTimers[timerKey] === undefined) {
+        this._mechTimers[timerKey] = 10; // 開場 10 秒後才開始
+      }
+      this._mechTimers[timerKey] -= dt;
+      if (this._mechTimers[timerKey] <= 0) {
+        this._mechTimers[timerKey] = mech.interval + Math.random() * (mech.jitter || 0);
         this.spawnHazard(mech);
       }
     }
@@ -912,7 +968,6 @@ class Game {
       h.t += dt;
 
       if (h.kind === 'pool') {
-        // 毒霧池：玩家在範圍內持續扣血 (吃無敵幀 → 實際 ~每 0.5 秒一跳)
         h.tick -= dt;
         if (h.tick <= 0) {
           h.tick = 0.5;
@@ -920,6 +975,19 @@ class Game {
           const dy = p.y - h.y;
           const rr = h.r + p.radius;
           if (dx * dx + dy * dy < rr * rr) {
+            if (p.takeDamage(h.dmg)) this.particles.createHurtText(p.x, p.y, h.dmg);
+          }
+        }
+        if (h.t >= h.dur) this.hazards.splice(i, 1);
+      } else if (h.kind === 'safeZone') {
+        // 安全高台：站在範圍「外」持續扣血
+        h.tick -= dt;
+        if (h.tick <= 0) {
+          h.tick = 0.5;
+          const dx = p.x - h.x;
+          const dy = p.y - h.y;
+          const rr = h.r + p.radius;
+          if (dx * dx + dy * dy > rr * rr) {
             if (p.takeDamage(h.dmg)) this.particles.createHurtText(p.x, p.y, h.dmg);
           }
         }
@@ -942,7 +1010,6 @@ class Game {
     const y = Math.max(b.minY + m, Math.min(b.maxY - m, this.player.y + Math.sin(angle) * dist));
 
     if (mech.type === 'supply') {
-      // 街頭空投：直接放物資箱在地面
       this.dropItems.push(new DropItem(x, y, 'SUPPLY'));
       this.particles.createShockwave(x, y, 70, '#ffb703');
       sound.playEvoFanfare();
@@ -956,7 +1023,7 @@ class Game {
       t: 0,
       tick: 0.5,
       fuse: mech.fuse || 0,
-      dur: mech.dur || 0,
+      dur: mech.dur || mech.duration || 0,
       dmg: mech.dmg || 0,
       dmgEnemy: mech.dmgEnemy || 0,
     });
@@ -1013,7 +1080,7 @@ class Game {
         ctx.beginPath();
         ctx.arc(0, 0, h.r * wob, 0, Math.PI * 2);
         ctx.stroke();
-      } else {
+      } else if (h.kind === 'mine' || h.kind === 'geyser') {
         // 地雷/噴發：倒數警示 (Soulstone 風格刻紋圓陣：旋轉虛線外環 + 內縮實圈 + 輻條)
         const prog = Math.min(1, h.t / h.fuse); // 0→1 越接近引爆
         const R = h.r * (1.3 - prog * 0.3);
@@ -1054,8 +1121,57 @@ class Game {
         ctx.arc(0, 0, 5 + prog * 13, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
+      } else if (h.kind === 'safeZone') {
+        // 安全高台：亮綠色光圈，站裡面才安全
+        const wob = 1 + Math.sin(h.t * 2.5) * 0.03;
+        const fadeIn = Math.min(1, h.t / 0.5);
+        const fadeOut = Math.min(1, (h.dur - h.t) / 0.6);
+        const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = '#00e676';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r * wob, 0, Math.PI * 2);
+        ctx.stroke();
+        // 內部安全光暈
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, h.r * wob);
+        g.addColorStop(0, 'rgba(0,230,118,0.12)');
+        g.addColorStop(1, 'rgba(0,230,118,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r * wob, 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.restore();
+    }
+
+    // 縮圈結界 (深淵無盡戰)
+    if (this._shrinkCircle) {
+      const sc = this._shrinkCircle;
+      const mechs = (this.level || LEVELS.street).mechs || [];
+      const scMech = mechs.find((m) => m.type === 'shrinkCircle');
+      if (scMech) {
+        ctx.save();
+        const cx = 0 - cam.x;
+        const cy = 0 - cam.y;
+        // 圈外半透明紫霧
+        ctx.fillStyle = 'rgba(120,50,255,0.06)';
+        ctx.beginPath();
+        ctx.rect(0, 0, this.vw, this.vh);
+        ctx.arc(cx, cy, sc.radius, 0, Math.PI * 2, true);
+        ctx.fill();
+        // 圈邊緣
+        ctx.strokeStyle = scMech.color;
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.6 + Math.sin(this.gameTime * 2) * 0.15;
+        ctx.setLineDash([12, 8]);
+        ctx.lineDashOffset = -this.gameTime * 30;
+        ctx.beginPath();
+        ctx.arc(cx, cy, sc.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
     }
   }
 
@@ -1309,9 +1425,25 @@ class Game {
             this.particles.createShockwave(this.extractionWell.x, this.extractionWell.y, 600, '#00e5ff');
             const rewardDna = 180;
             save.data.dna += rewardDna;
+
+            // 撤離井成功：目前背包內的所有待回收裝備直接安全入庫！
+            this.evacuated = true;
+            let securedCount = 0;
+            if (this.pendingGear && this.pendingGear.length > 0) {
+              securedCount = this.pendingGear.length;
+              for (const it of this.pendingGear) {
+                if (!save.addItem(it)) {
+                  save.data.dna += salvageValue(it);
+                }
+              }
+              this.pendingGear = [];
+              this.ui.updatePendingGear(0);
+            }
             save.flush();
+
             this.gold += 150;
-            this.ui.say(`🚁 戰術撤離成功！+${rewardDna} 🧬 DNA, +150 🪙`, '#ffd60a', 4);
+            const secMsg = securedCount > 0 ? `，安全運回 ${securedCount} 件裝備！` : '！';
+            this.ui.say(`🚁 戰術撤離成功！+${rewardDna} 🧬 DNA, +150 🪙${secMsg}`, '#ffd60a', 4);
             for (const e of this.enemies) {
               if (!e.isBoss && Math.hypot(e.x - this.player.x, e.y - this.player.y) < 500) {
                 e.takeDamage(9999, 10, this.player.x, this.player.y);
@@ -1428,6 +1560,16 @@ class Game {
         this.particles.createDamageText(enemy.x, enemy.y, p.damage, p.isCrit || p.isEvo, p.isCrit);
         sound.playHit();
 
+        // 傳奇特效：暴擊衝擊波
+        if (p.isCrit && this.player.legendaryEffects?.includes('crit_blast')) {
+          this.particles.createShockwave(enemy.x, enemy.y, 45, '#ffb703');
+          for (const nearE of this.enemies) {
+            if (nearE !== enemy && !nearE.isDead && Math.hypot(nearE.x - enemy.x, nearE.y - enemy.y) < 55) {
+              nearE.takeDamage(Math.round(p.damage * 0.4), 3, enemy.x, enemy.y);
+            }
+          }
+        }
+
         p.pierce--;
         if (p.pierce <= 0) {
           p.isDead = true;
@@ -1443,6 +1585,10 @@ class Game {
       if (enemy.isDead) {
         this.kills++;
         this.addCombo();
+        // 傳奇特效：擊殺汲取生命
+        if (this.player.legendaryEffects?.includes('kill_heal')) {
+          this.player.heal(3);
+        }
         if (enemy.isBoss) {
           this.triggerHitstop(0.08);
         } else if (enemy.isElite) {
@@ -1621,18 +1767,13 @@ class Game {
     } else if (item.type === 'gear') {
       const gear = item.item;
       if (!gear) return;
-      if (!save.addItem(gear)) {
-        // 倉庫滿了就地分解，總比讓玩家白撿一場好
-        save.data.dna += salvageValue(gear);
-        save.flush();
-        sound.playGem();
-        this.ui.say(`倉庫已滿 — ${itemName(gear)} 就地分解，回收 ${salvageValue(gear)} 🧬`, '#ffb703', 3);
-        return;
-      }
+      if (!this.pendingGear) this.pendingGear = [];
+      this.pendingGear.push(gear);
+      this.ui.updatePendingGear(this.pendingGear.length);
       const color = RARITIES[gear.rarity].color;
       sound.playEvoFanfare();
       this.particles.createShockwave(this.player.x, this.player.y, 130, color);
-      this.ui.say(`獲得 ${itemName(gear)}！`, color, 2.6);
+      this.ui.say(`拾獲 ${itemName(gear)}！(暫存待回收)`, color, 2.6);
     } else if (item.type === 'supply') {
       // 街頭空投物資箱：金幣 + 回血 + 金色衝擊波
       const gold = Math.round(30 * (this.metaGoldMul || 1));
@@ -1732,6 +1873,39 @@ class Game {
       });
     }
 
+    // 局內待回收裝備結算：勝利/撤離 100% 入庫，陣亡 50% 保留
+    const savedGear = [];
+    const lostGear = [];
+    if (this.pendingGear && this.pendingGear.length > 0) {
+      if (isVictory || this.evacuated) {
+        for (const it of this.pendingGear) {
+          if (save.addItem(it)) {
+            savedGear.push(it);
+          } else {
+            save.data.dna += salvageValue(it);
+            savedGear.push(it);
+          }
+        }
+      } else {
+        const shuffled = [...this.pendingGear].sort(() => Math.random() - 0.5);
+        const keepCount = Math.ceil(shuffled.length * 0.5);
+        const toKeep = shuffled.slice(0, keepCount);
+        const toLose = shuffled.slice(keepCount);
+        for (const it of toKeep) {
+          if (save.addItem(it)) {
+            savedGear.push(it);
+          } else {
+            save.data.dna += salvageValue(it);
+            savedGear.push(it);
+          }
+        }
+        lostGear.push(...toLose);
+      }
+      save.flush();
+      this.pendingGear = [];
+      this.ui.updatePendingGear(0);
+    }
+
     this.ui.showGameOver(
       {
         isVictory: isVictory,
@@ -1751,7 +1925,8 @@ class Game {
           : (save.data.best[this.level.id]?.time || 0),
         unlockedName: result.unlockedNew ? LEVELS[this.level.next].name : null,
       },
-      this.weaponManager
+      this.weaponManager,
+      { savedGear, lostGear }
     );
 
     // 解鎖新關卡後，選單要立刻反映

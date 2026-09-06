@@ -2,7 +2,7 @@
 
 import { WEAPONS, PASSIVES, GAME_CONFIG } from '../config.js';
 import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
-import { RARITIES, SLOTS, SLOT_ORDER, itemName, affixText, itemScore, salvageValue, reforgeCost } from '../items.js';
+import { RARITIES, SLOTS, SLOT_ORDER, itemName, affixText, itemScore, salvageValue, reforgeCost, SETS, LEGENDARY_EFFECTS, legendaryEffectText, FUSION_COST, fuseItems } from '../items.js';
 import { STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 
@@ -68,6 +68,10 @@ export class UIManager {
     this.levelSelect = document.getElementById('level-select');
     this.bubble = document.getElementById('dialogue-bubble');
     this.bubbleTimer = null;
+
+    // 裝備三合一合成模式狀態
+    this._fuseMode = false;
+    this._selectedFuseIds = new Set();
 
     // 升級彈窗內的 reroll 按鈕 (純金幣消耗，遊戲端驗收)
     if (this.rerollBtn) {
@@ -249,20 +253,56 @@ export class UIManager {
       btn.addEventListener('click', () => this._gearHandlers?.onUnequip(btn.dataset.unequip));
     });
 
-    // 批次分解：只掃沒穿在身上的
+    // 套裝狀態列 (集齊 3 件專屬加成)
+    const setStatus = document.getElementById('gear-status');
+    if (setStatus) {
+      const equippedItems = SLOT_ORDER.map((s) => byId.get(equipped[s])).filter(Boolean);
+      const setCounts = {};
+      for (const it of equippedItems) {
+        if (it.setKey) setCounts[it.setKey] = (setCounts[it.setKey] || 0) + 1;
+      }
+      const badges = [];
+      for (const [k, count] of Object.entries(setCounts)) {
+        const sDef = SETS[k];
+        if (!sDef) continue;
+        if (count >= 3) {
+          badges.push(`<span class="set-badge active" style="--set-c:${sDef.color}">★ ${sDef.name} (3/3 已激活：${sDef.bonusText})</span>`);
+        } else {
+          badges.push(`<span class="set-badge inactive" style="--set-c:${sDef.color}">${sDef.name} (${count}/3)</span>`);
+        }
+      }
+      setStatus.innerHTML = badges.length > 0
+        ? `<div class="set-badges-row">${badges.join(' ')}</div>`
+        : '<div class="set-badges-empty">穿齊 3 件同套裝可激活專屬加成</div>';
+    }
+
+    // 批次分解 & 三合一升階按鈕
     const worn = new Set(Object.values(equipped));
     const bulk = document.getElementById('gear-bulk');
     if (bulk) {
       bulk.innerHTML = '';
-      for (const rk of ['common', 'rare', 'epic']) {
-        const n = stash.filter((it) => it.rarity === rk && !worn.has(it.id)).length;
-        if (n === 0) continue;
-        const btn = document.createElement('button');
-        btn.className = 'gear-mini-btn bulk';
-        btn.style.setProperty('--rarity', RARITIES[rk].color);
-        btn.textContent = `分解全部${RARITIES[rk].name} (${n})`;
-        btn.addEventListener('click', () => this._gearHandlers?.onSalvageAll(rk));
-        bulk.appendChild(btn);
+      // 三合一升階切換鈕
+      const fuseBtn = document.createElement('button');
+      fuseBtn.className = 'gear-mini-btn fuse' + (this._fuseMode ? ' active' : '');
+      fuseBtn.textContent = this._fuseMode ? '✕ 退出合成' : '🔀 三合一升階';
+      fuseBtn.addEventListener('click', () => {
+        this._fuseMode = !this._fuseMode;
+        this._selectedFuseIds.clear();
+        this.rebuildGearView(save);
+      });
+      bulk.appendChild(fuseBtn);
+
+      if (!this._fuseMode) {
+        for (const rk of ['common', 'rare', 'epic']) {
+          const n = stash.filter((it) => it.rarity === rk && !worn.has(it.id)).length;
+          if (n === 0) continue;
+          const btn = document.createElement('button');
+          btn.className = 'gear-mini-btn bulk';
+          btn.style.setProperty('--rarity', RARITIES[rk].color);
+          btn.textContent = `分解全部${RARITIES[rk].name} (${n})`;
+          btn.addEventListener('click', () => this._gearHandlers?.onSalvageAll(rk));
+          bulk.appendChild(btn);
+        }
       }
     }
 
@@ -276,6 +316,48 @@ export class UIManager {
       return;
     }
 
+    // 三合一模式提示列
+    if (this._fuseMode) {
+      const promptBar = document.createElement('div');
+      promptBar.className = 'fuse-prompt-bar';
+      const selCount = this._selectedFuseIds.size;
+      const selectedItems = [...this._selectedFuseIds].map((id) => byId.get(id)).filter(Boolean);
+
+      let hint = `請選取 3 件同部位同稀有度的未穿戴裝備 (已選 ${selCount}/3)`;
+      let canConfirm = false;
+      let costDna = 0;
+
+      if (selCount === 3) {
+        const valRes = fuseItems(selectedItems);
+        if (!valRes.ok) {
+          hint = `⚠️ ${valRes.reason}`;
+        } else {
+          costDna = FUSION_COST[selectedItems[0].rarity] || 0;
+          if (save.data.dna < costDna) {
+            hint = `DNA 不足：合成需要 ${costDna} 🧬 (目前 ${save.data.dna})`;
+          } else {
+            hint = `條件齊全！合成需要 ${costDna} 🧬`;
+            canConfirm = true;
+          }
+        }
+      }
+
+      promptBar.innerHTML = `
+        <span>${hint}</span>
+        ${canConfirm ? `<button id="btn-confirm-fuse" class="gear-mini-btn fuse-confirm">✨ 確認合成高階</button>` : ''}
+      `;
+      this.gearList.appendChild(promptBar);
+
+      if (canConfirm) {
+        promptBar.querySelector('#btn-confirm-fuse')?.addEventListener('click', () => {
+          const ids = [...this._selectedFuseIds];
+          this._selectedFuseIds.clear();
+          this._fuseMode = false;
+          this._gearHandlers?.onFuse(ids);
+        });
+      }
+    }
+
     const rank = { mythic: 4, legendary: 3, epic: 2, rare: 1, common: 0 };
     const sorted = [...stash].sort(
       (a, b) => (rank[b.rarity] - rank[a.rarity]) || (itemScore(b) - itemScore(a))
@@ -283,38 +365,87 @@ export class UIManager {
 
     sorted.forEach((item) => {
       const isOn = equipped[item.slot] === item.id;
-      const reforge = reforgeCost(item); // null = 普通 (0 詞綴) 不能重鑄
+      const reforge = reforgeCost(item);
       const row = document.createElement('div');
-      row.className = 'gear-row' + (isOn ? ' equipped' : '');
+      const isSelected = this._selectedFuseIds.has(item.id);
+
+      let rowClass = 'gear-row' + (isOn ? ' equipped' : '');
+      if (this._fuseMode) {
+        if (isOn) rowClass += ' fuse-disabled';
+        else {
+          rowClass += ' fuse-selectable';
+          if (isSelected) rowClass += ' fuse-selected';
+        }
+      }
+      row.className = rowClass;
       row.style.setProperty('--rarity', RARITIES[item.rarity].color);
+
+      // 套裝標記與傳奇特效標籤
+      const setDef = item.setKey ? SETS[item.setKey] : null;
+      const setHtml = setDef ? `<span class="gear-set-tag" style="color:${setDef.color}">[${setDef.name}]</span>` : '';
+      const legHtml = item.legendaryEffect ? `<div class="gear-legendary-tag">${legendaryEffectText(item.legendaryEffect)}</div>` : '';
+
       row.innerHTML = `
         <span class="gear-row-icon">${SLOTS[item.slot].icon}</span>
         <div class="gear-row-info">
-          <div class="gear-row-name">${itemName(item)}${isOn ? ' <span class="gear-on">裝備中</span>' : ''}</div>
+          <div class="gear-row-name">${setHtml}${RARITIES[item.rarity].name} ${SLOTS[item.slot].name}${isOn ? ' <span class="gear-on">裝備中</span>' : ''}</div>
           <div class="gear-row-affixes">${item.affixes.length > 0 ? item.affixes.map(affixText).join(' ‧ ') : '無詞條 (可分解)'}</div>
+          ${legHtml}
         </div>
         <div class="gear-row-actions">
-          ${reforge !== null
-            ? `<button class="gear-mini-btn reforge" data-reforge="${item.id}" ${save.data.dna < reforge ? 'disabled' : ''} title="花 ${reforge} 🧬 重骰全部詞條">🔁 ${reforge}🧬</button>`
-            : ''}
-          ${isOn
-            ? (reforge === null ? '<span class="gear-locked-hint">脫下才能分解</span>' : '')
-            : `<button class="gear-mini-btn equip" data-equip="${item.id}">裝備</button>
-               <button class="gear-mini-btn drop" data-salvage="${item.id}">分解 +${salvageValue(item)} 🧬</button>`}
+          ${this._fuseMode
+            ? (isOn
+                ? '<span class="gear-locked-hint">穿戴中不可合成</span>'
+                : `<span class="gear-locked-hint" style="color:${isSelected ? '#ffd166' : '#888'}">${isSelected ? '✓ 已選中' : '點擊選取'}</span>`)
+            : `
+              ${reforge !== null
+                ? `<button class="gear-mini-btn reforge" data-reforge="${item.id}" ${save.data.dna < reforge ? 'disabled' : ''} title="花 ${reforge} 🧬 重骰全部詞條">🔁 ${reforge}🧬</button>`
+                : ''}
+              ${isOn
+                ? (reforge === null ? '<span class="gear-locked-hint">脫下才能分解</span>' : '')
+                : `<button class="gear-mini-btn equip" data-equip="${item.id}">裝備</button>
+                   <button class="gear-mini-btn drop" data-salvage="${item.id}">分解 +${salvageValue(item)} 🧬</button>`}
+            `}
         </div>
       `;
+
+      if (this._fuseMode && !isOn) {
+        row.addEventListener('click', (ev) => {
+          if (ev.target.tagName === 'BUTTON') return;
+          if (this._selectedFuseIds.has(item.id)) {
+            this._selectedFuseIds.delete(item.id);
+          } else {
+            if (this._selectedFuseIds.size < 3) {
+              this._selectedFuseIds.add(item.id);
+            }
+          }
+          this.rebuildGearView(save);
+        });
+      }
+
       this.gearList.appendChild(row);
     });
 
-    this.gearList.querySelectorAll('[data-equip]').forEach((btn) => {
-      btn.addEventListener('click', () => this._gearHandlers?.onEquip(btn.dataset.equip));
-    });
-    this.gearList.querySelectorAll('[data-salvage]').forEach((btn) => {
-      btn.addEventListener('click', () => this._gearHandlers?.onSalvage(btn.dataset.salvage));
-    });
-    this.gearList.querySelectorAll('[data-reforge]').forEach((btn) => {
-      btn.addEventListener('click', () => this._gearHandlers?.onReforge(btn.dataset.reforge));
-    });
+    if (!this._fuseMode) {
+      this.gearList.querySelectorAll('[data-equip]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._gearHandlers?.onEquip(btn.dataset.equip);
+        });
+      });
+      this.gearList.querySelectorAll('[data-salvage]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._gearHandlers?.onSalvage(btn.dataset.salvage);
+        });
+      });
+      this.gearList.querySelectorAll('[data-reforge]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._gearHandlers?.onReforge(btn.dataset.reforge);
+        });
+      });
+    }
   }
 
   // 佈署砲塔按鈕：金幣不夠就變灰
@@ -939,6 +1070,49 @@ export class UIManager {
       dmgList.appendChild(row);
     }
 
+    // 局內裝備回收結算展示
+    const gearBox = document.getElementById('game-over-gear-box');
+    const gearStatus = document.getElementById('game-over-gear-status');
+    const gearItems = document.getElementById('game-over-gear-items');
+    if (gearBox && gearStatus && gearItems) {
+      if (gearSummary && ((gearSummary.savedGear && gearSummary.savedGear.length > 0) || (gearSummary.lostGear && gearSummary.lostGear.length > 0))) {
+        gearBox.classList.remove('hidden');
+        const sCount = gearSummary.savedGear ? gearSummary.savedGear.length : 0;
+        const lCount = gearSummary.lostGear ? gearSummary.lostGear.length : 0;
+        gearStatus.textContent = lCount > 0 ? `入庫 ${sCount} 件 / 遺失 ${lCount} 件` : `全部入庫 ${sCount} 件`;
+        gearItems.innerHTML = '';
+        gearSummary.savedGear?.forEach((it) => {
+          const chip = document.createElement('span');
+          chip.className = 'gear-chip-mini';
+          chip.style.setProperty('--chip-color', RARITIES[it.rarity].color);
+          chip.textContent = `✓ ${itemName(it)}`;
+          gearItems.appendChild(chip);
+        });
+        gearSummary.lostGear?.forEach((it) => {
+          const chip = document.createElement('span');
+          chip.className = 'gear-chip-mini lost';
+          chip.style.setProperty('--chip-color', RARITIES[it.rarity].color);
+          chip.textContent = `✕ ${itemName(it)}`;
+          gearItems.appendChild(chip);
+        });
+      } else {
+        gearBox.classList.add('hidden');
+      }
+    }
+
     this.gameOverModal.classList.remove('hidden');
+  }
+
+  // 局內待回收裝備 HUD 更新
+  updatePendingGear(count) {
+    const chip = document.getElementById('pending-gear-chip');
+    const countEl = document.getElementById('pending-gear-count');
+    if (!chip) return;
+    if (count > 0) {
+      chip.classList.remove('hidden');
+      if (countEl) countEl.textContent = count;
+    } else {
+      chip.classList.add('hidden');
+    }
   }
 }

@@ -34,7 +34,9 @@ export const LEVELS = {
     decor: ['car', 'bin', 'neon'],
     hpScale: 1.0,
     // 關卡機制：街頭定期空投物資箱
-    mech: { type: 'supply', interval: 45, jitter: 20 },
+    mechs: [
+      { type: 'supply', interval: 45, jitter: 20 },
+    ],
     waves: [
       { until: 120, pool: [['walker', 1]], interval: 0.85, batch: 1 },
       { until: 240, pool: [['walker', 0.5], ['bat', 0.3], ['runner', 0.2]], interval: 0.6, batch: 1 },
@@ -73,7 +75,9 @@ export const LEVELS = {
     decor: ['tank', 'pipes', 'hazard'],
     hpScale: 1.3,
     // 關卡機制：實驗室毒霧池 (玩家踩到持續扣血)
-    mech: { type: 'pool', interval: 24, jitter: 8, radius: 115, dur: 6, dmg: 6, color: '#b5179e' },
+    mechs: [
+      { type: 'pool', interval: 24, jitter: 8, radius: 115, dur: 6, dmg: 6, color: '#b5179e' },
+    ],
     waves: [
       { until: 100, pool: [['walker', 0.6], ['boomer', 0.25], ['spitter', 0.15]], interval: 0.7, batch: 1 },
       { until: 240, pool: [['walker', 0.3], ['boomer', 0.25], ['bat', 0.18], ['spore_host', 0.15], ['spitter', 0.12]], interval: 0.5, batch: 1 },
@@ -112,7 +116,11 @@ export const LEVELS = {
     decor: ['ice_spike', 'snow', 'radar'],
     hpScale: 1.6,
     // 關卡機制：冰爆地雷 (短暫警示後爆炸，敵我皆傷)
-    mech: { type: 'mine', interval: 30, jitter: 12, radius: 125, fuse: 1.8, dmg: 10, dmgEnemy: 600, color: '#90e0ef' },
+    // 關卡機制：冰爆地雷 + 冰面滑行慣性 (鬆開搖桿後速度指數衰減而非瞬停)
+    mechs: [
+      { type: 'mine', interval: 30, jitter: 12, radius: 125, fuse: 1.8, dmg: 10, dmgEnemy: 600, color: '#90e0ef' },
+      { type: 'ice', friction: 0.92 },
+    ],
     waves: [
       { until: 100, pool: [['brute', 0.5], ['walker', 0.5]], interval: 0.75, batch: 1 },
       { until: 240, pool: [['brute', 0.35], ['bat', 0.3], ['walker', 0.15], ['warden', 0.2]], interval: 0.5, batch: 2 },
@@ -151,7 +159,11 @@ export const LEVELS = {
     decor: ['lava_crack', 'steel', 'gear'],
     hpScale: 2.0,
     // 關卡機制：熔岩噴發 (大範圍、對敵傷害高，幫你清場但要閃)
-    mech: { type: 'geyser', interval: 22, jitter: 8, radius: 170, fuse: 1.5, dmg: 14, dmgEnemy: 1300, color: '#ff7700' },
+    // 關卡機制：熔岩噴發 + 安全高台 (隨機亮環，站在範圍外持續扣血)
+    mechs: [
+      { type: 'geyser', interval: 22, jitter: 8, radius: 170, fuse: 1.5, dmg: 14, dmgEnemy: 1300, color: '#ff7700' },
+      { type: 'safeZone', interval: 25, jitter: 8, radius: 130, duration: 8, dmg: 6, color: '#ff9500' },
+    ],
     waves: [
       { until: 90, pool: [['brute', 0.45], ['boomer', 0.4], ['spitter', 0.15]], interval: 0.6, batch: 1 },
       { until: 220, pool: [['brute', 0.28], ['boomer', 0.22], ['bat', 0.18], ['runner', 0.18], ['spitter', 0.14]], interval: 0.42, batch: 2 },
@@ -189,6 +201,10 @@ export const LEVELS = {
     },
     decor: ['lava_crack', 'gear', 'radar'],
     hpScale: 1,
+    // 關卡機制：縮圈結界 (圈外持續扣血 + 向圈心微推，場地越來越小)
+    mechs: [
+      { type: 'shrinkCircle', startRadius: 1800, endRadius: 500, shrinkRate: 0.6, dmg: 8, dmgInterval: 0.4, color: '#b388ff' },
+    ],
     waves: [
       { until: 1e9, pool: [['walker', 0.18], ['bat', 0.14], ['brute', 0.12], ['boomer', 0.14], ['runner', 0.12], ['warden', 0.1], ['spore_host', 0.1], ['spitter', 0.1]], interval: 0.55, batch: 2 },
     ],

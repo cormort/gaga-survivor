@@ -196,6 +196,9 @@ export class WeaponManager {
 
   // 統一產生投射物，順手把「這一發是否暴擊」帶下去
   mkProjectile(options) {
+    if (this.player.legendaryEffects?.includes('pierce_all') && options.pierce !== undefined) {
+      options.pierce = 999;
+    }
     const p = new Projectile(options);
     p.isCrit = this.critShot;
     return p;
