@@ -1,6 +1,6 @@
 // 嘎嘎特攻 (Gaga Survivor) - 遊戲核心主循環與遊戲狀態機
 
-import { GAME_CONFIG, ENEMY_TYPES, WEAPONS } from './config.js';
+import { GAME_CONFIG, ENEMY_TYPES, WEAPONS, FX } from './config.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
@@ -51,6 +51,7 @@ class Game {
     this.dropItems = [];
     this.turrets = [];
     this.mercenaries = [];
+    this.decals = []; // 地面殘跡 (血漬/焦痕)
 
     // 遊戲性增強系統狀態
     this.hitstopTimer = 0;
@@ -423,6 +424,8 @@ class Game {
     this.particles.createShockwave(prop.x, prop.y, 180, '#ff9e00');
     sound.playExplosion();
     this.camera.shake = Math.max(this.camera.shake, 14);
+    // 爆炸焦痕
+    this.addDecal(prop.x, prop.y, 150, FX.scorch.fill, FX.scorch.a, FX.scorch.accent, FX.decalLife + 2);
 
     const blastR = 175;
     for (const enemy of this.enemies) {
@@ -558,6 +561,7 @@ class Game {
     this.dropItems = [];
     this.turrets = [];
     this.mercenaries = [];
+    this.decals = [];
     this.hazards = [];
     this.boss = null;
     this.particles.clear();
@@ -644,6 +648,7 @@ class Game {
     this.dropItems = [];
     this.turrets = [];
     this.mercenaries = [];
+    this.decals = [];
     this.initExplodableProps();
     this.extractionWell = null;
 
@@ -959,6 +964,8 @@ class Game {
     this.camera.shake = Math.max(this.camera.shake, 9);
     this.particles.createExplosion(h.x, h.y, h.r, h.kind === 'geyser');
     this.particles.createShockwave(h.x, h.y, h.r, h.color);
+    // 地雷/噴發地面焦痕
+    this.addDecal(h.x, h.y, h.r * 0.9, FX.scorch.fill, FX.scorch.a, hexToRgba(h.color, 0.45), FX.decalLife + 2);
 
     const rr = h.r;
     for (const e of this.enemies) {
@@ -1227,6 +1234,13 @@ class Game {
       if (prop.flashTimer > 0) prop.flashTimer -= dt;
     }
 
+    // 地面殘跡生命週期
+    for (let i = this.decals.length - 1; i >= 0; i--) {
+      const dc = this.decals[i];
+      dc.life -= dt;
+      if (dc.life <= 0) this.decals.splice(i, 1);
+    }
+
     // 4.8 撤離井刷新與倒數 (生成位置 clamp 在世界邊界內，避免貼牆時開在界外)
     if (!this.extractionWell && ((this.gameTime >= 150 && this.gameTime < 155) || (this.gameTime >= 330 && this.gameTime < 335))) {
       const ang = Math.random() * Math.PI * 2;
@@ -1405,6 +1419,13 @@ class Game {
         this.player.character.onKill?.(enemy, this);
         this.particles.createDeathParticles(enemy.x, enemy.y, enemy.color, enemy.isBoss ? 28 : 8);
 
+        // 地面殘跡：雜兵死亡留血漬 (Soulstone 風格視覺回饋)
+        if (!enemy.isBoss && Math.random() < FX.bloodChance) {
+          const [rr, gg, bb] = this._hexRgb(enemy.color);
+          this.addDecal(enemy.x, enemy.y, enemy.radius * FX.splatScale,
+            `${Math.round(rr * 0.55)},${Math.round(gg * 0.5)},${Math.round(bb * 0.55)}`, 0.5);
+        }
+
         // 掉落經驗寶石或稀有道具
         this.spawnDropItem(enemy);
 
@@ -1426,6 +1447,11 @@ class Game {
         if (enemy.isBoss) {
           this.camera.shake = 18;
           sound.playEvoFanfare();
+
+          // Boss 級焦痕
+          const [rr, gg, bb] = this._hexRgb(enemy.color);
+          this.addDecal(enemy.x, enemy.y, enemy.radius * FX.bossSplatScale,
+            `${Math.round(rr * 0.4)},${Math.round(gg * 0.38)},${Math.round(bb * 0.42)}`, 0.62, null, FX.bossDecalLife);
 
           // 擊敗 15:00 的終極首領 = 任務達成
           if (enemy.isFinal) {
@@ -1720,6 +1746,9 @@ class Game {
 
     // 繪製場景裝飾 (地板之上、掉落物之下)
     drawDecor(this.ctx, renderCam, this.level || LEVELS.street, this.vw, this.vh);
+
+    // 地面殘跡 (血漬/焦痕，實體之下)
+    this.drawDecals(this.ctx, renderCam);
 
     // 繪製掉落物
     for (const item of this.dropItems) {
@@ -2226,6 +2255,50 @@ class Game {
       }
     }
     ctx.restore();
+  }
+  // ── 地面殘跡 (血漬/焦痕，Soulstone 風格) ──
+  addDecal(x, y, r, fill, alpha = 0.5, accent = null, life = FX.decalLife) {
+    if (this.decals.length >= FX.decalCap) this.decals.shift();
+    this.decals.push({
+      x: x + (Math.random() - 0.5) * r * 0.4,
+      y: y + (Math.random() - 0.5) * r * 0.4,
+      r: r * (0.8 + Math.random() * 0.4),
+      life,
+      maxLife: life,
+      fill,
+      a: alpha,
+      accent,
+    });
+  }
+
+  _hexRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  drawDecals(ctx, cam) {
+    for (const d of this.decals) {
+      const sx = d.x - cam.x;
+      const sy = d.y - cam.y;
+      const m = d.r + 30;
+      if (sx < -m || sx > this.vw + m || sy < -m || sy > this.vh + m) continue;
+      const p = d.life / d.maxLife; // 1 → 0，隨時間淡出
+      ctx.save();
+      ctx.globalAlpha = d.a * Math.min(1, p * 1.8);
+      ctx.fillStyle = `rgba(${d.fill},0.85)`;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, d.r * 0.95, d.r * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (d.accent) {
+        ctx.globalAlpha = d.a * p;
+        ctx.strokeStyle = d.accent;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, d.r * 0.95, d.r * 0.6, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
 }
 

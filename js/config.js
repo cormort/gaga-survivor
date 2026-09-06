@@ -322,6 +322,17 @@ export const PASSIVES = {
   },
 };
 
+// ── 視覺特效參數中心 (Soulstone 風格批 2)：地面殘跡與未來特效共用 ──
+export const FX = {
+  decalCap: 60,          // 地面殘跡上限 (血漬/焦痕)，超過丟最舊
+  decalLife: 7,          // 殘跡存活秒數
+  bloodChance: 0.35,     // 雜兵死亡留下血漬的機率
+  splatScale: 1.35,      // 血漬大小 = 敵人半徑 × 此值
+  bossSplatScale: 2.6,   // Boss 焦痕大小
+  bossDecalLife: 10,
+  scorch: { fill: '10,10,10', a: 0.4, accent: 'rgba(255,150,50,0.4)' }, // 爆炸焦痕 (暗底 + 暖邊)
+};
+
 // 怪物配置
 export const ENEMY_TYPES = {
   walker: {
