@@ -179,11 +179,62 @@ js/systems/           Spawner (波次與 Boss 排程) / UI / ParticleSystem
 
 ---
 
-## 🚧 尚未實作
+## 🚧 尚未實作與開發規劃
 
-- **遠程敵人**：噴吐酸液、放置地面陷阱的敵人（目前所有雜兵都是近戰，尚無敵方彈幕系統）。
-- **更多地形互動**：冰面滑行慣性、熔岩漫溢的安全高台、縮圈結界（目前是定點式的毒霧／地雷／噴發）。
-- **更多 Boss 招式**：地面預警圈、扇形彈幕、分裂與引力漩渦（目前是 summon / nova 兩招）。
-- **裝備進階玩法**：賭裝／合成、套裝效果、會改變武器行為的傳奇特效（分解已上線）。
-- **局內回收風險**（Halls of Torment 式「裝備井」）：目前撿到就直接入袋，沒有「要活著帶回去」的緊張感。
-- **每日挑戰**：隨機詞綴的每日關卡尚未開放。
+以下每一項都附上「動哪些檔、接哪些現成鉤子、做完怎麼算過」，可以直接當工單接手。共通原則見 `CLAUDE.md`：資料驅動優先（能寫在 `config.js` / `levels.js` 的就不要寫死在邏輯裡）、最小改動、不重構沒壞的東西。
+
+### 1. 遠程敵人與敵方彈幕系統 ★優先
+
+目前所有雜兵都是近戰追擊，缺一套敵方投射物迴圈。
+
+- **要動**：`js/entities/EnemyProjectile.js`（新增，可大幅簡化 `js/entities/Projectile.js` 的寫法）、`js/main.js`（新增 `this.enemyProjectiles` 陣列，在 `update()` 推進、在 `render()` 繪製、新增 `checkEnemyProjectileHits()` 對玩家判定）、`js/entities/Enemy.js`（`update()` 內依 `config.ranged` 停在射程外並冷卻射擊，透過新的 `onEnemyShoot` callback 交給 main）、`js/config.js`（新怪 `spitter` 酸液噴吐者）、`js/sprites.js`（新 sprite）、`js/levels.js`（編入實驗室與熔爐波次池）。
+- **現成鉤子**：`Enemy.update(dt, player, onExplodeCallback, onBossSkill)` 已經是 callback 風格，照著加第五個參數即可；玩家受傷走 `player.takeDamage(n)`（內含無敵幀）並用 `this.particles.createHurtText()` 顯示跳字。
+- **驗收**：噴吐者會停在射程外拋射、彈道可被走位閃過、命中扣血且有跳字；場上 250 隻上限時不掉幀。
+
+### 2. 更多 Boss 招式
+
+目前只有內建衝鋒 + `summon`（召喚小怪）+ `nova`（範圍震波）兩招。
+
+- **要動**：`js/main.js` 的 `handleBossSkill(boss, act)`（在既有 `if/else` 鏈接新招）、`js/levels.js` 各 Boss 的 `behaviors: []` 陣列。
+- **建議新招**：`barrage` 扇形彈幕（依賴第 1 項的彈幕系統）、`ground` 地面預警圈（複用 `this.hazards` 的 `mine` 結構，`spawnHazard()` 已經支援 fuse + 敵我皆傷）、`vortex` 引力漩渦（每幀把玩家往 Boss 拉，持續 2 秒）。
+- **現成鉤子**：施放前 1.5 秒的紅色光圈前搖警示已寫在 `Enemy.draw()`，新招免費沿用；`this.camera.shake` 與 `this.particles.createShockwave()` 可直接用。
+- **驗收**：新招寫進某關 Boss 的 `behaviors` 後即生效，前搖警示正常，招式之間不會互相卡住冷卻。
+
+### 3. 更多地形互動
+
+目前是定點式的毒霧／地雷／噴發（`levels.mech` + `main.js` 的 `updateHazards()`）。
+
+- **要動**：`js/levels.js` 的 `mech` 設定、`js/main.js` 的 `updateHazards()` / `spawnHazard()` / `explodeHazard()`。
+- **建議項目**：冰面滑行慣性（雪地關給玩家加速度衰減而非瞬停）、熔岩漫溢的安全高台（反向機制：只有站在特定區域才安全）、縮圈結界（隨時間縮小的安全圈，圈外持續扣血）。
+- **注意**：`mech` 目前是單一物件，要多種同時存在得改成陣列 —— 這是唯一需要動到既有資料結構的地方，改的時候記得四關的設定一起更新。
+- **驗收**：新機制純靠 `levels.js` 的資料開關即可掛到任一關，關掉後舊行為完全不變。
+
+### 4. 裝備進階玩法
+
+分解、重鑄已上線（`js/items.js` + `js/save.js`）。
+
+- **要動**：`js/items.js`（套裝判定與傳奇特效表）、`js/save.js`（合成／賭裝的存檔操作，比照現有的 `salvageItem` / `reforgeItem` / `equipItem`）、`js/systems/UI.js`（倉庫介面新增按鈕）、`js/weapons/WeaponManager.js`（會改變武器行為的傳奇特效才需要動）。
+- **建議項目**：同稀有度三合一升階、套裝效果（三件同系列額外加成）、改變武器行為的傳奇特效（例如「苦無改為穿透全場」）。
+- **現成鉤子**：`gearBonuses(stash, equipped)` 是所有裝備加成的唯一出口，新加成從這裡回傳即可；`AFFIXES` / `RARITIES` 都是資料表。
+- **驗收**：新玩法不影響既有存檔（`save.js` 有 `ensureDefaults()`，新欄位要在那裡補預設值）。
+
+### 5. 局內回收風險（Halls of Torment 式「裝備井」）
+
+目前撿到就直接入袋，陣亡也不會掉，沒有「要活著帶回去」的緊張感。
+
+- **要動**：`js/main.js` 的 `spawnDropItem()` 與 `handleGameOver()`、`js/save.js` 的 `addItem()`、`js/systems/UI.js`（HUD 顯示本局待帶回的裝備）。
+- **設計**：本局撿到的裝備先進「暫存區」，通關才寫入倉庫，陣亡則損失（或只保留一定比例）。
+- **驗收**：陣亡與通關兩條路徑的結算差異清楚呈現在戰後畫面上。
+
+### 6. 每日挑戰
+
+隨機詞綴的每日關卡尚未開放。
+
+- **要動**：`js/levels.js`（以日期為亂數種子生成關卡變體）、`js/save.js`（每日進度與最佳紀錄）、`js/systems/UI.js`（選單入口）。
+- **設計**：用 `YYYYMMDD` 當種子跑一個簡單的 LCG，抽出關卡 + 2~3 個全域詞綴（例如「敵人速度 +30%、玩家傷害 +50%」），同一天所有玩家條件一致。
+- **驗收**：同一天重開瀏覽器抽到的條件完全相同，隔天自動換一組。
+
+### 已知技術債
+
+- `js/main.js` 已超過 1,200 行，狀態機、碰撞、地形機制、結算全擠在一起；接第 1、3 項之前可以考慮先把 `updateHazards` 系列抽到 `js/systems/Hazards.js`（現有 `js/systems/` 就是放這種東西的地方）。
+- 專案沒有測試框架，驗證方式是寫拋棄式 Node 腳本直接 import 模組跑 assert（`config.js` 會讀 `window`，記得先 `globalThis.window = { innerWidth: 1280, innerHeight: 720 }` 再動態 import）。
