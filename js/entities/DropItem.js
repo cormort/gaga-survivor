@@ -2,6 +2,16 @@
 
 import { DROP_TYPES } from '../config.js';
 import { RARITIES } from '../items.js';
+import { getSprite, blit } from '../sprites.js';
+
+// 經驗水晶 → 烘焙 sprite。水晶是場上數量最多的東西 (實測 7:50 有 126 顆佔掉落物 91%)，
+// 逐顆逐幀畫向量菱形 + shadowBlur 是整個渲染最貴的一段，改走既有的烘焙管線。
+const GEM_SPRITE = {
+  EXP_GREEN: 'gem_green',
+  EXP_BLUE: 'gem_blue',
+  EXP_PURPLE: 'gem_purple',
+  EXP_GOLD: 'gem_gold',
+};
 
 export class DropItem {
   constructor(x, y, kind = 'EXP_GREEN', payload = null) {
@@ -78,28 +88,8 @@ export class DropItem {
     ctx.translate(screenX, screenY + bob);
 
     if (this.type === 'exp') {
-      // 繪製發光晶瑩水晶 (菱形)
-      ctx.fillStyle = this.color;
-      ctx.shadowColor = this.color;
-      ctx.shadowBlur = 6;
-
-      ctx.beginPath();
-      ctx.moveTo(0, -this.radius * 1.3);
-      ctx.lineTo(this.radius, 0);
-      ctx.lineTo(0, this.radius * 1.3);
-      ctx.lineTo(-this.radius, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // 水晶高光
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.beginPath();
-      ctx.moveTo(0, -this.radius * 0.9);
-      ctx.lineTo(this.radius * 0.4, 0);
-      ctx.lineTo(0, this.radius * 0.4);
-      ctx.lineTo(-this.radius * 0.4, 0);
-      ctx.closePath();
-      ctx.fill();
+      // 光暈與稜面都已烘進 sprite，這裡只剩一次 drawImage
+      blit(ctx, getSprite(GEM_SPRITE[this.kind] || 'gem_green'), 0, 0, 0);
     } else if (this.type === 'gear') {
       // 裝備：稀有度光暈 + 寶箱圖示，遠遠就看得出值不值得繞路
       const g = ctx.createRadialGradient(0, 0, 2, 0, 0, this.radius * 2.6);

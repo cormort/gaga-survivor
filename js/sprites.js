@@ -1789,7 +1789,81 @@ function drawSpitter(x, t, r) {
   x.fill();
 }
 
+/* ==================== 經驗水晶 ==================== */
+
+// 經驗水晶：數量最多、每幀都在畫的東西，烘焙後每顆只剩一次 drawImage。
+// 外圈光暈直接烘進圖裡，取代原本每顆每幀的 shadowBlur (最貴的 canvas 操作)。
+function drawGem(x, color, r) {
+  const hh = r * 1.3; // 菱形上下半高
+
+  // 外圈光暈 (原本是 shadowBlur = 6)
+  const glow = x.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 2.4);
+  glow.addColorStop(0, hexA(color, 0.55));
+  glow.addColorStop(0.5, hexA(color, 0.18));
+  glow.addColorStop(1, hexA(color, 0));
+  x.fillStyle = glow;
+  x.beginPath();
+  x.arc(0, 0, r * 2.4, 0, Math.PI * 2);
+  x.fill();
+
+  // 左半面 (暗面) 與右半面 (亮面) 分開上色，做出稜面寶石感
+  x.beginPath();
+  x.moveTo(0, -hh);
+  x.lineTo(-r, 0);
+  x.lineTo(0, hh);
+  x.closePath();
+  x.fillStyle = mix(color, '#000000', 0.35);
+  x.fill();
+
+  x.beginPath();
+  x.moveTo(0, -hh);
+  x.lineTo(r, 0);
+  x.lineTo(0, hh);
+  x.closePath();
+  const face = x.createLinearGradient(0, -hh, 0, hh);
+  face.addColorStop(0, mix(color, '#ffffff', 0.55));
+  face.addColorStop(0.45, color);
+  face.addColorStop(1, mix(color, '#000000', 0.2));
+  x.fillStyle = face;
+  x.fill();
+
+  // 外框
+  x.strokeStyle = mix(color, '#ffffff', 0.3);
+  x.lineWidth = 1;
+  x.beginPath();
+  x.moveTo(0, -hh);
+  x.lineTo(r, 0);
+  x.lineTo(0, hh);
+  x.lineTo(-r, 0);
+  x.closePath();
+  x.stroke();
+
+  // 上方鏡面高光
+  x.fillStyle = 'rgba(255,255,255,0.8)';
+  x.beginPath();
+  x.moveTo(0, -hh * 0.82);
+  x.lineTo(r * 0.36, -hh * 0.16);
+  x.lineTo(0, hh * 0.1);
+  x.lineTo(-r * 0.36, -hh * 0.16);
+  x.closePath();
+  x.fill();
+}
+
+// #rrggbb → rgba()，以及兩色線性混合 (水晶稜面上色用)
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function mix(hex, other, t) {
+  const a = parseInt(hex.slice(1), 16);
+  const b = parseInt(other.slice(1), 16);
+  const ch = (sh) => Math.round((((a >> sh) & 255) * (1 - t)) + (((b >> sh) & 255) * t));
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+}
+
 /* ==================== 對外介面 ==================== */
+
 
 const BUILDERS = {
   duck:    { w: 64, h: 60, fn: (x, t) => drawDuck(x, t) },
@@ -1809,6 +1883,12 @@ const BUILDERS = {
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },
+
+  // 經驗水晶 (static：一格就夠，上下浮動由 DropItem 自己 translate)
+  gem_green:  { w: 32, h: 32, static: true, fn: (x) => drawGem(x, '#00f59b', 4) },
+  gem_blue:   { w: 36, h: 36, static: true, fn: (x) => drawGem(x, '#00b4d8', 5) },
+  gem_purple: { w: 40, h: 40, static: true, fn: (x) => drawGem(x, '#b5179e', 6) },
+  gem_gold:   { w: 44, h: 44, static: true, fn: (x) => drawGem(x, '#ffb703', 7) },
 
   // 場景裝飾 (只需一格，不做動畫)
   car:        { w: 64, h: 40, static: true, fn: drawCar },
