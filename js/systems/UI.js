@@ -981,7 +981,7 @@ export class UIManager {
     return result;
   }
 
-  showGameOver(stats, weaponManager) {
+  showGameOver(stats, weaponManager, gearSummary = null) {
     sound.playGameOver();
 
     const resultTitle = document.getElementById('result-title');
@@ -1075,26 +1075,26 @@ export class UIManager {
     const gearStatus = document.getElementById('game-over-gear-status');
     const gearItems = document.getElementById('game-over-gear-items');
     if (gearBox && gearStatus && gearItems) {
-      if (gearSummary && ((gearSummary.savedGear && gearSummary.savedGear.length > 0) || (gearSummary.lostGear && gearSummary.lostGear.length > 0))) {
+      const saved = gearSummary?.savedGear || [];
+      const lost = gearSummary?.lostGear || [];
+      const salvaged = gearSummary?.salvagedGear || []; // 倉庫滿，自動分解換 DNA
+      if (saved.length > 0 || lost.length > 0 || salvaged.length > 0) {
         gearBox.classList.remove('hidden');
-        const sCount = gearSummary.savedGear ? gearSummary.savedGear.length : 0;
-        const lCount = gearSummary.lostGear ? gearSummary.lostGear.length : 0;
-        gearStatus.textContent = lCount > 0 ? `入庫 ${sCount} 件 / 遺失 ${lCount} 件` : `全部入庫 ${sCount} 件`;
+        const parts = [`入庫 ${saved.length} 件`];
+        if (salvaged.length > 0) parts.push(`倉庫已滿自動分解 ${salvaged.length} 件`);
+        if (lost.length > 0) parts.push(`遺失 ${lost.length} 件`);
+        gearStatus.textContent = parts.join(' / ');
         gearItems.innerHTML = '';
-        gearSummary.savedGear?.forEach((it) => {
+        const addChip = (it, prefix, cls) => {
           const chip = document.createElement('span');
-          chip.className = 'gear-chip-mini';
+          chip.className = cls;
           chip.style.setProperty('--chip-color', RARITIES[it.rarity].color);
-          chip.textContent = `✓ ${itemName(it)}`;
+          chip.textContent = `${prefix} ${itemName(it)}`;
           gearItems.appendChild(chip);
-        });
-        gearSummary.lostGear?.forEach((it) => {
-          const chip = document.createElement('span');
-          chip.className = 'gear-chip-mini lost';
-          chip.style.setProperty('--chip-color', RARITIES[it.rarity].color);
-          chip.textContent = `✕ ${itemName(it)}`;
-          gearItems.appendChild(chip);
-        });
+        };
+        saved.forEach((it) => addChip(it, '✓', 'gear-chip-mini'));
+        salvaged.forEach((it) => addChip(it, '♻', 'gear-chip-mini'));
+        lost.forEach((it) => addChip(it, '✕', 'gear-chip-mini lost'));
       } else {
         gearBox.classList.add('hidden');
       }

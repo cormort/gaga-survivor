@@ -276,9 +276,11 @@ class Game {
   tryUpgradeNearestTurret() {
     if (this.state !== 'PLAYING' || !this.player) return;
     const upgradeCost = 50;
-    const standardTurrets = this.turrets.filter(
-      (t) => t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125
-    );
+    const standardTurrets = this.turrets
+      .filter((t) => t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125)
+      .sort((a, b) =>
+        Math.hypot(a.x - this.player.x, a.y - this.player.y) - Math.hypot(b.x - this.player.x, b.y - this.player.y)
+      );
     if (standardTurrets.length === 0) {
       this.ui.say('附近沒有可進化的標準砲塔', '#ffb703', 1.5);
       return;
@@ -686,7 +688,6 @@ class Game {
     this.killMilestoneAt = 100;
     this.timeMilestoneAt = 120;
     this.pendingGear = [];       // 局內拾獲待回收裝備 (暫存區)
-    this.evacuated = false;      // 是否透過撤離井成功撤退
     this.ui.updatePendingGear(0);
     this.input.reset();
 
@@ -1427,7 +1428,7 @@ class Game {
             save.data.dna += rewardDna;
 
             // 撤離井成功：目前背包內的所有待回收裝備直接安全入庫！
-            this.evacuated = true;
+            // (只保住此刻手上的，之後再撿的照樣吃陣亡懲罰 —— 這才是「回收風險」)
             let securedCount = 0;
             if (this.pendingGear && this.pendingGear.length > 0) {
               securedCount = this.pendingGear.length;
@@ -1873,33 +1874,25 @@ class Game {
       });
     }
 
-    // 局內待回收裝備結算：勝利/撤離 100% 入庫，陣亡 50% 保留
+    // 局內待回收裝備結算：通關 100% 入庫，陣亡隨機保留 50% (撤離井是當場入庫，不留旗標)
     const savedGear = [];
     const lostGear = [];
+    const salvagedGear = []; // 倉庫滿 → 自動分解換 DNA，跟真的入庫要分開列
+    const secure = (it) => {
+      if (save.addItem(it)) savedGear.push(it);
+      else {
+        save.data.dna += salvageValue(it);
+        salvagedGear.push(it);
+      }
+    };
     if (this.pendingGear && this.pendingGear.length > 0) {
-      if (isVictory || this.evacuated) {
-        for (const it of this.pendingGear) {
-          if (save.addItem(it)) {
-            savedGear.push(it);
-          } else {
-            save.data.dna += salvageValue(it);
-            savedGear.push(it);
-          }
-        }
+      if (isVictory) {
+        for (const it of this.pendingGear) secure(it);
       } else {
         const shuffled = [...this.pendingGear].sort(() => Math.random() - 0.5);
         const keepCount = Math.ceil(shuffled.length * 0.5);
-        const toKeep = shuffled.slice(0, keepCount);
-        const toLose = shuffled.slice(keepCount);
-        for (const it of toKeep) {
-          if (save.addItem(it)) {
-            savedGear.push(it);
-          } else {
-            save.data.dna += salvageValue(it);
-            savedGear.push(it);
-          }
-        }
-        lostGear.push(...toLose);
+        for (const it of shuffled.slice(0, keepCount)) secure(it);
+        lostGear.push(...shuffled.slice(keepCount));
       }
       save.flush();
       this.pendingGear = [];
@@ -1926,7 +1919,7 @@ class Game {
         unlockedName: result.unlockedNew ? LEVELS[this.level.next].name : null,
       },
       this.weaponManager,
-      { savedGear, lostGear }
+      { savedGear, lostGear, salvagedGear }
     );
 
     // 解鎖新關卡後，選單要立刻反映

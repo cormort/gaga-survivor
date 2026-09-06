@@ -194,13 +194,14 @@ export class WeaponManager {
     }
   }
 
-  // 統一產生投射物，順手把「這一發是否暴擊」帶下去
-  mkProjectile(options) {
+  // 統一產生投射物。crit 必須由開火端顯式帶入 —— 延遲開火的閉包若回頭讀 this，
+  // 期間別把武器開火會把旗標蓋掉，暴擊跳字與「連環爆裂」特效就會掛在錯的彈上。
+  mkProjectile(options, crit = false) {
     if (this.player.legendaryEffects?.includes('pierce_all') && options.pierce !== undefined) {
       options.pierce = 999;
     }
     const p = new Projectile(options);
-    p.isCrit = this.critShot;
+    p.isCrit = crit;
     return p;
   }
 
@@ -215,49 +216,49 @@ export class WeaponManager {
         id !== 'orbit_saw' && id !== 'singularity_ring') return;
 
     const baseDmg = def.baseDamage + (def.damageGrowth ? def.damageGrowth * (item.level - 1) : 0);
-    this.critShot = Math.random() < (this.player.critChance || 0) + (this.player.metaCrit || 0);
+    const crit = Math.random() < (this.player.critChance || 0) + (this.player.metaCrit || 0);
     const critMul = 2 + (this.player.metaCritDmg || 0);
-    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * (this.critShot ? critMul : 1));
+    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * (crit ? critMul : 1));
 
     switch (id) {
       case 'kunai':
       case 'ghost_shuriken':
       case 'phase_blade':
       case 'phase_storm':
-        this.fireKunai(def, item, finalDamage, enemies);
+        this.fireKunai(def, item, finalDamage, enemies, crit);
         break;
 
       case 'guardian':
       case 'eternal_domain':
       case 'orbit_saw':
       case 'singularity_ring':
-        this.fireGuardian(def, item, finalDamage);
+        this.fireGuardian(def, item, finalDamage, crit);
         break;
 
       case 'rocket':
       case 'shark_torpedo':
-        this.fireRocket(def, item, finalDamage, enemies);
+        this.fireRocket(def, item, finalDamage, enemies, crit);
         break;
 
       case 'molotov':
       case 'napalm_sea':
-        this.fireMolotov(def, item, finalDamage, enemies);
+        this.fireMolotov(def, item, finalDamage, enemies, crit);
         break;
 
       case 'lightning':
       case 'plasma_storm':
-        this.fireLightning(def, item, finalDamage, enemies, particleSystem);
+        this.fireLightning(def, item, finalDamage, enemies, particleSystem, crit);
         break;
 
       case 'soccer':
       case 'quantum_sphere':
-        this.fireSoccer(def, item, finalDamage, enemies);
+        this.fireSoccer(def, item, finalDamage, enemies, crit);
         break;
     }
   }
 
   // 1. 苦無 / 幽靈手裏劍 (追蹤發射)
-  fireKunai(def, item, damage, enemies) {
+  fireKunai(def, item, damage, enemies, crit = false) {
     // 尋找最近的敵人
     const target = this.getClosestEnemy(enemies);
     if (!target) return;
@@ -291,7 +292,7 @@ export class WeaponManager {
             life: 2.2,
             isEvo: def.isEvo,
             knockback: 1.5,
-          })
+          }, crit)
         );
         sound.playShoot();
       });
@@ -299,7 +300,7 @@ export class WeaponManager {
   }
 
   // 2. 守護輪盤 / 永恆守護力場
-  fireGuardian(def, item, damage) {
+  fireGuardian(def, item, damage, crit = false) {
     const fam = def.projType || 'guardian';
     // 移除同家族的舊環體 (守護輪盤/重力環鋸各自獨立，不會互清)
     this.projectiles = this.projectiles.filter((p) => p.type !== fam);
@@ -324,13 +325,13 @@ export class WeaponManager {
           life: def.duration,
           isEvo: def.isEvo,
           knockback: 4.5,
-        })
+        }, crit)
       );
     }
   }
 
   // 3. 火箭 / 鯊魚核彈
-  fireRocket(def, item, damage, enemies) {
+  fireRocket(def, item, damage, enemies, crit = false) {
     const target = this.getRandomEnemy(enemies);
     if (!target) return;
 
@@ -358,7 +359,7 @@ export class WeaponManager {
             pierce: 1,
             life: Math.min(2.5, dist / def.speed + 0.1),
             isEvo: def.isEvo,
-          })
+          }, crit)
         );
         sound.playShoot();
       });
@@ -366,7 +367,7 @@ export class WeaponManager {
   }
 
   // 4. 燃燒瓶 / 燃油煉獄
-  fireMolotov(def, item, damage, enemies) {
+  fireMolotov(def, item, damage, enemies, crit = false) {
     const count = def.isEvo ? def.count : def.count[item.level - 1];
     const r = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier;
 
@@ -387,13 +388,13 @@ export class WeaponManager {
           life: def.duration,
           isEvo: def.isEvo,
           knockback: 0.2,
-        })
+        }, crit)
       );
     }
   }
 
   // 5. 天降狂雷 / 狂雷星暴
-  fireLightning(def, item, damage, enemies, particleSystem) {
+  fireLightning(def, item, damage, enemies, particleSystem, crit = false) {
     const strikes = def.isEvo ? def.strikes : def.strikes[item.level - 1];
 
     for (let i = 0; i < strikes; i++) {
@@ -425,7 +426,7 @@ export class WeaponManager {
   }
 
   // 6. 量子足球 / 量子星雲球
-  fireSoccer(def, item, damage, enemies) {
+  fireSoccer(def, item, damage, enemies, crit = false) {
     const count = def.isEvo ? def.count : def.count[item.level - 1];
     const bounces = def.isEvo ? def.bounces : def.bounces[item.level - 1];
 
@@ -446,7 +447,7 @@ export class WeaponManager {
           life: 8.0,
           isEvo: def.isEvo,
           knockback: 3.5,
-        })
+        }, crit)
       );
       sound.playShoot();
     }
