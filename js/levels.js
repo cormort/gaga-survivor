@@ -21,6 +21,9 @@ export const LEVELS = {
       top: '#141d30', mid: '#0b1220', bottom: '#070a11',
       grid: 'rgba(255,255,255,0.035)', major: 'rgba(0,229,255,0.10)',
       bounds: 'rgba(255,0,85,0.65)',
+      // 全域調光 (Batch 4)：上下漸層色調 overlay + 暗角強度
+      grade: { c1: '80,60,230', a1: 0.05, c2: '8,18,70', a2: 0.09 },
+      vignette: 1,
       ground: {
         patches: [{ c: '255,255,255', a: 0.02 }, { c: '120,80,220', a: 0.045 }],
         motif: 'crack',        // 柏油裂紋 + 偶發霓虹微光裂縫
@@ -58,6 +61,8 @@ export const LEVELS = {
       top: '#12251c', mid: '#0a1712', bottom: '#050c09',
       grid: 'rgba(180,255,200,0.045)', major: 'rgba(0,245,155,0.12)',
       bounds: 'rgba(120,255,120,0.55)',
+      grade: { c1: '0,170,110', a1: 0.05, c2: '0,50,30', a2: 0.08 },
+      vignette: 0.9,
       ground: {
         patches: [{ c: '255,255,255', a: 0.02 }, { c: '0,245,155', a: 0.035 }],
         motif: 'panel',      // 金屬板接縫 + 偶發腐蝕斑
@@ -95,6 +100,8 @@ export const LEVELS = {
       top: '#16283d', mid: '#0d1a2a', bottom: '#060c14',
       grid: 'rgba(200,235,255,0.05)', major: 'rgba(120,200,255,0.14)',
       bounds: 'rgba(120,200,255,0.6)',
+      grade: { c1: '150,225,255', a1: 0.06, c2: '30,70,140', a2: 0.06 },
+      vignette: 1,
       ground: {
         patches: [{ c: '255,255,255', a: 0.025 }, { c: '120,200,255', a: 0.04 }],
         motif: 'crystal',    // 凍土冰晶簇 + 霜紋
@@ -132,6 +139,8 @@ export const LEVELS = {
       top: '#301410', mid: '#1c0b09', bottom: '#0d0504',
       grid: 'rgba(255,180,120,0.05)', major: 'rgba(255,120,0,0.16)',
       bounds: 'rgba(255,90,0,0.7)',
+      grade: { c1: '255,120,30', a1: 0.06, c2: '70,8,0', a2: 0.1 },
+      vignette: 1.15,
       ground: {
         patches: [{ c: '255,255,255', a: 0.015 }, { c: '255,120,0', a: 0.05 }],
         motif: 'lava',       // 龜裂熔岩地殼，裂縫透出橙紅餘燼
@@ -169,6 +178,8 @@ export const LEVELS = {
       top: '#241637', mid: '#140b24', bottom: '#07030f',
       grid: 'rgba(200,160,255,0.05)', major: 'rgba(180,120,255,0.14)',
       bounds: 'rgba(180,90,255,0.6)',
+      grade: { c1: '170,80,255', a1: 0.06, c2: '30,8,70', a2: 0.1 },
+      vignette: 1.1,
       ground: {
         patches: [{ c: '255,255,255', a: 0.018 }, { c: '180,120,255', a: 0.05 }],
         motif: 'void',       // 虛空符文刻痕與星塵

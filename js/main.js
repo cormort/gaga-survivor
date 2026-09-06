@@ -1782,6 +1782,9 @@ class Game {
     // 地面殘跡 (血漬/焦痕，實體之下)
     this.drawDecals(this.ctx, renderCam);
 
+    // 全域色調 overlay (Soulstone 風格調光：場景染上關卡色，角色保持原色)
+    this.drawColorGrade();
+
     // 繪製掉落物
     for (const item of this.dropItems) {
       item.draw(this.ctx, renderCam);
@@ -1980,9 +1983,26 @@ class Game {
     ctx.restore();
   }
 
+  // 全域色調 overlay：關卡色上下漸層，極淡染上場景 (角色繪製在其上，不受影響)
+  drawColorGrade() {
+    const theme = (this.level || LEVELS.street).theme;
+    const gr = theme && theme.grade;
+    if (!gr) return;
+    const ctx = this.ctx;
+    const g = ctx.createLinearGradient(0, 0, 0, this.vh);
+    g.addColorStop(0, `rgba(${gr.c1},${gr.a1})`);
+    g.addColorStop(0.55, `rgba(${gr.c1},${(gr.a1 * 0.4).toFixed(4)})`);
+    g.addColorStop(1, `rgba(${gr.c2},${gr.a2})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, this.vw, this.vh);
+  }
+
   drawVignette() {
     // ponytail: 暗角烘焙進離屏 canvas，每幀只做一次 drawImage
-    if (!this._vigCanvas || this._vigCanvas.width !== Math.round(this.vw) || this._vigCanvas.height !== Math.round(this.vh)) {
+    const vigLevel = this.level || LEVELS.street;
+    const vigMult = (vigLevel.theme && vigLevel.theme.vignette) || 1;
+    if (!this._vigCanvas || this._vigCanvas.width !== Math.round(this.vw) ||
+        this._vigCanvas.height !== Math.round(this.vh) || this._vigKey !== vigLevel.id) {
       const oc = document.createElement('canvas');
       oc.width = Math.max(1, Math.round(this.vw));
       oc.height = Math.max(1, Math.round(this.vh));
@@ -1992,11 +2012,12 @@ class Game {
         this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.72
       );
       g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(0.6, 'rgba(0,0,0,0.28)');
-      g.addColorStop(1, 'rgba(0,0,0,0.72)');
+      g.addColorStop(0.6, `rgba(0,0,0,${(0.28 * vigMult).toFixed(3)})`);
+      g.addColorStop(1, `rgba(0,0,0,${(0.72 * vigMult).toFixed(3)})`);
       octx.fillStyle = g;
       octx.fillRect(0, 0, oc.width, oc.height);
       this._vigCanvas = oc;
+      this._vigKey = vigLevel.id;
     }
     this.ctx.drawImage(this._vigCanvas, 0, 0, this.vw, this.vh);
   }
