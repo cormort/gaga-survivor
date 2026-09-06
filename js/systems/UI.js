@@ -893,7 +893,7 @@ export class UIManager {
       unlockRow.classList.add('hidden');
     }
 
-    // 武器傷害統計
+    // 武器傷害統計 (含武器、僱傭兵部隊與戰術砲塔)
     const dmgList = document.getElementById('damage-stats-list');
     dmgList.innerHTML = '';
 
@@ -901,6 +901,9 @@ export class UIManager {
     for (const [id, item] of weaponManager.weapons.entries()) {
       totalDmg += item.totalDamage;
     }
+    const mercDmg = Math.round(weaponManager.mercTotalDamage || 0);
+    const turretDmg = Math.round(weaponManager.turretTotalDamage || 0);
+    totalDmg += mercDmg + turretDmg;
 
     for (const [id, item] of weaponManager.weapons.entries()) {
       const def = WEAPONS[id];
@@ -910,6 +913,28 @@ export class UIManager {
       row.innerHTML = `
         <span>${def.icon} ${def.name}</span>
         <strong>${item.totalDamage.toLocaleString()} (${pct}%)</strong>
+      `;
+      dmgList.appendChild(row);
+    }
+
+    if (mercDmg > 0) {
+      const pct = totalDmg > 0 ? Math.round((mercDmg / totalDmg) * 100) : 0;
+      const row = document.createElement('div');
+      row.className = 'damage-stat-item';
+      row.innerHTML = `
+        <span>💂 僱傭兵部隊</span>
+        <strong>${mercDmg.toLocaleString()} (${pct}%)</strong>
+      `;
+      dmgList.appendChild(row);
+    }
+
+    if (turretDmg > 0) {
+      const pct = totalDmg > 0 ? Math.round((turretDmg / totalDmg) * 100) : 0;
+      const row = document.createElement('div');
+      row.className = 'damage-stat-item';
+      row.innerHTML = `
+        <span>🗼 戰術砲塔</span>
+        <strong>${turretDmg.toLocaleString()} (${pct}%)</strong>
       `;
       dmgList.appendChild(row);
     }

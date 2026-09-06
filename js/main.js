@@ -720,7 +720,7 @@ class Game {
       const t = this.turrets[i];
 
       t.update(dt, this.enemies, (target, dmg) => {
-        this.damageEnemy(target, dmg, 1, t.x, t.y);
+        this.damageEnemy(target, dmg, 1, t.x, t.y, 'turret');
         sound.playShoot();
       });
 

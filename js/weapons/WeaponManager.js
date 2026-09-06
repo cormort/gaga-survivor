@@ -21,6 +21,10 @@ export class WeaponManager {
     // 不會執行 → 佇列自然凍結；重開新局時舊 manager 直接棄置，不會有殘留射擊。
     this.delayed = [];
 
+    // 傭兵部隊與防禦砲塔獨立傷害統計
+    this.mercTotalDamage = 0;
+    this.turretTotalDamage = 0;
+
     // 初始武器由角色決定
     this.addWeapon(player.character.startWeapon || 'kunai');
   }
@@ -56,22 +60,26 @@ export class WeaponManager {
     if (!this.weapons.has(baseWeaponId)) return;
     const old = this.weapons.get(baseWeaponId);
 
-    // 替換為超武
+    // 彩鴿式雙武合成：配方是另一把武器 → 一併消耗，傷害加總繼承
+    const baseDef = WEAPONS[baseWeaponId];
+    const partnerId = baseDef ? baseDef.pairPassive : null;
+    const partnerDef = partnerId ? WEAPONS[partnerId] : null;
+    let partnerDmg = 0;
+    if (partnerDef && !partnerDef.isEvo && this.weapons.has(partnerId)) {
+      const partnerItem = this.weapons.get(partnerId);
+      if (partnerItem) partnerDmg = partnerItem.totalDamage || 0;
+      this.weapons.delete(partnerId);
+    }
+
+    // 替換為超武 (繼承主武器與副手武器之累計總傷害)
     this.weapons.delete(baseWeaponId);
     this.weapons.set(evoWeaponId, {
       id: evoWeaponId,
       level: 1,
       cooldownTimer: 0,
       isEvo: true,
-      totalDamage: old.totalDamage,
+      totalDamage: old.totalDamage + partnerDmg,
     });
-
-    // 彩鴿式雙武合成：配方是另一把武器 → 一併消耗，空出兩個武器槽
-    const baseDef = WEAPONS[baseWeaponId];
-    const partnerDef = baseDef ? WEAPONS[baseDef.pairPassive] : null;
-    if (partnerDef && !partnerDef.isEvo && this.weapons.has(baseDef.pairPassive)) {
-      this.weapons.delete(baseDef.pairPassive);
-    }
 
     sound.playEvoFanfare();
   }
@@ -467,6 +475,14 @@ export class WeaponManager {
   }
 
   recordDamage(weaponId, amount) {
+    if (weaponId === 'merc') {
+      this.mercTotalDamage += amount;
+      return;
+    }
+    if (weaponId === 'turret') {
+      this.turretTotalDamage += amount;
+      return;
+    }
     const item = this.weapons.get(weaponId);
     if (item) {
       item.totalDamage += amount;
