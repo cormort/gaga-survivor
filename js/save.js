@@ -15,9 +15,12 @@ export const MODE_IDS = ['survivor', 'defense'];
 function blank() {
   return {
     version: VERSION,
-    dna: 0,                 // 局外貨幣「基因密鑰」(局內金幣只用於砲塔等戰場消耗)
+    dna: 0,                 // 局外貨幣「基因密鑰」(天賦、黑市、裝備重鑄)
+    gold: 0,                // 跨局累積「特工金幣」(黑市補給、戰術興奮劑、設施升級)
+    boosters: [],           // 下局出擊前啟用的戰術興奮劑清單
+    stashCap: STASH_CAP,    // 倉庫容量上限 (可於黑市升級擴充)
     talents: {},            // 天賦樹等級 (基因強化)
-    stash: [],              // 打寶倉庫 (最多 STASH_CAP 件)
+    stash: [],              // 打寶倉庫 (最多 stashCap 件)
     equipped: {},           // 已穿裝備 { slotKey: itemId }
     unlocked: { survivor: ['street'], defense: ['street'] }, // 已解鎖關卡 (依模式)
     unlockedChars: ['duck'], // 已解鎖特工
@@ -79,6 +82,9 @@ function ensureDefaults(d) {
   for (const slot of SLOT_ORDER) {
     if (d.equipped[slot] && !d.stash.some((it) => it.id === d.equipped[slot])) delete d.equipped[slot];
   }
+  if (typeof d.gold !== 'number') d.gold = 0;
+  if (!Array.isArray(d.boosters)) d.boosters = [];
+  if (typeof d.stashCap !== 'number') d.stashCap = STASH_CAP;
   if (!d.settings || typeof d.settings !== 'object') d.settings = {};
   d.settings = { sfx: 1, bgm: 0.8, ...d.settings };
   // 舊存檔展開時會把自己的 version 蓋回來，這裡收尾補正，
@@ -166,8 +172,58 @@ export const save = {
   },
 
   // ----- 打寶倉庫 -----
+  getStashCap() {
+    return this.data.stashCap || STASH_CAP;
+  },
+
   stashFull() {
-    return this.data.stash.length >= STASH_CAP;
+    return this.data.stash.length >= this.getStashCap();
+  },
+
+  // step / maxCap 一律由呼叫端傳 (定義在 shop.js，別在這裡放預設值造成兩處漂移)
+  expandStash(step, maxCap) {
+    const curr = this.getStashCap();
+    if (curr >= maxCap) return false;
+    this.data.stashCap = Math.min(maxCap, curr + step);
+    this.flush();
+    return true;
+  },
+
+  // ----- 貨幣與戰術戰備 (特工黑市) -----
+  addGold(n) {
+    this.data.gold = Math.max(0, (this.data.gold || 0) + Math.floor(n));
+    this.flush();
+    return this.data.gold;
+  },
+
+  spend(costGold = 0, costDna = 0) {
+    const currGold = this.data.gold || 0;
+    const currDna = this.data.dna || 0;
+    if (currGold < costGold || currDna < costDna) return false;
+    this.data.gold = currGold - costGold;
+    this.data.dna = currDna - costDna;
+    this.flush();
+    return true;
+  },
+
+  hasBooster(id) {
+    return Array.isArray(this.data.boosters) && this.data.boosters.includes(id);
+  },
+
+  addBooster(id) {
+    if (!Array.isArray(this.data.boosters)) this.data.boosters = [];
+    if (!this.data.boosters.includes(id)) {
+      this.data.boosters.push(id);
+      this.flush();
+    }
+    return true;
+  },
+
+  consumeBoosters() {
+    const active = Array.isArray(this.data.boosters) ? [...this.data.boosters] : [];
+    this.data.boosters = [];
+    this.flush();
+    return active;
   },
 
   addItem(item) {
@@ -268,11 +324,13 @@ export const save = {
     return true;
   },
 
-  // 單局結算：回傳這場拿到多少 DNA、是否破紀錄、是否解鎖新關卡
-  // skipProgress=true (每日挑戰) 時只發 DNA，不寫該關最佳紀錄、不解鎖下一關
-  recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null, skipProgress = false, modeId = 'survivor' }) {
+  // 單局結算：回傳這場拿到多少 DNA 與金幣、是否破紀錄、是否解鎖新關卡
+  // skipProgress=true (每日挑戰) 時只發 DNA/金幣，不寫該關最佳紀錄、不解鎖下一關
+  recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null, skipProgress = false, modeId = 'survivor', gold = 0 }) {
     const dna = Math.max(1, Math.round((time / 10 + kills / 20 + level * 2) * dnaMult * (cleared ? 1.5 : 1)));
+    const runGold = Math.max(0, Math.floor(gold));
     this.data.dna += dna;
+    this.data.gold = (this.data.gold || 0) + runGold;
 
     if (!skipProgress) {
       if (!this.data.best[modeId]) this.data.best[modeId] = {};

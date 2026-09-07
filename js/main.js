@@ -22,7 +22,9 @@ import { metaBonuses, upgradeKeyOf } from './meta.js';
 import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, salvageValue, RARITIES } from './items.js';
 import { MODES, MODE_ORDER, getMode } from './modes.js';
 import { Core } from './entities/Core.js';
+import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXPANSION_STEP } from './shop.js';
 
+const MAX_ENEMIES = 240; // 場上敵人硬上限 (孵化/裂解都受限)
 // 核心外圈實際擠得下的同時攻擊數 (半徑 46 的六角形一圈約十幾隻)
 const CORE_MAX_ATTACKERS = 16;
 
@@ -55,6 +57,7 @@ class Game {
 
     // 實體清單
     this.enemies = [];
+    this._pendingSpawns = [];
     this.enemyProjectiles = [];
     this.dropItems = [];
     this.turrets = [];
@@ -127,7 +130,63 @@ class Game {
     this.refreshModeSelect();
     this.refreshCharSelect();
     this.refreshLevelSelect();
-    this.ui.updateDnaChip(save.data.dna);
+    this.ui.updateDnaChip(save.data.dna, save.data.gold);
+
+    // 特工黑市 (Shop)
+    document.getElementById('btn-shop')?.addEventListener('click', () => {
+      sound.playGem();
+      const buy = (cur, costGold, costDna, onPaid) => {
+        if (cur === 'gold' ? save.data.gold < costGold : save.data.dna < costDna) {
+          this.ui.sayStatus(`${cur === 'gold' ? '金幣' : 'DNA'} 不足！`, true);
+          sound.playHurt();
+          return;
+        }
+        save.spend(cur === 'gold' ? costGold : 0, cur === 'dna' ? costDna : 0);
+        sound.playEvoFanfare();
+        this.ui.updateDnaChip(save.data.dna, save.data.gold);
+        onPaid();
+        this.ui.rebuildShopView(save);
+      };
+
+      this.ui.openShopModal(save, {
+        onBuyCrate: (crateKey, currency) => {
+          const crate = SHOP_CRATES[crateKey];
+          if (!crate) return;
+          if (save.stashFull()) {
+            this.ui.sayStatus('倉庫已滿，請先清理或擴充倉庫！', true);
+            sound.playHurt();
+            return;
+          }
+          buy(currency, crate.costGold, crate.costDna, () => {
+            const item = crate.roll();
+            save.addItem(item);
+            this.ui.sayStatus(`成功開啟 ${crate.name}！獲得【${item.rarity.toUpperCase()}】特工裝備！`);
+          });
+        },
+        onBuyBooster: (boosterKey, currency) => {
+          const booster = SHOP_BOOSTERS[boosterKey];
+          if (!booster) return;
+          if (save.hasBooster(boosterKey)) {
+            this.ui.sayStatus('該戰術興奮劑已就緒，將於下局自動生效！', true);
+            return;
+          }
+          buy(currency, booster.costGold, booster.costDna, () => {
+            save.addBooster(boosterKey);
+            this.ui.sayStatus(`戰備完成：${booster.name} 已裝備，將於下局生效！`);
+          });
+        },
+        onExpandStash: (currency) => {
+          if (save.getStashCap() >= MAX_STASH_CAP) {
+            this.ui.sayStatus('倉庫已擴建至最大容量！', true);
+            return;
+          }
+          buy(currency, STASH_EXPAND_COST.costGold, STASH_EXPAND_COST.costDna, () => {
+            save.expandStash(STASH_EXPANSION_STEP, MAX_STASH_CAP);
+            this.ui.sayStatus(`特工倉庫擴充成功！當前容量上限：${save.getStashCap()}`);
+          });
+        },
+      });
+    });
 
     // 基因強化 (天賦樹)
     document.getElementById('btn-talents').addEventListener('click', () => {
@@ -235,11 +294,22 @@ class Game {
         this.state = 'PAUSED';
         sound.pauseBGM();
         this.ui.pauseBtn.textContent = '▶️';
+        this.ui.quitBtn?.classList.remove('hidden');
       } else if (this.state === 'PAUSED') {
         this.state = 'PLAYING';
         sound.resumeBGM();
         this.ui.pauseBtn.textContent = '⏸️';
+        this.ui.quitBtn?.classList.add('hidden');
       }
+    });
+
+    // 放棄任務 (暫停時可見)：以「陣亡」結算後回主選單
+    this.ui.quitBtn?.addEventListener('click', () => {
+      if (this.state !== 'PAUSED') return;
+      if (!confirm('確定要放棄本次任務？（將以失敗結算）')) return;
+      this.ui.quitBtn.classList.add('hidden');
+      this.handleGameOver(false);
+      this.returnToMenu();
     });
 
     // 佈署砲塔 (鍵盤 B / HUD 按鈕，行動端用按鈕)
@@ -608,6 +678,7 @@ class Game {
     this.ui.startScreen.classList.remove('hidden');
 
     this.enemies = [];
+    this._pendingSpawns = [];
     this.enemyProjectiles = [];
     this.dropItems = [];
     this.turrets = [];
@@ -625,7 +696,8 @@ class Game {
     this.ui.updateBossHUD(null);
     this.ui.updateHUD(this.player, 0, 0, 0);
     this.ui.pauseBtn.textContent = '⏸️';
-    this.ui.updateDnaChip(save.data.dna);
+    this.ui.quitBtn?.classList.add('hidden');
+    this.ui.updateDnaChip(save.data.dna, save.data.gold);
     this.refreshModeSelect();
     this.refreshCharSelect();
     this.refreshLevelSelect();
@@ -691,6 +763,31 @@ class Game {
     this.player.modeDmgMul = this.mode.weaponMul;
     this.weaponManager.applyPassives();
 
+    // 戰術興奮劑 (單局戰備加成) 注入套用
+    // 只讀不消耗：真正扣除留到 handleGameOver，開局秒退/放棄才不會白白吃掉戰備
+    const activeBoosters = [...(save.data.boosters || [])];
+    if (activeBoosters.length > 0) {
+      for (const bId of activeBoosters) {
+        if (bId === 'speed_stim') {
+          this.player.speedMultiplier += 0.15;
+          this.player.baseSpeedMul += 0.15;
+        } else if (bId === 'pierce_ammo') {
+          this.player.bonusPierce = (this.player.bonusPierce || 0) + 1;
+        } else if (bId === 'fortune_magnet') {
+          this.player.magnetMultiplier += 0.5;
+          this.player.baseMagnet += 0.5;
+          this.metaGoldMul = (this.metaGoldMul || 1) * 1.3;
+        } else if (bId === 'frenzy_core') {
+          this.player.metaCrit = (this.player.metaCrit || 0) + 0.10;
+          this.player.metaCritDmg = (this.player.metaCritDmg || 0) + 0.25;
+        } else if (bId === 'vitality_shield') {
+          this.player.shield = 100;
+          this.player.maxShield = 100;
+        }
+      }
+      this.ui.sayStatus(`💉 戰術興奮劑已生效！(${activeBoosters.length} 項戰備)`);
+    }
+
     // 每日挑戰詞條套用
     if (this.isDaily && this.dailyConfig) {
       for (const mod of this.dailyConfig.modifiers) {
@@ -705,6 +802,7 @@ class Game {
     this.lowHpWarned = false;
     this.particles.clear();
     this.enemies = [];
+    this._pendingSpawns = [];
     this.enemyProjectiles = [];
     this.dropItems = [];
     this.turrets = [];
@@ -1357,10 +1455,8 @@ class Game {
     // 守塔模式：雜兵朝基地核心進攻；Boss 仍鎖玩家 (技能全以玩家為原點，且核心撐不住 Boss)
     const mobTarget = this.core && this.mode.enemyTarget === 'core' ? this.core : this.player;
     for (const enemy of this.enemies) {
-      enemy.update(
-        dt,
-        enemy.isBoss ? this.player : mobTarget,
-        (boomer) => {
+      enemy.update(dt, enemy.isBoss ? this.player : mobTarget, {
+        onExplode: (boomer) => {
           // 自爆蟲引爆
           this.particles.createExplosion(boomer.x, boomer.y, 75);
           sound.playExplosion();
@@ -1370,9 +1466,10 @@ class Game {
             this.camera.shake = 8;
           }
         },
-        (boss, act) => this.handleBossSkill(boss, act),
-        (shooter, projData) => this.spawnEnemyProjectile(shooter, projData)
-      );
+        onBossSkill: (boss, act) => this.handleBossSkill(boss, act),
+        onShoot: (shooter, projData) => this.spawnEnemyProjectile(shooter, projData),
+        onHatch: (e) => this.spawnHatchling(e),
+      });
 
       // Boss 引力漩渦吸附判定
       if (enemy.isBoss && enemy.vortexTimer > 0) {
@@ -1446,6 +1543,12 @@ class Game {
         return;
       }
       this.ui.updateCoreHUD(this.core);
+    }
+
+    // 迴圈中孵化的新怪統一在這裡入場 (下一幀才開始行動)
+    if (this._pendingSpawns.length > 0) {
+      this.enemies.push(...this._pendingSpawns);
+      this._pendingSpawns.length = 0;
     }
 
     // 4.6 傭兵 AI (跟隨/索敵/被啃)
@@ -1697,7 +1800,7 @@ class Game {
         this.spawnDropItem(enemy);
 
         // 孢子母體死亡裂解成幼體 (沿用母體的血量成長係數)
-        if (enemy.splitInto && this.enemies.length < 240) {
+        if (enemy.splitInto && this.enemies.length < MAX_ENEMIES) {
           const hpMul = enemy.maxHp / ENEMY_TYPES[enemy.typeKey].hp;
           for (let n = 0; n < enemy.splitCount; n++) {
             const ang = (n / enemy.splitCount) * Math.PI * 2 + Math.random();
@@ -1739,6 +1842,26 @@ class Game {
     if (this.boss && this.boss.isDead) {
       this.boss = this.enemies.find((e) => e.isBoss && !e.isDead) || null;
     }
+  }
+
+  // 增殖胞囊孵化：吐出雜兵 (沿用目前關卡的雜兵血量成長係數)
+  spawnHatchling(hatcher) {
+    if (this.enemies.length + this._pendingSpawns.length >= MAX_ENEMIES) return;
+    const hpMul =
+      (1 + (this.gameTime / 60) * 0.4) * (this.level ? this.level.hpScale : 1);
+    for (let i = 0; i < (hatcher.hatchCount || 1); i++) {
+      const ang = Math.random() * Math.PI * 2;
+      // 不能直接 push 進 this.enemies：孵化是在敵人 update 迴圈裡觸發的，
+      // 當場加入會讓新生怪在同一幀被 update + 撞擊判定 (玩家還沒看到就吃傷害)
+      this._pendingSpawns.push(new Enemy(
+        hatcher.hatchMinion,
+        hatcher.x + Math.cos(ang) * (hatcher.radius + 10),
+        hatcher.y + Math.sin(ang) * (hatcher.radius + 10),
+        hpMul
+      ));
+    }
+    this.particles.createExplosion(hatcher.x, hatcher.y, 46);
+    sound.playExplosion();
   }
 
   spawnDropItem(enemy) {
@@ -1942,6 +2065,7 @@ class Game {
   handleGameOver(isVictory = false) {
     this.state = 'GAME_OVER';
     sound.stopBGM();
+    save.consumeBoosters(); // 本局結算了才真正消耗戰術興奮劑
     const lines = this.player.character.lines;
     const result = save.recordRun(this.level.id, {
       time: this.gameTime,
@@ -1953,6 +2077,7 @@ class Game {
       // 每日挑戰成績獨立 (daily 欄位)：不寫入該關 best、不解鎖下一關，但 DNA 照發
       skipProgress: this.isDaily,
       modeId: this.modeId,
+      gold: this.gold,
     });
 
     if (this.isDaily && this.dailyConfig) {
@@ -2002,6 +2127,7 @@ class Game {
           : this.level.name,
         dna: result.dna,
         totalDna: save.data.dna,
+        totalGold: save.data.gold,
         bestTime: this.isDaily
           ? (save.data.daily && save.data.daily.date === this.dailyConfig?.date ? save.data.daily.bestTime || 0 : 0)
           : (save.bestOf(this.level.id, this.modeId)?.time || 0),
@@ -2394,8 +2520,17 @@ class Game {
     ctx.fillStyle = this._floorGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Soulstone 風格地面質感層：汙漬色塊 + 每關專屬地表紋理 (畫在網格之下)
-    this.drawGroundDetail(ctx, camera, theme, W, H);
+    // Soulstone 風格地面質感層：汙漬色塊 + 每關專屬地表材質 (畫在網格之下)
+    // 材質細節每關烘焙成一片世界錨定的無接縫紋理磚，逐幀只做 drawImage 拼貼
+    const groundTex = this.getGroundTexture(this.level || LEVELS.street);
+    const gTile = groundTex.width;
+    const gOx = -(((camera.x % gTile) + gTile) % gTile);
+    const gOy = -(((camera.y % gTile) + gTile) % gTile);
+    for (let gy = gOy; gy < H; gy += gTile) {
+      for (let gx = gOx; gx < W; gx += gTile) {
+        ctx.drawImage(groundTex, gx, gy);
+      }
+    }
 
     // 細格線 + 每 4 格一條主格線，強化移動感
     const grid = 64;
@@ -2439,54 +2574,193 @@ class Game {
     ctx.restore();
   }
 
-  // 程序化地面質感 (Soulstone 風格參考)：世界座標雜湊決定汙漬與紋理，
-  // 不佔記憶體、不隨相機漂移。紋理種類由 levels.js theme.ground.motif 資料決定。
-  drawGroundDetail(ctx, camera, theme, W, H) {
-    const g = theme && theme.ground;
-    if (!g) return;
-    const key = (this.level || LEVELS.street).id || 'street';
-    let seed = 0;
-    for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
+  // 程序化地面材質烘焙 (Soulstone 風格參考)：世界座標雜湊決定汙漬與材質細節，
+  // 結果烘進一片無接縫紋理磚，之後每幀只做 drawImage。紋理/材質種類由
+  // levels.js theme.ground.motif / material 資料決定。
+  getGroundTexture(level) {
+    const id = (level && level.id) || 'street';
+    if (this._groundTextures && this._groundTextures[id]) return this._groundTextures[id];
+
+    // 世界錨定的接縫消除：先把細節畫在一片比成品大 2×PAD 的畫布上，
+    // 再裁出中央區塊當磚。跨磚界的柔光汙漬光暈照常接合，不會出現週期接縫。
+    const T = 768;            // 成品磚大小
+    const P = 230;            // 出血區 (涵蓋最大光暈半徑與裂縫漂移)
+    const B = T + P * 2;
+
+    const big = document.createElement('canvas');
+    big.width = big.height = B;
+    const bx = big.getContext('2d');
+
+    const g = level.theme && level.theme.ground;
+    const seed = this._groundSeed(id);
     const h = (cx, cy, k) => {
       const s = Math.sin(cx * 127.1 + cy * 311.7 + (seed + k * 74.7)) * 43758.5453;
       return s - Math.floor(s);
     };
     const cell = 240;
-    const c0x = Math.floor(camera.x / cell) - 1;
-    const c0y = Math.floor(camera.y / cell) - 1;
-    const cols = Math.ceil(W / cell) + 3;
-    const rows = Math.ceil(H / cell) + 3;
+    const c0 = Math.floor(-P / cell) - 1;
+    const c1 = Math.ceil((T + P) / cell) + 1;
 
-    for (let ry = 0; ry < rows; ry++) {
-      for (let rx = 0; rx < cols; rx++) {
-        const cx = c0x + rx;
-        const cy = c0y + ry;
-        const x = cx * cell - camera.x;
-        const y = cy * cell - camera.y;
+    for (let cy = c0; cy <= c1; cy++) {
+      for (let cx = c0; cx <= c1; cx++) {
+        const x = cx * cell + P;   // 磚面座標 = 世界座標 + 出血位移
+        const y = cy * cell + P;
+        if (!g) continue;
         const r = h(cx, cy, 1);
 
-        // 1) 大面積柔光汙漬 (約 6 成格子有一團)
+        // 1) 大面積柔光汙漬 (光暈半徑最大 ~192 ≤ P，烘焙後無接縫)
         if (r < 0.6) {
           const p = g.patches[r < 0.25 ? 0 : 1];
           const px = x + r * cell * 2.6 - cell * 0.8;
           const py = y + h(cx, cy, 2) * cell * 2.6 - cell * 0.8;
           const rad = 90 + r * 170;
-          const grad = ctx.createRadialGradient(px, py, 0, px, py, rad);
+          const grad = bx.createRadialGradient(px, py, 0, px, py, rad);
           grad.addColorStop(0, `rgba(${p.c},${p.a})`);
           grad.addColorStop(1, `rgba(${p.c},0)`);
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.arc(px, py, rad, 0, Math.PI * 2);
-          ctx.fill();
+          bx.fillStyle = grad;
+          bx.beginPath();
+          bx.arc(px, py, rad, 0, Math.PI * 2);
+          bx.fill();
         }
 
         // 2) 專屬地表紋理 (每格 1-2 筆)
         const n = 1 + Math.floor(h(cx, cy, 3) * 2);
         for (let k = 0; k < n; k++) {
-          this._groundMotif(ctx, g, x, y, cell, h(cx, cy, 4 + k), h(cx, cy, 9 + k));
+          this._groundMotif(bx, g, x, y, cell, h(cx, cy, 4 + k), h(cx, cy, 9 + k));
+        }
+
+        // 3) 每格的材質微粒 (粗礫 / 刷紋 / 霜雪 / 星塵)
+        if (g.material) this._groundGrain(bx, g, x, y, cell, h(cx, cy, 40), h(cx, cy, 41), h(cx, cy, 42));
+      }
+    }
+
+    // 4) 材質大範圍特徵 (油漬裂縫、鉚釘、熔岩餘燼、星點…)
+    if (g && g.material) this._groundMaterialAccents(bx, g, h, T, P);
+
+    const tile = document.createElement('canvas');
+    tile.width = tile.height = T;
+    tile.getContext('2d').drawImage(big, P, P, T, T, 0, 0, T, T);
+    if (!this._groundTextures) this._groundTextures = {};
+    this._groundTextures[id] = tile;
+    return tile;
+  }
+
+  _groundSeed(id) {
+    let s = 0;
+    for (let i = 0; i < id.length; i++) s = (s * 31 + id.charCodeAt(i)) >>> 0;
+    return s;
+  }
+
+  // 材質微粒：依材質在每個格子內撒低對比顆粒，做出「材質感」而非純色地板
+  _groundGrain(ctx, g, x, y, cell, r1, r2, r3) {
+    const mat = g.material;
+    const dot = (gx, gy, rad, rgb, a) => {
+      ctx.fillStyle = `rgba(${rgb},${a})`;
+      ctx.beginPath();
+      ctx.arc(gx, gy, rad, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    const count = mat === 'snow' ? 7 : mat === 'metal' ? 2 : 2 + Math.floor(r1 * 4);
+    for (let i = 0; i < count; i++) {
+      const gx = x + ((r2 + i * 0.31) % 1) * cell;
+      const gy = y + ((r3 + i * 0.17) % 1) * cell;
+      const rad = 0.6 + ((r2 * 7 + i) % 1) * 1.6;
+      if (mat === 'snow') dot(gx, gy, rad, '235,245,255', 0.1 + r1 * 0.12);
+      else if (mat === 'metal') dot(gx, gy, rad * 0.8, '255,255,255', 0.04);
+      else if (mat === 'lava') dot(gx, gy, rad, '15,8,6', 0.5);
+      else if (mat === 'void') dot(gx, gy, rad * 0.7, '255,255,255', 0.06 + r1 * 0.14);
+      else dot(gx, gy, rad, '0,0,0', 0.1 + r1 * 0.12);   // asphalt 粗礫
+    }
+  }
+
+  // 材質大範圍特徵。中心點都收進「安全帶」([P+m, T-(P+m)])，讓放射狀光暈
+  // 完整落在成品磚內，磚界才不會切到半顆光暈。
+  _groundMaterialAccents(ctx, g, h, T, P) {
+    const mat = g.material;
+    const bandX = (n, a, m, maxR = 10) => P + (maxR + h(n, a, 0) * (T - maxR * 2));
+    const bandY = (n, a, m, maxR = 10) => P + (maxR + h(n, a, 1) * (T - maxR * 2));
+
+    ctx.save();
+    if (mat === 'asphalt') {
+      // 深色柏油縫裂 (短、粗、不走太遠才不會被磚界切段)
+      ctx.lineWidth = 1.3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      for (let n = 0; n < 6; n++) {
+        const x0 = bandX(n, 0, 0, 160);
+        const y0 = bandY(n, 0, 0, 160);
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        for (let i = 1; i < 5; i++) {
+          ctx.lineTo(x0 + (h(n, i, 0) - 0.5) * 52, y0 + (h(n, i, 0) - 0.5) * 52);
+        }
+        ctx.stroke();
+      }
+      // 偶發圓形人孔蓋縫
+      for (let n = 0; n < 2; n++) {
+        const cx = P + (120 + h(n, 22, 0) * (T - 240));
+        const cy = P + (120 + h(n, 23, 0) * (T - 240));
+        ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, 26, 0, Math.PI * 2); ctx.stroke();
+      }
+    } else if (mat === 'metal') {
+      // 水平金屬刷紋 + 鉚釘點列
+      for (let y = 10; y < T + P; y += 84) {
+        const a = Math.max(0, 0.03 + Math.sin(y * 0.25) * 0.02);
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.fillRect(P, P + y, T, 1.2);
+      }
+      for (let n = 0; n < 10; n++) {
+        const px = bandX(n, 30, 0, 20);
+        const py = bandY(n, 30, 0, 20);
+        ctx.fillStyle = 'rgba(200,255,225,0.16)';
+        ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (mat === 'snow') {
+      // 大面積霜雪輝光 (安全帶確保光暈不切到磚界)
+      for (let n = 0; n < 9; n++) {
+        const px = bandX(n, 40, 0, 150);
+        const py = bandY(n, 40, 0, 150);
+        const rad = 60 + h(n, 41, 0) * 90;
+        const gr = ctx.createRadialGradient(px, py, 0, px, py, rad);
+        gr.addColorStop(0, 'rgba(255,255,255,0.06)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (mat === 'lava') {
+      // 熔岩餘燼光點 (帶 glow)
+      for (let n = 0; n < 26; n++) {
+        const px = bandX(n, 50, 0, 8);
+        const py = bandY(n, 50, 0, 8);
+        const rad = 1.2 + h(n, 51, 0) * 2.2;
+        const gr = ctx.createRadialGradient(px, py, 0, px, py, rad * 3.4);
+        gr.addColorStop(0, 'rgba(255,160,50,0.85)');
+        gr.addColorStop(1, 'rgba(255,120,0,0)');
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(px, py, rad * 3.4, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (mat === 'void') {
+      // 虛空星點 (含少量大星帶星芒)
+      for (let n = 0; n < 46; n++) {
+        const px = bandX(n, 60, 0, 6);
+        const py = bandY(n, 60, 0, 6);
+        const sz = h(n, 61, 0);
+        if (sz > 0.45) {
+          const big = sz > 0.85;
+          const rad = big ? 2.6 : 1.4;
+          const gr = ctx.createRadialGradient(px, py, 0, px, py, rad * 3.2);
+          gr.addColorStop(0, 'rgba(230,210,255,0.9)');
+          gr.addColorStop(1, 'rgba(230,210,255,0)');
+          ctx.fillStyle = gr;
+          ctx.beginPath(); ctx.arc(px, py, rad * 3.2, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.beginPath(); ctx.arc(px, py, big ? 1.2 : 0.7, 0, Math.PI * 2); ctx.fill();
         }
       }
     }
+    ctx.restore();
   }
 
   _groundMotif(ctx, g, x, y, cell, r1, r2) {

@@ -44,6 +44,9 @@ export class Player {
     this.rangeMultiplier = 1.0;
     this.magnetMultiplier = 1.0;
     this.hpRegen = 0;
+    this.shield = 0;
+    this.maxShield = 0;
+    this.bonusPierce = 0;
 
     // 狀態
     this.facing = 1; // 1: 右, -1: 左
@@ -191,7 +194,17 @@ export class Player {
   takeDamage(amount) {
     if (this.invulnerableTimer > 0 || this.isDead) return false;
 
-    this.hp -= Math.round(amount * this.damageTakenMul * (1 - (this.metaArmor || 0)));
+    let dmg = Math.round(amount * this.damageTakenMul * (1 - (this.metaArmor || 0)));
+    if (this.shield && this.shield > 0) {
+      if (this.shield >= dmg) {
+        this.shield -= dmg;
+        dmg = 0;
+      } else {
+        dmg -= this.shield;
+        this.shield = 0;
+      }
+    }
+    this.hp -= dmg;
     this.invulnerableTimer = 0.5; // 0.5 秒無敵時間
     sound.playHurt();
 
@@ -306,6 +319,18 @@ export class Player {
     ctx.beginPath();
     ctx.roundRect(barX, barY, Math.max(0, barW * pct), barH, 3);
     ctx.fill();
+
+    // 若有高能納米護盾，在血條上方繪製藍光護盾條
+    if (this.shield > 0) {
+      const shieldPct = Math.min(1, this.shield / (this.maxShield || 100));
+      const sBarY = barY - 6;
+      ctx.fillStyle = 'rgba(6, 10, 18, 0.7)';
+      ctx.fillRect(barX - 1, sBarY - 1, barW + 2, 4);
+      ctx.shadowColor = '#00d2ff';
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = '#00d2ff';
+      ctx.fillRect(barX, sBarY, barW * shieldPct, 3);
+    }
     ctx.restore();
   }
 }

@@ -5,6 +5,7 @@ import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
 import { RARITIES, SLOTS, SLOT_ORDER, itemName, affixText, itemScore, salvageValue, reforgeCost, SETS, LEGENDARY_EFFECTS, legendaryEffectText, FUSION_COST, fuseItems } from '../items.js';
 import { STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
+import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXPANSION_STEP } from '../shop.js';
 
 export class UIManager {
   constructor() {
@@ -44,6 +45,32 @@ export class UIManager {
 
     this.soundBtn = document.getElementById('btn-sound');
     this.pauseBtn = document.getElementById('btn-pause');
+    this.quitBtn = document.getElementById('btn-quit');
+    this.skipChestChk = document.getElementById('chk-skip-chest');
+
+    // 特工黑市 (Shop)
+    this.goldChip = document.getElementById('gold-chip');
+    this.shopModal = document.getElementById('shop-modal');
+    this.shopBody = document.getElementById('shop-body');
+    this.shopDnaVal = document.getElementById('shop-dna-val');
+    this.shopGoldVal = document.getElementById('shop-gold-val');
+    this.shopStashVal = document.getElementById('shop-stash-val');
+    this.shopStatusEl = document.getElementById('shop-status');
+    this.shopTabs = document.querySelectorAll('.shop-tab');
+    this._currentShopTab = 'crates';
+
+    this.shopTabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        this.shopTabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        this._currentShopTab = tab.dataset.tab;
+        if (this._shopSave) this.rebuildShopView(this._shopSave);
+      });
+    });
+
+    document.getElementById('btn-close-shop')?.addEventListener('click', () => {
+      this.shopModal?.classList.add('hidden');
+    });
 
     this.buildBtn = document.getElementById('btn-build');
     this.buildCost = document.getElementById('build-cost');
@@ -99,27 +126,32 @@ export class UIManager {
     this.initSlotPlaceholders();
   }
 
-  // 選單狀態提示 (主選單 + 天賦彈窗各一列；訊息寫在看得見的那一層)
+  // 選單狀態提示 (主選單 + 天賦彈窗 + 黑市各一列；訊息寫在看得見的那一層)
   sayStatus(text, isError = false) {
     clearTimeout(this._statusTimer);
-    for (const el of [this.statusEl, this.talentStatusEl, this.gearStatus]) {
+    for (const el of [this.statusEl, this.talentStatusEl, this.gearStatus, this.shopStatusEl]) {
       if (!el) continue;
       el.textContent = text || '';
       el.classList.toggle('err', !!isError);
     }
     if (text) {
       this._statusTimer = setTimeout(() => {
-        for (const el of [this.statusEl, this.talentStatusEl, this.gearStatus]) {
+        for (const el of [this.statusEl, this.talentStatusEl, this.gearStatus, this.shopStatusEl]) {
           if (el && el.textContent === text) el.textContent = '';
         }
       }, 2600);
     }
   }
 
-  updateDnaChip(dna) {
+  updateDnaChip(dna, gold) {
     const txt = `🧬 ${dna}`;
     if (this.dnaChip) this.dnaChip.textContent = txt;
     if (this.talentDna) this.talentDna.textContent = txt;
+    if (this.shopDnaVal) this.shopDnaVal.textContent = dna;
+    if (gold !== undefined) {
+      if (this.goldChip) this.goldChip.textContent = `🪙 ${gold}`;
+      if (this.shopGoldVal) this.shopGoldVal.textContent = gold;
+    }
   }
 
   // HUD 任務提示列 (文字不變就不碰 DOM，避免每幀寫入)
@@ -183,6 +215,104 @@ export class UIManager {
     this._onTalentInvest = onInvest || null;
     this.rebuildTalentView(save);
     this.talentModal?.classList.remove('hidden');
+  }
+
+  // 特工黑市彈窗
+  openShopModal(save, handlers) {
+    this._shopSave = save;
+    this._shopHandlers = handlers;
+    this.rebuildShopView(save);
+    this.shopModal?.classList.remove('hidden');
+  }
+
+  rebuildShopView(save) {
+    if (!this.shopBody) return;
+    const dna = save.data.dna || 0;
+    const gold = save.data.gold || 0;
+    const stashCap = save.getStashCap();
+    const stashLen = (save.data.stash || []).length;
+
+    if (this.shopDnaVal) this.shopDnaVal.textContent = dna;
+    if (this.shopGoldVal) this.shopGoldVal.textContent = gold;
+    if (this.shopStashVal) this.shopStashVal.textContent = `${stashLen} / ${stashCap}`;
+
+    this.shopBody.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'shop-grid';
+
+    const bal = (cur) => (cur === 'gold' ? gold : dna);
+    const btn = (attr, cur, key, cost, blocked) =>
+      `<button class="shop-buy-btn" data-${attr}="${key}" data-currency="${cur}" ${bal(cur) >= cost && !blocked ? '' : 'disabled'}>${cur === 'gold' ? '🪙' : '🧬'} ${cost}</button>`;
+    // 同一件商品的金幣 / DNA 兩種付款按鈕
+    const group = (attr, key, costs, blocked) => `<div class="shop-btn-group">
+      ${btn(attr, 'gold', key, costs.costGold, blocked)}
+      ${btn(attr, 'dna', key, costs.costDna, blocked)}
+    </div>`;
+
+    if (this._currentShopTab === 'crates') {
+      for (const [key, crate] of Object.entries(SHOP_CRATES)) {
+        const card = document.createElement('div');
+        card.className = 'shop-card';
+        card.style.setProperty('--rarity', crate.color);
+        const stashFull = save.stashFull();
+
+        card.innerHTML = `
+          <div class="shop-card-icon">${crate.icon}</div>
+          <div class="shop-card-title" style="color: ${crate.color}">${crate.name}</div>
+          <div class="shop-card-desc">${crate.desc}</div>
+          ${stashFull ? '<div style="color: #ff0055; font-size: 11px; margin-bottom: 6px; font-weight: bold;">⚠️ 裝備倉庫已滿</div>' : ''}
+          ${group('buy-crate', key, crate, stashFull)}
+        `;
+        grid.appendChild(card);
+      }
+    } else if (this._currentShopTab === 'boosters') {
+      for (const [key, booster] of Object.entries(SHOP_BOOSTERS)) {
+        const card = document.createElement('div');
+        card.className = 'shop-card';
+        const has = save.hasBooster(key);
+
+        card.innerHTML = `
+          <div class="shop-card-icon">${booster.icon}</div>
+          <div class="shop-card-title" style="color: ${booster.color}">${booster.name}</div>
+          <div class="shop-card-desc">${booster.desc}</div>
+          ${has ? '<div class="booster-equipped-badge">✓ 已就緒 (下局生效)</div>' : group('buy-booster', key, booster, has)}
+        `;
+        grid.appendChild(card);
+      }
+    } else if (this._currentShopTab === 'facilities') {
+      const card = document.createElement('div');
+      card.className = 'shop-card';
+      const isMax = stashCap >= MAX_STASH_CAP;
+
+      card.innerHTML = `
+        <div class="shop-card-icon">🏢</div>
+        <div class="shop-card-title" style="color: #4cc9f0">特工倉庫擴建</div>
+        <div class="shop-card-desc">擴充特工裝備庫存容量 +${STASH_EXPANSION_STEP} 格<br>當前容量: <strong>${stashCap}</strong> / 最大: <strong>${MAX_STASH_CAP}</strong></div>
+        ${isMax ? '<div class="booster-equipped-badge">已達最高等級 (MAX)</div>' : group('expand-stash', 'stash', STASH_EXPAND_COST, isMax)}
+      `;
+      grid.appendChild(card);
+    }
+
+    this.shopBody.appendChild(grid);
+
+    // Bind purchase buttons
+    grid.querySelectorAll('[data-buy-crate]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this._shopHandlers?.onBuyCrate(btn.dataset.buyCrate, btn.dataset.currency);
+      });
+    });
+
+    grid.querySelectorAll('[data-buy-booster]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this._shopHandlers?.onBuyBooster(btn.dataset.buyBooster, btn.dataset.currency);
+      });
+    });
+
+    grid.querySelectorAll('[data-expand-stash]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this._shopHandlers?.onExpandStash(btn.dataset.currency);
+      });
+    });
   }
 
   rebuildTalentView(save) {
@@ -306,7 +436,7 @@ export class UIManager {
       }
     }
 
-    // 倉庫清單 (依稀有度與戰力排序)
+    // 倉庫清單 (依種類 / 部位分組，同種類內由高至低降冪排序)
     this.gearCount.textContent = `倉庫 ${stash.length} / ${STASH_CAP}`;
     this.gearCount.classList.toggle('full', stash.length >= STASH_CAP);
     this.gearList.innerHTML = '';
@@ -359,11 +489,24 @@ export class UIManager {
     }
 
     const rank = { mythic: 4, legendary: 3, epic: 2, rare: 1, common: 0 };
+    const slotIdx = (s) => {
+      const i = SLOT_ORDER.indexOf(s);
+      return i >= 0 ? i : SLOT_ORDER.length;
+    };
+    // 種類 (部位) 分組在前，同種類內稀有度→戰力 由高至低
     const sorted = [...stash].sort(
-      (a, b) => (rank[b.rarity] - rank[a.rarity]) || (itemScore(b) - itemScore(a))
+      (a, b) => (slotIdx(a.slot) - slotIdx(b.slot)) || (rank[b.rarity] - rank[a.rarity]) || (itemScore(b) - itemScore(a))
     );
 
+    let lastSlot = null;
     sorted.forEach((item) => {
+      if (item.slot !== lastSlot) {
+        lastSlot = item.slot;
+        const head = document.createElement('div');
+        head.className = 'gear-slot-header';
+        head.textContent = `${SLOTS[item.slot].icon} ${SLOTS[item.slot].name}`;
+        this.gearList.appendChild(head);
+      }
       const isOn = equipped[item.slot] === item.id;
       const reforge = reforgeCost(item);
       const row = document.createElement('div');
@@ -504,6 +647,12 @@ export class UIManager {
 
   // 幸運物資箱抽獎彈窗
   showLuckyChest(count, rewards, onClaim) {
+    // 自動跳過開箱動畫：直接套用獎勵並回遊戲
+    if (this.skipChestChk && this.skipChestChk.checked) {
+      if (onClaim) onClaim();
+      return;
+    }
+
     if (!this.luckyChestModal) return;
     this.luckyChestModal.classList.remove('hidden');
     this.chestCards.innerHTML = '';
@@ -1069,6 +1218,8 @@ export class UIManager {
     document.getElementById('result-level-name').textContent = stats.levelName || '';
     document.getElementById('final-dna').textContent = `+${stats.dna}`;
     document.getElementById('total-dna').textContent = stats.totalDna;
+    const totalGoldEl = document.getElementById('total-gold');
+    if (totalGoldEl) totalGoldEl.textContent = stats.totalGold ?? 0;
 
     const unlockRow = document.getElementById('unlock-notice');
     if (stats.unlockedName) {

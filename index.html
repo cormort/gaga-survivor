@@ -53,6 +53,7 @@
         </button>
         <button id="btn-sound" class="hud-btn" title="切換音效">🔊</button>
         <button id="btn-pause" class="hud-btn" title="暫停遊戲">⏸️</button>
+        <button id="btn-quit" class="hud-btn quit-btn hidden" title="放棄任務回主選單">🚪</button>
       </div>
 
       <!-- 任務提示列：下一波 Boss / 終極首領通關條件 -->
@@ -137,6 +138,7 @@
         <div class="modal-header">
           <h2 class="glow-text chest-title">🎁 特工幸運補給！ 🎁</h2>
           <p id="chest-subtitle" class="subtitle">幸運輪盤揭曉中...</p>
+          <label class="skip-chest-label"><input type="checkbox" id="chk-skip-chest"> 自動跳過開箱動畫</label>
         </div>
         <div id="chest-cards" class="cards-grid chest-cards-grid">
           <!-- 動態生成 1/3/5 張抽獎卡牌 -->
@@ -189,6 +191,29 @@
       </div>
     </div>
 
+    <!-- 特工黑市 (Shop Modal) -->
+    <div id="shop-modal" class="overlay hidden">
+      <div class="modal-content shop-content">
+        <div class="modal-header">
+          <h2 class="glow-text">🛒 特工黑市</h2>
+          <p class="subtitle">消耗跨局金幣與基因密鑰，獲取強大軍備箱、戰術興奮劑與設施擴建</p>
+        </div>
+        <div class="shop-wallet-bar">
+          <div class="wallet-item">🧬 基因密鑰: <strong id="shop-dna-val">0</strong></div>
+          <div class="wallet-item">🪙 特工金幣: <strong id="shop-gold-val">0</strong></div>
+          <div class="wallet-item">🎒 倉庫上限: <strong id="shop-stash-val">30</strong></div>
+        </div>
+        <div id="shop-status" class="menu-status"></div>
+        <div class="shop-tabs">
+          <button class="shop-tab active" data-tab="crates">📦 軍備補給箱</button>
+          <button class="shop-tab" data-tab="boosters">💉 戰術興奮劑</button>
+          <button class="shop-tab" data-tab="facilities">🏢 後勤設施</button>
+        </div>
+        <div id="shop-body" class="shop-body"></div>
+        <button id="btn-close-shop" class="game-btn secondary-btn">關閉黑市</button>
+      </div>
+    </div>
+
     <!-- 開局/開始介面 -->
     <div id="start-screen" class="overlay">
       <div class="start-box">
@@ -209,6 +234,8 @@
         </div>
         <div class="menu-meta">
           <span id="dna-chip" class="dna-chip">🧬 0</span>
+          <span id="gold-chip" class="dna-chip gold-chip">🪙 0</span>
+          <button id="btn-shop" class="game-btn talent-btn shop-btn">🛒 特工黑市</button>
           <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
           <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
           <button id="btn-recipe" class="game-btn talent-btn">✨ 超武配方</button>
@@ -247,6 +274,10 @@
           <div class="stat-row">
             <span>獲得金幣</span>
             <strong id="final-gold">0</strong>
+          </div>
+          <div class="stat-row">
+            <span>金幣總計</span>
+            <strong id="total-gold">0</strong>
           </div>
           <div class="stat-row">
             <span>最高紀錄</span>

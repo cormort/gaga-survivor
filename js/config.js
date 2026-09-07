@@ -429,6 +429,43 @@ export const ENEMY_TYPES = {
       color: '#06d6a0',  // 螢光酸液綠
     },
   },
+  hound: {
+    name: '嗜血獵犬',
+    hp: 32,
+    speed: 165,
+    damage: 9,
+    color: '#b0753b',
+    radius: 12,
+    exp: 2,
+    dash: { every: 2.8, dur: 0.4, mul: 3.2 }, // 追擊型衝刺，會先繞再撲
+  },
+  hatcher: {
+    name: '增殖胞囊',
+    hp: 130,
+    speed: 16,
+    damage: 12,
+    color: '#d5547f',
+    radius: 24,
+    exp: 5,
+    damageTakenMul: 0.8,
+    hatchMinion: 'walker', // 定時孵化雜兵的生物巢穴
+    hatchInterval: 6,
+    hatchCount: 2,
+    splitInto: 'sporeling', // 死亡裂解成幼體
+    splitCount: 3,
+  },
+  chimera: {
+    name: '攻城巨像',
+    hp: 300,
+    speed: 42,
+    damage: 24,
+    color: '#8c8c92',
+    radius: 30,
+    exp: 7,
+    damageTakenMul: 0.55, // 厚重裝甲，靠穿透或爆發處理
+    splitInto: 'brute', // 爆開時掉出兩隻生化巨漢
+    splitCount: 2,
+  },
   boss: {
     name: '毀滅巨神‧暴君',
     hp: 1400,

@@ -204,6 +204,8 @@ export class WeaponManager {
   mkProjectile(options, crit = false) {
     if (this.player.legendaryEffects?.includes('pierce_all') && options.pierce !== undefined) {
       options.pierce = 999;
+    } else if (this.player.bonusPierce && options.pierce !== undefined && options.pierce < 900) {
+      options.pierce += this.player.bonusPierce;
     }
     const p = new Projectile(options);
     p.isCrit = crit;

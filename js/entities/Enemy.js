@@ -1,4 +1,4 @@
-// 怪物實體類別 (普通殭屍、突襲蝙蝠、生化巨漢、自爆蟲、Boss 暴君)
+// 怪物實體類別 (普通殭屍、突襲蝙蝠、生化巨漢、自爆蟲、噴吐者、衝刺獵犬、孵化胞囊、攻城巨像、Boss 暴君)
 
 import { ENEMY_TYPES, ELITE_AFFIXES } from '../config.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
@@ -7,6 +7,7 @@ export class Enemy {
   constructor(typeKey, x, y, hpMultiplier = 1) {
     const config = ENEMY_TYPES[typeKey] || ENEMY_TYPES.walker;
     this.typeKey = typeKey;
+    this.skin = null; // Boss 關卡主題外觀 (生成後由 Spawner 依 def.skin 覆寫)
     this.name = config.name;
     this.maxHp = config.hp * hpMultiplier;
     this.hp = this.maxHp;
@@ -16,6 +17,9 @@ export class Enemy {
     this.color = config.color;
     this.exp = config.exp;
     this.isBoss = !!config.isBoss;
+    // 外觀變異：一般怪隨機套一組烘焙好的尺寸變體，成群時不會看起來都一樣
+    // (Boss 用關卡主題 skin，不套尺寸抖動)
+    this.spriteVariant = this.isBoss ? 0 : Math.floor(Math.random() * 3);
     this.explodes = !!config.explodes;
     this.dash = config.dash || null;          // 狂奔感染者：週期衝刺
     this.splitInto = config.splitInto || null; // 孢子母體：死亡裂解
@@ -24,6 +28,10 @@ export class Enemy {
     this.dashLeft = 0;
     this.ranged = config.ranged ? { ...config.ranged } : null; // 遠程噴吐怪
     this.shootTimer = this.ranged ? Math.random() * this.ranged.cd : 0;
+    this.hatchMinion = config.hatchMinion || null; // 增殖胞囊：定時孵化雜兵
+    this.hatchInterval = config.hatchInterval || 0;
+    this.hatchCount = config.hatchCount || 1;
+    this.hatchTimer = this.hatchMinion ? this.hatchInterval * (0.6 + Math.random() * 0.4) : 0;
 
     // 精英詞綴 (由 Spawner 隨機賦予；Boss 不會有)
     this.isElite = false;
@@ -78,7 +86,8 @@ export class Enemy {
   }
 
   // target 是要追擊的對象：生存者模式為玩家，守塔模式的雜兵為基地核心 (兩者都有 x/y)
-  update(dt, target, onExplodeCallback = null, onBossSkill = null, onEnemyShoot = null) {
+  // cb: { onExplode, onBossSkill, onShoot, onHatch }，缺的就當作沒有
+  update(dt, target, cb = {}) {
     if (this.isDead) return;
 
     // 極寒減速倒數 (遊戲時間驅動：暫停/升級/開箱時同步凍結)
@@ -96,7 +105,7 @@ export class Enemy {
     let moveY = 0;
 
     if (this.isBoss) {
-      this.updateBoss(dt, dx, dy, dist, onBossSkill);
+      this.updateBoss(dt, dx, dy, dist, cb.onBossSkill);
     } else if (this.ranged) {
       // 遠程怪邏輯：在射程外保持距離開火，太近則後撤
       const desiredRange = this.ranged.range;
@@ -116,10 +125,10 @@ export class Enemy {
       this.shootTimer += dt;
       if (this.shootTimer >= this.ranged.cd) {
         this.shootTimer = 0;
-        if (dist > 0 && dist <= desiredRange * 1.6 && onEnemyShoot) {
+        if (dist > 0 && dist <= desiredRange * 1.6 && cb.onShoot) {
           const pDirX = dx / dist;
           const pDirY = dy / dist;
-          onEnemyShoot(this, {
+          cb.onShoot(this, {
             x: this.x + pDirX * (this.radius + 6),
             y: this.y + pDirY * (this.radius + 6),
             vx: pDirX * this.ranged.speed,
@@ -144,7 +153,16 @@ export class Enemy {
       this.fuseTimer += dt;
       if (this.fuseTimer >= 0.8) {
         this.isDead = true;
-        if (onExplodeCallback) onExplodeCallback(this);
+        cb.onExplode?.(this);
+      }
+    }
+
+    // 增殖胞囊邏輯：定時孵化雜兵 (孵化中的小小吞嚥動畫可從 animTimer 推得)
+    if (this.hatchMinion && !this.isDead) {
+      this.hatchTimer -= dt;
+      if (this.hatchTimer <= 0) {
+        this.hatchTimer = this.hatchInterval;
+        cb.onHatch?.(this);
       }
     }
 
@@ -238,11 +256,14 @@ export class Enemy {
     return this.isDead;
   }
 
-  // sprite 變體 (自爆點火 / Boss 衝鋒各有一組烘焙好的圖)
+  // sprite 變體：Boss 用關卡主題 skin (一般/衝鋒/最終)，雜兵用尺寸抖動
   get spriteKey() {
     if (this.explodes && this.fuseTimer > 0) return 'boomer_armed';
-    if (this.isBoss && this.isCharging) return 'boss_charging';
-    return this.typeKey;
+    if (this.isBoss) {
+      const base = this.skin || 'boss';
+      return this.isCharging ? base + '_charging' : base;
+    }
+    return this.spriteVariant > 0 ? this.typeKey + ':v' + this.spriteVariant : this.typeKey;
   }
 
   draw(ctx, camera) {
