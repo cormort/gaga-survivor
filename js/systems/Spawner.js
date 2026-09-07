@@ -2,7 +2,7 @@
 // 無盡模式 (endless) 是唯一例外：波次間隔/數量隨時間成長，Boss 固定 90 秒輪播。
 
 import { Enemy } from '../entities/Enemy.js';
-import { LEVELS, currentWave, pickEnemy, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL } from '../levels.js';
+import { LEVELS, currentWave, pickEnemy, enemyScale, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL } from '../levels.js';
 import { GAME_CONFIG } from '../config.js';
 import { ELITE_AFFIXES } from '../config.js';
 
@@ -66,12 +66,11 @@ export class Spawner {
 
     if (enemies.length >= MAX_ENEMIES) return;
 
-    // 雜兵血量隨時間與關卡難度成長 (無盡模式額外疊時間係數)
-    const hpMultiplier =
-      (1 + (gameTime / 60) * 0.4) * level.hpScale * (level.id === 'endless' ? 1 + gameTime / 300 : 1);
+    // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)
+    const scale = enemyScale(gameTime, level);
     for (let i = 0; i < batch; i++) {
       const pos = this.getSpawnPosition(player, 480 + Math.random() * 120);
-      const e = new Enemy(pickEnemy(wave.pool), pos.x, pos.y, hpMultiplier);
+      const e = new Enemy(pickEnemy(wave.pool), pos.x, pos.y, scale.hp, scale.dmg);
       this.rollElite(e, gameTime);
       enemies.push(e);
     }

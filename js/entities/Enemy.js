@@ -4,7 +4,7 @@ import { ENEMY_TYPES, ELITE_AFFIXES } from '../config.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
 
 export class Enemy {
-  constructor(typeKey, x, y, hpMultiplier = 1) {
+  constructor(typeKey, x, y, hpMultiplier = 1, dmgMultiplier = 1) {
     const config = ENEMY_TYPES[typeKey] || ENEMY_TYPES.walker;
     this.typeKey = typeKey;
     this.skin = null; // Boss 關卡主題外觀 (生成後由 Spawner 依 def.skin 覆寫)
@@ -12,7 +12,7 @@ export class Enemy {
     this.maxHp = config.hp * hpMultiplier;
     this.hp = this.maxHp;
     this.speed = config.speed;
-    this.damage = config.damage;
+    this.damage = Math.round(config.damage * dmgMultiplier);
     this.radius = config.radius;
     this.color = config.color;
     this.exp = config.exp;

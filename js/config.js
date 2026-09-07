@@ -124,7 +124,7 @@ export const WEAPONS = {
     description: '無需停歇！極限暴風加特林式連續全自動追蹤發射！',
     isEvo: true,
     baseWeapon: 'kunai',
-    baseDamage: 40,
+    baseDamage: 46,  // 40 時單體 DPS 反而略低於滿級苦無
     baseCooldown: 0.12, // 極致機槍射速
     speed: 800,
     projectiles: 1,
@@ -137,7 +137,7 @@ export const WEAPONS = {
     description: '守護輪盤永不收回！形成絕對防禦圈並產生擊退風暴。',
     isEvo: true,
     baseWeapon: 'guardian',
-    baseDamage: 32,
+    baseDamage: 60,  // 傷害節奏改由 rehit (0.4s) 控制，單刀要拉高才撐得起超武定位
     baseCooldown: 0, // 無 CD，永久旋轉
     duration: 999999,
     spinSpeed: 5.5,
@@ -151,8 +151,8 @@ export const WEAPONS = {
     description: '發射全螢幕震顫核聚變魚雷，毀天滅地級大範圍爆破。',
     isEvo: true,
     baseWeapon: 'rocket',
-    baseDamage: 120,
-    baseCooldown: 1.8,
+    baseDamage: 150,
+    baseCooldown: 1.2,  // 1.8 時單體 DPS 反而低於滿級火箭
     speed: 460,
     explosionRadius: 220,
     count: 2,
@@ -164,7 +164,7 @@ export const WEAPONS = {
     description: '藍色高溫烈火將地面覆蓋成火海，擴散並迅速融化怪群。',
     isEvo: true,
     baseWeapon: 'molotov',
-    baseDamage: 24,
+    baseDamage: 40,  // 滿級燃燒瓶每跳就是 24，超武不能原地踏步
     baseCooldown: 2.0,
     duration: 5.5,
     radius: 140,
@@ -174,13 +174,12 @@ export const WEAPONS = {
     id: 'plasma_storm',
     name: '狂雷星暴 (超武)',
     icon: '🌩️💥',
-    description: '漫天落雷連環轟炸，並觸發連鎖電弧擴散爆裂。',
+    description: '漫天落雷連環轟炸，落點更密、單發威力翻倍。',
     isEvo: true,
     baseWeapon: 'lightning',
     baseDamage: 75,
     baseCooldown: 1.1,
     strikes: 6,
-    chainHits: 2,
   },
   quantum_sphere: {
     id: 'quantum_sphere',
@@ -260,7 +259,7 @@ export const WEAPONS = {
     description: '環鋸化為永續運轉的奇點軌道，範圍更大、轉速更快，切割一切近身之物。',
     isEvo: true,
     baseWeapon: 'orbit_saw',
-    baseDamage: 38,
+    baseDamage: 70,  // 同上：軌道更貼身、範圍更小，單刀給得比守護力場高
     baseCooldown: 0,
     duration: 999999,
     spinSpeed: 6.2,

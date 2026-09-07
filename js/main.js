@@ -15,7 +15,7 @@ import { ParticleSystem } from './systems/ParticleSystem.js';
 import { UIManager } from './systems/UI.js';
 import { sound } from './audio.js';
 import { CHARACTERS, CHARACTER_ORDER } from './characters.js';
-import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy, getDailyChallenge } from './levels.js';
+import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy, enemyScale, getDailyChallenge } from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
@@ -1802,13 +1802,15 @@ class Game {
         // 孢子母體死亡裂解成幼體 (沿用母體的血量成長係數)
         if (enemy.splitInto && this.enemies.length < MAX_ENEMIES) {
           const hpMul = enemy.maxHp / ENEMY_TYPES[enemy.typeKey].hp;
+          const dmgMul = enemyScale(this.gameTime, this.level).dmg;
           for (let n = 0; n < enemy.splitCount; n++) {
             const ang = (n / enemy.splitCount) * Math.PI * 2 + Math.random();
             this.enemies.push(new Enemy(
               enemy.splitInto,
               enemy.x + Math.cos(ang) * 26,
               enemy.y + Math.sin(ang) * 26,
-              hpMul
+              hpMul,
+              dmgMul
             ));
           }
         }
@@ -1847,8 +1849,7 @@ class Game {
   // 增殖胞囊孵化：吐出雜兵 (沿用目前關卡的雜兵血量成長係數)
   spawnHatchling(hatcher) {
     if (this.enemies.length + this._pendingSpawns.length >= MAX_ENEMIES) return;
-    const hpMul =
-      (1 + (this.gameTime / 60) * 0.4) * (this.level ? this.level.hpScale : 1);
+    const scale = enemyScale(this.gameTime, this.level);
     for (let i = 0; i < (hatcher.hatchCount || 1); i++) {
       const ang = Math.random() * Math.PI * 2;
       // 不能直接 push 進 this.enemies：孵化是在敵人 update 迴圈裡觸發的，
@@ -1857,7 +1858,8 @@ class Game {
         hatcher.hatchMinion,
         hatcher.x + Math.cos(ang) * (hatcher.radius + 10),
         hatcher.y + Math.sin(ang) * (hatcher.radius + 10),
-        hpMul
+        scale.hp,
+        scale.dmg
       ));
     }
     this.particles.createExplosion(hatcher.x, hatcher.y, 46);

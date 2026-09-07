@@ -4,6 +4,10 @@ import { WEAPONS, PASSIVES } from '../config.js';
 import { Projectile } from '../entities/Projectile.js';
 import { sound } from '../audio.js';
 
+// 同一隻敵人被同一個投射物再次命中的間隔 (秒)
+const ORBIT_REHIT = 0.4;   // 環繞刀刃：每目標 DPS ≈ 單刀傷害 / 0.4
+const SOCCER_REHIT = 0.5;  // 彈跳球：讓「彈跳次數」真的能轉成傷害
+
 export class WeaponManager {
   constructor(player) {
     this.player = player;
@@ -309,11 +313,19 @@ export class WeaponManager {
   // 2. 守護輪盤 / 永恆守護力場
   fireGuardian(def, item, damage, crit = false) {
     const fam = def.projType || 'guardian';
-    // 移除同家族的舊環體 (守護輪盤/重力環鋸各自獨立，不會互清)
-    this.projectiles = this.projectiles.filter((p) => p.type !== fam);
-
     const count = def.isEvo ? def.count : def.count[item.level - 1];
     const radius = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier;
+
+    // 超武的環是「永久旋轉」(duration 999999)，冷卻 0 會被夾成 0.08 秒。
+    // 若每次都重建，等於每 0.08 秒把命中清單清空一次 → 每目標 400+ DPS 的失控輸出。
+    // 改成：環還在、且規格沒變 (升等/範圍加成) 就原地留著，傷害節奏交給 rehit 控制。
+    const alive = this.projectiles.filter((p) => p.type === fam && !p.isDead);
+    if (def.isEvo && alive.length === count &&
+        alive[0].damage === damage && Math.abs(alive[0].orbitRadius - radius) < 0.01) {
+      return;
+    }
+    // 移除同家族的舊環體 (守護輪盤/重力環鋸各自獨立，不會互清)
+    this.projectiles = this.projectiles.filter((p) => p.type !== fam);
 
     for (let i = 0; i < count; i++) {
       const angle = (i * 2 * Math.PI) / count;
@@ -332,6 +344,7 @@ export class WeaponManager {
           life: def.duration,
           isEvo: def.isEvo,
           knockback: 4.5,
+          rehit: ORBIT_REHIT,
         }, crit)
       );
     }
@@ -454,6 +467,7 @@ export class WeaponManager {
           life: 8.0,
           isEvo: def.isEvo,
           knockback: 3.5,
+          rehit: SOCCER_REHIT,
         }, crit)
       );
       sound.playShoot();

@@ -251,7 +251,12 @@ export function rerollAffixes(item) {
 export function itemName(item) {
   const setDef = item.setKey ? SETS[item.setKey] : null;
   const setPrefix = setDef ? `[${setDef.name}] ` : '';
-  return `${setPrefix}${RARITIES[item.rarity].name} ${SLOTS[item.slot].name}`;
+  return `${setPrefix}${RARITIES[item.rarity].name} ${SLOTS[item.slot].name} ${ilvlText(item)}`;
+}
+
+// 裝備等級標記：詞條數值 = 基礎隨機值 × ilvl，所以這個數字直接代表這件裝備多強
+export function ilvlText(item) {
+  return `Lv.${(item.ilvl || 1).toFixed(2)}`;
 }
 
 export function legendaryEffectText(effectKey) {

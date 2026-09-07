@@ -2,7 +2,7 @@
 
 import { WEAPONS, PASSIVES, GAME_CONFIG } from '../config.js';
 import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
-import { RARITIES, SLOTS, SLOT_ORDER, itemName, affixText, itemScore, salvageValue, reforgeCost, SETS, LEGENDARY_EFFECTS, legendaryEffectText, FUSION_COST, fuseItems } from '../items.js';
+import { RARITIES, SLOTS, SLOT_ORDER, itemName, ilvlText, affixText, itemScore, salvageValue, reforgeCost, SETS, LEGENDARY_EFFECTS, legendaryEffectText, FUSION_COST, fuseItems } from '../items.js';
 import { STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXPANSION_STEP } from '../shop.js';
@@ -372,7 +372,7 @@ export class UIManager {
         <div class="gear-slot-icon">${def.icon}</div>
         <div class="gear-slot-name">${def.name}</div>
         ${item
-          ? `<div class="gear-slot-item">${RARITIES[item.rarity].name}</div>
+          ? `<div class="gear-slot-item">${RARITIES[item.rarity].name} <span class="gear-ilvl">${ilvlText(item)}</span></div>
              <div class="gear-slot-affixes">${item.affixes.map(affixText).join('<br>')}</div>
              <button class="gear-mini-btn" data-unequip="${slotKey}">脫下</button>`
           : '<div class="gear-slot-empty">未裝備</div>'}
@@ -531,7 +531,7 @@ export class UIManager {
       row.innerHTML = `
         <span class="gear-row-icon">${SLOTS[item.slot].icon}</span>
         <div class="gear-row-info">
-          <div class="gear-row-name">${setHtml}${RARITIES[item.rarity].name} ${SLOTS[item.slot].name}${isOn ? ' <span class="gear-on">裝備中</span>' : ''}</div>
+          <div class="gear-row-name">${setHtml}${RARITIES[item.rarity].name} ${SLOTS[item.slot].name} <span class="gear-ilvl" title="裝備等級：詞條數值的倍率，深入高難度關卡並撐得越久掉得越高">${ilvlText(item)}</span>${isOn ? ' <span class="gear-on">裝備中</span>' : ''}</div>
           <div class="gear-row-affixes">${item.affixes.length > 0 ? item.affixes.map(affixText).join(' ‧ ') : '無詞條 (可分解)'}</div>
           ${legHtml}
         </div>

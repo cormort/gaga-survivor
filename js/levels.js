@@ -226,6 +226,16 @@ export const ENDLESS_BOSS_CYCLE = []
 
 export const ENDLESS_BOSS_INTERVAL = 90;
 
+// 敵人隨時間 / 關卡難度的成長係數 (Spawner、孵化、裂解共用一份公式)
+// hp 無上限地變厚；dmg 緩升且封頂 1.8×，避免後期只是「磨」而完全沒有威脅感
+export function enemyScale(gameTime, level) {
+  const endless = level && level.id === 'endless';
+  return {
+    hp: (1 + (gameTime / 60) * 0.4) * ((level && level.hpScale) || 1) * (endless ? 1 + gameTime / 300 : 1),
+    dmg: Math.min(1.8, 1 + (gameTime / 60) * 0.1),
+  };
+}
+
 // 依時間取出當前波次設定
 export function currentWave(level, gameTime) {
   for (const w of level.waves) {

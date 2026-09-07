@@ -27,9 +27,11 @@ export class Projectile {
     this.orbitRadius = options.orbitRadius || 70;
     this.spinSpeed = options.spinSpeed || 3.5;
 
-    // 燃燒火海專屬
+    // 持續傷害節奏：火海每 0.25 秒跳一次，環繞刀刃/彈跳球用 rehit 決定多久能再打同一隻
     this.tickTimer = 0;
     this.tickInterval = 0.25;
+    this.rehit = options.rehit || 0;
+    this.seed = Math.random() * 100; // 火焰舌動畫相位，讓每灘火各燒各的
 
     // 火箭專屬
     this.explosionRadius = options.explosionRadius || 80;
@@ -66,6 +68,7 @@ export class Projectile {
         this.orbitAngle += this.spinSpeed * dt;
         this.x = player.x + Math.cos(this.orbitAngle) * this.orbitRadius;
         this.y = player.y + Math.sin(this.orbitAngle) * this.orbitRadius;
+        this.tickRehit(dt);
         break;
 
       case 'rocket':
@@ -85,6 +88,7 @@ export class Projectile {
       case 'soccer':
         this.x += this.vx * dt;
         this.y += this.vy * dt;
+        this.tickRehit(dt); // 不重置的話，一顆球對同一隻怪一輩子只能打一次，彈跳次數等於白給
 
         // 螢幕與世界邊界反彈
         const bounds = GAME_CONFIG.WORLD_BOUNDS;
@@ -105,6 +109,16 @@ export class Projectile {
         this.x += this.vx * dt;
         this.y += this.vy * dt;
         break;
+    }
+  }
+
+  // 每 rehit 秒清空命中清單，讓同一隻敵人能被重複命中 (rehit 為 0 則維持只打一次)
+  tickRehit(dt) {
+    if (this.rehit <= 0) return;
+    this.tickTimer += dt;
+    if (this.tickTimer >= this.rehit) {
+      this.tickTimer = 0;
+      this.hitEnemies.clear();
     }
   }
 
@@ -338,25 +352,77 @@ export class Projectile {
   }
 
   drawFirePool(ctx) {
-    const pulse = 1 + Math.sin(Date.now() * 0.01) * 0.06;
-    const r = this.radius * pulse;
+    const t = Date.now() * 0.003 + this.seed;
+    const r = this.radius;
+    // 藍色煉獄與一般火海只差色溫。火焰的三個關鍵：根部最亮、火舌會歪、舌尖要透明
+    const c = this.isEvo
+      ? { hot: '245,252,255', mid: '70,170,255', cool: '80,30,220', ember: '150,215,255' }
+      : { hot: '255,248,210', mid: '255,145,25', cool: '190,25,0', ember: '255,160,60' };
 
-    const grad = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r);
-    if (this.isEvo) {
-      // 藍色高溫煉獄
-      grad.addColorStop(0, 'rgba(0, 245, 255, 0.85)');
-      grad.addColorStop(0.6, 'rgba(114, 9, 183, 0.55)');
-      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    } else {
-      grad.addColorStop(0, 'rgba(255, 180, 0, 0.8)');
-      grad.addColorStop(0.6, 'rgba(255, 0, 60, 0.45)');
-      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    }
-
-    ctx.fillStyle = grad;
+    // 1. 地上的燃燒油漬 (壓扁橢圓)，火要有附著的地面
+    ctx.save();
+    ctx.scale(1, 0.4);
+    const pool = ctx.createRadialGradient(0, 0, r * 0.1, 0, 0, r);
+    pool.addColorStop(0, `rgba(${c.hot}, 0.55)`);
+    pool.addColorStop(0.45, `rgba(${c.mid}, 0.38)`);
+    pool.addColorStop(1, `rgba(${c.cool}, 0)`);
+    ctx.fillStyle = pool;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+
+    // 2. 火舌：一根根獨立竄動、互相交疊。每根都會左右擺 (lean)，
+    //    漸層從根部的亮白熱一路透明到舌尖 —— 反過來畫就會變成水晶柱。
+    ctx.globalCompositeOperation = 'lighter';
+    const N = Math.max(6, Math.min(11, Math.round(r / 14))); // 大灘火 = 更多更細的火舌，不會變成粗積木
+    for (let i = 0; i < N; i++) {
+      const seed = i * 2.399;
+      const u = (i + 0.5) / N;                                  // 0..1 橫向位置
+      const bx = (u * 2 - 1) * r * 0.78;
+      const by = Math.sin(u * Math.PI) * -r * 0.06;             // 中間的舌根稍高
+      const env = 0.45 + 0.55 * Math.sin(u * Math.PI);          // 中間高、兩側矮
+      const h = r * env * (1.15 + 0.4 * Math.sin(t * 2.6 + seed));
+      const w = (r / N) * 1.5 * (0.75 + 0.25 * Math.sin(t * 3.7 + seed));
+      const lean = Math.sin(t * 1.9 + seed) * r * 0.22;         // 火舌歪斜
+
+      const g = ctx.createLinearGradient(0, by, 0, by - h);
+      g.addColorStop(0, `rgba(${c.hot}, 0.95)`);
+      g.addColorStop(0.3, `rgba(${c.mid}, 0.62)`);
+      g.addColorStop(0.62, `rgba(${c.cool}, 0.16)`);
+      g.addColorStop(1, `rgba(${c.cool}, 0)`);
+      ctx.fillStyle = g;
+
+      ctx.beginPath();
+      ctx.moveTo(bx - w, by);
+      ctx.bezierCurveTo(bx - w, by - h * 0.5, bx + lean - w * 0.22, by - h * 0.85, bx + lean, by - h);
+      ctx.bezierCurveTo(bx + lean + w * 0.22, by - h * 0.85, bx + w, by - h * 0.5, bx + w, by);
+      ctx.quadraticCurveTo(bx, by + w * 0.5, bx - w, by);
+      ctx.fill();
+    }
+
+    // 3. 根部的高溫白熱帶 (壓扁)，把所有火舌的根連成一條燒紅的線
+    ctx.save();
+    ctx.scale(1, 0.3);
+    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.85);
+    core.addColorStop(0, `rgba(${c.hot}, 0.9)`);
+    core.addColorStop(1, `rgba(${c.mid}, 0)`);
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 4. 竄升的火星
+    for (let i = 0; i < 5; i++) {
+      const p = (t * 0.35 + i * 0.2) % 1;
+      const ex = Math.sin(t * 1.3 + i * 2.1) * r * 0.55;
+      ctx.fillStyle = `rgba(${c.ember}, ${(1 - p) * 0.8})`;
+      ctx.beginPath();
+      ctx.arc(ex, -p * r * 1.6, r * 0.045 * (1 - p * 0.6), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   drawSoccer(ctx) {
