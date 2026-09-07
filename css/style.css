@@ -260,13 +260,13 @@ body, html {
 }
 
 /* ==================== Boss HUD ==================== */
+/* 核心／Boss 血條都排在 header 的 flex 流裡。
+   舊版兩者都是 top: 96px 的絕對定位，而 header 高度會隨內容 (經驗條 + 狀態列 +
+   任務提示 + 技能欄) 變動，守塔模式下核心血條就直接壓在任務提示列上。 */
 #boss-hud {
-  position: absolute;
-  top: 96px;
-  left: 50%;
-  transform: translateX(-50%);
   width: 90%;
   max-width: 520px;
+  margin: 0 auto;
   background: rgba(20, 10, 20, 0.9);
   padding: 8px 16px;
   border-radius: 12px;
@@ -1846,12 +1846,10 @@ body, html {
 
 /* ===== 基地核心血條 (守塔模式) ===== */
 #core-hud {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 96px);
-  left: 50%;
-  transform: translateX(-50%);
+  margin: 0 auto;
   z-index: 24;
   display: flex;
+  width: fit-content;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
