@@ -15,7 +15,7 @@ import { ParticleSystem } from './systems/ParticleSystem.js';
 import { UIManager } from './systems/UI.js';
 import { sound } from './audio.js';
 import { CHARACTERS, CHARACTER_ORDER } from './characters.js';
-import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy, enemyScale, getDailyChallenge } from './levels.js';
+import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy, enemyScale, mergeRules, getDailyChallenge } from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
@@ -751,7 +751,10 @@ class Game {
     sound.startBGM(activeLevelId);
 
     this.level = LEVELS[activeLevelId] || LEVELS.street;
-    this.spawner.setLevel(activeLevelId);
+    // 關卡常駐規則 × 每日挑戰詞綴 → 合併成單一份係數，Spawner 與各注入點共用
+    this.rules = mergeRules(this.level.rules, ...(this.isDaily ? this.dailyConfig.modifiers : []));
+    this.spawner.setLevel(activeLevelId, this.rules);
+    this._eliteHeal = 0; // 每日「吸血盛宴」用，開局先清掉上一局的殘留
 
     // 模式：守塔在場中央生出基地核心，玩家開場站在核心下方讓出位置
     this.mode = getMode(this.modeId);
@@ -788,16 +791,31 @@ class Game {
       this.ui.sayStatus(`💉 戰術興奮劑已生效！(${activeBoosters.length} 項戰備)`);
     }
 
-    // 每日挑戰詞條套用
+    // 每日挑戰中規則層處理不了的兩項 (玩家速度與血量上限是加法/覆寫語意)
     if (this.isDaily && this.dailyConfig) {
       for (const mod of this.dailyConfig.modifiers) {
-        if (mod.playerSpeedMul) this.player.speedMultiplier *= mod.playerSpeedMul;
+        if (mod.playerSpeedMul) {
+          this.player.speedMultiplier *= mod.playerSpeedMul;
+          this.player.baseSpeedMul *= mod.playerSpeedMul;
+        }
         if (mod.playerHpMul) {
           this.player.maxHp = Math.round(this.player.maxHp * mod.playerHpMul);
-          this.player.hp = this.player.maxHp;
+          this.player.baseMaxHp = this.player.maxHp;
         }
+        if (mod.maxHpOffset) {
+          this.player.maxHp = Math.max(20, this.player.maxHp + mod.maxHpOffset);
+          this.player.baseMaxHp = this.player.maxHp;
+        }
+        this.player.hp = this.player.maxHp;
+        if (mod.eliteHeal) this._eliteHeal = mod.eliteHeal;
       }
     }
+
+    // 規則層注入：輸出、受傷、金幣三個乘數
+    this.player.damageTakenMul *= this.rules.damageTakenMul;
+    this.player.modeDmgMul = (this.player.modeDmgMul || 1) * this.rules.playerDmgMul;
+    this.metaGoldMul *= this.rules.goldMul;
+    this.weaponManager.applyPassives();
 
     this.lowHpWarned = false;
     this.particles.clear();
@@ -843,6 +861,11 @@ class Game {
       this.ui.say(`每日挑戰啟動！【${this.dailyConfig.modifiers.map((m) => m.name).join(' | ')}】`, '#00e5ff', 4.5);
     } else {
       this.ui.say(this.player.character.lines.start, this.player.character.accent);
+      // 開場台詞講完才提示本關規則 (共用同一個氣泡通道，先講的會被蓋掉)
+      if (!this.isDaily && this.level.rules?.label && this.level.id !== 'street') {
+        this.weaponManager.schedule(3.4, () =>
+          this.ui.say(`⚔️ ${this.level.rules.label}：${this.level.rules.desc}`, '#ffd166', 4.5));
+      }
     }
 
     this.ui.setModeButtons(this.mode);
@@ -944,14 +967,15 @@ class Game {
       // 召喚 3 隻當前波次的小怪 (數量逼近上限就不召)
       if (this.enemies.length < 230) {
         const pool = currentWave(this.level || LEVELS.street, this.gameTime).pool;
-        const hpMul = (1 + this.gameTime / 90) * (this.level ? this.level.hpScale : 1) * 0.6;
+        const scale = enemyScale(this.gameTime, this.level, this.rules);
+        scale.hp = (1 + this.gameTime / 90) * (this.level ? this.level.hpScale : 1) * 0.6; // 召喚怪刻意壓低
         for (let i = 0; i < 3; i++) {
           const ang = Math.random() * Math.PI * 2;
           this.enemies.push(new Enemy(
             pickEnemy(pool),
             boss.x + Math.cos(ang) * 120,
             boss.y + Math.sin(ang) * 120,
-            hpMul
+            scale
           ));
         }
       }
@@ -1793,6 +1817,10 @@ class Game {
         if (this.player.legendaryEffects?.includes('kill_heal')) {
           this.player.heal(3);
         }
+        // 每日詞綴「吸血盛宴」：擊殺精英/Boss 回血
+        if ((enemy.isElite || enemy.isBoss) && this._eliteHeal) {
+          this.player.heal(this._eliteHeal);
+        }
         if (enemy.isBoss) {
           this.triggerHitstop(0.08);
         } else if (enemy.isElite) {
@@ -1813,16 +1841,16 @@ class Game {
 
         // 孢子母體死亡裂解成幼體 (沿用母體的血量成長係數)
         if (enemy.splitInto && this.enemies.length < MAX_ENEMIES) {
-          const hpMul = enemy.maxHp / ENEMY_TYPES[enemy.typeKey].hp;
-          const dmgMul = enemyScale(this.gameTime, this.level).dmg;
+          // 沿用母體的血量成長，傷害與移速用目前時間/規則重算
+          const scale = enemyScale(this.gameTime, this.level, this.rules);
+          scale.hp = enemy.maxHp / ENEMY_TYPES[enemy.typeKey].hp;
           for (let n = 0; n < enemy.splitCount; n++) {
             const ang = (n / enemy.splitCount) * Math.PI * 2 + Math.random();
             this.enemies.push(new Enemy(
               enemy.splitInto,
               enemy.x + Math.cos(ang) * 26,
               enemy.y + Math.sin(ang) * 26,
-              hpMul,
-              dmgMul
+              scale
             ));
           }
         }
@@ -1892,7 +1920,7 @@ class Game {
   // 增殖胞囊孵化：吐出雜兵 (沿用目前關卡的雜兵血量成長係數)
   spawnHatchling(hatcher) {
     if (this.enemies.length + this._pendingSpawns.length >= MAX_ENEMIES) return;
-    const scale = enemyScale(this.gameTime, this.level);
+    const scale = enemyScale(this.gameTime, this.level, this.rules);
     for (let i = 0; i < (hatcher.hatchCount || 1); i++) {
       const ang = Math.random() * Math.PI * 2;
       // 不能直接 push 進 this.enemies：孵化是在敵人 update 迴圈裡觸發的，
@@ -1901,8 +1929,7 @@ class Game {
         hatcher.hatchMinion,
         hatcher.x + Math.cos(ang) * (hatcher.radius + 10),
         hatcher.y + Math.sin(ang) * (hatcher.radius + 10),
-        scale.hp,
-        scale.dmg
+        scale
       ));
     }
     this.particles.createExplosion(hatcher.x, hatcher.y, 46);
@@ -1990,7 +2017,7 @@ class Game {
     if (item.type === 'exp') {
       sound.playGem();
       // 裝備「領悟」詞條放大經驗水晶 (每顆至少 1)
-      const val = Math.max(1, Math.round(item.value * (1 + (this.player.metaExp || 0))));
+      const val = Math.max(1, Math.round(item.value * (1 + (this.player.metaExp || 0)) * this.rules.expMul));
       const leveledUp = this.player.gainExp(val);
       if (leveledUp) {
         this.triggerLevelUp();

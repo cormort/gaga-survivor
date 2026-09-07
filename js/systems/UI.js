@@ -756,6 +756,7 @@ export class UIManager {
         <span class="level-icon">${unlocked ? lv.icon : '🔒'}</span>
         <span class="level-name">${lv.name}</span>
         <span class="level-sub">${lv.sub} ‧ 難度 ${'★'.repeat(lv.difficulty)}</span>
+        ${unlocked && lv.rules?.label ? `<span class="level-rule" title="${lv.rules.desc}">⚔️ ${lv.rules.label}</span>` : ''}
         <span class="level-best">${unlocked ? bestLine : '通關前一關即可解鎖'}</span>
       `;
       card.addEventListener('click', () => {

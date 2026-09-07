@@ -4,15 +4,16 @@ import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE } from '../config.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
 
 export class Enemy {
-  constructor(typeKey, x, y, hpMultiplier = 1, dmgMultiplier = 1) {
+  // scale: { hp, dmg, speed } — 關卡難度、時間成長與關卡規則合併後的係數
+  constructor(typeKey, x, y, scale = {}) {
     const config = ENEMY_TYPES[typeKey] || ENEMY_TYPES.walker;
     this.typeKey = typeKey;
     this.skin = null; // Boss 關卡主題外觀 (生成後由 Spawner 依 def.skin 覆寫)
     this.name = config.name;
-    this.maxHp = config.hp * hpMultiplier;
+    this.maxHp = config.hp * (scale.hp || 1);
     this.hp = this.maxHp;
-    this.speed = config.speed;
-    this.damage = Math.round(config.damage * dmgMultiplier);
+    this.speed = config.speed * (scale.speed || 1);
+    this.damage = Math.round(config.damage * (scale.dmg || 1));
     this.radius = config.radius;
     this.color = config.color;
     this.exp = config.exp;

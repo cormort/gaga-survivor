@@ -2,7 +2,7 @@
 // 無盡模式 (endless) 是唯一例外：波次間隔/數量隨時間成長，Boss 固定 90 秒輪播。
 
 import { Enemy } from '../entities/Enemy.js';
-import { LEVELS, currentWave, pickEnemy, enemyScale, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL } from '../levels.js';
+import { LEVELS, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL } from '../levels.js';
 import { GAME_CONFIG } from '../config.js';
 import { ELITE_AFFIXES } from '../config.js';
 
@@ -13,8 +13,9 @@ export class Spawner {
     this.setLevel('street');
   }
 
-  setLevel(levelId) {
+  setLevel(levelId, rules = RULE_DEFAULTS) {
     this.level = LEVELS[levelId] || LEVELS.street;
+    this.rules = rules;
     this.reset();
   }
 
@@ -54,6 +55,7 @@ export class Spawner {
     const wave = currentWave(level, gameTime);
 
     // 無盡模式：間隔隨時間縮短、單次數量增加 (有上限避免一口氣灌爆)
+    const rules = this.rules || RULE_DEFAULTS;
     let interval = wave.interval;
     let batch = wave.batch;
     if (level.id === 'endless') {
@@ -61,16 +63,19 @@ export class Spawner {
       batch = 1 + Math.min(5, Math.floor(gameTime / 150));
     }
 
+    // 生成密度：直接縮短間隔 (關卡規則 / 每日詞綴共用)
+    interval /= rules.spawnMul;
+
     if (this.spawnTimer < interval) return;
     this.spawnTimer = 0;
 
     if (enemies.length >= MAX_ENEMIES) return;
 
     // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)
-    const scale = enemyScale(gameTime, level);
+    const scale = enemyScale(gameTime, level, rules);
     for (let i = 0; i < batch; i++) {
       const pos = this.getSpawnPosition(player, 480 + Math.random() * 120);
-      const e = new Enemy(pickEnemy(wave.pool), pos.x, pos.y, scale.hp, scale.dmg);
+      const e = new Enemy(pickEnemy(wave.pool), pos.x, pos.y, scale);
       this.rollElite(e, gameTime);
       enemies.push(e);
     }
@@ -79,7 +84,7 @@ export class Spawner {
   // 精英詞綴：機率隨時間從 3.5% 緩升到 10% (Boss 與召喚小怪不套用)
   rollElite(enemy, gameTime) {
     if (enemy.isBoss) return;
-    const chance = Math.min(0.1, 0.035 + gameTime / 9000);
+    const chance = Math.min(0.1, 0.035 + gameTime / 9000) * (this.rules || RULE_DEFAULTS).eliteChanceMul;
     if (Math.random() >= chance) return;
     const keys = Object.keys(ELITE_AFFIXES);
     enemy.makeElite(keys[Math.floor(Math.random() * keys.length)]);
@@ -87,7 +92,7 @@ export class Spawner {
 
   spawnBoss(def, player, enemies, onBossSpawnCallback) {
     const pos = this.getSpawnPosition(player, 550);
-    const boss = new Enemy('boss', pos.x, pos.y, 1);
+    const boss = new Enemy('boss', pos.x, pos.y);
     boss.maxHp = boss.hp = def.hp;
     boss.name = def.name;
     // 關卡主題外觀：一般 Boss 用該關皮膚，最終 Boss 換更大號的「最終」變體

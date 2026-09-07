@@ -34,6 +34,8 @@ export const LEVELS = {
     },
     decor: ['car', 'bin', 'neon'],
     hpScale: 1.0,
+    // 基準關：不加任何規則，讓新手先熟悉底層手感
+    rules: { label: '標準交戰規則', desc: '沒有額外環境修正，適合熟悉操作' },
     // 關卡機制：街頭定期空投物資箱
     mechs: [
       { type: 'supply', interval: 45, jitter: 20 },
@@ -76,6 +78,11 @@ export const LEVELS = {
     },
     decor: ['tank', 'pipes', 'hazard'],
     hpScale: 1.3,
+    // 蟲海壓迫：怪多而脆，考驗清群面積而非單體輸出
+    rules: {
+      label: '蟲潮壓迫', desc: '敵人數量 +40%、血量 -25%，變異體出現率 ×1.6',
+      spawnMul: 1.4, enemyHpMul: 0.75, eliteChanceMul: 1.6,
+    },
     // 關卡機制：實驗室毒霧池 (玩家踩到持續扣血)
     mechs: [
       { type: 'pool', interval: 24, jitter: 8, radius: 115, dur: 6, dmg: 6, color: '#b5179e' },
@@ -118,6 +125,11 @@ export const LEVELS = {
     },
     decor: ['ice_spike', 'snow', 'radar'],
     hpScale: 1.6,
+    // 凍原重甲：怪走得慢但更厚，加上冰面滑行 → 風箏走位關
+    rules: {
+      label: '凍原重甲', desc: '敵人移速 -20%、血量 +25%；地面結冰會滑行',
+      enemySpeedMul: 0.8, enemyHpMul: 1.25,
+    },
     // 關卡機制：冰爆地雷 (短暫警示後爆炸，敵我皆傷)
     // 關卡機制：冰爆地雷 + 冰面滑行慣性 (鬆開搖桿後速度指數衰減而非瞬停)
     mechs: [
@@ -162,6 +174,11 @@ export const LEVELS = {
     },
     decor: ['lava_crack', 'steel', 'gear'],
     hpScale: 2.0,
+    // 熔爐試煉：高風險高報酬，玩家與敵人都變得極脆
+    rules: {
+      label: '熔爐試煉', desc: '我方傷害 +30%，但受到傷害 +50%；金幣 +60%',
+      playerDmgMul: 1.3, damageTakenMul: 1.5, goldMul: 1.6,
+    },
     // 關卡機制：熔岩噴發 (大範圍、對敵傷害高，幫你清場但要閃)
     // 關卡機制：熔岩噴發 + 安全高台 (隨機亮環，站在範圍外持續扣血)
     mechs: [
@@ -206,6 +223,11 @@ export const LEVELS = {
     },
     decor: ['lava_crack', 'gear', 'radar'],
     hpScale: 1,
+    // 無盡深淵：全面加壓，用經驗加成補償
+    rules: {
+      label: '深淵法則', desc: '敵人移速 +20%、變異體出現率 ×2；經驗 +30%',
+      enemySpeedMul: 1.2, eliteChanceMul: 2, expMul: 1.3,
+    },
     // 關卡機制：縮圈結界 (圈外持續扣血 + 向圈心微推，場地越來越小)
     mechs: [
       { type: 'shrinkCircle', startRadius: 1800, endRadius: 500, shrinkRate: 0.6, dmg: 8, dmgInterval: 0.4, color: '#b388ff' },
@@ -226,13 +248,41 @@ export const ENDLESS_BOSS_CYCLE = []
 
 export const ENDLESS_BOSS_INTERVAL = 90;
 
+// ── 關卡規則層 ───────────────────────────────────────────────
+// 每關除了敵人組成與地形機制，再掛一組「常駐規則」改變玩法手感。
+// 每日挑戰的詞綴走同一套欄位與同一個合併函式，兩邊共用一份注入層。
+export const RULE_DEFAULTS = {
+  enemySpeedMul: 1,   // 敵人移速
+  enemyHpMul: 1,      // 敵人血量 (疊在 hpScale 之上)
+  spawnMul: 1,        // 生成密度 (直接縮短生成間隔)
+  eliteChanceMul: 1,  // 精英詞綴機率
+  playerDmgMul: 1,    // 玩家武器輸出
+  damageTakenMul: 1,  // 玩家受到的傷害
+  goldMul: 1,         // 金幣收益
+  expMul: 1,          // 經驗獲得
+};
+
+// 把關卡規則與每日詞綴相乘合併 (缺的欄位一律當 1)
+export function mergeRules(...sources) {
+  const out = { ...RULE_DEFAULTS };
+  for (const src of sources) {
+    if (!src) continue;
+    for (const k of Object.keys(RULE_DEFAULTS)) {
+      if (typeof src[k] === 'number') out[k] *= src[k];
+    }
+  }
+  return out;
+}
+
 // 敵人隨時間 / 關卡難度的成長係數 (Spawner、孵化、裂解共用一份公式)
 // hp 無上限地變厚；dmg 緩升且封頂 1.8×，避免後期只是「磨」而完全沒有威脅感
-export function enemyScale(gameTime, level) {
+export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
   const endless = level && level.id === 'endless';
   return {
-    hp: (1 + (gameTime / 60) * 0.4) * ((level && level.hpScale) || 1) * (endless ? 1 + gameTime / 300 : 1),
+    hp: (1 + (gameTime / 60) * 0.4) * ((level && level.hpScale) || 1)
+        * (endless ? 1 + gameTime / 300 : 1) * rules.enemyHpMul,
     dmg: Math.min(1.8, 1 + (gameTime / 60) * 0.1),
+    speed: rules.enemySpeedMul,
   };
 }
 
@@ -260,7 +310,7 @@ export const DAILY_MODIFIERS = [
   { id: 'hyper_speed', name: '⚡ 極速狂飆', desc: '玩家與怪物速度 +35%', playerSpeedMul: 1.35, enemySpeedMul: 1.35 },
   { id: 'glass_cannon', name: '💥 玻璃大砲', desc: '全武器傷害 +75%，受到傷害 +60%', playerDmgMul: 1.75, damageTakenMul: 1.6 },
   { id: 'gold_rush', name: '🪙 淘金狂熱', desc: '金幣獲取 +100%，砲塔冷卻縮短 35%', goldMul: 2.0, turretCdr: 0.65 },
-  { id: 'dense_swarm', name: '🧟 狂暴怪海', desc: '怪物數量 +40%，雜兵血量 -25%', spawnMul: 1.4, hpMul: 0.75 },
+  { id: 'dense_swarm', name: '🧟 狂暴怪海', desc: '怪物數量 +40%，雜兵血量 -25%', spawnMul: 1.4, enemyHpMul: 0.75 },
   { id: 'vampiric', name: '🩸 吸血盛宴', desc: '生命上限 -25，擊殺精英怪立即回血 30', maxHpOffset: -25, eliteHeal: 30 },
 ];
 
