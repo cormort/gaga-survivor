@@ -740,7 +740,9 @@ body, html {
    兩者同為 .overlay (z-index 100)，DOM 順序在後的開始畫面會蓋掉先宣告的彈窗，
    結果就是點「基因強化 / 裝備倉庫」看起來沒反應。 */
 #talent-modal,
-#gear-modal {
+#gear-modal,
+#recipe-modal,
+#shop-modal {
   z-index: 200;
 }
 
