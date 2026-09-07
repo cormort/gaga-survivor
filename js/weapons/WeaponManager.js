@@ -1,6 +1,6 @@
 // 武器管理器 (自動鎖定、冷卻計時、投射物生成、超武進化檢測與傷害統計)
 
-import { WEAPONS, PASSIVES } from '../config.js';
+import { WEAPONS, PASSIVES, CHARGE } from '../config.js';
 import { Projectile } from '../entities/Projectile.js';
 import { sound } from '../audio.js';
 
@@ -10,6 +10,7 @@ const SOCCER_REHIT = 0.5;  // 彈跳球：讓「彈跳次數」真的能轉成�
 
 export class WeaponManager {
   constructor(player) {
+    this.shotCount = new Map(); // 各武器累計發數 (蓄能彈用)
     this.player = player;
 
     // 擁有的武器: Map<weaponId, { level, cooldownTimer, isEvo, totalDamage }>
@@ -269,6 +270,14 @@ export class WeaponManager {
   }
 
   // 1. 苦無 / 幽靈手裏劍 (追蹤發射)
+  // 蓄能：逐發計數 (不是逐輪)，每 charge.every 發回傳一次元素效果
+  chargeFor(def) {
+    if (!def.charge) return null;
+    const n = (this.shotCount.get(def.id) || 0) + 1;
+    this.shotCount.set(def.id, n);
+    return n % def.charge.every === 0 ? def.charge.effect : null;
+  }
+
   fireKunai(def, item, damage, enemies, crit = false) {
     // 尋找最近的敵人
     const target = this.getClosestEnemy(enemies);
@@ -278,6 +287,8 @@ export class WeaponManager {
     const pierce = def.isEvo ? def.pierce : def.pierce[item.level - 1];
 
     for (let i = 0; i < count; i++) {
+      const charged = this.chargeFor(def);
+
       this.schedule(i * 0.07, () => {
         if (!target) return;
         const dx = target.x - this.player.x;
@@ -302,6 +313,7 @@ export class WeaponManager {
             pierce: pierce,
             life: 2.2,
             isEvo: def.isEvo,
+            charge: charged,
             knockback: 1.5,
           }, crit)
         );
@@ -359,6 +371,7 @@ export class WeaponManager {
     const expRadius = (def.isEvo ? def.explosionRadius : def.explosionRadius[item.level - 1]) * this.player.rangeMultiplier;
 
     for (let i = 0; i < count; i++) {
+      const charged = this.chargeFor(def);
       this.schedule(i * 0.15, () => {
         const dx = target.x + (Math.random() * 60 - 30) - this.player.x;
         const dy = target.y + (Math.random() * 60 - 30) - this.player.y;
@@ -379,6 +392,7 @@ export class WeaponManager {
             pierce: 1,
             life: Math.min(2.5, dist / def.speed + 0.1),
             isEvo: def.isEvo,
+            charge: charged,
           }, crit)
         );
         sound.playShoot();
@@ -468,6 +482,7 @@ export class WeaponManager {
           isEvo: def.isEvo,
           knockback: 3.5,
           rehit: SOCCER_REHIT,
+          charge: this.chargeFor(def),
         }, crit)
       );
       sound.playShoot();
@@ -492,6 +507,10 @@ export class WeaponManager {
       if (dist <= rocketProj.explosionRadius + enemy.radius) {
         enemy.takeDamage(rocketProj.damage, 5, rocketProj.x, rocketProj.y);
         this.recordDamage(rocketProj.weaponId, rocketProj.damage);
+        // 毒氣彈：爆炸範圍內全員中毒 (火箭的蓄能效果走爆炸，不走直接命中)
+        if (rocketProj.charge === 'poison') {
+          enemy.applyPoison(CHARGE.poison.duration, rocketProj.weaponId);
+        }
         if (particleSystem) {
           particleSystem.createDamageText(enemy.x, enemy.y, rocketProj.damage, true);
         }

@@ -170,6 +170,25 @@ export class ParticleSystem {
     }
   }
 
+  // 兩點之間的鋸齒電弧 (蓄能電擊跳躍用)，沿用落雷的折線渲染
+  createArc(x1, y1, x2, y2, color = '#7df8ff') {
+    if (this.lightnings.length >= MAX_LIGHTNINGS) return;
+    const segments = 6;
+    const nx = -(y2 - y1);
+    const ny = x2 - x1;
+    const len = Math.hypot(nx, ny) || 1;
+    const points = [];
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const jitter = i === 0 || i === segments ? 0 : (Math.random() - 0.5) * 26;
+      points.push({
+        x: x1 + (x2 - x1) * t + (nx / len) * jitter,
+        y: y1 + (y2 - y1) * t + (ny / len) * jitter,
+      });
+    }
+    this.lightnings.push({ points, radius: 10, color, life: 0.18, maxLife: 0.18 });
+  }
+
   createLightning(x, y, radius, isEvo = false) {
     if (this.lightnings.length >= MAX_LIGHTNINGS) return;
     // 生成折線落雷節點

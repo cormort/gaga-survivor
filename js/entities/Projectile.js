@@ -31,6 +31,7 @@ export class Projectile {
     this.tickTimer = 0;
     this.tickInterval = 0.25;
     this.rehit = options.rehit || 0;
+    this.charge = options.charge || null; // 蓄能彈：'burn' / 'chain'
     this.seed = Math.random() * 100; // 火焰舌動畫相位，讓每灘火各燒各的
 
     // 火箭專屬
@@ -136,6 +137,20 @@ export class Projectile {
 
     ctx.save();
     ctx.translate(screenX, screenY);
+
+    // 蓄能彈：外圈套一層元素光暈，讓玩家看得出這發不一樣
+    if (this.charge) {
+      const glow = { burn: '255,123,0', chain: '125,248,255', freeze: '127,216,255', poison: '125,255,143' }[this.charge] || '255,255,255';
+      const pulse = 1 + Math.sin(Date.now() * 0.02 + this.seed) * 0.15;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius * 2.6 * pulse);
+      g.addColorStop(0, `rgba(${glow}, 0.75)`);
+      g.addColorStop(0.5, `rgba(${glow}, 0.3)`);
+      g.addColorStop(1, `rgba(${glow}, 0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 2.6 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     switch (this.type) {
       case 'kunai':

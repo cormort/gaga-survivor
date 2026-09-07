@@ -21,7 +21,7 @@ export const WEAPONS = {
     id: 'kunai',
     name: '特工苦無',
     icon: '🗡️',
-    description: '自動朝最近敵人疾速發射穿透苦無。',
+    description: '自動朝最近敵人疾速發射穿透苦無。每 5 發蓄能射出燃燒彈。',
     isEvo: false,
     evoTarget: 'ghost_shuriken',
     pairPassive: 'atk_scroll',
@@ -33,6 +33,7 @@ export const WEAPONS = {
     speed: 650,
     projectiles: [1, 1, 2, 2, 3], // 各等級發射數量
     pierce: [1, 1, 2, 2, 3],
+    charge: { every: 5, effect: 'burn' }, // 每 5 發射出一枚燃燒苦無
   },
   guardian: {
     id: 'guardian',
@@ -55,7 +56,7 @@ export const WEAPONS = {
     id: 'rocket',
     name: '高爆火箭',
     icon: '🚀',
-    description: '發射鎖定高爆飛彈，命中造成巨大範圍破片爆炸。',
+    description: '發射鎖定高爆飛彈，命中造成巨大範圍破片爆炸。每 3 發蓄能射出毒氣彈。',
     isEvo: false,
     evoTarget: 'shark_torpedo',
     pairPassive: 'magnet',        // 爆炸清場 → 自動吸寶 (原 range_fuel)
@@ -67,6 +68,7 @@ export const WEAPONS = {
     speed: 380,
     explosionRadius: [70, 85, 95, 110, 130],
     count: [1, 1, 2, 2, 3],
+    charge: { every: 3, effect: 'poison' }, // 每 3 發射出毒氣彈，爆炸範圍內全部中毒
   },
   molotov: {
     id: 'molotov',
@@ -103,7 +105,7 @@ export const WEAPONS = {
     id: 'soccer',
     name: '量子足球',
     icon: '⚽',
-    description: '踢出高彈力金屬足球，在怪群與空間中高速彈射。',
+    description: '踢出高彈力金屬足球，在怪群與空間中高速彈射。每 3 顆蓄能射出冰凍球。',
     isEvo: false,
     evoTarget: 'quantum_sphere',
     pairPassive: 'speed_shoes',   // 走位控球/追球 (原 max_hp_vest)
@@ -114,6 +116,7 @@ export const WEAPONS = {
     speed: 520,
     bounces: [5, 7, 9, 12, 16],
     count: [1, 1, 2, 2, 3],
+    charge: { every: 3, effect: 'freeze' }, // 每 3 顆射出冰凍球
   },
 
   // 超武 (Evo Weapons)
@@ -121,7 +124,7 @@ export const WEAPONS = {
     id: 'ghost_shuriken',
     name: '幽靈手裏劍 (超武)',
     icon: '✨🗡️',
-    description: '無需停歇！極限暴風加特林式連續全自動追蹤發射！',
+    description: '無需停歇！極限暴風加特林式連續全自動追蹤發射，每 6 發挾帶燃燒彈。',
     isEvo: true,
     baseWeapon: 'kunai',
     baseDamage: 46,  // 40 時單體 DPS 反而略低於滿級苦無
@@ -129,6 +132,7 @@ export const WEAPONS = {
     speed: 800,
     projectiles: 1,
     pierce: 5,
+    charge: { every: 6, effect: 'burn' }, // 射速快，間隔拉長
   },
   eternal_domain: {
     id: 'eternal_domain',
@@ -148,7 +152,7 @@ export const WEAPONS = {
     id: 'shark_torpedo',
     name: '鯊魚核彈 (超武)',
     icon: '🦈💣',
-    description: '發射全螢幕震顫核聚變魚雷，毀天滅地級大範圍爆破。',
+    description: '發射全螢幕震顫核聚變魚雷，毀天滅地級大範圍爆破，每 2 發挾帶劇毒。',
     isEvo: true,
     baseWeapon: 'rocket',
     baseDamage: 150,
@@ -156,6 +160,7 @@ export const WEAPONS = {
     speed: 460,
     explosionRadius: 220,
     count: 2,
+    charge: { every: 2, effect: 'poison' },
   },
   napalm_sea: {
     id: 'napalm_sea',
@@ -185,7 +190,7 @@ export const WEAPONS = {
     id: 'quantum_sphere',
     name: '量子星雲球 (超武)',
     icon: '⚛️⚽',
-    description: '多顆超光速量子球體裂變，留下能量粒子殘影瘋狂彈射。',
+    description: '多顆超光速量子球體裂變，留下能量粒子殘影瘋狂彈射，每 4 顆挾帶冰凍。',
     isEvo: true,
     baseWeapon: 'soccer',
     baseDamage: 55,
@@ -193,6 +198,7 @@ export const WEAPONS = {
     speed: 700,
     bounces: 24,
     count: 4,
+    charge: { every: 4, effect: 'freeze' },
   },
 
   // 新增武器 (內容擴充批)：開路穿透型 ─ 相位飛刃
@@ -201,7 +207,7 @@ export const WEAPONS = {
     id: 'phase_blade',
     name: '相位飛刃',
     icon: '💠',
-    description: '朝最近敵人擲出高速相位刃，貫穿成群敵人。與苦無可合體為超武。',
+    description: '朝最近敵人擲出高速相位刃，貫穿成群敵人。每 4 發蓄能射出電弧刃。與苦無可合體為超武。',
     isEvo: false,
     evoTarget: 'phase_storm',
     pairPassive: 'kunai',          // 武器+武器合成 (VS 黑白鴿精神)
@@ -213,6 +219,7 @@ export const WEAPONS = {
     speed: 560,
     projectiles: [1, 1, 1, 2, 2],
     pierce: [3, 4, 5, 6, 8],
+    charge: { every: 4, effect: 'chain' }, // 每 4 發射出一枚電弧刃
     projType: 'drill',
   },
   // 新增武器 (內容擴充批)：護身環繞型 ─ 重力環鋸
@@ -241,7 +248,7 @@ export const WEAPONS = {
     id: 'phase_storm',
     name: '相位風暴 (超武)',
     icon: '🌀💠',
-    description: '雙武合體！相位飛刃與苦無融合成不間斷的全自動相位風暴，貫穿一切。',
+    description: '雙武合體！相位飛刃與苦無融合成不間斷的全自動相位風暴，每 8 發挾帶電弧刃。',
     isEvo: true,
     baseWeapon: 'phase_blade',
     baseDamage: 55,
@@ -249,6 +256,7 @@ export const WEAPONS = {
     speed: 720,
     projectiles: 1,
     pierce: 6,
+    charge: { every: 8, effect: 'chain' }, // 合體超武射速極快，間隔再拉長
     projType: 'drill',
   },
   // 護身超武：重力奇點環 (重力環鋸的永續型態)
@@ -267,6 +275,18 @@ export const WEAPONS = {
     radius: 62,
     projType: 'saw',
   },
+};
+
+// 蓄能彈 (Charged Shot)：投射武器每打出固定發數，下一發附帶元素效果。
+// burn  = 命中後持續灼燒 (重複命中只刷新時間，不疊層)
+// chain = 命中後電弧跳躍到附近敵人，每跳衰減
+export const CHARGE = {
+  burn:   { dps: 18, duration: 3, color: '#ff7b00' },
+  chain:  { jumps: 3, range: 190, falloff: 0.65, color: '#7df8ff' },
+  // 冰凍：雜兵完全定住，Boss 只吃減速 (不然高射速武器能把 Boss 鎖死)
+  freeze: { duration: 1.1, bossSlow: 2.2, color: '#7fd8ff' },
+  // 中毒：單層比燃燒弱，但持續久且可疊層 — 定位是打高血量目標
+  poison: { dps: 7, duration: 5, maxStacks: 5, color: '#7dff8f' },
 };
 
 // 被動配件定義

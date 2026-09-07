@@ -1,6 +1,6 @@
 // 怪物實體類別 (普通殭屍、突襲蝙蝠、生化巨漢、自爆蟲、噴吐者、衝刺獵犬、孵化胞囊、攻城巨像、Boss 暴君)
 
-import { ENEMY_TYPES, ELITE_AFFIXES } from '../config.js';
+import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE } from '../config.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
 
 export class Enemy {
@@ -52,6 +52,13 @@ export class Enemy {
     this.animTimer = Math.random() * 10;
     this.fuseTimer = 0; // 自爆倒數
     this.slowTimer = 0; // 極寒脈衝減速剩餘秒數 (遊戲時間倒數)
+    this.burnTimer = 0; // 蓄能燃燒彈的灼燒剩餘秒數
+    this.burnDps = 0;
+    this.burnSource = null; // 灼燒傷害要記回原武器 (結算榜)
+    this.freezeTimer = 0;   // 冰凍定身剩餘秒數 (Boss 不吃，改吃 slowTimer)
+    this.poisonTimer = 0;   // 中毒剩餘秒數
+    this.poisonStacks = 0;  // 中毒層數 (可疊，最多 CHARGE.poison.maxStacks)
+    this.poisonSource = null;
     this.isDead = false;
 
     // Boss 專屬技能冷卻
@@ -93,6 +100,32 @@ export class Enemy {
     // 極寒減速倒數 (遊戲時間驅動：暫停/升級/開箱時同步凍結)
     if (this.slowTimer > 0) this.slowTimer = Math.max(0, this.slowTimer - dt);
 
+    if (this.freezeTimer > 0) this.freezeTimer = Math.max(0, this.freezeTimer - dt);
+
+    // 持續傷害：灼燒 (高傷短時、不疊層) 與中毒 (低傷長時、可疊層)
+    // 兩者都不擊退、不觸發閃白，否則整片怪會狂閃
+    let dot = 0;
+    if (this.burnTimer > 0) {
+      this.burnTimer -= dt;
+      dot += this.burnDps * dt;
+      cb.onBurn?.(this, this.burnDps * dt, this.burnSource);
+    }
+    if (this.poisonTimer > 0) {
+      this.poisonTimer -= dt;
+      const tick = CHARGE.poison.dps * this.poisonStacks * dt;
+      dot += tick;
+      cb.onBurn?.(this, tick, this.poisonSource);
+      if (this.poisonTimer <= 0) this.poisonStacks = 0;
+    }
+    if (dot > 0) {
+      this.hp -= dot;
+      if (this.hp <= 0) {
+        this.hp = 0;
+        this.isDead = true;
+        return;
+      }
+    }
+
     this.animTimer += dt * 8;
     if (this.flashTimer > 0) this.flashTimer -= dt;
 
@@ -125,7 +158,7 @@ export class Enemy {
       this.shootTimer += dt;
       if (this.shootTimer >= this.ranged.cd) {
         this.shootTimer = 0;
-        if (dist > 0 && dist <= desiredRange * 1.6 && cb.onShoot) {
+        if (dist > 0 && dist <= desiredRange * 1.6 && cb.onShoot && this.freezeTimer <= 0) {
           const pDirX = dx / dist;
           const pDirY = dy / dist;
           cb.onShoot(this, {
@@ -158,7 +191,7 @@ export class Enemy {
     }
 
     // 增殖胞囊邏輯：定時孵化雜兵 (孵化中的小小吞嚥動畫可從 animTimer 推得)
-    if (this.hatchMinion && !this.isDead) {
+    if (this.hatchMinion && !this.isDead && this.freezeTimer <= 0) {
       this.hatchTimer -= dt;
       if (this.hatchTimer <= 0) {
         this.hatchTimer = this.hatchInterval;
@@ -193,6 +226,7 @@ export class Enemy {
 
   // 極寒脈衝減速：回傳當幀速度倍率 (0.5 = 半速；slowTimer 由遊戲時間倒數，暫停即凍結)
   speedFactor() {
+    if (this.freezeTimer > 0) return 0; // 冰凍定身 (擊退位移不受影響)
     return this.slowTimer > 0 ? 0.5 : 1;
   }
 
@@ -231,6 +265,29 @@ export class Enemy {
         if (onBossSkill) onBossSkill(this, act);
       }
     }
+  }
+
+  // 灼燒：時間刷新而非疊層，避免多發蓄能彈把雜兵瞬間燒穿
+  applyBurn(dps, duration, weaponId = null) {
+    this.burnDps = Math.max(this.burnDps, dps);
+    this.burnTimer = Math.max(this.burnTimer, duration);
+    this.burnSource = weaponId || this.burnSource;
+  }
+
+  // 冰凍：雜兵完全定住；Boss 免疫硬控，改吃等長的減速
+  applyFreeze(duration) {
+    if (this.isBoss) {
+      this.slowTimer = Math.max(this.slowTimer, duration * CHARGE.freeze.bossSlow);
+      return;
+    }
+    this.freezeTimer = Math.max(this.freezeTimer, duration);
+  }
+
+  // 中毒：疊層 (上限 maxStacks)，每次命中都把持續時間刷滿
+  applyPoison(duration, weaponId = null) {
+    this.poisonStacks = Math.min(CHARGE.poison.maxStacks, this.poisonStacks + 1);
+    this.poisonTimer = Math.max(this.poisonTimer, duration);
+    this.poisonSource = weaponId || this.poisonSource;
   }
 
   takeDamage(amount, knockbackDist = 0, sourceX = 0, sourceY = 0) {
@@ -318,6 +375,77 @@ export class Enemy {
       ctx.save();
       ctx.translate(screenX, screenY);
       this.drawMiniHpBar(ctx);
+      ctx.restore();
+    }
+
+    // 灼燒中：加色疊上橘紅火光 + 竄升火星 (加色混合才不會被深色 sprite 吃掉)
+    if (this.burnTimer > 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.globalCompositeOperation = 'lighter';
+      const f = this.animTimer * 6;
+      const g = ctx.createRadialGradient(0, this.radius * 0.3, 0, 0, this.radius * 0.3, this.radius * 1.5);
+      g.addColorStop(0, `rgba(255, 190, 60, ${0.5 + Math.sin(f) * 0.15})`);
+      g.addColorStop(0.55, 'rgba(255, 90, 0, 0.28)');
+      g.addColorStop(1, 'rgba(180, 30, 0, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, this.radius * 0.3, this.radius * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = 0; i < 3; i++) {
+        const p = ((f * 0.12 + i * 0.33) % 1);
+        ctx.fillStyle = `rgba(255, ${140 + i * 30}, 40, ${(1 - p) * 0.9})`;
+        ctx.beginPath();
+        ctx.arc(Math.sin(f * 0.7 + i * 2.1) * this.radius * 0.6,
+                this.radius * 0.3 - p * this.radius * 2, this.radius * 0.14 * (1 - p * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 冰凍中：冰藍結晶包覆 + 外圈實線
+    if (this.freezeTimer > 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.fillStyle = 'rgba(140, 220, 255, 0.32)';
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius + 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(200, 245, 255, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const r1 = this.radius + 2;
+        const r2 = this.radius + 9;
+        ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+        ctx.lineTo(Math.cos(a + 0.35) * r2, Math.sin(a + 0.35) * r2);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 中毒中：綠色毒霧氣泡，層數越多越濃
+    if (this.poisonTimer > 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.globalCompositeOperation = 'lighter';
+      const density = this.poisonStacks / 5;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius * 1.4);
+      g.addColorStop(0, `rgba(120, 255, 140, ${0.2 + density * 0.3})`);
+      g.addColorStop(1, 'rgba(30, 160, 60, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = 0; i < this.poisonStacks; i++) {
+        const p = ((this.animTimer * 0.35 + i * 0.27) % 1);
+        ctx.fillStyle = `rgba(150, 255, 170, ${(1 - p) * 0.85})`;
+        ctx.beginPath();
+        ctx.arc(Math.sin(this.animTimer * 1.4 + i * 2.4) * this.radius * 0.7,
+                this.radius * 0.3 - p * this.radius * 1.8, this.radius * 0.11, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
 

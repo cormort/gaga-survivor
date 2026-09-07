@@ -1,6 +1,6 @@
 // 嘎嘎特攻 (Gaga Survivor) - 遊戲核心主循環與遊戲狀態機
 
-import { GAME_CONFIG, ENEMY_TYPES, WEAPONS, FX } from './config.js';
+import { GAME_CONFIG, ENEMY_TYPES, WEAPONS, FX, CHARGE } from './config.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
@@ -1469,6 +1469,7 @@ class Game {
         onBossSkill: (boss, act) => this.handleBossSkill(boss, act),
         onShoot: (shooter, projData) => this.spawnEnemyProjectile(shooter, projData),
         onHatch: (e) => this.spawnHatchling(e),
+        onBurn: (e, dmg, src) => this.weaponManager.recordDamage(src, dmg),
       });
 
       // Boss 引力漩渦吸附判定
@@ -1752,6 +1753,17 @@ class Game {
         this.particles.createDamageText(enemy.x, enemy.y, p.damage, p.isCrit || p.isEvo, p.isCrit);
         sound.playHit();
 
+        // 蓄能彈效果 (火箭的毒氣走爆炸，不在這裡)
+        if (p.charge === 'burn') {
+          enemy.applyBurn(CHARGE.burn.dps, CHARGE.burn.duration, p.weaponId);
+        } else if (p.charge === 'chain') {
+          this.chainShock(enemy, p.damage, p.weaponId);
+        } else if (p.charge === 'freeze') {
+          enemy.applyFreeze(CHARGE.freeze.duration);
+        } else if (p.charge === 'poison') {
+          enemy.applyPoison(CHARGE.poison.duration, p.weaponId);
+        }
+
         // 傳奇特效：暴擊衝擊波
         if (p.isCrit && this.player.legendaryEffects?.includes('crit_blast')) {
           this.particles.createShockwave(enemy.x, enemy.y, 45, '#ffb703');
@@ -1843,6 +1855,37 @@ class Game {
     // Boss 血條跟著場上仍存活的 Boss (可能同時有階段 Boss 與終極首領)
     if (this.boss && this.boss.isDead) {
       this.boss = this.enemies.find((e) => e.isBoss && !e.isDead) || null;
+    }
+  }
+
+  // 蓄能電擊：從命中的敵人往外連跳，每跳傷害衰減
+  chainShock(origin, damage, weaponId) {
+    const { jumps, range, falloff, color } = CHARGE.chain;
+    const hit = new Set([origin]);
+    let from = origin;
+    let dmg = damage;
+
+    for (let j = 0; j < jumps; j++) {
+      let next = null;
+      let bestD = range * range;
+      for (const e of this.enemies) {
+        if (e.isDead || hit.has(e)) continue;
+        const d = (e.x - from.x) ** 2 + (e.y - from.y) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          next = e;
+        }
+      }
+      if (!next) break;
+
+      dmg = Math.round(dmg * falloff);
+      if (dmg < 1) break;
+      this.particles.createArc(from.x, from.y, next.x, next.y, color);
+      next.takeDamage(dmg, 1, from.x, from.y);
+      this.weaponManager.recordDamage(weaponId, dmg);
+      this.particles.createDamageText(next.x, next.y, dmg, true);
+      hit.add(next);
+      from = next;
     }
   }
 
