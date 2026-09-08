@@ -1476,9 +1476,31 @@ body, html {
 
   .start-box { padding: 20px 14px; border-radius: 18px; }
   .game-title { font-size: 26px; }
-  .character-select, .level-select { grid-template-columns: repeat(2, 1fr); }
-  .char-portrait { width: 78px; height: 74px; }
+  .level-select { grid-template-columns: repeat(2, 1fr); }
+  /* 角色卡改單列橫向捲動：5 位特工用 2 欄 grid 會把選單撐到三倍高 */
+  .character-select {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 8px;
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+    scrollbar-width: none;
+  }
+  .character-select::-webkit-scrollbar { display: none; }
+  .char-card {
+    flex: 0 0 46%;
+    scroll-snap-align: center;
+  }
+  .char-portrait { width: 64px; height: 60px; }
   .char-trait { font-size: 10px; }
+  /* 角色卡在手機上壓縮：頭像小一號、型態區收窄、重複的職業標籤隱藏 */
+  .char-card { padding: 8px 6px; }
+  .char-class-tag { display: none; }
+  .char-aspect-section { margin-top: 5px; padding-top: 5px; }
+  .char-aspect-title { font-size: 10px; margin-bottom: 3px; }
+  .aspect-chip { font-size: 9px; padding: 2px 5px; }
+  .aspect-desc-tooltip { display: none; }
   .controls-guide { padding: 8px; margin-bottom: 14px; font-size: 12px; }
 
   #dialogue-bubble { font-size: 13px; bottom: 26%; padding: 8px 14px; }
@@ -2613,11 +2635,17 @@ body, html {
   gap: 4px;
 }
 
+/* 型態列改單行橫向捲動：換行會把整排角色卡撐高一倍 */
 .aspect-chips {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
 }
+.aspect-chips::-webkit-scrollbar { display: none; }
+.aspect-chip { flex: 0 0 auto; white-space: nowrap; }
 
 .aspect-chip {
   padding: 3px 6px;
