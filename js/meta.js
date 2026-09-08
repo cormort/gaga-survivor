@@ -55,9 +55,10 @@ export function talentCost(def, level) {
   return def.costs[level] ?? def.costs[def.costs.length - 1];
 }
 
-// 升級選項的識別鍵 (reroll 排除重複卡、比對顯示清單用)
 export function upgradeKeyOf(opt) {
-  return opt.type === 'evo' ? 'evo:' + opt.baseId : opt.type + ':' + (opt.id || '');
+  if (opt.type === 'evo') return 'evo:' + opt.baseId;
+  if (opt.type === 'special') return 'special:' + opt.specialId;
+  return opt.type + ':' + (opt.id || '');
 }
 
 // 由存檔的 talents {id: lvl} 算出整場的加成總和 (Game.start 時套用到玩家身上)

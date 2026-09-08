@@ -1,9 +1,9 @@
 // UI 介面管理器 (HUD 抬頭顯示、升級三選一卡牌彈窗、技能格槽位與戰鬥統計)
 
-import { WEAPONS, PASSIVES, GAME_CONFIG } from '../config.js';
+import { WEAPONS, PASSIVES, GAME_CONFIG, SPECIAL_CARDS, ACHIEVEMENTS, CONSUMABLE_ITEMS, WEAPON_ASPECTS } from '../config.js';
 import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
 import { RARITIES, SLOTS, SLOT_ORDER, itemName, ilvlText, affixText, itemScore, salvageValue, reforgeCost, SETS, LEGENDARY_EFFECTS, legendaryEffectText, FUSION_COST, fuseItems } from '../items.js';
-import { STASH_CAP } from '../save.js';
+import { save, STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXPANSION_STEP } from '../shop.js';
 
@@ -18,6 +18,8 @@ export class UIManager {
     this._objectiveText = null;
     this.weaponSlots = document.getElementById('weapon-slots');
     this.passiveSlots = document.getElementById('passive-slots');
+    this.pocketSlot = document.getElementById('pocket-slot');
+    this.btnPocket = document.getElementById('btn-pocket');
 
     this.bossHud = document.getElementById('boss-hud');
     this.bossHpFill = document.getElementById('boss-hp-fill');
@@ -72,8 +74,43 @@ export class UIManager {
       this.shopModal?.classList.add('hidden');
     });
 
+    this.facilityBar = document.getElementById('facility-bar');
     this.buildBtn = document.getElementById('btn-build');
     this.buildCost = document.getElementById('build-cost');
+    this.facilityButtons = {
+      turret: { btn: document.getElementById('btn-build'), cost: document.getElementById('build-cost') },
+      electric_grid: { btn: document.getElementById('btn-build-grid'), cost: document.getElementById('build-grid-cost') },
+      purifier: { btn: document.getElementById('btn-build-purifier'), cost: document.getElementById('build-purifier-cost') },
+      barricade: { btn: document.getElementById('btn-build-barricade'), cost: document.getElementById('build-barricade-cost') },
+    };
+
+    // 官方禮包兌換
+    this.giftModal = document.getElementById('gift-code-modal');
+    this.giftInput = document.getElementById('input-gift-code');
+    this.giftStatus = document.getElementById('gift-status');
+    this.giftRedeemBtn = document.getElementById('btn-redeem-code');
+    this.giftBtn = document.getElementById('btn-gift');
+
+    this.giftBtn?.addEventListener('click', () => {
+      this.openGiftModal();
+    });
+    document.getElementById('btn-close-gift')?.addEventListener('click', () => {
+      this.giftModal?.classList.add('hidden');
+    });
+    document.querySelectorAll('.gift-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        if (this.giftInput) {
+          this.giftInput.value = chip.dataset.code || '';
+          this.giftInput.focus();
+        }
+      });
+    });
+    this.giftRedeemBtn?.addEventListener('click', () => {
+      this.tryRedeemGiftCode();
+    });
+    this.giftInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.tryRedeemGiftCode();
+    });
 
     this.dashBtn = document.getElementById('btn-dash');
     this.dashOverlay = document.getElementById('dash-cooldown-overlay');
@@ -115,6 +152,39 @@ export class UIManager {
     });
     document.getElementById('btn-close-recipe')?.addEventListener('click', () => {
       this.recipeModal?.classList.add('hidden');
+    });
+
+    // 局內隨機事件橫幅
+    this.eventBanner = document.getElementById('event-banner');
+
+    // 局內祝福與協同欄
+    this.blessingsBar = document.getElementById('blessings-bar');
+    this.synergiesBar = document.getElementById('synergies-bar');
+
+    // 祝福選擇彈窗
+    this.blessingModal = document.getElementById('blessing-modal');
+    this.blessingTitle = document.getElementById('blessing-title');
+    this.blessingCards = document.getElementById('blessing-cards');
+
+    // 流浪商人彈窗
+    this.merchantModal = document.getElementById('merchant-modal');
+    this.merchantCards = document.getElementById('merchant-cards');
+    this.merchantGoldVal = document.getElementById('merchant-gold-val');
+    document.getElementById('btn-close-merchant')?.addEventListener('click', () => {
+      this.hideMerchant();
+    });
+
+    // 成就彈窗
+    this.achievementsModal = document.getElementById('achievements-modal');
+    this.achievementsList = document.getElementById('achievements-list');
+    this.achievementsProgress = document.getElementById('achievements-progress');
+    this.achievementsTotalReward = document.getElementById('achievements-total-reward');
+    this.achievementsBtn = document.getElementById('btn-achievements');
+    this.achievementsBtn?.addEventListener('click', () => {
+      this.showAchievements();
+    });
+    document.getElementById('btn-close-achievements')?.addEventListener('click', () => {
+      this.achievementsModal?.classList.add('hidden');
     });
 
     if (this.turretUpBtn) {
@@ -164,7 +234,7 @@ export class UIManager {
   }
 
   // 開始畫面的特工選擇卡 (未解鎖的特工要花 DNA 解鎖，點卡即購買)
-  buildCharacterSelect(characters, order, save, onPick, onUnlock, initialId = order[0]) {
+  buildCharacterSelect(characters, order, save, onPick, onUnlock, initialId = order[0], onAspectChange = null) {
     this.charSelect.innerHTML = '';
 
     order.forEach((id, i) => {
@@ -172,19 +242,44 @@ export class UIManager {
       const unlocked = save.characterUnlocked(id);
       const cost = c.unlockCost || 0;
 
-      const card = document.createElement('button');
+      const card = document.createElement('div');
       card.className = 'char-card'
         + (unlocked && id === initialId ? ' selected' : '')
         + (unlocked ? '' : ' locked');
       card.style.setProperty('--accent', c.accent);
+      const classColor = c.classColor || c.accent || '#00e5ff';
+      const heroClass = c.heroClass || '特工';
+
+      const aspects = WEAPON_ASPECTS[c.startWeapon] || [];
+      const currentAspect = save.getWeaponAspect(c.startWeapon) || aspects[0]?.id;
+      let aspectHtml = '';
+      if (unlocked && aspects.length > 0) {
+        aspectHtml = `
+          <div class="char-aspect-section">
+            <div class="char-aspect-title">⚔️ 兵器型態:</div>
+            <div class="aspect-chips" data-weapon="${c.startWeapon}">
+              ${aspects.map(a => `
+                <span class="aspect-chip ${a.id === currentAspect ? 'active' : ''}" data-aspect="${a.id}" title="${a.name}: ${a.desc}">
+                  ${a.icon} ${a.name.split(' ')[0]}
+                </span>
+              `).join('')}
+            </div>
+            <div class="aspect-desc-tooltip">${aspects.find(a => a.id === currentAspect)?.desc || ''}</div>
+          </div>
+        `;
+      }
+
       card.innerHTML = `
         <canvas class="char-portrait" width="128" height="120"></canvas>
+        <div class="char-class-badge" style="background:${classColor}; color:#0c1017;">${heroClass}</div>
         ${unlocked ? '' : `<div class="char-lock-badge">🔒 ${cost} 🧬</div>`}
         <div class="char-codename">${c.codename}${unlocked ? '' : ' <span class="lock-hint">未解鎖</span>'}</div>
-        <div class="char-title">${c.title}</div>
+        <div class="char-title">${c.title} <span class="char-class-tag" style="color:${classColor};">(${heroClass})</span></div>
         <div class="char-trait"><strong>${c.traitName}</strong>${c.traitDesc}</div>
+        ${aspectHtml}
       `;
-      card.addEventListener('click', () => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.aspect-chip')) return;
         if (!unlocked) {
           // 鎖定卡：有給解鎖回呼就試買 (DNA 不足時由遊戲端顯示提示)
           if (typeof onUnlock === 'function') onUnlock(id, cost);
@@ -195,6 +290,25 @@ export class UIManager {
         card.classList.add('selected');
         onPick(id);
       });
+
+      if (unlocked && aspects.length > 0) {
+        card.querySelectorAll('.aspect-chip').forEach(chip => {
+          chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const aId = chip.dataset.aspect;
+            save.setWeaponAspect(c.startWeapon, aId);
+            sound.playGem();
+            card.querySelectorAll('.aspect-chip').forEach(el => el.classList.toggle('active', el.dataset.aspect === aId));
+            const descEl = card.querySelector('.aspect-desc-tooltip');
+            if (descEl) {
+              const found = aspects.find(a => a.id === aId);
+              if (found) descEl.textContent = found.desc;
+            }
+            if (typeof onAspectChange === 'function') onAspectChange(c.startWeapon, aId);
+          });
+        });
+      }
+
       this.charSelect.appendChild(card);
 
       // 直接把遊戲內同一組 sprite 畫成頭像，選角看到的就是實際長相
@@ -591,10 +705,21 @@ export class UIManager {
     }
   }
 
-  // 佈署砲塔按鈕：金幣不夠就變灰
+  // 佈署設施按鈕列狀態更新 (金幣不夠就變灰)
+  updateFacilityButtons(gold, costFn) {
+    if (!this.facilityButtons) return;
+    for (const [type, item] of Object.entries(this.facilityButtons)) {
+      if (!item || !item.btn) continue;
+      const cost = typeof costFn === 'function' ? costFn(type) : 50;
+      if (item.cost) item.cost.textContent = cost;
+      item.btn.classList.toggle('affordable', gold >= cost);
+    }
+  }
+
+  // 佈署砲塔按鈕：保持相容
   updateBuildBtn(gold, cost) {
-    this.buildCost.textContent = cost;
-    this.buildBtn.classList.toggle('affordable', gold >= cost);
+    if (this.buildCost) this.buildCost.textContent = cost;
+    if (this.buildBtn) this.buildBtn.classList.toggle('affordable', gold >= cost);
   }
 
   // 戰術閃避冷卻進度
@@ -797,11 +922,48 @@ export class UIManager {
     });
   }
 
-  // 依模式顯示/隱藏砲塔與傭兵按鈕 (生存者模式兩者都沒有)
+  // 依模式顯示/隱藏砲塔與傭兵按鈕
   setModeButtons(mode) {
+    this.facilityBar?.classList.toggle('hidden', !mode.turrets);
     this.buildBtn?.classList.toggle('hidden', !mode.turrets);
     this.hireBtn?.classList.toggle('hidden', !mode.mercs);
     if (!mode.turrets) this.showTurretUpgrade(false);
+  }
+
+  // 官方禮包彈窗
+  openGiftModal() {
+    if (this.giftStatus) {
+      this.giftStatus.textContent = '';
+      this.giftStatus.className = 'menu-status gift-status';
+    }
+    this.giftModal?.classList.remove('hidden');
+    if (this.giftInput) {
+      this.giftInput.value = '';
+      this.giftInput.focus();
+    }
+  }
+
+  tryRedeemGiftCode() {
+    if (!this.giftInput || !this.giftStatus) return;
+    const code = this.giftInput.value.trim();
+    if (!code) {
+      this.giftStatus.textContent = '請輸入禮包密令！';
+      this.giftStatus.className = 'menu-status gift-status err';
+      sound.playHurt();
+      return;
+    }
+    const res = save.redeemCode(code);
+    if (res.ok) {
+      this.giftStatus.textContent = `🎉 兌換成功！獲得：${res.reward}`;
+      this.giftStatus.className = 'menu-status gift-status ok';
+      this.giftInput.value = '';
+      this.updateDnaChip(save.data.dna, save.data.gold);
+      sound.playEvoFanfare();
+    } else {
+      this.giftStatus.textContent = `❌ ${res.reason}`;
+      this.giftStatus.className = 'menu-status gift-status err';
+      sound.playHurt();
+    }
   }
 
   // 基地核心血條 (守塔模式)
@@ -882,13 +1044,60 @@ export class UIManager {
       const slot = document.getElementById(`weapon-slot-${wIndex}`);
       if (!slot) continue;
       const def = WEAPONS[id];
+      const aspectId = weaponManager.player?.weaponAspects?.[id];
+      const aspectList = WEAPON_ASPECTS[id];
+      const asp = aspectList?.find((a) => a.id === aspectId);
+      const aspectBadge = asp ? `<span class="slot-aspect-badge" title="${asp.name}: ${asp.desc}">${asp.icon}</span>` : '';
+
       slot.className = `skill-slot filled ${item.isEvo ? 'evo' : ''}`;
       slot.innerHTML = `
         <span class="slot-emoji">${def.icon.split(' ')[0]}</span>
         <span class="slot-stars">${item.isEvo ? 'MAX' : '★'.repeat(item.level)}</span>
+        ${aspectBadge}
       `;
       wIndex++;
     }
+
+  updatePocketItem(itemId, count) {
+    const pocketSlot = document.getElementById('pocket-slot');
+    const pocketIcon = document.getElementById('pocket-item-icon');
+    const pocketBadge = document.getElementById('pocket-item-badge');
+    const actionBtn = document.getElementById('btn-pocket');
+    const actionIcon = document.getElementById('action-pocket-icon');
+    const actionBadge = document.getElementById('action-pocket-badge');
+
+    if (!itemId || count <= 0) {
+      if (pocketSlot) {
+        pocketSlot.className = 'pocket-slot empty';
+        pocketSlot.title = '戰術口袋 (目前為空)';
+      }
+      if (pocketIcon) pocketIcon.textContent = '🎒';
+      if (pocketBadge) pocketBadge.classList.add('hidden');
+      if (actionBtn) actionBtn.classList.add('hidden');
+      return;
+    }
+
+    const conf = CONSUMABLE_ITEMS[itemId];
+    if (!conf) return;
+
+    if (pocketSlot) {
+      pocketSlot.className = 'pocket-slot filled';
+      pocketSlot.title = `【${conf.name}】${conf.desc} (按 E 或點擊使用)`;
+    }
+    if (pocketIcon) pocketIcon.textContent = conf.icon;
+    if (pocketBadge) {
+      pocketBadge.textContent = count;
+      pocketBadge.classList.toggle('hidden', count <= 1);
+    }
+    if (actionBtn) {
+      actionBtn.classList.remove('hidden');
+      if (actionIcon) actionIcon.textContent = conf.icon;
+      if (actionBadge) {
+        actionBadge.textContent = count;
+        actionBadge.classList.toggle('hidden', count <= 1);
+      }
+    }
+  }
     // 空槽重置
     for (let i = wIndex; i < GAME_CONFIG.MAX_WEAPON_SLOTS; i++) {
       const slot = document.getElementById(`weapon-slot-${i}`);
@@ -940,20 +1149,27 @@ export class UIManager {
 
     options.forEach((opt) => {
       const card = document.createElement('div');
-      card.className = `upgrade-card ${opt.isEvo ? 'card-evo' : ''}`;
+      card.className = `upgrade-card ${opt.isEvo ? 'card-evo' : (opt.type === 'special' ? 'card-special' : '')}`;
+      if (opt.color) {
+        card.style.setProperty('--card-glow-color', opt.color);
+      }
 
       const stars = opt.isEvo
         ? '★★★★★ 超武進化'
+        : opt.type === 'special'
+        ? '★ 特殊奇遇'
+        : opt.type === 'heal'
+        ? '緊急補給'
         : opt.isNew
         ? 'NEW 首次獲取'
-        : '★'.repeat(opt.nextLevel) + '☆'.repeat(opt.maxLevel - opt.nextLevel);
+        : '★'.repeat(opt.nextLevel || 1) + '☆'.repeat(Math.max(0, (opt.maxLevel || 1) - (opt.nextLevel || 1)));
 
       card.innerHTML = `
         <div class="card-icon-box">${opt.icon}</div>
         <div class="card-info">
           <div class="card-title-row">
             <span class="card-name">${opt.name}</span>
-            <span class="card-tag ${opt.isEvo ? 'tag-evo' : ''}">${opt.tag}</span>
+            <span class="card-tag ${opt.isEvo ? 'tag-evo' : (opt.type === 'special' ? 'tag-special' : '')}">${opt.tag}</span>
           </div>
           <div class="card-desc">${opt.description}</div>
           <div class="card-level-stars">${stars}</div>
@@ -1139,6 +1355,20 @@ export class UIManager {
       }
     }
 
+    // 6. 特殊升級卡 (15% 機率混入一張)
+    if (Math.random() < 0.15 && SPECIAL_CARDS && SPECIAL_CARDS.length > 0) {
+      const sp = SPECIAL_CARDS[Math.floor(Math.random() * SPECIAL_CARDS.length)];
+      candidates.push({
+        type: 'special',
+        specialId: sp.id,
+        name: sp.name,
+        icon: sp.icon,
+        description: sp.desc,
+        tag: '特殊奇遇',
+        color: sp.color,
+      });
+    }
+
     // 若全部選滿/無可升級，提供特工急救包
     if (candidates.length === 0) {
       candidates.push({
@@ -1306,6 +1536,52 @@ export class UIManager {
       }
     }
 
+    // 成就解鎖結算展示
+    const achBox = document.getElementById('game-over-achievements-box');
+    const achList = document.getElementById('game-over-achievements-list');
+    if (achBox && achList) {
+      const newly = stats.achievements || [];
+      if (newly.length > 0) {
+        achBox.classList.remove('hidden');
+        achList.innerHTML = '';
+        newly.forEach((ach) => {
+          const item = document.createElement('div');
+          item.className = 'game-over-ach-item';
+          item.innerHTML = `<span>${ach.icon} <strong>${ach.name}</strong>：${ach.desc}</span><strong class="ach-dna">+${ach.reward} 🧬</strong>`;
+          achList.appendChild(item);
+        });
+      } else {
+        achBox.classList.add('hidden');
+      }
+    }
+
+    // 祝福與協同結算展示
+    const buffsBox = document.getElementById('game-over-buffs-box');
+    const buffsList = document.getElementById('game-over-buffs-list');
+    if (buffsBox && buffsList) {
+      const bList = stats.blessings || [];
+      const sList = stats.synergies || [];
+      if (bList.length > 0 || sList.length > 0) {
+        buffsBox.classList.remove('hidden');
+        buffsList.innerHTML = '';
+        bList.forEach((b) => {
+          const chip = document.createElement('span');
+          chip.className = 'game-over-buff-chip';
+          chip.innerHTML = `${b.icon} ${b.name}`;
+          buffsList.appendChild(chip);
+        });
+        sList.forEach((s) => {
+          const chip = document.createElement('span');
+          chip.className = 'game-over-buff-chip synergy-chip';
+          chip.style.borderColor = s.color;
+          chip.innerHTML = `${s.icon} ${s.name}`;
+          buffsList.appendChild(chip);
+        });
+      } else {
+        buffsBox.classList.add('hidden');
+      }
+    }
+
     this.gameOverModal.classList.remove('hidden');
   }
 
@@ -1320,5 +1596,158 @@ export class UIManager {
     } else {
       chip.classList.add('hidden');
     }
+  }
+
+  // ── 方向 1：局內隨機祝福 UI ──
+  updateBlessings(blessings) {
+    if (!this.blessingsBar) return;
+    this.blessingsBar.innerHTML = '';
+    blessings.forEach((b) => {
+      const badge = document.createElement('div');
+      badge.className = 'buff-badge blessing-badge';
+      badge.innerHTML = `<span class="buff-icon">${b.icon}</span>`;
+      badge.title = `${b.name}`;
+      this.blessingsBar.appendChild(badge);
+    });
+  }
+
+  showBlessingChoice(title, choices, onSelect) {
+    if (!this.blessingModal) return;
+    sound.playEvoFanfare();
+    if (this.blessingTitle) this.blessingTitle.textContent = `🔮 神聖祝福降臨！ (${title})`;
+    if (this.blessingCards) {
+      this.blessingCards.innerHTML = '';
+      choices.forEach((b) => {
+        const card = document.createElement('div');
+        card.className = `upgrade-card card-blessing ${b.risk ? 'card-risk' : ''}`;
+        card.innerHTML = `
+          <div class="card-icon-box">${b.icon}</div>
+          <div class="card-info">
+            <div class="card-title-row">
+              <span class="card-name">${b.name}</span>
+              <span class="card-tag ${b.risk ? 'tag-risk' : 'tag-blessing'}">${b.risk ? '代價祝福' : '神聖祝福'}</span>
+            </div>
+            <div class="card-desc">${b.desc}</div>
+          </div>
+        `;
+        card.addEventListener('click', () => {
+          this.blessingModal.classList.add('hidden');
+          onSelect(b);
+        });
+        this.blessingCards.appendChild(card);
+      });
+    }
+    this.blessingModal.classList.remove('hidden');
+  }
+
+  // ── 方向 2：隨機事件 UI ──
+  updateEventBanner(activeEvent) {
+    if (!this.eventBanner) return;
+    if (!activeEvent) {
+      this.eventBanner.classList.add('hidden');
+      return;
+    }
+    this.eventBanner.classList.remove('hidden');
+    this.eventBanner.style.setProperty('--event-color', activeEvent.color);
+    this.eventBanner.innerHTML = `
+      <span class="event-icon">${activeEvent.icon}</span>
+      <div class="event-body">
+        <strong class="event-title">${activeEvent.name}</strong>
+        <span class="event-desc">${activeEvent.desc}</span>
+      </div>
+      <span class="event-timer">${Math.ceil(activeEvent.remaining)}s</span>
+    `;
+  }
+
+  // ── 方向 4：武器協同 UI ──
+  updateSynergies(synergies) {
+    if (!this.synergiesBar) return;
+    this.synergiesBar.innerHTML = '';
+    synergies.forEach((s) => {
+      const badge = document.createElement('div');
+      badge.className = 'buff-badge synergy-badge';
+      badge.style.setProperty('--badge-color', s.color);
+      badge.innerHTML = `<span class="buff-icon">${s.icon}</span>`;
+      badge.title = `【${s.name}】${s.desc}`;
+      this.synergiesBar.appendChild(badge);
+    });
+  }
+
+  // ── 方向 5：局內黑市商人 UI ──
+  showMerchant(merchant, currentGold, onBuy) {
+    if (!this.merchantModal) return;
+    if (this.merchantGoldVal) this.merchantGoldVal.textContent = currentGold;
+    if (this.merchantCards) {
+      this.merchantCards.innerHTML = '';
+      merchant.items.forEach((item) => {
+        const card = document.createElement('div');
+        const affordable = currentGold >= item.cost;
+        card.className = `upgrade-card merchant-card ${affordable ? '' : 'merchant-disabled'}`;
+        card.innerHTML = `
+          <div class="card-icon-box">${item.icon}</div>
+          <div class="card-info">
+            <div class="card-title-row">
+              <span class="card-name">${item.name}</span>
+              <span class="card-tag tag-merchant">${item.cost} 🪙</span>
+            </div>
+            <div class="card-desc">${item.desc}</div>
+            <button class="game-btn primary-btn merchant-buy-btn" ${affordable ? '' : 'disabled'}>
+              ${affordable ? '購買' : '金幣不足'}
+            </button>
+          </div>
+        `;
+        const btn = card.querySelector('.merchant-buy-btn');
+        btn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onBuy(item);
+        });
+        this.merchantCards.appendChild(card);
+      });
+    }
+    this.merchantModal.classList.remove('hidden');
+  }
+
+  hideMerchant() {
+    this.merchantModal?.classList.add('hidden');
+  }
+
+  // ── 方向 6：成就系統 UI ──
+  showAchievements() {
+    if (!this.achievementsModal) return;
+    const unlocked = new Set(save.data.achievements || []);
+    let totalUnlocked = 0;
+    let totalReward = 0;
+
+    if (this.achievementsList) {
+      this.achievementsList.innerHTML = '';
+      ACHIEVEMENTS.forEach((ach) => {
+        const isDone = unlocked.has(ach.id);
+        if (isDone) {
+          totalUnlocked++;
+          totalReward += ach.reward;
+        }
+        const row = document.createElement('div');
+        row.className = `achievement-row ${isDone ? 'done' : 'locked'}`;
+        row.innerHTML = `
+          <div class="ach-icon">${ach.icon}</div>
+          <div class="ach-info">
+            <div class="ach-title-row">
+              <strong class="ach-name">${ach.name}</strong>
+              <span class="ach-reward">+${ach.reward} 🧬</span>
+            </div>
+            <div class="ach-desc">${ach.desc}</div>
+          </div>
+          <div class="ach-status-badge">${isDone ? '✓ 已達成' : '未解鎖'}</div>
+        `;
+        this.achievementsList.appendChild(row);
+      });
+    }
+    if (this.achievementsProgress) {
+      this.achievementsProgress.textContent = `${totalUnlocked} / ${ACHIEVEMENTS.length}`;
+    }
+    if (this.achievementsTotalReward) {
+      this.achievementsTotalReward.textContent = `${totalReward}`;
+    }
+    this.achievementsModal.classList.remove('hidden');
   }
 }

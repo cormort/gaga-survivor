@@ -65,8 +65,28 @@ export class Player {
     this.dashTimer = 0;
     this.dashDuration = 0.22;
     this.dashTimeLeft = 0;
-    this.dashDir = { x: 1, y: 0 };
+    this.dashDir = { x: 0, y: 0 };
     this.dashGhosts = [];
+
+    // 戰術口袋 (惡魔城風格消費道具)
+    this.pocketItem = null;      // 例如 'potion', 'stopwatch'
+    this.pocketItemCount = 0;   // 堆疊上限 2
+    this.atkPotionTimer = 0;
+    this.shieldPotionTimer = 0;
+    this.luckPotionTimer = 0;
+    this.nemesisCritTimer = 0;
+    this.achillesSpeedTimer = 0;
+    this.achillesSpeedStacks = 0;
+
+    // 武器型態配置 (Hades Aspects)
+    this.weaponAspects = {
+      kunai: 'zagreus',
+      rocket: 'hestia',
+      molotov: 'zagreus',
+      lightning: 'zeus',
+      guardian: 'zagreus',
+      soccer: 'achilles',
+    };
 
     // 套用角色專屬特質的初始值
     this.character.init?.(this);
@@ -81,17 +101,18 @@ export class Player {
   }
 
   get speed() {
-    return this.baseSpeed * this.speedMultiplier;
+    const achillesBonus = 1 + (this.achillesSpeedStacks || 0) * 0.06;
+    return this.baseSpeed * this.speedMultiplier * achillesBonus;
   }
 
   // 觸發戰術閃避翻滾
   dash(inputVector) {
     if (this.dashTimer > 0 || this.dashTimeLeft > 0 || this.isDead) return false;
 
-    let dirX = inputVector?.x || 0;
-    let dirY = inputVector?.y || 0;
+    // 依當前移動方向翻滾，無輸入則依面向
+    const dirX = inputVector.x;
+    const dirY = inputVector.y;
     const len = Math.hypot(dirX, dirY);
-
     if (len > 0.1) {
       this.dashDir = { x: dirX / len, y: dirY / len };
     } else {
@@ -99,11 +120,17 @@ export class Player {
     }
 
     this.dashTimeLeft = this.dashDuration;
-    // 局外 CDR 可微幅減免翻滾冷卻，至多 -30%
-    const cdrMod = Math.max(0.7, 1 - (this.metaCdr || 0) * 0.5);
+    // 局外 CDR 可微幅減免翻滾冷卻，至多 -30%；幽靈步伐祝福可進一步降低 40%
+    const cdrMod = Math.max(0.4, (1 - (this.metaCdr || 0) * 0.5) * (this.blessingDashCdr || 1));
     this.dashMaxTimer = this.dashCooldown * cdrMod;
     this.dashTimer = this.dashCooldown * cdrMod;
     this.invulnerableTimer = Math.max(this.invulnerableTimer, this.dashDuration + 0.1);
+
+    // 武器型態：涅墨西斯裁決 (翻滾後 3.5 秒內苦無必暴)
+    if (this.weaponAspects?.kunai === 'nemesis') {
+      this.nemesisCritTimer = 3.5;
+    }
+
     sound.playDash();
     return true;
   }
@@ -114,10 +141,20 @@ export class Player {
     // 閃避冷卻計時
     if (this.dashTimer > 0) this.dashTimer -= dt;
 
+    // 藥劑與型態 Buff 計時
+    if (this.atkPotionTimer > 0) this.atkPotionTimer -= dt;
+    if (this.shieldPotionTimer > 0) this.shieldPotionTimer -= dt;
+    if (this.luckPotionTimer > 0) this.luckPotionTimer -= dt;
+    if (this.nemesisCritTimer > 0) this.nemesisCritTimer -= dt;
+    if (this.achillesSpeedTimer > 0) {
+      this.achillesSpeedTimer -= dt;
+      if (this.achillesSpeedTimer <= 0) this.achillesSpeedStacks = 0;
+    }
+
     // 翻滾狀態 vs 普通移動
     if (this.dashTimeLeft > 0) {
       this.dashTimeLeft -= dt;
-      const dashSpeed = this.speed * 3.6;
+      const dashSpeed = this.speed * 3.6 * (this.blessingDashDist || 1);
       this.x += this.dashDir.x * dashSpeed * dt;
       this.y += this.dashDir.y * dashSpeed * dt;
 
@@ -195,6 +232,14 @@ export class Player {
     if (this.invulnerableTimer > 0 || this.isDead) return false;
 
     let dmg = Math.round(amount * this.damageTakenMul * (1 - (this.metaArmor || 0)));
+    // 惡魔城防禦藥劑：受傷減半
+    if (this.shieldPotionTimer > 0) {
+      dmg = Math.round(dmg * 0.5);
+    }
+    // 雅典娜聖光結界：領域減傷 25%
+    if (this.inSanctuary) {
+      dmg = Math.round(dmg * 0.75);
+    }
     if (this.shield && this.shield > 0) {
       if (this.shield >= dmg) {
         this.shield -= dmg;
@@ -205,10 +250,21 @@ export class Player {
       }
     }
     this.hp -= dmg;
+    if (this.game && dmg > 0) {
+      this.game._damageTaken = (this.game._damageTaken || 0) + dmg;
+    }
     this.invulnerableTimer = 0.5; // 0.5 秒無敵時間
     sound.playHurt();
 
     if (this.hp <= 0) {
+      if (this.blessingDeathSave) {
+        this.blessingDeathSave = false;
+        this.hp = 1;
+        this.invulnerableTimer = 3.0; // 3 秒無敵時間
+        sound.playEvoFanfare();
+        if (this.game?.ui) this.game.ui.say('🌈 虹光護佑觸發！以 1 HP 存活！', '#00f59b', 3);
+        return true;
+      }
       this.hp = 0;
       this.isDead = true;
     }
@@ -216,6 +272,7 @@ export class Player {
   }
 
   heal(amount) {
+    if (this.isDead) return;
     this.hp = Math.min(this.maxHp, this.hp + amount);
   }
 
@@ -248,6 +305,30 @@ export class Player {
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.drawImage(Player.glow(), -56, -50, 112, 112);
+
+    // 戰術藥劑與型態 Buff 視覺環
+    const now = Date.now() * 0.003;
+    if (this.shieldPotionTimer > 0) {
+      ctx.strokeStyle = '#4cc9f0';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 28 + Math.sin(now * 3) * 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (this.atkPotionTimer > 0) {
+      ctx.strokeStyle = '#ff7b00';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 24 + Math.cos(now * 4) * 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (this.nemesisCritTimer > 0) {
+      ctx.strokeStyle = '#ffd60a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 22, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
 
     // 無敵時間閃爍

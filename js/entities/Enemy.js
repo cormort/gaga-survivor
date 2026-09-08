@@ -127,6 +127,10 @@ export class Enemy {
       }
     }
 
+    if (this._markedTimer > 0) {
+      this._markedTimer -= dt;
+    }
+
     this.animTimer += dt * 8;
     if (this.flashTimer > 0) this.flashTimer -= dt;
 
@@ -282,6 +286,20 @@ export class Enemy {
       return;
     }
     this.freezeTimer = Math.max(this.freezeTimer, duration);
+  }
+
+  // 眩暈：同冰凍定身機制
+  applyStun(duration) {
+    if (this.isBoss) {
+      this.slowTimer = Math.max(this.slowTimer, duration * 0.5);
+      return;
+    }
+    this.freezeTimer = Math.max(this.freezeTimer, duration);
+  }
+
+  // 減速
+  applySlow(duration) {
+    this.slowTimer = Math.max(this.slowTimer, duration);
   }
 
   // 中毒：疊層 (上限 maxStacks)，每次命中都把持續時間刷滿

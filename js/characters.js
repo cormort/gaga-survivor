@@ -8,6 +8,9 @@ export const CHARACTERS = {
     codename: '007 鴨鴨',
     title: '嘎嘎特工',
     role: '均衡新手推薦 / 單體點殺與極速風箏',
+    heroClass: '遠程',
+    classColor: '#ffcc00',
+    classTitle: '致命點殺 / 極速風箏',
     traitName: '特工風度',
     traitDesc: '移動時 +15% 暴擊率，拾取範圍 +20%',
     startWeapon: 'kunai',
@@ -39,6 +42,9 @@ export const CHARACTERS = {
     codename: '暴走蘿蔔',
     title: '特工兔兔',
     role: '極限跑速 / 範圍燃燒 / 邊跑邊打',
+    heroClass: '重火力',
+    classColor: '#ff6b35',
+    classTitle: '極限跑速 / 範圍火海',
     traitName: '兔子快跑',
     traitDesc: '跑速每 +10%，全傷害 +5%；奔跑時留下灼燒火痕',
     startWeapon: 'molotov',
@@ -85,6 +91,9 @@ export const CHARACTERS = {
     codename: '鋼鐵肥啾',
     title: '重裝企鵝',
     role: '近身絞肉機 / 站擼護盾 / 彈射防禦',
+    heroClass: '防守',
+    classColor: '#9fb3c8',
+    classTitle: '重裝肉盾 / 反傷力場',
     traitName: '厚脂肪裝甲',
     traitDesc: '碰撞傷害 -20%，受擊時裝甲反震引發全場衝擊波',
     startWeapon: 'guardian',
@@ -124,6 +133,9 @@ export const CHARACTERS = {
     codename: '脈衝喵喵',
     title: '賽博駭客',
     role: '技能 CD 縮減極致 / 全螢幕連鎖天罰',
+    heroClass: '輔助',
+    classColor: '#00e5ff',
+    classTitle: '超頻過載 / 全域天罰',
     traitName: '超頻過載',
     traitDesc: '擊殺菁英怪 (巨漢/詞綴怪/Boss) 觸發過載，5 秒內所有冷卻減半',
     startWeapon: 'lightning',
@@ -152,6 +164,36 @@ export const CHARACTERS = {
       game.ui.say('超頻過載！冷卻減半 5 秒', '#00e5ff');
     },
   },
+
+  mechanic: {
+    id: 'mechanic',
+    sprite: 'mechanic',
+    codename: '工兵阿鴨',
+    title: '戰地工程師',
+    heroClass: '工程',
+    classColor: '#00f59b',
+    classTitle: '戰地工事 / 建築專精',
+    role: '防禦工事專精 / 設施建造減免 / 開局戰備金',
+    traitName: '工事大師',
+    traitDesc: '所有戰場防禦設施部署費用 -25%，工事耐久度 +50%，開局額外獲贈 100 🪙 工程戰備金',
+    startWeapon: 'rocket',
+    unlockCost: 180,
+    accent: '#00f59b',
+    lines: {
+      start: '藍圖已確認，扳手已就緒！今天要在這片感染廢墟築起鋼鐵防線，嘎！',
+      levelup: '新零件到了！這能大幅升級我的戰地設施！',
+      evolve: '核彈火箭發射架改裝完成！讓殭屍嚐嚐工程學的浪漫！',
+      lowhp: '防線要被衝破了？！戰地工程兵絕不後退！',
+      boss: '掃描到超巨型感染體，各砲台、電網與拒馬全力開火！',
+      win: '據點防衛完好無損，工程質量五星好評，收工回基地喝機油特調！',
+      death: '我的……自動維修板手……螺絲鬆了……嘎……',
+    },
+    init(player) {
+      player.facilityCostMul = 0.75;
+      player.facilityHpMul = 1.5;
+      player.startBonusGold = 100;
+    },
+  },
 };
 
-export const CHARACTER_ORDER = ['duck', 'rabbit', 'penguin', 'cat'];
+export const CHARACTER_ORDER = ['duck', 'rabbit', 'penguin', 'cat', 'mechanic'];

@@ -48,9 +48,20 @@
           <span class="hud-icon">📦</span>
           <span id="pending-gear-count">0</span>
         </div>
-        <button id="btn-build" class="hud-btn build-btn" title="佈署砲塔 (B)">
-          <span class="build-icon">🔫</span><span id="build-cost">60</span>
-        </button>
+        <div id="facility-bar" class="facility-bar">
+          <button id="btn-build" class="hud-btn build-btn" data-facility="turret" title="機槍砲台 (1/B)">
+            <span class="build-icon">🔫</span><span id="build-cost">60</span>
+          </button>
+          <button id="btn-build-grid" class="hud-btn build-btn" data-facility="electric_grid" title="高壓電網 (2)">
+            <span class="build-icon">⚡</span><span id="build-grid-cost">50</span>
+          </button>
+          <button id="btn-build-purifier" class="hud-btn build-btn" data-facility="purifier" title="淨化裝置 (3)">
+            <span class="build-icon">🧪</span><span id="build-purifier-cost">75</span>
+          </button>
+          <button id="btn-build-barricade" class="hud-btn build-btn" data-facility="barricade" title="反傷拒馬 (4)">
+            <span class="build-icon">🛡️</span><span id="build-barricade-cost">40</span>
+          </button>
+        </div>
         <button id="btn-sound" class="hud-btn" title="切換音效">🔊</button>
         <button id="btn-pause" class="hud-btn" title="暫停遊戲">⏸️</button>
         <button id="btn-quit" class="hud-btn quit-btn hidden" title="放棄任務回主選單">🚪</button>
@@ -58,6 +69,9 @@
 
       <!-- 任務提示列：下一波 Boss / 終極首領通關條件 -->
       <div id="objective" class="objective"></div>
+
+      <!-- 局內隨機事件橫幅 -->
+      <div id="event-banner" class="event-banner hidden"></div>
 
       <!-- 武器與被動技能欄 -->
       <div id="skills-tray">
@@ -69,6 +83,20 @@
           <span class="slot-label">被動</span>
           <div id="passive-slots" class="slots-container"></div>
         </div>
+        <!-- 戰術口袋槽 (惡魔城消費道具) -->
+        <div class="slot-group">
+          <span class="slot-label">道具 [E]</span>
+          <div id="pocket-slot" class="pocket-slot empty" title="戰術口袋 (按 E 或點擊使用)">
+            <span id="pocket-item-icon" class="pocket-icon">🎒</span>
+            <span id="pocket-item-badge" class="pocket-badge hidden">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 局內祝福與協同 HUD 圖示列 -->
+      <div id="buffs-tray" class="buffs-tray">
+        <div id="blessings-bar" class="buffs-bar"></div>
+        <div id="synergies-bar" class="buffs-bar"></div>
       </div>
 
       <!-- 基地核心血條 (守塔模式顯示) -->
@@ -101,12 +129,17 @@
       </div>
     </div>
 
-    <!-- 戰術動作按鈕 (閃避翻滾 / 砲塔升級) -->
+    <!-- 戰術動作按鈕 (閃避翻滾 / 砲塔升級 / 戰術道具) -->
     <div id="action-bar">
       <button id="btn-dash" class="action-btn dash-btn" title="戰術閃避 (Space)">
         <span class="action-icon">💨</span>
         <span class="action-key">SPACE</span>
         <div id="dash-cooldown-overlay"></div>
+      </button>
+      <button id="btn-pocket" class="action-btn pocket-btn hidden" title="使用戰術道具 (E)">
+        <span id="action-pocket-icon" class="action-icon">🎒</span>
+        <span class="action-key">E</span>
+        <span id="action-pocket-badge" class="action-badge hidden">0</span>
       </button>
       <button id="btn-hire" class="action-btn hire-btn" title="僱傭傭兵 (G)">
         <span class="action-icon">💂</span>
@@ -214,11 +247,100 @@
       </div>
     </div>
 
+    <!-- 祝福二選一彈窗 (Roguelike Blessing Modal) -->
+    <div id="blessing-modal" class="overlay hidden">
+      <div class="modal-content blessing-content">
+        <div class="modal-header">
+          <h2 id="blessing-title" class="glow-text">🔮 神聖祝福降臨！</h2>
+          <p class="subtitle">從以下兩項神聖祝福中選擇一項，永久加持本局戰鬥</p>
+        </div>
+        <div id="blessing-cards" class="cards-grid blessing-cards-grid">
+          <!-- 動態生成 2 張祝福卡 -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 流浪黑市商人彈窗 (Merchant Modal) -->
+    <div id="merchant-modal" class="overlay hidden">
+      <div class="modal-content merchant-content">
+        <div class="modal-header">
+          <h2 class="glow-text">🏪 流浪黑市商人</h2>
+          <p class="subtitle">花費本局金幣選購即時戰鬥物資 (商人即將離開，請把握時機)</p>
+        </div>
+        <div class="merchant-wallet-bar">
+          <span>持有金幣：<strong id="merchant-gold-val">0</strong> 🪙</span>
+        </div>
+        <div id="merchant-cards" class="cards-grid merchant-cards-grid">
+          <!-- 動態生成商人貨架 -->
+        </div>
+        <button id="btn-close-merchant" class="game-btn secondary-btn">離開商店</button>
+      </div>
+    </div>
+
+    <!-- 成就系統彈窗 (Achievements Modal) -->
+    <div id="achievements-modal" class="overlay hidden">
+      <div class="modal-content achievements-content">
+        <div class="modal-header">
+          <h2 class="glow-text">🎯 特工成就勳章</h2>
+          <p class="subtitle">達成各項戰鬥挑戰解鎖榮譽成就，領取豐厚基因密鑰 🧬 獎勵！</p>
+        </div>
+        <div id="achievements-summary" class="achievements-summary">
+          <span>達成進度：<strong id="achievements-progress">0 / 12</strong></span>
+          <span>累計獎勵：<strong id="achievements-total-reward">0</strong> 🧬</span>
+        </div>
+        <div id="achievements-list" class="achievements-list">
+          <!-- 動態生成成就清單 -->
+        </div>
+        <button id="btn-close-achievements" class="game-btn secondary-btn">關閉成就</button>
+      </div>
+    </div>
+
+    <!-- 官方禮包兌換彈窗 (Gift Code Modal) -->
+    <div id="gift-code-modal" class="overlay hidden">
+      <div class="modal-content gift-content">
+        <div class="modal-header">
+          <h2 class="glow-text">🎁 嘎嘎特攻 · 官方禮包兌換</h2>
+          <p class="subtitle">2026 首款鴨鴨末日生存割草爽遊 · 專屬公測豪禮即刻領取！</p>
+        </div>
+        <div class="gift-box-body">
+          <div class="gift-input-row">
+            <input type="text" id="input-gift-code" class="gift-input" placeholder="請輸入禮包碼 (例: DUCK888)" maxlength="20" autocomplete="off" spellcheck="false" />
+            <button id="btn-redeem-code" class="game-btn primary-btn gift-redeem-btn">兌換獎勵 ✨</button>
+          </div>
+          <div class="gift-quick-label">點擊快速填入官方限定密令：</div>
+          <div class="gift-chips-grid">
+            <button class="gift-chip" data-code="DUCK888">
+              <span class="chip-code">DUCK888</span>
+              <span class="chip-reward">🪙 888 金幣</span>
+            </button>
+            <button class="gift-chip" data-code="GAGA999">
+              <span class="chip-code">GAGA999</span>
+              <span class="chip-reward">🧬 150 基因密鑰</span>
+            </button>
+            <button class="gift-chip" data-code="GAGAFIGHT">
+              <span class="chip-code">GAGAFIGHT</span>
+              <span class="chip-reward">💜 紫色史詩裝備</span>
+            </button>
+            <button class="gift-chip" data-code="DUCKGO">
+              <span class="chip-code">DUCKGO</span>
+              <span class="chip-reward">🪙 500 + 🧬 50</span>
+            </button>
+            <button class="gift-chip" data-code="VIP666">
+              <span class="chip-code">VIP666</span>
+              <span class="chip-reward">🪙 666 金幣</span>
+            </button>
+          </div>
+          <div id="gift-status" class="menu-status gift-status"></div>
+        </div>
+        <button id="btn-close-gift" class="game-btn secondary-btn">關閉視窗</button>
+      </div>
+    </div>
+
     <!-- 開局/開始介面 -->
     <div id="start-screen" class="overlay">
       <div class="start-box">
-        <div class="title-badge">ROGUELIKE SURVIVOR</div>
-        <h1 class="game-title">嘎嘎特攻隊<br><span class="title-sub">GAGA SURVIVOR</span></h1>
+        <div class="title-badge">2026 首款鴨鴨末日生存割草爽遊</div>
+        <h1 class="game-title">嘎嘎特攻<br><span class="title-sub">2026 首款鴨鴨末日生存割草爽遊 · GAGA SURVIVOR</span></h1>
         <div class="select-label">選擇作戰模式</div>
         <div id="mode-select" class="mode-select"></div>
 
@@ -235,9 +357,11 @@
         <div class="menu-meta">
           <span id="dna-chip" class="dna-chip">🧬 0</span>
           <span id="gold-chip" class="dna-chip gold-chip">🪙 0</span>
+          <button id="btn-gift" class="game-btn talent-btn gift-btn">🎁 官方禮包</button>
           <button id="btn-shop" class="game-btn talent-btn shop-btn">🛒 特工黑市</button>
           <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
           <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
+          <button id="btn-achievements" class="game-btn talent-btn">🎯 特工成就</button>
           <button id="btn-recipe" class="game-btn talent-btn">✨ 超武配方</button>
           <button id="btn-daily" class="game-btn talent-btn">📅 每日挑戰</button>
         </div>
@@ -304,6 +428,16 @@
             <span id="game-over-gear-status"></span>
           </div>
           <div id="game-over-gear-items" class="game-over-gear-items"></div>
+        </div>
+
+        <div id="game-over-achievements-box" class="game-over-achievements-box hidden">
+          <div class="game-over-achievements-title">🎯 本局解鎖成就！</div>
+          <div id="game-over-achievements-list" class="game-over-achievements-list"></div>
+        </div>
+
+        <div id="game-over-buffs-box" class="game-over-buffs-box hidden">
+          <div class="game-over-buffs-title">🔮 獲得祝福與協同</div>
+          <div id="game-over-buffs-list" class="game-over-buffs-list"></div>
         </div>
 
         <button id="btn-restart" class="game-btn primary-btn">再次挑戰 🔁</button>

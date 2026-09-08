@@ -2124,3 +2124,522 @@ body, html {
   margin: 3px 0;
   letter-spacing: 0.3px;
 }
+
+/* ==================== 局內隨機事件橫幅 (Event Banner) ==================== */
+.event-banner {
+  --event-color: #ff0055;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 580px;
+  margin: 0 auto;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, rgba(20, 20, 35, 0.92) 0%, rgba(10, 10, 20, 0.95) 100%);
+  border: 2px solid var(--event-color);
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(255, 0, 85, 0.3), inset 0 0 12px rgba(255, 0, 85, 0.15);
+  animation: eventPulse 1.8s infinite alternate ease-in-out;
+  pointer-events: auto;
+}
+
+@keyframes eventPulse {
+  0% { box-shadow: 0 0 12px var(--event-color); transform: scale(1); }
+  100% { box-shadow: 0 0 24px var(--event-color); transform: scale(1.02); }
+}
+
+.event-icon {
+  font-size: 24px;
+  filter: drop-shadow(0 0 6px var(--event-color));
+}
+
+.event-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.event-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.event-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.event-timer {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--event-color);
+  background: rgba(0, 0, 0, 0.5);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--event-color);
+}
+
+/* ==================== 局內祝福與協同圖示列 (Buffs Tray) ==================== */
+.buffs-tray {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  pointer-events: auto;
+  min-height: 28px;
+}
+
+.buffs-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.buff-badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 26, 43, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  font-size: 16px;
+  cursor: help;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.buff-badge:hover {
+  transform: scale(1.25);
+  z-index: 5;
+}
+
+.blessing-badge {
+  border-color: #b388ff;
+  box-shadow: 0 0 8px rgba(179, 136, 255, 0.4);
+}
+
+.synergy-badge {
+  border-color: var(--badge-color, #00e5ff);
+  box-shadow: 0 0 8px var(--badge-color, #00e5ff);
+}
+
+/* ==================== 祝福選擇面板 (Blessing Modal) ==================== */
+.blessing-content {
+  max-width: 640px;
+  background: radial-gradient(circle at 50% 0%, rgba(50, 20, 80, 0.95) 0%, rgba(15, 10, 25, 0.98) 100%);
+  border: 2px solid #b388ff;
+  box-shadow: 0 0 35px rgba(179, 136, 255, 0.35);
+}
+
+.blessing-cards-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.card-blessing {
+  border-color: rgba(179, 136, 255, 0.5);
+  background: rgba(25, 18, 45, 0.85);
+}
+
+.card-blessing:hover {
+  border-color: #b388ff;
+  box-shadow: 0 0 20px rgba(179, 136, 255, 0.5);
+}
+
+.card-risk {
+  border-color: rgba(255, 0, 85, 0.6);
+  background: rgba(45, 15, 25, 0.85);
+}
+
+.card-risk:hover {
+  border-color: #ff0055;
+  box-shadow: 0 0 20px rgba(255, 0, 85, 0.5);
+}
+
+.tag-blessing {
+  background: rgba(179, 136, 255, 0.2);
+  color: #b388ff;
+  border: 1px solid rgba(179, 136, 255, 0.5);
+}
+
+.tag-risk {
+  background: rgba(255, 0, 85, 0.2);
+  color: #ff0055;
+  border: 1px solid rgba(255, 0, 85, 0.5);
+}
+
+/* ==================== 特殊卡 (Special Card) ==================== */
+.card-special {
+  border-color: var(--card-glow-color, #ffb703) !important;
+  box-shadow: 0 0 16px var(--card-glow-color, rgba(255, 183, 3, 0.4));
+  background: radial-gradient(circle at 50% 0%, rgba(45, 35, 10, 0.85) 0%, rgba(18, 26, 43, 0.9) 100%) !important;
+}
+
+.card-special:hover {
+  box-shadow: 0 0 28px var(--card-glow-color, #ffb703) !important;
+}
+
+.tag-special {
+  background: rgba(255, 183, 3, 0.2);
+  color: #ffb703;
+  border: 1px solid rgba(255, 183, 3, 0.6);
+  font-weight: 700;
+}
+
+/* ==================== 黑市商人面板 (Merchant Modal) ==================== */
+.merchant-content {
+  max-width: 680px;
+  background: radial-gradient(circle at 50% 0%, rgba(55, 45, 15, 0.95) 0%, rgba(15, 18, 25, 0.98) 100%);
+  border: 2px solid #ffd166;
+  box-shadow: 0 0 35px rgba(255, 209, 102, 0.35);
+}
+
+.merchant-wallet-bar {
+  text-align: center;
+  font-size: 15px;
+  color: #ffd166;
+  margin-bottom: 12px;
+}
+
+.merchant-cards-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.merchant-card {
+  border-color: rgba(255, 209, 102, 0.4);
+  padding: 14px;
+}
+
+.merchant-card:hover {
+  border-color: #ffd166;
+}
+
+.merchant-disabled {
+  opacity: 0.6;
+}
+
+.tag-merchant {
+  background: rgba(255, 209, 102, 0.2);
+  color: #ffd166;
+  border: 1px solid rgba(255, 209, 102, 0.6);
+  font-weight: 700;
+}
+
+.merchant-buy-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* ==================== 成就勳章彈窗 (Achievements Modal) ==================== */
+.achievements-content {
+  max-width: 720px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% 0%, rgba(30, 45, 75, 0.95) 0%, rgba(10, 15, 28, 0.98) 100%);
+  border: 2px solid #00e5ff;
+  box-shadow: 0 0 40px rgba(0, 229, 255, 0.3);
+}
+
+.achievements-summary {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  font-size: 14px;
+  color: #00e5ff;
+  margin-bottom: 12px;
+}
+
+.achievements-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 6px;
+  margin-bottom: 16px;
+  max-height: 55vh;
+}
+
+.achievement-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(18, 26, 43, 0.85);
+  border: 1px solid rgba(64, 116, 219, 0.3);
+  transition: all 0.2s;
+}
+
+.achievement-row.done {
+  border-color: #00f59b;
+  background: rgba(0, 245, 155, 0.08);
+}
+
+.achievement-row.locked {
+  opacity: 0.65;
+  filter: grayscale(0.4);
+}
+
+.ach-icon {
+  font-size: 28px;
+}
+
+.ach-info {
+  flex: 1;
+}
+
+.ach-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.ach-name {
+  font-size: 15px;
+  color: #fff;
+}
+
+.ach-reward {
+  font-size: 12px;
+  font-weight: 700;
+  color: #b5179e;
+  background: rgba(181, 23, 158, 0.15);
+  border: 1px solid rgba(181, 23, 158, 0.4);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.ach-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ach-status-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+
+.achievement-row.done .ach-status-badge {
+  background: rgba(0, 245, 155, 0.2);
+  color: #00f59b;
+  border: 1px solid rgba(0, 245, 155, 0.5);
+}
+
+/* ==================== 結算成就與祝福 (Game Over) ==================== */
+.game-over-achievements-box,
+.game-over-buffs-box {
+  margin: 10px 0;
+  padding: 10px;
+  background: rgba(10, 15, 25, 0.85);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 8px;
+}
+
+.game-over-achievements-title,
+.game-over-buffs-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #00e5ff;
+  margin-bottom: 6px;
+}
+
+.game-over-ach-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.game-over-ach-item .ach-dna {
+  color: #b5179e;
+}
+
+.game-over-buff-chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 7px;
+  margin: 3px 4px 3px 0;
+  border-radius: 6px;
+  background: rgba(179, 136, 255, 0.15);
+  border: 1px solid #b388ff;
+  color: #e2d9ff;
+}
+
+.game-over-buff-chip.synergy-chip {
+  background: rgba(0, 229, 255, 0.15);
+  border-color: #00e5ff;
+  color: #bbf8ff;
+}
+
+/* ==================== 戰術口袋槽 (惡魔城消費道具) ==================== */
+.pocket-slot {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  background: rgba(12, 16, 24, 0.85);
+  border: 1.5px solid rgba(0, 245, 155, 0.35);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.pocket-slot:hover {
+  transform: scale(1.08);
+  border-color: #00f59b;
+  box-shadow: 0 0 12px rgba(0, 245, 155, 0.5);
+}
+
+.pocket-slot.empty {
+  opacity: 0.6;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.pocket-slot.filled {
+  border-color: #00f59b;
+  background: radial-gradient(circle at center, rgba(0, 245, 155, 0.25) 0%, rgba(12, 16, 24, 0.9) 75%);
+  box-shadow: 0 0 10px rgba(0, 245, 155, 0.4);
+  animation: pocketPulse 2.5s infinite ease-in-out;
+}
+
+@keyframes pocketPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 245, 155, 0.3); }
+  50% { box-shadow: 0 0 16px rgba(0, 245, 155, 0.65); }
+}
+
+.pocket-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.pocket-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ff0055;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 8px;
+  padding: 1px 5px;
+  border: 1px solid #ffffff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+/* 行動端戰術道具按鈕 */
+.action-btn.pocket-btn {
+  border-color: rgba(0, 245, 155, 0.65);
+  box-shadow: 0 4px 18px rgba(0, 245, 155, 0.35);
+}
+
+.action-btn.pocket-btn .action-key {
+  color: #00f59b;
+}
+
+.action-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ff0055;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 8px;
+  padding: 1px 5px;
+  border: 1px solid #fff;
+}
+
+/* 武器槽型態徽章 */
+.slot-aspect-badge {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  font-size: 11px;
+  line-height: 1;
+  background: rgba(12, 16, 24, 0.9);
+  border: 1px solid #ffd60a;
+  border-radius: 6px;
+  padding: 1px 2px;
+}
+
+/* ==================== Hades 武器型態選擇列 ==================== */
+.char-aspect-section {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  text-align: left;
+}
+
+.char-aspect-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffd60a;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.aspect-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.aspect-chip {
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #c9d1d9;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.aspect-chip:hover {
+  background: rgba(255, 214, 10, 0.15);
+  border-color: #ffd60a;
+  color: #fff;
+}
+
+.aspect-chip.active {
+  background: linear-gradient(135deg, rgba(255, 214, 10, 0.3), rgba(255, 107, 0, 0.3));
+  border-color: #ffd60a;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(255, 214, 10, 0.4);
+}
+
+.aspect-desc-tooltip {
+  font-size: 10px;
+  color: #8a9bb0;
+  margin-top: 4px;
+  line-height: 1.35;
+}
+

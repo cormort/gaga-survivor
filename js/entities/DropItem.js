@@ -27,6 +27,8 @@ export class DropItem {
     this.heal = conf.heal || 0;
     this.icon = conf.icon || '';
 
+    this.subType = conf.subType || null;
+
     // 裝備掉落：帶著整件物品，顏色改用稀有度色
     this.item = payload;
     if (this.type === 'gear' && payload) {
@@ -134,6 +136,28 @@ export class DropItem {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(this.icon || '🧰', 0, 0);
+    } else if (this.type === 'consumable') {
+      // 惡魔城風格消費道具：絢麗光暈與旋轉星環
+      const g = ctx.createRadialGradient(0, 0, 2, 0, 0, this.radius * 2.8);
+      g.addColorStop(0, this.color || '#00f59b');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.6 + Math.sin(this.animTime * 2.5) * 0.2;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = this.color || '#00f59b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 1.3, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.font = `${this.radius * 1.8}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.icon, 0, 0);
     } else {
       // 道具 (磁鐵、炸彈、烤雞、金幣)
       ctx.font = `${this.radius * 2}px sans-serif`;
@@ -145,3 +169,95 @@ export class DropItem {
     ctx.restore();
   }
 }
+
+// ── 地圖街頭可破壞場景物 (Destructibles: 木箱 / 油桶 / 補給桶) ──
+export class DestructibleCrate {
+  constructor(x, y, kind = 'crate') {
+    this.x = x;
+    this.y = y;
+    this.kind = kind; // 'crate' | 'barrel'
+    this.radius = kind === 'barrel' ? 18 : 16;
+    this.maxHp = kind === 'barrel' ? 40 : 25;
+    this.hp = this.maxHp;
+    this.isDead = false;
+    this.shake = 0;
+  }
+
+  takeDamage(amount) {
+    this.hp -= amount;
+    this.shake = 4;
+    if (this.hp <= 0) {
+      this.isDead = true;
+    }
+    return this.isDead;
+  }
+
+  update(dt) {
+    if (this.shake > 0) {
+      this.shake = Math.max(0, this.shake - dt * 20);
+    }
+  }
+
+  draw(ctx, camera) {
+    if (this.isDead) return;
+    const sx = this.x - camera.x;
+    const sy = this.y - camera.y;
+
+    if (sx < -40 || sx > window.innerWidth + 40 || sy < -40 || sy > window.innerHeight + 40) return;
+
+    ctx.save();
+    ctx.translate(sx + (Math.random() - 0.5) * this.shake, sy + (Math.random() - 0.5) * this.shake);
+
+    if (this.kind === 'barrel') {
+      // 鋼鐵油桶 / 科技物資桶
+      ctx.fillStyle = '#2b2d42';
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#4cc9f0';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.font = '18px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🛢️', 0, 0);
+    } else {
+      // 復古木箱
+      const size = this.radius * 2;
+      ctx.fillStyle = '#8d5b4c';
+      ctx.fillRect(-this.radius, -this.radius, size, size);
+      ctx.strokeStyle = '#d4a373';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-this.radius, -this.radius, size, size);
+
+      // 對角交叉木條
+      ctx.beginPath();
+      ctx.moveTo(-this.radius, -this.radius);
+      ctx.lineTo(this.radius, this.radius);
+      ctx.moveTo(this.radius, -this.radius);
+      ctx.lineTo(-this.radius, this.radius);
+      ctx.strokeStyle = '#582f0e';
+      ctx.stroke();
+
+      ctx.font = '16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('📦', 0, 0);
+    }
+
+    // 若受損，顯示微型血條
+    if (this.hp < this.maxHp) {
+      const barW = this.radius * 2;
+      const barH = 3;
+      const barY = -this.radius - 6;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(-this.radius, barY, barW, barH);
+      ctx.fillStyle = '#ffb703';
+      ctx.fillRect(-this.radius, barY, barW * Math.max(0, this.hp / this.maxHp), barH);
+    }
+
+    ctx.restore();
+  }
+}
+

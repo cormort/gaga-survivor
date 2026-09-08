@@ -648,6 +648,140 @@ function drawCat(x, t) {
   x.fill();
 }
 
+/* ==================== 戰地工程師 (工兵阿鴨) ==================== */
+
+function drawMechanicDuck(x, t) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2.2;
+  const wing = Math.sin(p + 0.4);
+
+  x.save();
+  shadow(x, 15, 8);
+
+  // 雙腳 (踩踏步)
+  for (const s of [-1, 1]) {
+    const ph = p + (s === 1 ? Math.PI : 0);
+    const lift = Math.max(0, -Math.sin(ph)) * 3;
+    x.fillStyle = '#ff7b00';
+    x.strokeStyle = '#a34600';
+    x.lineWidth = 1.2;
+    x.beginPath();
+    x.moveTo(-1 + s * 3, 14 + bob);
+    x.lineTo(3 + s * 3, 19 + bob - lift);
+    x.lineTo(-5 + s * 3, 19 + bob - lift);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  }
+
+  // 尾羽
+  x.fillStyle = '#dda000';
+  x.strokeStyle = '#8a5600';
+  x.lineWidth = 1.4;
+  x.beginPath();
+  x.moveTo(-11, 1 + bob);
+  x.lineTo(-24, -7 + bob);
+  x.lineTo(-19, 0 + bob);
+  x.lineTo(-23, 4 + bob);
+  x.lineTo(-12, 8 + bob);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 身體 (鮮黃羽毛)
+  x.fillStyle = sphere(x, '#ffc72c', 17, 0, bob);
+  x.beginPath();
+  x.arc(0, bob, 16, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#7d4d00';
+  x.lineWidth = 2;
+  x.stroke();
+
+  // 工程反光背心
+  x.fillStyle = '#ff6b35';
+  x.beginPath();
+  x.roundRect(-10, bob - 2, 20, 14, 4);
+  x.fill();
+  // 反光條
+  x.fillStyle = '#e0f7fa';
+  x.fillRect(-10, bob + 3, 20, 3);
+  x.fillStyle = '#00f59b';
+  x.fillRect(-10, bob + 7, 20, 2);
+
+  // 鴨嘴
+  const bg = x.createLinearGradient(8, 0, 21, 4);
+  bg.addColorStop(0, '#ffa940');
+  bg.addColorStop(1, '#f06a00');
+  x.fillStyle = bg;
+  x.strokeStyle = '#a34600';
+  x.lineWidth = 1.4;
+  x.beginPath();
+  x.moveTo(7, -2 + bob);
+  x.lineTo(21, 1 + bob);
+  x.lineTo(21, 3 + bob);
+  x.lineTo(7, 8 + bob);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 工程安全帽
+  x.fillStyle = '#ffb703';
+  x.strokeStyle = '#b27700';
+  x.lineWidth = 1.6;
+  x.beginPath();
+  x.arc(2, -10 + bob, 14, Math.PI * 0.9, Math.PI * 2.1);
+  x.fill();
+  x.stroke();
+  // 帽緣
+  x.fillStyle = '#fb8500';
+  x.beginPath();
+  x.roundRect(-11, -10 + bob, 26, 4.5, 2);
+  x.fill();
+  x.stroke();
+  // 戰術探照燈
+  x.fillStyle = '#1b222e';
+  x.fillRect(2, -15 + bob, 6, 5);
+  x.fillStyle = '#00f59b';
+  x.beginPath();
+  x.arc(5, -12.5 + bob, 2.5, 0, Math.PI * 2);
+  x.fill();
+
+  // 防護風鏡
+  x.fillStyle = 'rgba(0, 229, 255, 0.75)';
+  x.strokeStyle = '#1b222e';
+  x.lineWidth = 1.5;
+  x.beginPath();
+  x.roundRect(1, -6 + bob, 13, 7, 2);
+  x.fill();
+  x.stroke();
+
+  // 扳手手持 / 翅膀
+  x.save();
+  x.translate(-3, 4 + bob + wing * 0.3);
+  x.rotate(-0.35 + wing * 0.07);
+  x.fillStyle = '#dc9c00';
+  x.strokeStyle = '#7d4d00';
+  x.lineWidth = 1.2;
+  x.beginPath();
+  x.ellipse(0, 0, 7.5, 5, 0, 0, Math.PI * 2);
+  x.fill();
+  x.stroke();
+  // 金屬扳手
+  x.fillStyle = '#adb5bd';
+  x.strokeStyle = '#495057';
+  x.lineWidth = 1.2;
+  x.beginPath();
+  x.rect(2, -2, 14, 3.5);
+  x.fill();
+  x.stroke();
+  x.beginPath();
+  x.arc(17, 0, 4, -0.6, 0.6, true);
+  x.stroke();
+  x.restore();
+
+  x.restore();
+}
+
 /* ==================== 怪物 ==================== */
 
 function drawWalker(x, t, r) {
@@ -2616,6 +2750,7 @@ const BUILDERS = {
   rabbit:  { w: 72, h: 64, fn: (x, t) => drawRabbit(x, t) },
   penguin: { w: 64, h: 64, fn: (x, t) => drawPenguin(x, t) },
   cat:     { w: 68, h: 64, fn: (x, t) => drawCat(x, t) },
+  mechanic: { w: 68, h: 64, fn: (x, t) => drawMechanicDuck(x, t) },
   walker: { w: 56, h: 52, fn: (x, t) => drawWalker(x, t, 14) },
   bat:    { w: 60, h: 48, fn: (x, t) => drawBat(x, t, 11) },
   brute:  { w: 76, h: 72, fn: (x, t) => drawBrute(x, t, 22) },

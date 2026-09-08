@@ -518,4 +518,300 @@ export const DROP_TYPES = {
   SUPPLY: { type: 'supply', icon: '📦', radius: 10 }, // 街頭空投物資箱 (關卡機制)
   GEAR: { type: 'gear', icon: '🎁', radius: 11 },      // 裝備掉落 (顏色由稀有度覆寫)
   CHEST: { type: 'chest', icon: '🧰', radius: 14, color: '#ffb703' }, // 幸運補給箱 (Boss/精英掉落)
+
+  // 惡魔城風格消費道具 (可拾取至口袋手動使用或直接觸發)
+  POTION:        { type: 'consumable', subType: 'potion',        icon: '🧪', color: '#00f59b', radius: 11 },
+  ELIXIR:        { type: 'consumable', subType: 'elixir',        icon: '💖', color: '#ff4d6d', radius: 12 },
+  ATK_POTION:    { type: 'consumable', subType: 'atk_potion',    icon: '🗡️', color: '#ff7b00', radius: 11 },
+  SHIELD_POTION: { type: 'consumable', subType: 'shield_potion', icon: '🛡️', color: '#4cc9f0', radius: 11 },
+  LUCK_POTION:   { type: 'consumable', subType: 'luck_potion',   icon: '🍀', color: '#70e000', radius: 11 },
+  STOPWATCH:     { type: 'consumable', subType: 'stopwatch',     icon: '⏱️', color: '#ffd166', radius: 12 },
+  HOLY_WATER:    { type: 'consumable', subType: 'holy_water',    icon: '💧', color: '#00e5ff', radius: 11 },
+  MANNA_PRISM:   { type: 'consumable', subType: 'manna_prism',   icon: '🧲', color: '#b5179e', radius: 12 },
+  MAGIC_TICKET:  { type: 'consumable', subType: 'magic_ticket',  icon: '🎫', color: '#ffd60a', radius: 12 },
 };
+
+// ── 惡魔城經典消費道具定義 (Consumable Items) ──
+export const CONSUMABLE_ITEMS = {
+  potion: {
+    id: 'potion',
+    name: '生命藥水',
+    icon: '🧪',
+    color: '#00f59b',
+    desc: '立即回復 35% 最大生命值',
+    radius: 11,
+  },
+  elixir: {
+    id: 'elixir',
+    name: '特級靈藥',
+    icon: '💖',
+    color: '#ff4d6d',
+    desc: '完全回滿生命值 + 消除負面狀態',
+    radius: 12,
+  },
+  atk_potion: {
+    id: 'atk_potion',
+    name: '力量藥劑',
+    icon: '🗡️',
+    color: '#ff7b00',
+    desc: '15 秒內攻擊力 +40%',
+    radius: 11,
+    duration: 15,
+  },
+  shield_potion: {
+    id: 'shield_potion',
+    name: '防禦藥劑',
+    icon: '🛡️',
+    color: '#4cc9f0',
+    desc: '15 秒內受傷 -50% 且具備霸體',
+    radius: 11,
+    duration: 15,
+  },
+  luck_potion: {
+    id: 'luck_potion',
+    name: '幸運藥劑',
+    icon: '🍀',
+    color: '#70e000',
+    desc: '20 秒內暴擊率 +30%，金幣掉落翻倍',
+    radius: 11,
+    duration: 20,
+  },
+  stopwatch: {
+    id: 'stopwatch',
+    name: '時停懷錶',
+    icon: '⏱️',
+    color: '#ffd166',
+    desc: '凍結全場敵人與敵方子彈 3.5 秒',
+    radius: 12,
+    duration: 3.5,
+  },
+  holy_water: {
+    id: 'holy_water',
+    name: '神聖聖水',
+    icon: '💧',
+    color: '#00e5ff',
+    desc: '投擲神聖結界，持續灼燒並削弱敵人 6 秒',
+    radius: 11,
+    duration: 6,
+  },
+  manna_prism: {
+    id: 'manna_prism',
+    name: '魔晶石',
+    icon: '🧲',
+    color: '#b5179e',
+    desc: '立即吸納全地圖所有經驗水晶與金幣',
+    radius: 12,
+  },
+  magic_ticket: {
+    id: 'magic_ticket',
+    name: '神奇門票',
+    icon: '🎫',
+    color: '#ffd60a',
+    desc: '瞬間折躍至安全開闊空地，原地引爆 360° 擊退衝擊波',
+    radius: 12,
+  },
+};
+
+// ── 武器型態系統 (Hades Weapon Aspects) ──
+// 每把武器提供 3 種不同型態 (Aspects)，影響發射模式、射程、機制或連動
+export const WEAPON_ASPECTS = {
+  kunai: [
+    { id: 'zagreus', name: '札格型態 (疾風)', icon: '💨', tag: '極速連射',
+      desc: '基礎射速 +30%，射程 +20%，單體擊殺手感極速流暢。',
+      stats: { cdMul: 0.70, rangeMul: 1.20 } },
+    { id: 'chiron',  name: '基隆型態 (箭雨)', icon: '🏹', tag: '扇形標記',
+      desc: '每輪齊射 3 枚扇形飛刀，被命中的目標標記 5 秒（受傷 +25%）。',
+      stats: { fanCount: 3, markDamageBonus: 0.25 } },
+    { id: 'nemesis', name: '涅墨西斯 (裁決)', icon: '⚖️', tag: '翻滾必暴',
+      desc: '戰術閃避翻滾後 3.5 秒內，所有苦無 100% 致命暴擊且暴擊傷害 ×1.5！',
+      stats: { dashCrit: true, dashCritDur: 3.5, critDmgMul: 1.5 } },
+  ],
+  rocket: [
+    { id: 'hestia',  name: '赫斯提亞 (穿甲狙擊)', icon: '🎯', tag: '貫穿巨彈',
+      desc: '冷卻 +15%，但火箭化為超重型穿甲導彈，貫穿直線上怪物並在末端引爆 250% 核爆。',
+      stats: { cdMul: 1.15, pierce: 6, blastMul: 2.5, scale: 1.6 } },
+    { id: 'eris',    name: '埃里斯 (蜂巢集群)', icon: '🐝', tag: '四發齊射',
+      desc: '連射 4 枚微型追蹤火箭，自動精準索敵多個不同怪物轟炸。',
+      stats: { clusterCount: 4, damageMul: 0.65, scale: 0.75 } },
+    { id: 'lucifer', name: '路西法 (熔岩地火)', icon: '🌋', tag: '熔岩火坑',
+      desc: '火箭爆炸後在地面留下滾燙熔岩坑，持續灼燒與減速踩過的怪物 4 秒。',
+      stats: { lavaPool: true, lavaDuration: 4.0 } },
+  ],
+  molotov: [
+    { id: 'zagreus',  name: '札格型態 (烈火海)', icon: '🔥', tag: '大範圍爆燃',
+      desc: '燃燒半徑 +40%，火海傷害跳頻加快 30%。',
+      stats: { radiusMul: 1.40, tickRateMul: 0.70 } },
+    { id: 'poseidon', name: '波塞頓 (激流爆破)', icon: '🌊', tag: '激流擊退',
+      desc: '燃燒瓶落地引發洶湧水汽激流，大幅擊退周遭敵人並施加 50% 潮濕減速。',
+      stats: { knockback: 280, slowRatio: 0.50, slowDur: 3.0 } },
+    { id: 'athena',   name: '雅典娜 (聖光領域)', icon: '✨', tag: '聖光庇護',
+      desc: '化為神聖守護領域，玩家處於領域內受傷 -25% 且每秒回復 8 HP。',
+      stats: { sanctuary: true, dmgResist: 0.25, healPerSec: 8 } },
+  ],
+  lightning: [
+    { id: 'zeus',  name: '宙斯型態 (連鎖狂雷)', icon: '⚡', tag: '連鎖彈射',
+      desc: '落雷命中目標後引發連鎖電弧，在周圍最多 4 名敵人之間跳躍傳導。',
+      stats: { chainTargets: 4, chainDamageRatio: 0.70 } },
+    { id: 'thor',  name: '索爾型態 (定點天罰)', icon: '🔨', tag: '巨雷眩暈',
+      desc: '召喚天頂巨雷，造成 300% 巨額傷害並使目標與周圍敵怪眩暈 1.2 秒。',
+      stats: { damageMul: 3.0, stunDur: 1.2, radiusMul: 1.5 } },
+    { id: 'chaos', name: '混沌型態 (電磁風暴)', icon: '🌀', tag: '引力聚怪',
+      desc: '落雷點生成旋轉電磁風暴，持續將周邊敵人吸引至中心聚集。',
+      stats: { vortex: true, vortexDur: 2.0, pullStrength: 220 } },
+  ],
+  guardian: [
+    { id: 'zagreus', name: '札格型態 (疾速環)', icon: '🥏', tag: '高速旋轉',
+      desc: '輪盤旋轉速度 +50%，基礎飛盤數量 +1。',
+      stats: { spinSpeedMul: 1.50, extraBlades: 1 } },
+    { id: 'chaos',   name: '混沌型態 (彈射飛刃)', icon: '🪚', tag: '發射飛盤',
+      desc: '輪盤旋轉時，每 2 秒向外發射一枚反彈刀刃穿透敵群。',
+      stats: { ejectRate: 2.0 } },
+    { id: 'shield',  name: '聖盾型態 (投射反彈)', icon: '🛡️', tag: '消彈護盾',
+      desc: '防禦力場擴大 30%，能阻擋消滅甚至反彈所有敵方投射物。',
+      stats: { radiusMul: 1.30, reflectBullets: true } },
+  ],
+  soccer: [
+    { id: 'achilles', name: '阿基里斯 (超導衝鋒)', icon: '🏃', tag: '彈射充能',
+      desc: '足球每次彈射命中，為特工提供 6% 跑速（可疊加至 42%），彈跳速度遞增。',
+      stats: { speedBoostPerHit: 0.06, maxSpeedBoost: 0.42 } },
+    { id: 'guanyu',   name: '關羽型態 (寒冰重力球)', icon: '❄️', tag: '冰凍引力',
+      desc: '足球直徑增大 50%，自帶重力牽引周遭怪物並強制冰凍 1.5 秒。',
+      stats: { radiusMul: 1.50, freezeDur: 1.5, gravityPull: true } },
+    { id: 'thanatos', name: '塔納托斯 (湮滅死球)', icon: '💀', tag: '第5擊核爆',
+      desc: '足球每次彈跳傷害提升 25%，累積第 5 次彈跳時產生湮滅黑洞爆炸。',
+      stats: { bounceDmgGrowth: 0.25, fifthImplosion: true } },
+  ],
+};
+
+// ── 局內隨機祝福 (Blessings)：里程碑二選一，本局限定的被動效果 ──
+// apply(player, game) 在獲得時呼叫一次注入加成，tick(dt, game) 每幀呼叫（需要的話）。
+// 部分祝福有 risk 標記（高收益但有代價），UI 會特別標示。
+export const BLESSINGS = [
+  { id: 'flame_touch',     name: '烈焰之觸',     icon: '🔥', desc: '所有武器範圍 +20%',
+    apply(p) { p.blessingAreaMul = (p.blessingAreaMul || 1) * 1.20; } },
+  { id: 'overcharge',      name: '過載協議',      icon: '⚡', desc: '攻速 +25%，受傷 +15%', risk: true,
+    apply(p) { p.blessingCdrMul = (p.blessingCdrMul || 1) * 0.75; p.damageTakenMul *= 1.15; } },
+  { id: 'blood_pact',      name: '嗜血契約',      icon: '🩸', desc: '擊殺回血 2，拾取範圍 -25%', risk: true,
+    apply(p) { p.blessingKillHeal = (p.blessingKillHeal || 0) + 2; p.blessingMagnetMul = (p.blessingMagnetMul || 1) * 0.75; } },
+  { id: 'fortune_gem',     name: '幸運寶鑽',      icon: '💎', desc: '經驗獲得 +50%',
+    apply(p) { p.metaExp = (p.metaExp || 0) + 0.50; } },
+  { id: 'phase_shield',    name: '相位護盾',      icon: '🛡️', desc: '每 25 秒自動觸發 2.5 秒無敵',
+    apply(p) { p.blessingShieldCD = 25; p.blessingShieldTimer = 0; p.blessingShieldDur = 2.5; } },
+  { id: 'gravity_well',    name: '引力異常',      icon: '🧲', desc: '拾取範圍翻倍',
+    apply(p) { p.blessingMagnetMul = (p.blessingMagnetMul || 1) * 2; } },
+  { id: 'crit_storm',      name: '暴擊風暴',      icon: '🗡️', desc: '暴擊率 +15%',
+    apply(p) { p.metaCrit = (p.metaCrit || 0) + 0.15; } },
+  { id: 'golden_age',      name: '黃金時代',      icon: '💰', desc: '金幣掉落率翻倍',
+    apply(_, g) { g.metaGoldMul = (g.metaGoldMul || 1) * 2; } },
+  { id: 'cooldown_crunch', name: '冷卻壓縮',      icon: '🔄', desc: '所有武器冷卻 -18%',
+    apply(p) { p.blessingCdrMul = (p.blessingCdrMul || 1) * 0.82; } },
+  { id: 'ghost_step',      name: '幽靈步伐',      icon: '🏃', desc: '閃避冷卻 -40%，距離 +30%',
+    apply(p) { p.blessingDashCdr = 0.6; p.blessingDashDist = 1.3; } },
+  { id: 'armor_pierce',    name: '穿甲之刃',      icon: '⚔️', desc: '所有投射物穿透 +2',
+    apply(p) { p.bonusPierce = (p.bonusPierce || 0) + 2; } },
+  { id: 'tornado_spin',    name: '龍捲共鳴',      icon: '🌪️', desc: '環繞型武器轉速 +50%',
+    apply(p) { p.blessingSpinMul = (p.blessingSpinMul || 1) * 1.5; } },
+  { id: 'executioner',     name: '處刑人',        icon: '💀', desc: '對低血量 (<30%) 敵人傷害 +60%',
+    apply(p) { p.blessingExecute = true; } },
+  { id: 'rainbow_aegis',   name: '虹光護佑',      icon: '🌈', desc: '致死傷害時以 1 HP 存活（每局一次）',
+    apply(p) { p.blessingDeathSave = true; } },
+  { id: 'berserker',       name: '狂戰士',        icon: '😈', desc: '生命越低傷害越高（30% HP → +60% 傷害）', risk: true,
+    apply(p) { p.blessingBerserker = true; } },
+];
+
+// ── 局內隨機事件 (Mini-Events)：打破中段節奏空窗 ──
+// trigger(game) 在觸發時呼叫，負責生成敵人/獎勵/計時。duration 秒後結束。
+export const MINI_EVENTS = [
+  { id: 'swarm_rush',      name: '怪潮突襲',      icon: '🌊', color: '#ff0055',
+    desc: '15 秒內怪物密度翻倍！撐住就有大量獎勵', duration: 15 },
+  { id: 'elite_hunt',      name: '精英獵殺',      icon: '👑', color: '#ffb703',
+    desc: '三隻精英怪同時出現，全滅掉幸運箱！', duration: 25 },
+  { id: 'treasure_goblin', name: '寶藏哥布林',    icon: '🎁', color: '#00f59b',
+    desc: '一隻高速金色怪物正在逃跑，擊殺掉大量金幣！', duration: 12 },
+  { id: 'death_march',     name: '死亡行軍',      icon: '💀', color: '#9fb3c8',
+    desc: '一波攻城巨像從北方壓境！', duration: 20 },
+  { id: 'crystal_rain',    name: '水晶雨',        icon: '💎', color: '#b5179e',
+    desc: '天降大量經驗水晶，快收集！', duration: 8 },
+];
+
+// ── 武器協同效果 (Synergies)：持有特定武器組合產生額外被動 ──
+// weapons: 需要同時持有的武器 id 陣列 (包含超武)
+// 一把武器可參與多組協同，但同組只生效一次
+export const SYNERGIES = [
+  { id: 'steam_blast',    weapons: ['molotov', 'soccer'],    name: '蒸汽爆破',    icon: '💨',
+    desc: '冰凍敵人被火焰命中時傷害 ×2', color: '#7df8ff',
+    effect: { frozenFireMul: 2.0 } },
+  { id: 'thunder_blade',  weapons: ['lightning', 'kunai'],   name: '導電刀鋒',    icon: '⚡',
+    desc: '苦無命中 20% 機率觸發落雷', color: '#00e5ff',
+    effect: { kunaiThunderChance: 0.20 } },
+  { id: 'napalm_chain',   weapons: ['rocket', 'molotov'],    name: '燃爆連鎖',    icon: '🔥',
+    desc: '爆炸範圍 +35%', color: '#ff7b00',
+    effect: { explosionRangeMul: 1.35 } },
+  { id: 'twin_orbit',     weapons: ['guardian', 'orbit_saw'], name: '雙環共振',   icon: '🌀',
+    desc: '兩種環繞武器互相加速 +30%', color: '#b5179e',
+    effect: { orbitSpeedMul: 1.3 } },
+  { id: 'bullet_storm',   weapons: ['kunai', 'phase_blade'],  name: '彈幕風暴',   icon: '🗡️',
+    desc: '投射物武器冷卻 -20%', color: '#ffd166',
+    effect: { projCdrMul: 0.80 } },
+  { id: 'elemental_fusion', weapons: ['lightning', 'molotov'], name: '元素融合',  icon: '🔮',
+    desc: '蓄能彈觸發間隔 -1 發', color: '#b388ff',
+    effect: { chargeReduction: 1 } },
+];
+
+// ── 特殊升級卡 (Special Cards)：升級三選一中低機率出現 ──
+export const SPECIAL_CARDS = [
+  { id: 'nuke_strike',     name: '軌道核彈',     icon: '💣', tag: '特殊',
+    desc: '立即全螢幕清怪 + 3 秒無敵！', color: '#ff0055' },
+  { id: 'gene_mutate',     name: '基因突變',     icon: '🧬', tag: '特殊',
+    desc: '隨機一把武器直接 +2 級（可能超過正常上限）！', color: '#00f59b' },
+  { id: 'lucky_wheel',     name: '幸運大轉盤',   icon: '🎰', tag: '特殊',
+    desc: '開啟一個超豐富獎池的幸運輪盤！', color: '#ffb703' },
+  { id: 'gold_rush',       name: '淘金狂潮',     icon: '🪙', tag: '特殊',
+    desc: '立即獲得 200 金幣 + 30 秒金幣掉落率翻倍！', color: '#ffb703' },
+  { id: 'full_heal',       name: '超級急救',     icon: '💖', tag: '特殊',
+    desc: '完全恢復生命值 + 獲得 50 點護盾！', color: '#ff69b4' },
+];
+
+// ── 局內流浪商人 (Merchant Items)：生存者模式定期出現 ──
+export const MERCHANT_ITEMS = [
+  { id: 'mega_heal',       name: '強效急救包',   icon: '💊', cost: 40,
+    desc: '立即回復 80 HP', color: '#00f59b' },
+  { id: 'temp_overclock',  name: '臨時過載晶片', icon: '⚡', cost: 60,
+    desc: '30 秒內攻速 +40%', color: '#00e5ff', duration: 30 },
+  { id: 'energy_shield',   name: '能量護罩',     icon: '🛡️', cost: 80,
+    desc: '獲得 100 點護盾', color: '#4cc9f0' },
+  { id: 'hyper_magnet',    name: '超級磁力場',   icon: '🧲', cost: 50,
+    desc: '15 秒拾取範圍 ×3', color: '#b5179e', duration: 15 },
+  { id: 'orbital_strike',  name: '軌道轟炸',     icon: '💣', cost: 100,
+    desc: '延遲 3 秒全場 500 傷害', color: '#ff0055' },
+  { id: 'fire_enchant',    name: '元素附魔',     icon: '🔥', cost: 70,
+    desc: '30 秒所有攻擊附帶燃燒', color: '#ff7b00', duration: 30 },
+];
+
+// ── 成就系統 (Achievements) ──
+export const ACHIEVEMENTS = [
+  { id: 'combo_200',       name: '暴風切割',     icon: '🗡️', desc: '單局達成 200 連擊',
+    check: (s) => s.maxCombo >= 200, reward: 50 },
+  { id: 'speed_clear_1',   name: '極速通關',     icon: '🏃', desc: '3 分鐘內擊敗第一關首領',
+    check: (s) => s.levelId === 'street' && s.cleared && s.time <= 180, reward: 80 },
+  { id: 'no_hit_1',        name: '零傷通關',     icon: '🛡️', desc: '不受傷通過第一關',
+    check: (s) => s.levelId === 'street' && s.cleared && s.damageTaken === 0, reward: 150 },
+  { id: 'kill_2000',       name: '屠殺模式',     icon: '💀', desc: '單局擊殺 2000 隻怪物',
+    check: (s) => s.kills >= 2000, reward: 100 },
+  { id: 'evo_3',           name: '超武收藏家',   icon: '⚡', desc: '同一局合成 3 把超武',
+    check: (s) => s.evosThisRun >= 3, reward: 120 },
+  { id: 'chest_5',         name: '幸運兒',       icon: '🎲', desc: '單局開啟 5 次幸運箱',
+    check: (s) => s.chestsOpened >= 5, reward: 60 },
+  { id: 'glass_core',      name: '玻璃大砲大師', icon: '🌋', desc: '每日挑戰含玻璃大砲詞綴時通關',
+    check: (s) => s.isDaily && s.cleared && s.hasGlassCannon, reward: 200 },
+  { id: 'blessing_5',      name: '祝福收集者',   icon: '🔮', desc: '單局獲得 5 個祝福',
+    check: (s) => s.blessingsCount >= 5, reward: 80 },
+  { id: 'synergy_3',       name: '武器大師',     icon: '🌀', desc: '同一局觸發 3 組武器協同',
+    check: (s) => s.synergiesActive >= 3, reward: 100 },
+  { id: 'merchant_buy',    name: '老顧客',       icon: '🏪', desc: '單局向商人購買 3 次',
+    check: (s) => s.merchantBuys >= 3, reward: 40 },
+  { id: 'endless_10m',     name: '深淵倖存者',   icon: '🌀', desc: '深淵無盡戰存活超過 10 分鐘',
+    check: (s) => s.levelId === 'endless' && s.time >= 600, reward: 200 },
+  { id: 'all_chars',       name: '特工大閱兵',   icon: '🦆', desc: '使用全部 4 位特工各通關一次',
+    check: (s) => s.clearedWithAllChars, reward: 300 },
+];

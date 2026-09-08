@@ -43,6 +43,13 @@ export class Projectile {
 
     // 傭兵專屬 (擊殺升級 credit)
     this.mercOwner = options.mercOwner || null;
+
+    // 武器型態專屬 (Hades Aspects)
+    this.aspect = options.aspect || null;
+    this.markOnHit = !!options.markOnHit;
+    this.reflectBullets = !!options.reflectBullets;
+    this.isSanctuary = !!options.isSanctuary;
+    this.thanatosBounces = options.thanatosBounces || 0;
   }
 
   update(dt, player, onExplosion = null) {
@@ -80,6 +87,14 @@ export class Projectile {
       case 'fire_pool':
         // 地面積火固定在原處，定時跳傷害
         this.tickTimer += dt;
+        if (this.isSanctuary && player) {
+          if (Math.hypot(player.x - this.x, player.y - this.y) <= this.radius) {
+            player.inSanctuary = true;
+            if (this.tickTimer >= this.tickInterval) {
+              player.heal(2);
+            }
+          }
+        }
         if (this.tickTimer >= this.tickInterval) {
           this.tickTimer = 0;
           this.hitEnemies.clear(); // 每跳重置命中清單，允許持續灼燒
@@ -367,8 +382,37 @@ export class Projectile {
   }
 
   drawFirePool(ctx) {
-    const t = Date.now() * 0.003 + this.seed;
     const r = this.radius;
+
+    // 雅典娜聖光結界：金色神聖領域
+    if (this.isSanctuary) {
+      ctx.save();
+      const pool = ctx.createRadialGradient(0, 0, r * 0.1, 0, 0, r);
+      pool.addColorStop(0, 'rgba(255, 230, 110, 0.45)');
+      pool.addColorStop(0.65, 'rgba(255, 190, 40, 0.22)');
+      pool.addColorStop(1, 'rgba(255, 180, 0, 0)');
+      ctx.fillStyle = pool;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#ffe066';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.92, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.font = `${Math.round(r * 0.45)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('✨', 0, 0);
+      ctx.restore();
+      return;
+    }
+
+    const t = Date.now() * 0.003 + this.seed;
     // 藍色煉獄與一般火海只差色溫。火焰的三個關鍵：根部最亮、火舌會歪、舌尖要透明
     const c = this.isEvo
       ? { hot: '245,252,255', mid: '70,170,255', cool: '80,30,220', ember: '150,215,255' }
