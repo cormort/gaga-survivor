@@ -198,6 +198,13 @@ export class DestructibleCrate {
     }
   }
 
+  // 破壞時的木屑/鐵片噴濺
+  splinter(particles) {
+    const color = this.kind === 'barrel' ? '#4cc9f0' : '#d4a373';
+    particles.createDeathParticles(this.x, this.y, color, 12);
+    particles.createHitSpark(this.x, this.y, color);
+  }
+
   draw(ctx, camera) {
     if (this.isDead) return;
     const sx = this.x - camera.x;

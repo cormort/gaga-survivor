@@ -171,7 +171,7 @@ export class UIManager {
     this.merchantCards = document.getElementById('merchant-cards');
     this.merchantGoldVal = document.getElementById('merchant-gold-val');
     document.getElementById('btn-close-merchant')?.addEventListener('click', () => {
-      this.hideMerchant();
+      this.onMerchantClose ? this.onMerchantClose() : this.hideMerchant();
     });
 
     // 成就彈窗

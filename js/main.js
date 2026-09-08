@@ -39,7 +39,7 @@ class Game {
     this.canvas = document.getElementById('gameCanvas');
     this.ctx = this.canvas.getContext('2d');
 
-    // 狀態機: 'START', 'PLAYING', 'LEVEL_UP', 'PAUSED', 'GAME_OVER', 'CHEST_MODAL'
+    // 狀態機: 'START', 'PLAYING', 'LEVEL_UP', 'PAUSED', 'GAME_OVER', 'CHEST_MODAL', 'BLESSING_MODAL', 'MERCHANT_MODAL'
     this.state = 'START';
 
     this.input = new InputController();
@@ -88,6 +88,7 @@ class Game {
 
     // ── 新系統狀態 ──
     this.blessings = [];           // 本局已獲得的祝福 [{id, name, icon}]
+    this._pendingBlessings = [];   // 因彈窗衝突而延後的祝福 (回到 PLAYING 再補發)
     this.activeEvent = null;       // 當前進行中的局內事件
     this._eventSchedule = [];      // 預排的事件觸發時間
     this._eventIdx = 0;
@@ -1060,6 +1061,7 @@ class Game {
 
     // ── 新系統重設 ──
     this.blessings = [];
+    this._pendingBlessings = [];
     this.activeEvent = null;
     // 預排局內事件：90s, 210s, 330s, 420s (閃過 Boss 時段 120/300/480)
     this._eventSchedule = [90, 210, 330, 420];
@@ -1077,6 +1079,7 @@ class Game {
     this.ui.updateBlessings([]);
     this.ui.updateSynergies([]);
     this.ui.updateEventBanner(null);
+    this.ui.onMerchantClose = () => this.dismissMerchant();
     this.input.reset();
 
     this.ui.updateSkillSlots(this.weaponManager);
@@ -1627,6 +1630,11 @@ class Game {
 
   // 里程碑獎勵：每 100 殺交替 [舊獎勵 / 祝福二選一]，每 2 分鐘一次後勤補給
   checkMilestones() {
+    if (this.state !== 'PLAYING') return;
+    if (this._pendingBlessings.length > 0) {
+      this.offerBlessingChoice(this._pendingBlessings.shift());
+      return;
+    }
     while (this.kills >= this.killMilestoneAt) {
       const n = this.killMilestoneAt;
       this.killMilestoneAt += 100;
@@ -1639,10 +1647,12 @@ class Game {
         const kinds = ['magnet', 'gold', 'heal', 'bomb'];
         this.grantMilestone(kinds[((this._milestoneIdx / 2) - 1) % 4], `擊殺 ${n}`);
       }
+      if (this.state !== 'PLAYING') break;
     }
     while (this.gameTime >= this.timeMilestoneAt) {
       this.timeMilestoneAt += 120;
       this.grantMilestone('resupply', `存活 ${Math.round(this.gameTime / 60)} 分鐘`);
+      if (this.state !== 'PLAYING') break;
     }
     // 局內事件排程
     this.checkEventSchedule();
@@ -1690,6 +1700,11 @@ class Game {
 
   // ── 方向 1：局內隨機祝福 ──
   offerBlessingChoice(title) {
+    // 其他彈窗開著時先排隊，回到 PLAYING 再補發 (兩層 overlay 疊加會鎖死操作)
+    if (this.state !== 'PLAYING') {
+      this._pendingBlessings.push(title);
+      return;
+    }
     const owned = new Set(this.blessings.map((b) => b.id));
     const pool = BLESSINGS.filter((b) => !owned.has(b.id));
     if (pool.length === 0) {
@@ -1700,7 +1715,11 @@ class Game {
     // 隨機抽兩個不重複的祝福
     const shuffled = pool.sort(() => Math.random() - 0.5);
     const choices = shuffled.slice(0, Math.min(2, shuffled.length));
+    this.state = 'BLESSING_MODAL';
+    sound.pauseBGM();
     this.ui.showBlessingChoice(title, choices, (picked) => {
+      this.state = 'PLAYING';
+      sound.resumeBGM();
       this.applyBlessing(picked);
     });
   }
@@ -1927,8 +1946,8 @@ class Game {
     if (!this.merchant) return;
     this.merchant.timer -= dt;
     if (this.merchant.timer <= 0) {
+      this.closeMerchantPanel();
       this.merchant = null;
-      this.ui.hideMerchant();
       return;
     }
     // 玩家靠近時顯示購買面板
@@ -1936,10 +1955,33 @@ class Game {
     const dy = this.player.y - this.merchant.y;
     const dist = Math.hypot(dx, dy);
     if (dist < this.merchant.interactDist) {
-      this.ui.showMerchant(this.merchant, this.gold, (item) => this.buyMerchantItem(item));
-    } else {
-      this.ui.hideMerchant();
+      if (!this.merchant.panelOpen) this.openMerchantPanel();
+    } else if (this.merchant.panelOpen) {
+      this.closeMerchantPanel();
     }
+  }
+
+  // 「離開商店」：關閉面板並讓商人立刻收攤，避免玩家還站在原地時面板又跳出來
+  dismissMerchant() {
+    this.closeMerchantPanel();
+    this.merchant = null;
+  }
+
+  openMerchantPanel() {
+    if (this.state !== 'PLAYING') return;
+    this.merchant.panelOpen = true;
+    this.state = 'MERCHANT_MODAL';
+    sound.pauseBGM();
+    this.ui.showMerchant(this.merchant, this.gold, (item) => this.buyMerchantItem(item));
+  }
+
+  closeMerchantPanel() {
+    if (this.merchant) this.merchant.panelOpen = false;
+    if (this.state === 'MERCHANT_MODAL') {
+      this.state = 'PLAYING';
+      sound.resumeBGM();
+    }
+    this.ui.hideMerchant();
   }
 
   buyMerchantItem(item) {
@@ -1999,8 +2041,10 @@ class Game {
     if (this.merchant) {
       this.merchant.items = this.merchant.items.filter((i) => i.id !== item.id);
       if (this.merchant.items.length === 0) {
+        this.closeMerchantPanel();
         this.merchant = null;
-        this.ui.hideMerchant();
+      } else {
+        this.ui.showMerchant(this.merchant, this.gold, (it) => this.buyMerchantItem(it));
       }
     }
     this.ui.say(`購買：${item.icon} ${item.name}`, item.color, 2);
@@ -2077,14 +2121,19 @@ class Game {
     // ponytail: 只在遊戲進行中重繪。覆蓋層有全螢幕 backdrop-filter: blur，
     // 畫布每幀變動會逼瀏覽器每幀重做全螢幕模糊 → 死亡/升級時直接卡死。
     // 停止重繪後畫布保留最後一幀，視覺上完全一樣。
-    if (this.state === 'PLAYING') {
-      if (this.hitstopTimer > 0) {
-        this.hitstopTimer -= dt;
-        this.render();
-      } else {
-        this.update(dt);
-        this.render();
+    // ponytail: 單幀例外不能弄死整條 rAF 鏈 —— 以前一次丟出就永久卡住畫面
+    try {
+      if (this.state === 'PLAYING') {
+        if (this.hitstopTimer > 0) {
+          this.hitstopTimer -= dt;
+          this.render();
+        } else {
+          this.update(dt);
+          this.render();
+        }
       }
+    } catch (err) {
+      console.error('[frame error]', err);
     }
 
     requestAnimationFrame(this.loop);
