@@ -1057,6 +1057,36 @@ export class UIManager {
       `;
       wIndex++;
     }
+    // 空槽重置
+    for (let i = wIndex; i < GAME_CONFIG.MAX_WEAPON_SLOTS; i++) {
+      const slot = document.getElementById(`weapon-slot-${i}`);
+      if (slot) {
+        slot.className = 'skill-slot';
+        slot.innerHTML = '';
+      }
+    }
+
+    // 更新被動配件欄
+    let pIndex = 0;
+    for (const [id, item] of weaponManager.passives.entries()) {
+      const slot = document.getElementById(`passive-slot-${pIndex}`);
+      if (!slot) continue;
+      const def = PASSIVES[id];
+      slot.className = 'skill-slot filled';
+      slot.innerHTML = `
+        <span class="slot-emoji">${def.icon}</span>
+        <span class="slot-stars">${item.level >= def.maxLevel ? 'MAX' : '★'.repeat(item.level)}</span>
+      `;
+      pIndex++;
+    }
+    for (let i = pIndex; i < GAME_CONFIG.MAX_PASSIVE_SLOTS; i++) {
+      const slot = document.getElementById(`passive-slot-${i}`);
+      if (slot) {
+        slot.className = 'skill-slot';
+        slot.innerHTML = '';
+      }
+    }
+  }
 
   updatePocketItem(itemId, count) {
     const pocketSlot = document.getElementById('pocket-slot');
@@ -1095,36 +1125,6 @@ export class UIManager {
       if (actionBadge) {
         actionBadge.textContent = count;
         actionBadge.classList.toggle('hidden', count <= 1);
-      }
-    }
-  }
-    // 空槽重置
-    for (let i = wIndex; i < GAME_CONFIG.MAX_WEAPON_SLOTS; i++) {
-      const slot = document.getElementById(`weapon-slot-${i}`);
-      if (slot) {
-        slot.className = 'skill-slot';
-        slot.innerHTML = '';
-      }
-    }
-
-    // 更新被動配件欄
-    let pIndex = 0;
-    for (const [id, item] of weaponManager.passives.entries()) {
-      const slot = document.getElementById(`passive-slot-${pIndex}`);
-      if (!slot) continue;
-      const def = PASSIVES[id];
-      slot.className = 'skill-slot filled';
-      slot.innerHTML = `
-        <span class="slot-emoji">${def.icon}</span>
-        <span class="slot-stars">${item.level >= def.maxLevel ? 'MAX' : '★'.repeat(item.level)}</span>
-      `;
-      pIndex++;
-    }
-    for (let i = pIndex; i < GAME_CONFIG.MAX_PASSIVE_SLOTS; i++) {
-      const slot = document.getElementById(`passive-slot-${i}`);
-      if (slot) {
-        slot.className = 'skill-slot';
-        slot.innerHTML = '';
       }
     }
   }
