@@ -13,6 +13,12 @@ const GEM_SPRITE = {
   EXP_GOLD: 'gem_gold',
 };
 
+// 會過期的掉落物類型：場上量最大、玩家不會特地繞路去撿的雜物。
+// 裝備/寶箱/消費道具/補給這類「值得繞路」的掉落物不設時限，讓它們消失只會變成懲罰。
+const EXPIRING_TYPES = new Set(['exp', 'gold']);
+const DROP_LIFETIME = 60;   // 秒
+const BLINK_LAST = 5;       // 最後幾秒開始閃爍預告
+
 export class DropItem {
   constructor(x, y, kind = 'EXP_GREEN', payload = null) {
     this.x = x;
@@ -40,14 +46,27 @@ export class DropItem {
     this.flySpeed = 0;
     this.collected = false;
 
+    // 存活倒數：撿不到的雜物會無限累積，每幀照樣 update + draw
+    this.life = EXPIRING_TYPES.has(this.type) ? DROP_LIFETIME : Infinity;
+    this.expired = false;
+
     // 微浮動
     this.animTime = Math.random() * 5;
   }
 
   update(dt, player) {
-    if (this.collected) return;
+    if (this.collected || this.expired) return;
 
     this.animTime += dt * 5;
+
+    // 已經起飛的道具不再倒數 —— 飛到一半憑空消失最惱人
+    if (!this.isAttracted) {
+      this.life -= dt;
+      if (this.life <= 0) {
+        this.expired = true;
+        return;
+      }
+    }
 
     const dx = player.x - this.x;
     const dy = player.y - this.y;
@@ -77,7 +96,10 @@ export class DropItem {
   }
 
   draw(ctx, camera) {
-    if (this.collected) return;
+    if (this.collected || this.expired) return;
+
+    // 剩最後幾秒閃爍，讓玩家知道再不撿就沒了
+    if (this.life < BLINK_LAST && Math.sin(this.animTime * 4) < 0) return;
 
     const screenX = this.x - camera.x;
     const screenY = this.y - camera.y;

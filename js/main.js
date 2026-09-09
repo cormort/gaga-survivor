@@ -2783,6 +2783,12 @@ class Game {
       const item = this.dropItems[i];
       item.update(dt, this.player);
 
+      // 逾時未撿的雜物直接移除，避免場上無限累積
+      if (item.expired) {
+        this.dropItems.splice(i, 1);
+        continue;
+      }
+
       if (item.collected) {
         this.handleItemPickup(item);
         this.dropItems.splice(i, 1);
