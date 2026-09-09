@@ -60,14 +60,18 @@ export class DropItem {
 
     if (this.isAttracted) {
       this.flySpeed += 1400 * dt; // 加速飛向玩家
-      if (dist > 0.1) {
-        this.x += (dx / dist) * this.flySpeed * dt;
-        this.y += (dy / dist) * this.flySpeed * dt;
-      }
+      const step = this.flySpeed * dt;
+      const reach = player.radius + this.radius;
 
-      // 觸碰玩家核心即完成拾取
-      if (dist < player.radius + this.radius) {
+      // 一幀的位移可能大於接觸半徑 (磁鐵吸全場的遠距離水晶會加速到 1500+ px/s，
+      // 敵人一多、幀時間拉長時更誇張)。只比對距離的話水晶會直接穿過玩家，
+      // 之後在兩側來回彈跳且越飛越快，永遠撿不到 —— 這些幽靈水晶不斷累積，
+      // 每幀照樣 update + draw，就是磁鐵之後越來越卡的原因。
+      if (dist <= reach || step >= dist - reach) {
         this.collected = true;
+      } else {
+        this.x += (dx / dist) * step;
+        this.y += (dy / dist) * step;
       }
     }
   }
