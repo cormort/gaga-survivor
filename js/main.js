@@ -124,11 +124,52 @@ class Game {
     };
 
     this.lastTime = performance.now();
+    this.perf = this.initPerfHUD();
 
     this.initWindow();
     this.bindEvents();
     this.loop = this.loop.bind(this);
+
     requestAnimationFrame(this.loop);
+  }
+
+  // 網址加 ?perf=1 才建立效能面板；沒開就回傳 null，正常遊玩零成本。
+  initPerfHUD() {
+    if (!new URLSearchParams(location.search).has('perf')) return null;
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:0;left:0;z-index:9999;pointer-events:none;' +
+      'font:11px/1.45 ui-monospace,monospace;white-space:pre;color:#00f59b;' +
+      'background:rgba(0,0,0,0.72);padding:6px 9px;border-bottom-right-radius:8px;';
+    document.body.appendChild(el);
+    return { el, frames: [], update: 0, render: 0, ticks: 0, last: 0 };
+  }
+
+  // 效能面板：網址加 ?perf=1 開啟。卡頓時直接截圖就看得出是哪一項爆掉。
+  // 每 250ms 才寫一次 DOM，本身的成本可忽略。
+  drawPerfHUD(now) {
+    const pf = this.perf;
+    if (now - pf.last < 250) return;
+    pf.last = now;
+
+    const f = pf.frames.sort((a, b) => a - b);
+    const med = f.length ? f[f.length >> 1] : 0;
+    const worst = f.length ? f[f.length - 1] : 0;
+    const ticks = pf.ticks || 1;
+    const n = (arr) => arr?.length ?? 0;   // 開始畫面時部分系統尚未建立
+
+    pf.el.textContent = [
+      `${(1000 / (med || 1)).toFixed(0)} fps   幀 ${med.toFixed(1)} / 最差 ${worst.toFixed(0)} ms`,
+      `update ${(pf.update / ticks).toFixed(1)}  render ${(pf.render / ticks).toFixed(1)} ms`,
+      `敵 ${n(this.enemies)}  投射 ${n(this.weaponManager?.projectiles)}  敵彈 ${n(this.enemyProjectiles)}`,
+      `掉落 ${n(this.dropItems)}  粒子 ${n(this.particles?.particles)}  殘跡 ${n(this.decals)}`,
+      `砲塔 ${n(this.turrets)}  傭兵 ${n(this.mercenaries)}  待升級 ${this.pendingLevelUps}`,
+      `狀態 ${this.state}`,
+    ].join('\n');
+
+    pf.frames.length = 0;
+    pf.update = 0;
+    pf.render = 0;
+    pf.ticks = 0;
   }
 
   initWindow() {
@@ -2124,6 +2165,8 @@ class Game {
     const dt = Math.min(0.1, (currentTime - this.lastTime) / 1000);
     this.lastTime = currentTime;
 
+    if (this.perf) this.perf.frames.push(dt * 1000);
+
     // ponytail: 只在遊戲進行中重繪。覆蓋層有全螢幕 backdrop-filter: blur，
     // 畫布每幀變動會逼瀏覽器每幀重做全螢幕模糊 → 死亡/升級時直接卡死。
     // 停止重繪後畫布保留最後一幀，視覺上完全一樣。
@@ -2133,6 +2176,14 @@ class Game {
         if (this.hitstopTimer > 0) {
           this.hitstopTimer -= dt;
           this.render();
+        } else if (this.perf) {
+          const t0 = performance.now();
+          this.update(dt);
+          const t1 = performance.now();
+          this.render();
+          this.perf.update += t1 - t0;
+          this.perf.render += performance.now() - t1;
+          this.perf.ticks++;
         } else {
           this.update(dt);
           this.render();
@@ -2141,6 +2192,8 @@ class Game {
     } catch (err) {
       console.error('[frame error]', err);
     }
+
+    if (this.perf) this.drawPerfHUD(currentTime);
 
     requestAnimationFrame(this.loop);
   }
