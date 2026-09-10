@@ -1090,6 +1090,32 @@ body, html {
 
 .build-icon { font-size: 15px; }
 
+/* 技能欄與加成列：平時收起，更新時才展開 HUD_PEEK_SECONDS 秒。
+   它們久久才變一次，卻常駐佔掉螢幕上緣一大塊，後期尤其嚴重。
+   用 max-height 收合才能真的把版面空間讓出來 (opacity 不會)。 */
+.hud-peek {
+  overflow: hidden;
+  transition: max-height 0.22s ease, opacity 0.18s ease;
+}
+
+/* 用 :not(.peeking) 而不是單純的 .hud-peek —— 後者與 .buffs-tray 同特異性，
+   而 .buffs-tray 定義在本檔更後面，它的 min-height 會蓋過收合。 */
+.hud-peek:not(.peeking) {
+  max-height: 0;
+  min-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  pointer-events: none;
+}
+
+.hud-peek.peeking {
+  max-height: 160px;
+  opacity: 1;
+}
+
 /* ==================== 角色台詞氣泡 ==================== */
 #dialogue-bubble {
   --accent: #00e5ff;

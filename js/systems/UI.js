@@ -10,6 +10,10 @@ import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXP
 // 加成列最多顯示幾個 (只留最近取得的，其餘收成「+N」)
 const BUFF_BAR_MAX = 4;
 
+// 技能欄與加成列平時收起，更新時才展開幾秒 —— 它們久久才變一次，卻常駐佔掉
+// 螢幕上緣一大塊。提示氣泡同理，講完就收。
+const HUD_PEEK_SECONDS = 1.0;
+
 export class UIManager {
   constructor() {
     this.expFill = document.getElementById('exp-bar-fill');
@@ -161,6 +165,11 @@ export class UIManager {
     this.eventBanner = document.getElementById('event-banner');
 
     // 局內祝福與協同欄
+    this.skillsTray = document.getElementById('skills-tray');
+    this.buffsTray = document.getElementById('buffs-tray');
+    this._peekTimers = new Map();
+    this.skillsTray?.classList.add('hud-peek');
+    this.buffsTray?.classList.add('hud-peek');
     this.blessingsBar = document.getElementById('blessings-bar');
     this.synergiesBar = document.getElementById('synergies-bar');
 
@@ -990,6 +999,16 @@ export class UIManager {
   }
 
   // 角色台詞氣泡
+  // 讓一個列「探頭」幾秒再收回去。收合用 CSS 的 .hud-peek/.peeking 控制。
+  peek(el) {
+    if (!el) return;
+    el.classList.add('peeking');
+    clearTimeout(this._peekTimers.get(el));
+    this._peekTimers.set(el, setTimeout(() => {
+      el.classList.remove('peeking');
+    }, HUD_PEEK_SECONDS * 1000));
+  }
+
   say(text, color = '#00e5ff', seconds = 3.2) {
     if (!text) return;
     this.bubble.textContent = text;
@@ -1000,9 +1019,10 @@ export class UIManager {
     this.bubble.classList.add('pop');
 
     clearTimeout(this.bubbleTimer);
+    // 一律壓到 HUD_PEEK_SECONDS：原本 1.4–4.5 秒的訊息會長時間蓋住畫面下緣
     this.bubbleTimer = setTimeout(() => {
       this.bubble.classList.add('hidden');
-    }, seconds * 1000);
+    }, Math.min(seconds, HUD_PEEK_SECONDS) * 1000);
   }
 
   initSlotPlaceholders() {
@@ -1041,6 +1061,7 @@ export class UIManager {
   }
 
   updateSkillSlots(weaponManager) {
+    this.peek(this.skillsTray);
     // 更新武器欄
     let wIndex = 0;
     for (const [id, item] of weaponManager.weapons.entries()) {
@@ -1092,6 +1113,7 @@ export class UIManager {
   }
 
   updatePocketItem(itemId, count) {
+    this.peek(this.skillsTray);
     const pocketSlot = document.getElementById('pocket-slot');
     const pocketIcon = document.getElementById('pocket-item-icon');
     const pocketBadge = document.getElementById('pocket-item-badge');
@@ -1620,6 +1642,7 @@ export class UIManager {
 
   updateBlessings(blessings) {
     if (!this.blessingsBar) return;
+    this.peek(this.buffsTray);
     this.renderBuffBar(this.blessingsBar, blessings, (b) => {
       const badge = document.createElement('div');
       badge.className = 'buff-badge blessing-badge';
@@ -1680,6 +1703,7 @@ export class UIManager {
   // ── 方向 4：武器協同 UI ──
   updateSynergies(synergies) {
     if (!this.synergiesBar) return;
+    this.peek(this.buffsTray);
     this.renderBuffBar(this.synergiesBar, synergies, (s) => {
       const badge = document.createElement('div');
       badge.className = 'buff-badge synergy-badge';
