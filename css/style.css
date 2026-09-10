@@ -180,6 +180,31 @@ body, html {
   gap: 6px;
 }
 
+/* 工事建造鈕移到畫面右側，與頂端資訊列分開 —— 後期資訊列已經擠到兩排，
+   建造是「操作」不是「資訊」，混在一起既難按也把遊戲視野壓掉。 */
+#action-bar .facility-bar {
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+#action-bar .build-btn {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  font-size: 10px;
+  line-height: 1.1;
+  background: rgba(13, 22, 40, 0.85);
+}
+
+#action-bar .build-icon { font-size: 17px; }
+
 .hud-btn {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -1463,9 +1488,9 @@ body, html {
   .hud-pill { padding: 3px 5px; font-size: 10px; gap: 2px; }
   .hud-icon { font-size: 10px; }
   .hud-btn { width: 26px; height: 26px; font-size: 12px; padding: 0; }
-  .facility-bar { gap: 2px; }
-  .build-btn { width: auto; min-width: 26px; padding: 0 3px; font-size: 9px; gap: 1px; }
-  .build-icon { font-size: 10px; }
+  #action-bar .facility-bar { gap: 4px; padding-bottom: 8px; }
+  #action-bar .build-btn { width: 42px; height: 42px; font-size: 9px; }
+  #action-bar .build-icon { font-size: 15px; }
   .objective { font-size: 11px; min-height: 13px; margin-top: -2px; }
 
   #skills-tray { gap: 4px; flex-wrap: nowrap; }
@@ -2228,7 +2253,8 @@ body, html {
   display: flex;
   gap: 6px;
   align-items: center;
-  flex-wrap: wrap;
+  /* 不換行：換到第二排就會把遊戲視野再壓掉一截，寧可靠「+N」收起來 */
+  flex-wrap: nowrap;
 }
 
 .buff-badge {
@@ -2249,6 +2275,15 @@ body, html {
 .buff-badge:hover {
   transform: scale(1.25);
   z-index: 5;
+}
+
+.buff-more {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-dim, #9fb0c8);
+  border-style: dashed;
+  cursor: help;
 }
 
 .blessing-badge {

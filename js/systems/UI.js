@@ -7,6 +7,9 @@ import { save, STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXPANSION_STEP } from '../shop.js';
 
+// 加成列最多顯示幾個 (只留最近取得的，其餘收成「+N」)
+const BUFF_BAR_MAX = 4;
+
 export class UIManager {
   constructor() {
     this.expFill = document.getElementById('exp-bar-fill');
@@ -1599,15 +1602,30 @@ export class UIManager {
   }
 
   // ── 方向 1：局內隨機祝福 UI ──
+  // 只顯示最近取得的幾個，其餘收成一個「+N」計數。後期祝福與協同會長到兩排、
+  // 把遊戲視野壓掉一半，而玩家其實只需要知道剛拿到什麼 —— 完整清單在結算畫面。
+  renderBuffBar(bar, list, makeBadge) {
+    bar.innerHTML = '';
+    const shown = list.slice(-BUFF_BAR_MAX);
+    const hidden = list.length - shown.length;
+    if (hidden > 0) {
+      const more = document.createElement('div');
+      more.className = 'buff-badge buff-more';
+      more.textContent = `+${hidden}`;
+      more.title = list.slice(0, hidden).map((x) => x.name).join('、');
+      bar.appendChild(more);
+    }
+    shown.forEach((x) => bar.appendChild(makeBadge(x)));
+  }
+
   updateBlessings(blessings) {
     if (!this.blessingsBar) return;
-    this.blessingsBar.innerHTML = '';
-    blessings.forEach((b) => {
+    this.renderBuffBar(this.blessingsBar, blessings, (b) => {
       const badge = document.createElement('div');
       badge.className = 'buff-badge blessing-badge';
       badge.innerHTML = `<span class="buff-icon">${b.icon}</span>`;
       badge.title = `${b.name}`;
-      this.blessingsBar.appendChild(badge);
+      return badge;
     });
   }
 
@@ -1662,14 +1680,13 @@ export class UIManager {
   // ── 方向 4：武器協同 UI ──
   updateSynergies(synergies) {
     if (!this.synergiesBar) return;
-    this.synergiesBar.innerHTML = '';
-    synergies.forEach((s) => {
+    this.renderBuffBar(this.synergiesBar, synergies, (s) => {
       const badge = document.createElement('div');
       badge.className = 'buff-badge synergy-badge';
       badge.style.setProperty('--badge-color', s.color);
       badge.innerHTML = `<span class="buff-icon">${s.icon}</span>`;
       badge.title = `【${s.name}】${s.desc}`;
-      this.synergiesBar.appendChild(badge);
+      return badge;
     });
   }
 

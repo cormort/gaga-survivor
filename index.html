@@ -48,20 +48,6 @@
           <span class="hud-icon">📦</span>
           <span id="pending-gear-count">0</span>
         </div>
-        <div id="facility-bar" class="facility-bar">
-          <button id="btn-build" class="hud-btn build-btn" data-facility="turret" title="機槍砲台 (1/B)">
-            <span class="build-icon">🔫</span><span id="build-cost">60</span>
-          </button>
-          <button id="btn-build-grid" class="hud-btn build-btn" data-facility="electric_grid" title="高壓電網 (2)">
-            <span class="build-icon">⚡</span><span id="build-grid-cost">50</span>
-          </button>
-          <button id="btn-build-purifier" class="hud-btn build-btn" data-facility="purifier" title="淨化裝置 (3)">
-            <span class="build-icon">🧪</span><span id="build-purifier-cost">75</span>
-          </button>
-          <button id="btn-build-barricade" class="hud-btn build-btn" data-facility="barricade" title="反傷拒馬 (4)">
-            <span class="build-icon">🛡️</span><span id="build-barricade-cost">40</span>
-          </button>
-        </div>
         <button id="btn-sound" class="hud-btn" title="切換音效">🔊</button>
         <button id="btn-pause" class="hud-btn" title="暫停遊戲">⏸️</button>
         <button id="btn-quit" class="hud-btn quit-btn hidden" title="放棄任務回主選單">🚪</button>
@@ -131,6 +117,20 @@
 
     <!-- 戰術動作按鈕 (閃避翻滾 / 砲塔升級 / 戰術道具) -->
     <div id="action-bar">
+      <div id="facility-bar" class="facility-bar">
+        <button id="btn-build" class="hud-btn build-btn" data-facility="turret" title="機槍砲台 (1/B)">
+            <span class="build-icon">🔫</span><span id="build-cost">60</span>
+        </button>
+        <button id="btn-build-grid" class="hud-btn build-btn" data-facility="electric_grid" title="高壓電網 (2)">
+            <span class="build-icon">⚡</span><span id="build-grid-cost">50</span>
+        </button>
+        <button id="btn-build-purifier" class="hud-btn build-btn" data-facility="purifier" title="淨化裝置 (3)">
+            <span class="build-icon">🧪</span><span id="build-purifier-cost">75</span>
+        </button>
+        <button id="btn-build-barricade" class="hud-btn build-btn" data-facility="barricade" title="反傷拒馬 (4)">
+            <span class="build-icon">🛡️</span><span id="build-barricade-cost">40</span>
+        </button>
+      </div>
       <button id="btn-dash" class="action-btn dash-btn" title="戰術閃避 (Space)">
         <span class="action-icon">💨</span>
         <span class="action-key">SPACE</span>
