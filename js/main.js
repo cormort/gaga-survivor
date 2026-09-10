@@ -2162,7 +2162,7 @@ class Game {
       const charClears = new Set(d.charClears || []);
       charClears.add(this.characterId);
       d.charClears = [...charClears];
-      save.save();
+      save.flush();
       stats.clearedWithAllChars = charClears.size >= 4;
     }
     const newlyUnlocked = [];
@@ -2177,7 +2177,7 @@ class Game {
     }
     if (newlyUnlocked.length > 0) {
       save.data.achievements = [...unlocked];
-      save.save();
+      save.flush();
     }
     return newlyUnlocked;
   }
@@ -2243,9 +2243,10 @@ class Game {
       this.frameError = err;
       this.frameErrorCount = (this.frameErrorCount || 0) + 1;
       this.frameErrorStreak = (this.frameErrorStreak || 0) + 1;
-      // 連續半秒都拋同一個例外 = 遊戲已經回不來了，直接告訴玩家，
-      // 不要讓他對著一張凍結的畫面乾等。
-      if (this.frameErrorStreak === 30) this.showFatalError(err);
+      // 兩種都要抓：連續半秒都在拋 = 畫面已經回不來了；累計三次 = 反覆出現的
+      // 真 bug (例如結算流程拋錯後只會拋幾次就停在 GAME_OVER，連續計數永遠到不了
+      // 門檻，玩家卻已經卡死沒有出口)。
+      if (this.frameErrorStreak === 30 || this.frameErrorCount === 3) this.showFatalError(err);
     }
 
     if (this.perf) this.drawPerfHUD(currentTime);

@@ -211,9 +211,19 @@ game.updateHazards = function(){ throw new Error('測試用'); };
 ### D2 偶發例外不打擾
 ```js
 (function(){ const f = game.updateHazards; let n = 0;
-  game.updateHazards = function(...a){ if (n++ < 3) throw new Error('偶發'); return f.apply(this, a); }; })();
+  game.updateHazards = function(...a){ if (n++ < 2) throw new Error('偶發'); return f.apply(this, a); }; })();
 ```
 **通過**：不跳告示，遊戲照常進行
+
+> 告示的觸發條件有兩個：**連續 30 幀**都在拋（畫面回不來了），或**累計 3 次**
+> （反覆出現的真 bug）。後者是為了抓「拋幾次就停在某個死狀態」的情況 ——
+> 結算流程拋錯只會拋 3 次就停在 `GAME_OVER`，連續計數永遠到不了 30，
+> 玩家卻已經卡死沒有出口。
+
+### D2b 結算流程
+正常打完一局（戰死與通關各一次），確認結算畫面會出現。
+**失敗**：畫面凍結、沒有結算畫面、狀態停在 `GAME_OVER` → 這是 `handleGameOver`
+中途拋錯，回報面板最下方的錯誤訊息
 
 ### D3 彈窗狀態機
 逐一開關：升級卡、寶箱、商人、祝福、裝備、暫停。每次關閉後檢查面板 `狀態` 是否回到 `PLAYING`。
