@@ -3,6 +3,66 @@
 import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE } from '../config.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
 
+// 狀態光暈烘焙：灼燒/中毒原本每隻每幀都重建一個徑向漸層，再填一個半徑 1.5 倍的
+// 加色大圓 —— 後期滿場中燒時這是最貴的一段 (實測 250 隻：開啟 21fps / 關閉 48fps)。
+// 改成依半徑烘一次到離屏畫布，之後每幀只剩一次 drawImage；動態明滅改用 globalAlpha
+// 調變，色階比例照舊，外觀維持不變。
+const GLOW_CACHE = new Map();
+
+// 火星/毒氣泡同樣烘成小 sprite。原本每顆都要組一次 rgba() 字串給 fillStyle (字串解析)
+// 再走 beginPath/arc/fill —— 250 隻 × 最多 8 顆 = 每幀兩千次，實測 fill 次數與 fps
+// 幾乎完全負相關。顏色只有固定幾種、只有透明度在變，改用 globalAlpha 調變後外觀不變。
+const SPARK_COLORS = ['rgb(255, 140, 40)', 'rgb(255, 170, 40)', 'rgb(255, 200, 40)',
+                      'rgb(150, 255, 170)'];
+const SPARK_R = 16;
+const SPARKS = SPARK_COLORS.map((color) => {
+  const cv = document.createElement('canvas');
+  cv.width = SPARK_R * 2;
+  cv.height = SPARK_R * 2;
+  const x = cv.getContext('2d');
+  x.fillStyle = color;
+  x.beginPath();
+  x.arc(SPARK_R, SPARK_R, SPARK_R, 0, Math.PI * 2);
+  x.fill();
+  return cv;
+});
+
+// 以中心點與半徑貼上烘好的火星
+function blitSpark(ctx, idx, cx, cy, r, alpha) {
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(SPARKS[idx], cx - r, cy - r, r * 2, r * 2);
+}
+
+function statusGlow(kind, radius) {
+  const r = Math.round(radius);
+  const key = `${kind}${r}`;
+  let glow = GLOW_CACHE.get(key);
+  if (glow) return glow;
+
+  const rad = r * (kind === 'burn' ? 1.5 : 1.4);
+  const size = Math.max(2, Math.ceil(rad * 2));
+  const cv = document.createElement('canvas');
+  cv.width = size;
+  cv.height = size;
+  const x = cv.getContext('2d');
+  const g = x.createRadialGradient(rad, rad, 0, rad, rad, rad);
+  if (kind === 'burn') {
+    // 烘焙時把 alpha 除以基準值 0.5，繪製時再乘回 globalAlpha，總和與原本一致
+    g.addColorStop(0, 'rgba(255, 190, 60, 1)');
+    g.addColorStop(0.55, 'rgba(255, 90, 0, 0.56)');
+    g.addColorStop(1, 'rgba(180, 30, 0, 0)');
+  } else {
+    g.addColorStop(0, 'rgba(120, 255, 140, 1)');
+    g.addColorStop(1, 'rgba(30, 160, 60, 0)');
+  }
+  x.fillStyle = g;
+  x.fillRect(0, 0, size, size);
+
+  glow = { cv, rad };
+  GLOW_CACHE.set(key, glow);
+  return glow;
+}
+
 export class Enemy {
   // scale: { hp, dmg, speed } — 關卡難度、時間成長與關卡規則合併後的係數
   constructor(typeKey, x, y, scale = {}) {
@@ -403,22 +463,18 @@ export class Enemy {
       ctx.translate(screenX, screenY);
       ctx.globalCompositeOperation = 'lighter';
       const f = this.animTimer * 6;
-      const g = ctx.createRadialGradient(0, this.radius * 0.3, 0, 0, this.radius * 0.3, this.radius * 1.5);
-      g.addColorStop(0, `rgba(255, 190, 60, ${0.5 + Math.sin(f) * 0.15})`);
-      g.addColorStop(0.55, 'rgba(255, 90, 0, 0.28)');
-      g.addColorStop(1, 'rgba(180, 30, 0, 0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, this.radius * 0.3, this.radius * 1.5, 0, Math.PI * 2);
-      ctx.fill();
+      const glow = statusGlow('burn', this.radius);
+      ctx.globalAlpha = 0.5 + Math.sin(f) * 0.15;
+      ctx.drawImage(glow.cv, -glow.rad, this.radius * 0.3 - glow.rad);
+      ctx.globalAlpha = 1;
       for (let i = 0; i < 3; i++) {
         const p = ((f * 0.12 + i * 0.33) % 1);
-        ctx.fillStyle = `rgba(255, ${140 + i * 30}, 40, ${(1 - p) * 0.9})`;
-        ctx.beginPath();
-        ctx.arc(Math.sin(f * 0.7 + i * 2.1) * this.radius * 0.6,
-                this.radius * 0.3 - p * this.radius * 2, this.radius * 0.14 * (1 - p * 0.5), 0, Math.PI * 2);
-        ctx.fill();
+        blitSpark(ctx, i,
+          Math.sin(f * 0.7 + i * 2.1) * this.radius * 0.6,
+          this.radius * 0.3 - p * this.radius * 2,
+          this.radius * 0.14 * (1 - p * 0.5), (1 - p) * 0.9);
       }
+      ctx.globalAlpha = 1;
       ctx.restore();
     }
 
@@ -450,21 +506,18 @@ export class Enemy {
       ctx.translate(screenX, screenY);
       ctx.globalCompositeOperation = 'lighter';
       const density = this.poisonStacks / 5;
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius * 1.4);
-      g.addColorStop(0, `rgba(120, 255, 140, ${0.2 + density * 0.3})`);
-      g.addColorStop(1, 'rgba(30, 160, 60, 0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, 0, this.radius * 1.4, 0, Math.PI * 2);
-      ctx.fill();
+      const glow = statusGlow('poison', this.radius);
+      ctx.globalAlpha = 0.2 + density * 0.3;
+      ctx.drawImage(glow.cv, -glow.rad, -glow.rad);
+      ctx.globalAlpha = 1;
       for (let i = 0; i < this.poisonStacks; i++) {
         const p = ((this.animTimer * 0.35 + i * 0.27) % 1);
-        ctx.fillStyle = `rgba(150, 255, 170, ${(1 - p) * 0.85})`;
-        ctx.beginPath();
-        ctx.arc(Math.sin(this.animTimer * 1.4 + i * 2.4) * this.radius * 0.7,
-                this.radius * 0.3 - p * this.radius * 1.8, this.radius * 0.11, 0, Math.PI * 2);
-        ctx.fill();
+        blitSpark(ctx, 3,
+          Math.sin(this.animTimer * 1.4 + i * 2.4) * this.radius * 0.7,
+          this.radius * 0.3 - p * this.radius * 1.8,
+          this.radius * 0.11, (1 - p) * 0.85);
       }
+      ctx.globalAlpha = 1;
       ctx.restore();
     }
 
