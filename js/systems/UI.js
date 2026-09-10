@@ -10,9 +10,14 @@ import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXP
 // 加成列最多顯示幾個 (只留最近取得的，其餘收成「+N」)
 const BUFF_BAR_MAX = 4;
 
-// 技能欄與加成列平時收起，更新時才展開幾秒 —— 它們久久才變一次，卻常駐佔掉
-// 螢幕上緣一大塊。提示氣泡同理，講完就收。
+// 技能欄與加成列平時收起，更新時才展開這麼久 —— 它們久久才變一次，卻常駐佔掉
+// 螢幕上緣一大塊。只是「瞄一眼確認拿到什麼」，收得快一點沒關係。
 const HUD_PEEK_SECONDS = 1.0;
+
+// 提示氣泡的時長上限。原本 1.4–4.5 秒，較長的訊息 (每日詞綴、關卡規則、Boss
+// 警告) 會久久蓋住畫面下緣；但壓到 1 秒又來不及讀完。取中間值，短訊息維持原本
+// 的時長，只有超過上限的才被截短。
+const HUD_HINT_MAX_SECONDS = 2.5;
 
 export class UIManager {
   constructor() {
@@ -1019,10 +1024,9 @@ export class UIManager {
     this.bubble.classList.add('pop');
 
     clearTimeout(this.bubbleTimer);
-    // 一律壓到 HUD_PEEK_SECONDS：原本 1.4–4.5 秒的訊息會長時間蓋住畫面下緣
     this.bubbleTimer = setTimeout(() => {
       this.bubble.classList.add('hidden');
-    }, Math.min(seconds, HUD_PEEK_SECONDS) * 1000);
+    }, Math.min(seconds, HUD_HINT_MAX_SECONDS) * 1000);
   }
 
   initSlotPlaceholders() {
