@@ -6,7 +6,7 @@ import { LEVELS, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS
 import { GAME_CONFIG } from '../config.js';
 import { ELITE_AFFIXES } from '../config.js';
 
-const MAX_ENEMIES = 250;
+export const MAX_ENEMIES = 250;   // 場上敵人硬上限 (main.js 的孵化/裂解上限由此推導)
 
 export class Spawner {
   constructor() {

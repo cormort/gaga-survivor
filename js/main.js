@@ -10,7 +10,7 @@ import { Projectile } from './entities/Projectile.js';
 import { Turret, TURRET, TURRET_VARIANTS, FACILITY_TYPES } from './entities/Turret.js';
 import { InputController } from './input.js';
 import { WeaponManager } from './weapons/WeaponManager.js';
-import { Spawner } from './systems/Spawner.js';
+import { Spawner, MAX_ENEMIES as SPAWNER_MAX_ENEMIES } from './systems/Spawner.js';
 import { ParticleSystem } from './systems/ParticleSystem.js';
 import { UIManager } from './systems/UI.js';
 import { sound } from './audio.js';
@@ -24,10 +24,16 @@ import { MODES, MODE_ORDER, getMode } from './modes.js';
 import { Core } from './entities/Core.js';
 import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXPANSION_STEP } from './shop.js';
 
-const MAX_ENEMIES = 240; // 場上敵人硬上限 (孵化/裂解都受限)
+// 孵化/裂解用的上限：比 Spawner 的 MAX_ENEMIES 低 10 隻，留給波次生成的餘裕，
+// 否則自我增殖的怪會把名額吃光、後續波次的新怪種再也進不來。
+// 兩邊過去各寫一個數字 (240 / 250) 且沒說明關係，改為從同一個來源推導。
+const HATCH_ENEMY_CAP = SPAWNER_MAX_ENEMIES - 10;
 // 核心外圈實際擠得下的同時攻擊數 (半徑 46 的六角形一圈約十幾隻)
 // 不會過期的掉落物 (裝備/寶箱/消費道具/補給) 在場上的數量上限
 const NON_EXPIRING_DROP_CAP = 15;
+
+// 兩次精英擊殺頓格之間的最小間隔 (秒)
+const ELITE_HITSTOP_GAP = 0.5;
 
 // 擊殺里程碑的間隔。固定每 100 殺的話，8 分鐘約 1430 殺 = 14 次彈窗打斷世界，
 // 加上升級卡與寶箱，後期幾乎在看選單而不是在玩。改成愈後面愈稀疏。
@@ -120,6 +126,7 @@ class Game {
     this._eventSchedule = [];      // 預排的事件觸發時間
     this._eventBag = [];           // 事件洗牌袋 (抽完一輪才重置)
     this._recycleTally = 0;        // 累積待提示的回收金幣
+    this._lastEliteHitstop = -99;  // 上次精英擊殺頓格的遊戲時間 (未觸發過)
     this._eventIdx = 0;
     this.activeSynergies = [];     // 當前生效的武器協同 [{id, name, icon}]
     this.merchant = null;          // 當前場上的商人 {x, y, timer, items}
@@ -158,6 +165,16 @@ class Game {
     this.loop = this.loop.bind(this);
 
     requestAnimationFrame(this.loop);
+  }
+
+  // 新的一局要從乾淨狀態開始。不清的話，玩家踩過一次例外之後，之後每一局的
+  // 效能面板都掛著舊的「✖ 每幀例外 ×N」與舊訊息，紅色告示也一直留在畫面上。
+  clearFrameErrors() {
+    this.frameError = null;
+    this.frameErrorCount = 0;
+    this.frameErrorStreak = 0;
+    this._fatalEl?.remove();
+    this._fatalEl = null;
   }
 
   // 遊戲迴圈連續拋例外時的告示。本身必須絕對安全 —— 它跑在 catch 裡，
@@ -1182,6 +1199,8 @@ class Game {
     this._eventSchedule = buildEventSchedule();
     this._eventBag = [];
     this._recycleTally = 0;
+    this._lastEliteHitstop = -99;
+    this.clearFrameErrors();
     this._eventIdx = 0;
     this.activeSynergies = [];
     this.merchant = null;
@@ -2747,7 +2766,10 @@ class Game {
         }
         if (enemy.isBoss) {
           this.triggerHitstop(0.08);
-        } else if (enemy.isElite) {
+        } else if (enemy.isElite && this.gameTime - this._lastEliteHitstop >= ELITE_HITSTOP_GAP) {
+          // 精英機率提高後，密集擊殺會讓頓格幀佔比衝到一成以上 (實測 endless 局
+          // 面板出現「凍結 33–50%」)。頓格是打擊感，不是節流閥，加最小間隔。
+          this._lastEliteHitstop = this.gameTime;
           this.triggerHitstop(0.035);
         }
         this.player.character.onKill?.(enemy, this);
@@ -2764,7 +2786,7 @@ class Game {
         this.spawnDropItem(enemy);
 
         // 孢子母體死亡裂解成幼體 (沿用母體的血量成長係數)
-        if (enemy.splitInto && this.enemies.length < MAX_ENEMIES) {
+        if (enemy.splitInto && this.enemies.length < HATCH_ENEMY_CAP) {
           // 沿用母體的血量成長，傷害與移速用目前時間/規則重算
           const scale = enemyScale(this.gameTime, this.level, this.rules);
           scale.hp = enemy.maxHp / ENEMY_TYPES[enemy.typeKey].hp;
@@ -2843,7 +2865,7 @@ class Game {
 
   // 增殖胞囊孵化：吐出雜兵 (沿用目前關卡的雜兵血量成長係數)
   spawnHatchling(hatcher) {
-    if (this.enemies.length + this._pendingSpawns.length >= MAX_ENEMIES) return;
+    if (this.enemies.length + this._pendingSpawns.length >= HATCH_ENEMY_CAP) return;
     const scale = enemyScale(this.gameTime, this.level, this.rules);
     for (let i = 0; i < (hatcher.hatchCount || 1); i++) {
       const ang = Math.random() * Math.PI * 2;
