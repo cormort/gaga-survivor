@@ -141,7 +141,8 @@ class Game {
       'font:11px/1.45 ui-monospace,monospace;white-space:pre;color:#00f59b;' +
       'background:rgba(0,0,0,0.72);padding:6px 9px;border-bottom-right-radius:8px;';
     document.body.appendChild(el);
-    return { el, frames: [], update: 0, render: 0, ticks: 0, last: 0 };
+    return { el, frames: [], update: 0, render: 0, ticks: 0, last: 0,
+             hitstopFrames: 0, pausedFrames: 0 };
   }
 
   // 效能面板：網址加 ?perf=1 開啟。卡頓時直接截圖就看得出是哪一項爆掉。
@@ -157,9 +158,14 @@ class Game {
     const ticks = pf.ticks || 1;
     const n = (arr) => arr?.length ?? 0;   // 開始畫面時部分系統尚未建立
 
+    // 這一段窗期內，有多少幀「畫得出來但世界沒在動」
+    const total = f.length || 1;
+    const frozen = Math.round((pf.hitstopFrames + pf.pausedFrames) / total * 100);
+
     pf.el.textContent = [
       `${(1000 / (med || 1)).toFixed(0)} fps   幀 ${med.toFixed(1)} / 最差 ${worst.toFixed(0)} ms`,
-      `update ${(pf.update / ticks).toFixed(1)}  render ${(pf.render / ticks).toFixed(1)} ms`,
+      `update ${(pf.update / ticks).toFixed(2)}  render ${(pf.render / ticks).toFixed(2)} ms  跑${pf.ticks}幀`,
+      `凍結 ${frozen}%  (頓格${pf.hitstopFrames} 暫停${pf.pausedFrames})  hs ${this.hitstopTimer.toFixed(2)}`,
       `敵 ${n(this.enemies)}  投射 ${n(this.weaponManager?.projectiles)}  敵彈 ${n(this.enemyProjectiles)}`,
       `掉落 ${n(this.dropItems)}  粒子 ${n(this.particles?.particles)}  殘跡 ${n(this.decals)}`,
       `砲塔 ${n(this.turrets)}  傭兵 ${n(this.mercenaries)}  待升級 ${this.pendingLevelUps}`,
@@ -170,6 +176,8 @@ class Game {
     pf.update = 0;
     pf.render = 0;
     pf.ticks = 0;
+    pf.hitstopFrames = 0;
+    pf.pausedFrames = 0;
   }
 
   initWindow() {
@@ -2165,7 +2173,10 @@ class Game {
     const dt = Math.min(0.1, (currentTime - this.lastTime) / 1000);
     this.lastTime = currentTime;
 
-    if (this.perf) this.perf.frames.push(dt * 1000);
+    if (this.perf) {
+      this.perf.frames.push(dt * 1000);
+      if (this.state !== 'PLAYING') this.perf.pausedFrames++;
+    }
 
     // ponytail: 只在遊戲進行中重繪。覆蓋層有全螢幕 backdrop-filter: blur，
     // 畫布每幀變動會逼瀏覽器每幀重做全螢幕模糊 → 死亡/升級時直接卡死。
@@ -2176,6 +2187,7 @@ class Game {
         if (this.hitstopTimer > 0) {
           this.hitstopTimer -= dt;
           this.render();
+          if (this.perf) this.perf.hitstopFrames++;
         } else if (this.perf) {
           const t0 = performance.now();
           this.update(dt);
