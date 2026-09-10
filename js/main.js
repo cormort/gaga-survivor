@@ -761,8 +761,11 @@ class Game {
       case 'manna_prism':
         sound.playEvoFanfare();
         this.particles.createShockwave(this.player.x, this.player.y, 200, '#d966ff');
-        this.weaponManager.cooldowns.clear();
-        this.player.dashCooldownTimer = 0;
+        // 冷卻是存在每把武器自己的 cooldownTimer 上，WeaponManager 沒有 cooldowns
+        // 這個 Map —— 原本的 cooldowns.clear() 必定拋 TypeError，而這裡跑在
+        // update() 的 try/catch 內，一炸就整局凍結 (畫面停住、音效照常)。
+        for (const w of this.weaponManager.weapons.values()) w.cooldownTimer = 0;
+        this.player.dashTimer = 0;
         this.ui.say('💎 曼納稜晶：全武裝冷卻歸零，立即重置！', '#d966ff', 2.5);
         break;
 
