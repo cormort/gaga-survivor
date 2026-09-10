@@ -167,7 +167,7 @@ export const save = {
         this.data.stash.push(gear);
       }
     }
-    this.save();
+    this.flush();
     return { success: true, message: `成功領取【${def.name}】！獲得 ${def.desc}` };
   },
 
