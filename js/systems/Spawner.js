@@ -2,7 +2,7 @@
 // 無盡模式 (endless) 是唯一例外：波次間隔/數量隨時間成長，Boss 固定 90 秒輪播。
 
 import { Enemy } from '../entities/Enemy.js';
-import { LEVELS, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL } from '../levels.js';
+import { LEVELS, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL, endlessBossInterval } from '../levels.js';
 import { GAME_CONFIG } from '../config.js';
 import { ELITE_AFFIXES } from '../config.js';
 
@@ -33,7 +33,7 @@ export class Spawner {
     // Boss 排程：無盡模式 = 固定週期輪播深淵 Boss；一般關卡 = 時間表
     if (level.id === 'endless') {
       if (gameTime >= this.nextEndlessBossAt) {
-        this.nextEndlessBossAt = gameTime + ENDLESS_BOSS_INTERVAL;
+        this.nextEndlessBossAt = gameTime + endlessBossInterval(gameTime);
         const def = ENDLESS_BOSS_CYCLE[this.endlessBossIdx % ENDLESS_BOSS_CYCLE.length];
         this.endlessBossIdx++;
         // 血量與時俱進，名稱加「深淵·」前綴區隔；剝掉 final 旗標避免被誤判為通關
@@ -74,7 +74,10 @@ export class Spawner {
     // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)
     const scale = enemyScale(gameTime, level, rules);
     for (let i = 0; i < batch; i++) {
-      const pos = this.getSpawnPosition(player, 480 + Math.random() * 120);
+      // 生成距離隨時間縮短 (480 → 340)：後期玩家的清場半徑遠大於此，
+      // 生得太遠等於「還沒靠近就被打掉」，威脅永遠傳不到玩家身上。
+      const spawnDist = Math.max(340, 480 - gameTime * 0.16) + Math.random() * 120;
+      const pos = this.getSpawnPosition(player, spawnDist);
       const e = new Enemy(pickEnemy(wave.pool), pos.x, pos.y, scale);
       this.rollElite(e, gameTime);
       enemies.push(e);

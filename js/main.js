@@ -35,6 +35,14 @@ const NON_EXPIRING_DROP_CAP = 15;
 // 兩次精英擊殺頓格之間的最小間隔 (秒)
 const ELITE_HITSTOP_GAP = 0.5;
 
+// 金幣乘數的天花板。天賦財運 × 模式 2.2 × 祝福 1.3 × 每日規則 × 淘金潮 2 是純
+// 乘法疊加、原本沒有上限 —— 實測空存檔 23 分鐘 5.8 萬金，帶滿 meta 加成的存檔
+// 同時間 142 萬，差 25 倍，砲塔與傭兵變成無限供應。
+const GOLD_MUL_CAP = 8;
+
+// 局內待回收裝備的上限，超出的自動分解成金幣 (原本無上限，實測 23 分鐘累積數百件)
+const PENDING_GEAR_CAP = 40;
+
 // 掉落物堆積到這個數量後，未進入拾取半徑的也開始緩慢飄向玩家
 const DRIFT_THRESHOLD = 40;
 const DRIFT_SPEED = 55;        // px/s
@@ -653,6 +661,12 @@ class Game {
     this.start(true);
   }
 
+  // 實際生效的金幣乘數 (夾在上限內)。metaGoldMul 本身不夾 —— 淘金潮是 ×2 後再 ÷2
+  // 還原，先夾住會把還原算錯。
+  goldMul() {
+    return Math.min(GOLD_MUL_CAP, this.metaGoldMul || 1);
+  }
+
   // 打擊微頓挫 (Hitstop)
   triggerHitstop(duration = 0.05) {
     this.hitstopTimer = Math.max(this.hitstopTimer, duration);
@@ -870,7 +884,7 @@ class Game {
         for (const d of this.dropItems) {
           d.isAttracted = true;
         }
-        this.gold += Math.round(100 * (this.metaGoldMul || 1));
+        this.gold += Math.round(100 * this.goldMul());
         this.particles.createShockwave(this.player.x, this.player.y, 220, '#ffcc00');
         this.particles.createDamageText(this.player.x, this.player.y, '+100 🪙', false);
         this.ui.say('🎫 魔法門票：全圖寶石磁吸 + 100 🪙！', '#ffcc00', 2.5);
@@ -903,7 +917,7 @@ class Game {
     const count = roll < 0.2 ? 1 : roll < 0.85 ? 3 : 5;
 
     const rewardPool = [
-      { name: '金幣大獎', desc: '+120 🪙 戰備金', icon: '🪙', isGold: true, apply: () => { this.gold += Math.round(120 * this.metaGoldMul); } },
+      { name: '金幣大獎', desc: '+120 🪙 戰備金', icon: '🪙', isGold: true, apply: () => { this.gold += Math.round(120 * this.goldMul()); } },
       { name: '急救補給包', desc: '+45 HP 治療', icon: '🩹', apply: () => { this.player.heal(45); } },
       { name: '超導磁石', desc: '瞬間吸收全圖寶石', icon: '🧲', apply: () => { for (const d of this.dropItems) d.isAttracted = true; } },
       { name: '基因碎片', desc: '+35 🧬 密鑰', icon: '🧬', apply: () => { save.data.dna += 35; save.flush(); } },
@@ -1275,7 +1289,9 @@ class Game {
   getFacilityCost(type = 'turret') {
     const conf = FACILITY_TYPES[type] || FACILITY_TYPES.turret;
     const count = this.turrets.filter((t) => (t.facilityType || 'turret') === type).length;
-    let raw = conf.baseCost + conf.costGrowth * count;
+    // 原本是線性 (60 + 35n)，蓋 20 座也才 760 —— 後期金幣以萬計，等於無限重建。
+    // 乘上 1.12^n 形成軟天花板：20 座約 7.3k、30 座約 33k、40 座約 136k。
+    let raw = (conf.baseCost + conf.costGrowth * count) * Math.pow(1.12, count);
     if (this.player && this.player.facilityCostMul) {
       raw *= this.player.facilityCostMul;
     }
@@ -1839,7 +1855,7 @@ class Game {
   }
 
   grantMilestone(tag, title) {
-    const mul = this.metaGoldMul || 1;
+    const mul = this.goldMul();
     switch (tag) {
       case 'magnet':
         for (const d of this.dropItems) d.isAttracted = true;
@@ -3050,7 +3066,7 @@ class Game {
   // 否則長局會被回收訊息洗版。
   recycleDrop(item) {
     const worth = item.type === 'gold'
-      ? Math.round(item.value * (this.metaGoldMul || 1))
+      ? Math.round(item.value * this.goldMul())
       : Math.max(1, Math.round((item.value || 1) * 0.5));
     this.gold += worth;
     this._recycleTally = (this._recycleTally || 0) + worth;
@@ -3106,7 +3122,7 @@ class Game {
       this.particles.createDamageText(this.player.x, this.player.y, `+${item.heal} HP`, false);
     } else if (item.type === 'gold') {
       sound.playGem();
-      this.gold += Math.round(item.value * (this.metaGoldMul || 1));
+      this.gold += Math.round(item.value * this.goldMul());
     } else if (item.type === 'chest') {
       this.openLuckyChest();
     } else if (item.type === 'gear') {
@@ -3114,6 +3130,17 @@ class Game {
       if (!gear) return;
       if (!this.pendingGear) this.pendingGear = [];
       this.pendingGear.push(gear);
+      // 超出上限就把最舊的自動分解 —— 原本無上限，長局會累積到數百上千件，
+      // 而回收時本來就多半是分解掉的
+      let autoSalvaged = 0;
+      while (this.pendingGear.length > PENDING_GEAR_CAP) {
+        const old = this.pendingGear.shift();
+        this.gold += salvageValue(old);
+        autoSalvaged++;
+      }
+      if (autoSalvaged > 0) {
+        this.ui.say(`♻️ 暫存已滿，自動分解 ${autoSalvaged} 件舊裝備`, '#9fb0c8', 1.6);
+      }
       this.ui.updatePendingGear(this.pendingGear.length);
       const color = RARITIES[gear.rarity].color;
       sound.playEvoFanfare();
@@ -3121,7 +3148,7 @@ class Game {
       this.ui.say(`拾獲 ${itemName(gear)}！(暫存待回收)`, color, 2.6);
     } else if (item.type === 'supply') {
       // 街頭空投物資箱：金幣 + 回血 + 金色衝擊波
-      const gold = Math.round(30 * (this.metaGoldMul || 1));
+      const gold = Math.round(30 * this.goldMul());
       this.gold += gold;
       this.player.heal(25);
       sound.playEvoFanfare();
@@ -3207,7 +3234,7 @@ class Game {
       this.applySpecialCard(selectedOption);
     } else if (selectedOption.type === 'heal') {
       this.player.heal(this.player.maxHp * 0.5);
-      this.gold += Math.round(50 * (this.metaGoldMul || 1));
+      this.gold += Math.round(50 * this.goldMul());
     }
 
     this.ui.updateSkillSlots(this.weaponManager);
@@ -3249,7 +3276,7 @@ class Game {
         this.openLuckyChest();
         break;
       case 'gold_rush':
-        this.gold += Math.round(200 * (this.metaGoldMul || 1));
+        this.gold += Math.round(200 * this.goldMul());
         this.metaGoldMul *= 2;
         this._goldRushTimer = 30;
         this.ui.say('🪙 淘金狂潮！30 秒金幣翻倍！', '#ffb703', 3);

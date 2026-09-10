@@ -253,6 +253,12 @@ export const ENDLESS_BOSS_CYCLE = []
 
 export const ENDLESS_BOSS_INTERVAL = 90;
 
+// 無盡後期的 Boss 間隔：90 秒起，每分鐘縮 2 秒，最短 45 秒。固定 90 秒的話
+// 後期玩家火力早就過剩，Boss 之間的空檔只是在等下一隻。
+export function endlessBossInterval(gameTime) {
+  return Math.max(45, ENDLESS_BOSS_INTERVAL - (gameTime / 60) * 2);
+}
+
 // ── 關卡規則層 ───────────────────────────────────────────────
 // 每關除了敵人組成與地形機制，再掛一組「常駐規則」改變玩法手感。
 // 每日挑戰的詞綴走同一套欄位與同一個合併函式，兩邊共用一份注入層。
@@ -280,16 +286,26 @@ export function mergeRules(...sources) {
 }
 
 // 敵人隨時間 / 關卡難度的成長係數 (Spawner、孵化、裂解共用一份公式)
-// hp 無上限地變厚；dmg 緩升且封頂 1.8×，避免後期只是「磨」而完全沒有威脅感
+//
+// dmg 的封頂原本是 1.8×，8 分鐘就到頂 —— 但血量無上限成長，於是 23 分鐘的怪比
+// 8 分鐘的耐打 5 倍、傷害卻一模一樣，玩家又多了二十幾級與整套裝備，結果是
+// 「完全不會死，只是磨得久」。封頂拉到 3.5×，斜率不變 (約 25 分鐘到頂)，
+// 前 8 分鐘的體驗完全不受影響。
 export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
   const endless = level && level.id === 'endless';
   return {
     // 0.4 → 0.28：後期改走「數量多、單隻脆」而不是「一隻一隻變成肉山」。
     // 8 分鐘時的血量倍率由 4.2 降為 3.24，配合下面各關卡新增的高 batch 末波。
     hp: (1 + (gameTime / 60) * 0.28) * ((level && level.hpScale) || 1)
-        * (endless ? 1 + gameTime / 300 : 1) * rules.enemyHpMul,
-    dmg: Math.min(1.8, 1 + (gameTime / 60) * 0.1),
-    speed: rules.enemySpeedMul,
+        * (endless ? 1 + gameTime / 300 : 1) * rules.enemyHpMul
+        // 後期二次項：玩家輸出實測 2→20 分鐘成長 413 倍，血量只成長 26 倍，
+        // 於是雜兵在接近途中就被清掉。10 分鐘前不動 (維持「多而脆」的手感)，
+        // 之後才加速追上。23 分鐘時整體倍率約為原本的 2.1 倍。
+        * (1 + Math.pow(Math.max(0, gameTime / 60 - 10), 2) * 0.012),
+    dmg: Math.min(3.5, 1 + (gameTime / 60) * 0.1),
+    // 移動速度原本完全不隨時間成長，而玩家有移速升級 —— 實測「中位敵人距離」
+    // 全程卡在 400px，雜兵根本走不到玩家面前。緩升並封頂 1.5×。
+    speed: rules.enemySpeedMul * Math.min(1.5, 1 + (gameTime / 60) * 0.03),
   };
 }
 
