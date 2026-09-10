@@ -1901,7 +1901,7 @@ class Game {
             this.player.x + Math.cos(ang) * dist,
             this.player.y + Math.sin(ang) * dist, scale);
           const affixKeys = Object.keys(ELITE_AFFIXES);
-          e.applyAffix(affixKeys[Math.floor(Math.random() * affixKeys.length)]);
+          e.makeElite(affixKeys[Math.floor(Math.random() * affixKeys.length)]);
           e._eventElite = true; // 標記為事件精英
           this.enemies.push(e);
         }
@@ -2218,7 +2218,7 @@ class Game {
     try {
       if (this.state === 'PLAYING') {
         if (this.hitstopTimer > 0) {
-          this.hitstopTimer -= dt;
+          this.hitstopTimer = Math.max(0, this.hitstopTimer - dt);
           this.render();
           if (this.perf) this.perf.hitstopFrames++;
         } else if (this.perf) {

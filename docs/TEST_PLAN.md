@@ -255,6 +255,29 @@ game.updateHazards = function(){ throw new Error('測試用'); };
 
 ---
 
+## 6.5 罕見分支煙霧測試（**每次改動後都要跑**）
+
+```bash
+node tools/smoke-branches.mjs      # 離開碼 1 = 有分支拋例外，可接 CI
+```
+
+把每個 switch 的每個 case 都實際觸發一次：消耗品 9、里程碑 5、局內事件 5、
+商人 6、特殊卡 5、Boss 技能 4、祝福 15、結算 2 = 共 51 個分支。
+
+**為什麼需要這個**：本專案已連續出現三個同型 bug，全是「平常跑不到的分支裡有
+筆誤的方法名」——
+
+| 分支 | 寫成 | 正確 |
+|---|---|---|
+| 曼納稜晶 | `weaponManager.cooldowns.clear()` | `cooldowns` 不存在 |
+| 結算成就 | `save.save()` | `save.flush()` |
+| 精英獵殺 | `enemy.applyAffix()` | `enemy.makeElite()` |
+
+語法檢查抓不到、正常遊玩很久才踩一次，但踩到就是整局凍結。這支測試在修正前
+能正確標出 `[局內事件] elite_hunt`，已驗證有偵測能力。
+
+---
+
 ## 7. 自動化夾具
 
 **Lane C 直接用 `tools/perf-probe.mjs`，不要自己重寫。**
@@ -263,6 +286,7 @@ game.updateHazards = function(){ throw new Error('測試用'); };
 node tools/perf-probe.mjs                    # 全部情境
 node tools/perf-probe.mjs --scenario=burn5   # 單一情境
 node tools/perf-probe.mjs --json             # 供 diff 比對
+node tools/smoke-branches.mjs                # 罕見分支煙霧測試
 ```
 
 環境變數：`PROBE_URL`（預設 127.0.0.1:8899）、`CHROMIUM`（自訂 Chromium 路徑）、
