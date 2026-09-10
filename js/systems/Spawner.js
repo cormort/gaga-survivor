@@ -84,7 +84,9 @@ export class Spawner {
   // 精英詞綴：機率隨時間從 3.5% 緩升到 10% (Boss 與召喚小怪不套用)
   rollElite(enemy, gameTime) {
     if (enemy.isBoss) return;
-    const chance = Math.min(0.1, 0.035 + gameTime / 9000) * (this.rules || RULE_DEFAULTS).eliteChanceMul;
+    // 原本 gameTime/9000 要 150 分鐘才到上限，8 分鐘只有 4% —— 一局打完幾乎看不到
+    // 精英，ELITE_AFFIXES 的四種詞綴等於閒置。改成 90 秒到 8%、約 5 分半到頂。
+    const chance = Math.min(0.12, 0.035 + gameTime / 2000) * (this.rules || RULE_DEFAULTS).eliteChanceMul;
     if (Math.random() >= chance) return;
     const keys = Object.keys(ELITE_AFFIXES);
     enemy.makeElite(keys[Math.floor(Math.random() * keys.length)]);

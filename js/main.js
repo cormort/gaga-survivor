@@ -26,6 +26,31 @@ import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXP
 
 const MAX_ENEMIES = 240; // 場上敵人硬上限 (孵化/裂解都受限)
 // 核心外圈實際擠得下的同時攻擊數 (半徑 46 的六角形一圈約十幾隻)
+// 不會過期的掉落物 (裝備/寶箱/消費道具/補給) 在場上的數量上限
+const NON_EXPIRING_DROP_CAP = 15;
+
+// 擊殺里程碑的間隔。固定每 100 殺的話，8 分鐘約 1430 殺 = 14 次彈窗打斷世界，
+// 加上升級卡與寶箱，後期幾乎在看選單而不是在玩。改成愈後面愈稀疏。
+const KILL_MILESTONES = [100, 250, 500, 900, 1400, 2000, 2700];
+const KILL_MILESTONE_STEP = 900;   // 超出表格後的固定間隔
+
+function nextKillMilestone(current) {
+  for (const m of KILL_MILESTONES) if (m > current) return m;
+  return current + KILL_MILESTONE_STEP;
+}
+
+// 事件排程：原本固定 [90,210,330,420] 只有 4 次，每局一模一樣。
+// 改成隨機間隔並持續到後期，長局才不會後半段完全沒事件。
+function buildEventSchedule() {
+  const out = [];
+  let t = 60 + Math.random() * 30;
+  while (t < 1200) {
+    out.push(Math.round(t));
+    t += 75 + Math.random() * 75;
+  }
+  return out;
+}
+
 const CORE_MAX_ATTACKERS = 16;
 
 // #rrggbb + alpha → rgba() 字串 (地形機制的半透明渲染用)
@@ -93,6 +118,8 @@ class Game {
     this._pendingBlessings = [];   // 因彈窗衝突而延後的祝福 (回到 PLAYING 再補發)
     this.activeEvent = null;       // 當前進行中的局內事件
     this._eventSchedule = [];      // 預排的事件觸發時間
+    this._eventBag = [];           // 事件洗牌袋 (抽完一輪才重置)
+    this._recycleTally = 0;        // 累積待提示的回收金幣
     this._eventIdx = 0;
     this.activeSynergies = [];     // 當前生效的武器協同 [{id, name, icon}]
     this.merchant = null;          // 當前場上的商人 {x, y, timer, items}
@@ -1152,7 +1179,9 @@ class Game {
     this._pendingBlessings = [];
     this.activeEvent = null;
     // 預排局內事件：90s, 210s, 330s, 420s (閃過 Boss 時段 120/300/480)
-    this._eventSchedule = [90, 210, 330, 420];
+    this._eventSchedule = buildEventSchedule();
+    this._eventBag = [];
+    this._recycleTally = 0;
     this._eventIdx = 0;
     this.activeSynergies = [];
     this.merchant = null;
@@ -1725,7 +1754,7 @@ class Game {
     }
     while (this.kills >= this.killMilestoneAt) {
       const n = this.killMilestoneAt;
-      this.killMilestoneAt += 100;
+      this.killMilestoneAt = nextKillMilestone(this.killMilestoneAt);
       this._milestoneIdx++;
       if (this._milestoneIdx % 2 === 1) {
         // 奇數次 → 祝福二選一
@@ -1877,8 +1906,15 @@ class Game {
   }
 
   triggerMiniEvent() {
-    const pool = MINI_EVENTS.filter(() => true); // 全部可選
-    const evt = pool[Math.floor(Math.random() * pool.length)];
+    // 洗牌袋：抽完一輪才重置，避免像純隨機那樣同一個事件短時間內連中兩次
+    if (this._eventBag.length === 0) {
+      this._eventBag = [...MINI_EVENTS];
+      for (let i = this._eventBag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [this._eventBag[i], this._eventBag[j]] = [this._eventBag[j], this._eventBag[i]];
+      }
+    }
+    const evt = this._eventBag.pop();
     this.activeEvent = { ...evt, remaining: evt.duration };
     sound.playEvoFanfare();
     this.ui.say(`⚡ ${evt.icon} ${evt.name}：${evt.desc}`, evt.color, 3.5);
@@ -2900,8 +2936,10 @@ class Game {
       item.update(dt, this.player);
       if (item.isAttracted && !item.collected) inFlight++;
 
-      // 逾時未撿的雜物直接移除，避免場上無限累積
+      // 逾時未撿的雜物折算成金幣再移除。直接蒸發等於「打了怪卻什麼都沒拿到」，
+      // 玩家既沒成長也看不到回收回饋；折算金幣至少讓擊殺不白費。
       if (item.expired) {
+        this.recycleDrop(item);
         this.dropItems.splice(i, 1);
         continue;
       }
@@ -2918,6 +2956,8 @@ class Game {
     // 等這一波全部落袋才彈升級卡。逐顆立刻彈窗的話，磁鐵一次灌進大量經驗會變成
     // 「彈窗 → 回 PLAYING 撿下一顆 → 再彈窗」反覆數十次；而非 PLAYING 狀態
     // 不重繪畫布 (見 loop())，玩家看到的就是畫面凍結、升級卡狂跳，音效卻正常。
+    this.capNonExpiringDrops();
+
     // 但不能無限等 —— 密集刷怪時場上可能永遠有水晶在飛，所以最多壓 0.6 秒。
     if (this.pendingLevelUps > 0 && this.state === 'PLAYING') {
       this._levelUpHold += dt;
@@ -2927,6 +2967,36 @@ class Game {
       }
     } else {
       this._levelUpHold = 0;
+    }
+  }
+
+  // 過期或被上限擠掉的掉落物折算金幣。累積到一定量才提示一次，
+  // 否則長局會被回收訊息洗版。
+  recycleDrop(item) {
+    const worth = item.type === 'gold'
+      ? Math.round(item.value * (this.metaGoldMul || 1))
+      : Math.max(1, Math.round((item.value || 1) * 0.5));
+    this.gold += worth;
+    this._recycleTally = (this._recycleTally || 0) + worth;
+    if (this._recycleTally >= 25) {
+      this.ui.say(`♻️ 回收未拾取的戰利品 +${this._recycleTally} 🪙`, '#ffb703', 1.8);
+      this._recycleTally = 0;
+    }
+  }
+
+  // 裝備/寶箱/消費道具/補給不會過期，長局或掛機時會無上限堆在地上，
+  // 每幀照樣 update + draw。超過上限就把最舊的折算掉。
+  capNonExpiringDrops() {
+    let over = 0;
+    for (const d of this.dropItems) if (d.life === Infinity) over++;
+    over -= NON_EXPIRING_DROP_CAP;
+    if (over <= 0) return;
+    for (let i = 0; i < this.dropItems.length && over > 0; i++) {
+      if (this.dropItems[i].life !== Infinity) continue;
+      this.recycleDrop(this.dropItems[i]);
+      this.dropItems.splice(i, 1);
+      i--;
+      over--;
     }
   }
 

@@ -44,7 +44,9 @@ export const LEVELS = {
       { until: 120, pool: [['walker', 1]], interval: 0.85, batch: 1 },
       { until: 240, pool: [['walker', 0.5], ['bat', 0.25], ['runner', 0.15], ['hound', 0.1]], interval: 0.6, batch: 1 },
       { until: 360, pool: [['walker', 0.35], ['bat', 0.22], ['brute', 0.18], ['runner', 0.18], ['hound', 0.07]], interval: 0.45, batch: 1 },
-      { until: 480, pool: [['walker', 0.25], ['bat', 0.18], ['brute', 0.16], ['boomer', 0.15], ['runner', 0.16], ['hound', 0.1]], interval: 0.3, batch: 2 },
+      { until: 480, pool: [['walker', 0.22], ['bat', 0.16], ['brute', 0.14], ['boomer', 0.13], ['runner', 0.14], ['hound', 0.09], ['spitter', 0.12]], interval: 0.3, batch: 2 },
+      // 8 分鐘後：多而脆。玩家唯一要閃的不再只有身體碰撞
+      { until: 9999, pool: [['walker', 0.24], ['bat', 0.16], ['brute', 0.1], ['boomer', 0.14], ['runner', 0.16], ['hound', 0.06], ['spitter', 0.14]], interval: 0.26, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 4000, name: '狂暴推土喪屍', skin: 'boss_street' },
@@ -92,6 +94,7 @@ export const LEVELS = {
       { until: 240, pool: [['walker', 0.3], ['boomer', 0.22], ['bat', 0.16], ['spore_host', 0.14], ['spitter', 0.1], ['hatcher', 0.08]], interval: 0.5, batch: 1 },
       { until: 360, pool: [['boomer', 0.24], ['brute', 0.2], ['bat', 0.16], ['spore_host', 0.16], ['spitter', 0.14], ['hatcher', 0.1]], interval: 0.4, batch: 2 },
       { until: 480, pool: [['boomer', 0.22], ['brute', 0.22], ['walker', 0.14], ['spore_host', 0.16], ['spitter', 0.16], ['hatcher', 0.1]], interval: 0.28, batch: 2 },
+      { until: 9999, pool: [['boomer', 0.22], ['brute', 0.16], ['walker', 0.18], ['spore_host', 0.16], ['spitter', 0.18], ['hatcher', 0.1]], interval: 0.24, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 5500, name: '生化軟泥聚合體', behaviors: ['summon'], skin: 'boss_lab' },
@@ -140,7 +143,8 @@ export const LEVELS = {
       { until: 100, pool: [['brute', 0.5], ['walker', 0.5]], interval: 0.75, batch: 1 },
       { until: 240, pool: [['brute', 0.32], ['bat', 0.28], ['walker', 0.14], ['warden', 0.18], ['chimera', 0.08]], interval: 0.5, batch: 2 },
       { until: 360, pool: [['brute', 0.3], ['bat', 0.22], ['boomer', 0.16], ['warden', 0.2], ['hound', 0.06], ['chimera', 0.06]], interval: 0.38, batch: 2 },
-      { until: 480, pool: [['brute', 0.26], ['bat', 0.18], ['boomer', 0.2], ['warden', 0.22], ['hound', 0.06], ['chimera', 0.08]], interval: 0.26, batch: 2 },
+      { until: 480, pool: [['brute', 0.23], ['bat', 0.16], ['boomer', 0.18], ['warden', 0.2], ['hound', 0.05], ['chimera', 0.07], ['spitter', 0.11]], interval: 0.26, batch: 2 },
+      { until: 9999, pool: [['brute', 0.18], ['bat', 0.18], ['boomer', 0.2], ['warden', 0.16], ['hound', 0.08], ['chimera', 0.07], ['spitter', 0.13]], interval: 0.24, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 7000, name: '冰霜機甲', behaviors: ['ground'], skin: 'boss_frost' },
@@ -190,6 +194,7 @@ export const LEVELS = {
       { until: 220, pool: [['brute', 0.26], ['boomer', 0.2], ['bat', 0.16], ['runner', 0.16], ['spitter', 0.12], ['hatcher', 0.1]], interval: 0.42, batch: 2 },
       { until: 360, pool: [['brute', 0.24], ['boomer', 0.16], ['bat', 0.12], ['warden', 0.14], ['spore_host', 0.12], ['spitter', 0.1], ['chimera', 0.06], ['hatcher', 0.06]], interval: 0.3, batch: 2 },
       { until: 480, pool: [['brute', 0.2], ['boomer', 0.16], ['bat', 0.1], ['warden', 0.14], ['spore_host', 0.1], ['runner', 0.06], ['spitter', 0.1], ['hound', 0.06], ['hatcher', 0.08]], interval: 0.22, batch: 3 },
+      { until: 9999, pool: [['brute', 0.16], ['boomer', 0.16], ['bat', 0.12], ['warden', 0.12], ['spore_host', 0.1], ['runner', 0.08], ['spitter', 0.14], ['hound', 0.06], ['hatcher', 0.06]], interval: 0.2, batch: 5 },
     ],
     bosses: [
       { at: 120, hp: 9000, name: '烈焰暴君', behaviors: ['nova', 'ground'], skin: 'boss_core' },
@@ -279,7 +284,9 @@ export function mergeRules(...sources) {
 export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
   const endless = level && level.id === 'endless';
   return {
-    hp: (1 + (gameTime / 60) * 0.4) * ((level && level.hpScale) || 1)
+    // 0.4 → 0.28：後期改走「數量多、單隻脆」而不是「一隻一隻變成肉山」。
+    // 8 分鐘時的血量倍率由 4.2 降為 3.24，配合下面各關卡新增的高 batch 末波。
+    hp: (1 + (gameTime / 60) * 0.28) * ((level && level.hpScale) || 1)
         * (endless ? 1 + gameTime / 300 : 1) * rules.enemyHpMul,
     dmg: Math.min(1.8, 1 + (gameTime / 60) * 0.1),
     speed: rules.enemySpeedMul,
@@ -308,10 +315,10 @@ export function pickEnemy(pool) {
 // 每日挑戰詞綴庫與種子生成
 export const DAILY_MODIFIERS = [
   { id: 'hyper_speed', name: '⚡ 極速狂飆', desc: '玩家與怪物速度 +35%', playerSpeedMul: 1.35, enemySpeedMul: 1.35 },
-  { id: 'glass_cannon', name: '💥 玻璃大砲', desc: '全武器傷害 +75%，受到傷害 +60%', playerDmgMul: 1.75, damageTakenMul: 1.6 },
+  { id: 'glass_cannon', name: '💥 玻璃大砲', desc: '全武器傷害 +75%，受到傷害 +60%', playerDmgMul: 1.75, damageTakenMul: 1.6, survivalRisk: true },
   { id: 'gold_rush', name: '🪙 淘金狂熱', desc: '金幣獲取 +100%，砲塔冷卻縮短 35%', goldMul: 2.0, turretCdr: 0.65 },
   { id: 'dense_swarm', name: '🧟 狂暴怪海', desc: '怪物數量 +40%，雜兵血量 -25%', spawnMul: 1.4, enemyHpMul: 0.75 },
-  { id: 'vampiric', name: '🩸 吸血盛宴', desc: '生命上限 -25，擊殺精英怪立即回血 30', maxHpOffset: -25, eliteHeal: 30 },
+  { id: 'vampiric', name: '🩸 吸血盛宴', desc: '生命上限 -25，擊殺精英怪立即回血 30', maxHpOffset: -25, eliteHeal: 30, survivalRisk: true },
 ];
 
 export function getDailyChallenge(dateStr = null) {
@@ -326,8 +333,12 @@ export function getDailyChallenge(dateStr = null) {
   const mods = [...DAILY_MODIFIERS];
   const m1Idx = Math.floor(lcg() * mods.length);
   const m1 = mods.splice(m1Idx, 1)[0];
-  const m2Idx = Math.floor(lcg() * mods.length);
-  const m2 = mods.splice(m2Idx, 1)[0];
+
+  // 削生存能力的詞綴最多一個。glass_cannon (受傷 +60%) 與 vampiric (生命上限 -25)
+  // 同時抽中會變成純懲罰疊加，那天的難度直接爆掉。
+  const pool2 = m1.survivalRisk ? mods.filter((m) => !m.survivalRisk) : mods;
+  const m2Idx = Math.floor(lcg() * pool2.length);
+  const m2 = pool2[m2Idx];
 
   return {
     date: d,

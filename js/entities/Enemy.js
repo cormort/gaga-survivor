@@ -129,6 +129,8 @@ export class Enemy {
       this.chargeDir = { x: 0, y: 0 };
       this.skillTimer = 5;       // 離下一次專屬技能的時間
       this.behaviors = [];       // 由關卡 boss 定義帶入：'summon' / 'nova'
+      this._bossStageSeen = 0;   // 已進入的狂暴階段 (0/1/2)
+      this._enrageFlash = 0;     // 進階瞬間的紅光殘餘秒數
     }
   }
 
@@ -295,10 +297,28 @@ export class Enemy {
     return this.slowTimer > 0 ? 0.5 : 1;
   }
 
-  updateBoss(dt, dx, dy, dist, onBossSkill = null) {
-    this.chargeTimer += dt;
+  // Boss 狂暴階段：血量過半、剩四分之一各進一階。技能更密、衝鋒更頻、移動更快。
+  // 原本 Boss 從頭到尾行為一致，玩家火力後期成長後只剩「站著磨」，收尾毫無張力。
+  bossStage() {
+    const r = this.hp / this.maxHp;
+    if (r <= 0.25) return 2;
+    if (r <= 0.5) return 1;
+    return 0;
+  }
 
-    // 每 5 秒發動一次極速衝鋒
+  updateBoss(dt, dx, dy, dist, onBossSkill = null) {
+    const stage = this.bossStage();
+    if (stage > this._bossStageSeen) {
+      this._bossStageSeen = stage;
+      this._enrageFlash = 1.0;          // 進階瞬間的視覺提示
+      this.skillTimer = Math.min(this.skillTimer, 0.6);  // 立刻接一招
+    }
+    if (this._enrageFlash > 0) this._enrageFlash -= dt;
+
+    const rage = 1 + stage * 0.35;      // 階段 0/1/2 → 1.0 / 1.35 / 1.7
+    this.chargeTimer += dt * rage;
+
+    // 每 5 秒發動一次極速衝鋒 (狂暴後更頻繁)
     if (!this.isCharging && this.chargeTimer >= 5.0) {
       this.isCharging = true;
       this.chargeTimer = 0;
@@ -308,16 +328,16 @@ export class Enemy {
     }
 
     if (this.isCharging) {
-      this.x += this.chargeDir.x * this.speed * this.speedFactor() * 3.2 * dt;
-      this.y += this.chargeDir.y * this.speed * this.speedFactor() * 3.2 * dt;
+      this.x += this.chargeDir.x * this.speed * this.speedFactor() * 3.2 * rage * dt;
+      this.y += this.chargeDir.y * this.speed * this.speedFactor() * 3.2 * rage * dt;
       if (this.chargeTimer >= 1.2) {
         this.isCharging = false;
         this.chargeTimer = 0;
       }
     } else {
       if (dist > 0.1) {
-        this.x += (dx / dist) * this.speed * this.speedFactor() * dt;
-        this.y += (dy / dist) * this.speed * this.speedFactor() * dt;
+        this.x += (dx / dist) * this.speed * this.speedFactor() * rage * dt;
+        this.y += (dy / dist) * this.speed * this.speedFactor() * rage * dt;
       }
     }
 
@@ -325,7 +345,7 @@ export class Enemy {
     if (this.skillTimer > 0) {
       this.skillTimer -= dt;
       if (this.skillTimer <= 0 && this.behaviors && this.behaviors.length > 0) {
-        this.skillTimer = 8 + Math.random() * 3;
+        this.skillTimer = (8 + Math.random() * 3) / rage;
         const act = this.behaviors[Math.floor(Math.random() * this.behaviors.length)];
         if (onBossSkill) onBossSkill(this, act);
       }
@@ -455,6 +475,20 @@ export class Enemy {
       ctx.translate(screenX, screenY);
       this.drawMiniHpBar(ctx);
       ctx.restore();
+    }
+
+    // Boss 進入狂暴階段的瞬間紅環，讓玩家知道「它變兇了」而不是莫名其妙被打死
+    if (this._enrageFlash > 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.globalAlpha = Math.min(1, this._enrageFlash);
+      ctx.strokeStyle = '#ff0055';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * (1.3 + (1 - this._enrageFlash) * 1.6), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      ctx.globalAlpha = 1;
     }
 
     // 灼燒中：加色疊上橘紅火光 + 竄升火星 (加色混合才不會被深色 sprite 吃掉)
