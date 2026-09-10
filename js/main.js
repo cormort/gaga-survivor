@@ -133,6 +133,30 @@ class Game {
     requestAnimationFrame(this.loop);
   }
 
+  // 遊戲迴圈連續拋例外時的告示。本身必須絕對安全 —— 它跑在 catch 裡，
+  // 若自己再拋一次就會沖出 loop()，連 rAF 鏈都一起弄死。
+  showFatalError(err) {
+    try {
+      if (this._fatalEl) return;
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;inset:auto 0 0 0;z-index:99999;' +
+        'background:rgba(30,0,8,0.94);border-top:2px solid #ff0055;color:#ffd9e2;' +
+        'font:12px/1.6 ui-monospace,monospace;padding:12px 14px;white-space:pre-wrap;' +
+        'word-break:break-all;max-height:45vh;overflow:auto;';
+      const where = String(err?.stack || '').split('\n')[1]?.trim() || '';
+      box.textContent = '⚠️ 遊戲發生錯誤，畫面已停止更新\n' +
+        `${err?.message || err}\n${where}\n`;
+      const btn = document.createElement('button');
+      btn.textContent = '重新載入';
+      btn.style.cssText = 'margin-top:10px;padding:8px 18px;font:inherit;font-size:13px;' +
+        'background:#ff0055;color:#fff;border:0;border-radius:6px;';
+      btn.onclick = () => location.reload();
+      box.appendChild(btn);
+      document.body.appendChild(box);
+      this._fatalEl = box;
+    } catch (_) { /* 告示都掛了就算了，至少別再往上炸 */ }
+  }
+
   // 網址加 ?perf=1 才建立效能面板；沒開就回傳 null，正常遊玩零成本。
   initPerfHUD() {
     if (!new URLSearchParams(location.search).has('perf')) return null;
@@ -2210,6 +2234,7 @@ class Game {
           this.render();
         }
       }
+      this.frameErrorStreak = 0;
     } catch (err) {
       // 例外只要是必然重現的，這裡每幀都會接到 —— rAF 還在跑、畫布留著最後
       // 一幀、音訊照常，但遊戲世界從此不再前進，看起來就是「畫面卡住」。
@@ -2217,6 +2242,10 @@ class Game {
       console.error('[frame error]', err);
       this.frameError = err;
       this.frameErrorCount = (this.frameErrorCount || 0) + 1;
+      this.frameErrorStreak = (this.frameErrorStreak || 0) + 1;
+      // 連續半秒都拋同一個例外 = 遊戲已經回不來了，直接告訴玩家，
+      // 不要讓他對著一張凍結的畫面乾等。
+      if (this.frameErrorStreak === 30) this.showFatalError(err);
     }
 
     if (this.perf) this.drawPerfHUD(currentTime);
