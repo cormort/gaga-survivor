@@ -132,6 +132,7 @@ class Game {
     this._eventBag = [];           // 事件洗牌袋 (抽完一輪才重置)
     this._recycleTally = 0;        // 累積待提示的回收金幣
     this._lastEliteHitstop = -99;  // 上次精英擊殺頓格的遊戲時間 (未觸發過)
+    this._buildHintShown = false;  // 守塔建造引導只提示一次
     this._eventIdx = 0;
     this.activeSynergies = [];     // 當前生效的武器協同 [{id, name, icon}]
     this.merchant = null;          // 當前場上的商人 {x, y, timer, items}
@@ -180,6 +181,12 @@ class Game {
     this.frameErrorStreak = 0;
     this._fatalEl?.remove();
     this._fatalEl = null;
+    // 頓格事件數與最小間隔是「整局」的統計，不跟著新局歸零就會累積到看不懂
+    if (this.perf) {
+      this.perf.hitstopEvents = 0;
+      this.perf.lastHitstopAt = -99;
+      this.perf.minHitstopGap = Infinity;
+    }
   }
 
   // 遊戲迴圈連續拋例外時的告示。本身必須絕對安全 —— 它跑在 catch 裡，
@@ -216,7 +223,8 @@ class Game {
       'background:rgba(0,0,0,0.72);padding:6px 9px;border-bottom-right-radius:8px;';
     document.body.appendChild(el);
     return { el, frames: [], update: 0, render: 0, ticks: 0, last: 0,
-             hitstopFrames: 0, pausedFrames: 0 };
+             hitstopFrames: 0, pausedFrames: 0,
+             hitstopEvents: 0, lastHitstopAt: -99, minHitstopGap: Infinity };
   }
 
   // 效能面板：網址加 ?perf=1 開啟。卡頓時直接截圖就看得出是哪一項爆掉。
@@ -239,7 +247,8 @@ class Game {
     pf.el.textContent = [
       `${(1000 / (med || 1)).toFixed(0)} fps   幀 ${med.toFixed(1)} / 最差 ${worst.toFixed(0)} ms`,
       `update ${(pf.update / ticks).toFixed(2)}  render ${(pf.render / ticks).toFixed(2)} ms  跑${pf.ticks}幀`,
-      `凍結 ${frozen}%  (頓格${pf.hitstopFrames} 暫停${pf.pausedFrames})  hs ${this.hitstopTimer.toFixed(2)}`,
+      `凍結 ${frozen}%  (頓格${pf.hitstopFrames}幀/${pf.hitstopEvents}次 暫停${pf.pausedFrames})`,
+      `頓格最小間隔 ${pf.minHitstopGap === Infinity ? '—' : pf.minHitstopGap.toFixed(2) + 's'}  hs ${this.hitstopTimer.toFixed(2)}`,
       `敵 ${n(this.enemies)}  投射 ${n(this.weaponManager?.projectiles)}  敵彈 ${n(this.enemyProjectiles)}`,
       `掉落 ${n(this.dropItems)}  粒子 ${n(this.particles?.particles)}  殘跡 ${n(this.decals)}`,
       `砲塔 ${n(this.turrets)}  傭兵 ${n(this.mercenaries)}  待升級 ${this.pendingLevelUps}`,
@@ -257,6 +266,8 @@ class Game {
     pf.ticks = 0;
     pf.hitstopFrames = 0;
     pf.pausedFrames = 0;
+    // hitstopEvents / minHitstopGap 刻意不重設 —— 那是整局的統計，
+    // 每 250ms 歸零就又變回受幀率影響的量了
   }
 
   initWindow() {
@@ -645,6 +656,17 @@ class Game {
   // 打擊微頓挫 (Hitstop)
   triggerHitstop(duration = 0.05) {
     this.hitstopTimer = Math.max(this.hitstopTimer, duration);
+    if (this.perf) {
+      // 面板原本只數「頓格幀數」，但一次 0.08 秒的 Boss 頓格在 10fps 下就佔 5 幀，
+      // 看起來像五次精英頓格洗版。改為同時記錄事件數與最小間隔 —— 這兩個量與
+      // 幀率無關，才分得出「偶爾一次」和「洗版」。
+      const gap = this.gameTime - this.perf.lastHitstopAt;
+      if (this.perf.hitstopEvents > 0) {
+        this.perf.minHitstopGap = Math.min(this.perf.minHitstopGap, gap);
+      }
+      this.perf.hitstopEvents++;
+      this.perf.lastHitstopAt = this.gameTime;
+    }
   }
 
   // 連擊計算與狂潮觸發
@@ -1205,6 +1227,7 @@ class Game {
     this._eventBag = [];
     this._recycleTally = 0;
     this._lastEliteHitstop = -99;
+    this._buildHintShown = false;
     this.clearFrameErrors();
     this._eventIdx = 0;
     this.activeSynergies = [];
@@ -2468,6 +2491,14 @@ class Game {
 
     // 4.6 傭兵 AI (跟隨/索敵/被啃)
     this.updateMercenaries(dt);
+
+    // 開局送的那一座之外，玩家還是不知道自己「可以再蓋」。金幣第一次夠的時候
+    // 提示一次就好 —— 實測整場只蓋一座 (就是預置的那座)，主線仍然沒被使用。
+    if (this.core && this.mode.turrets && !this._buildHintShown
+        && this.gold >= this.getFacilityCost('turret')) {
+      this._buildHintShown = true;
+      this.ui.say('🪙 金幣足夠了 — 走到空地按建造鈕，多一座砲台就多一道防線', '#ffb703', 4);
+    }
 
     // 檢測是否在標準砲塔附近 (顯示進化按鈕)
     const nearStandardTurret = this.turrets.find(
