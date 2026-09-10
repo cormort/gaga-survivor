@@ -54,7 +54,10 @@ export class DropItem {
     this.animTime = Math.random() * 5;
   }
 
-  update(dt, player) {
+  // drift: 場上水晶太多時給的緩慢牽引速度 (px/s)，0 表示不牽引。
+  // 拾取半徑之外的水晶原本只能靠玩家自己走過去，清完一波後場上散落幾百顆，
+  // 要嘛繞路撿到手軟、要嘛放它過期。堆積時給一點被動吸引，摩擦少很多。
+  update(dt, player, drift = 0) {
     if (this.collected || this.expired) return;
 
     this.animTime += dt * 5;
@@ -75,6 +78,9 @@ export class DropItem {
     // 進入拾取半徑觸發磁吸
     if (dist < player.pickupRadius) {
       this.isAttracted = true;
+    } else if (drift > 0 && dist > 0.1) {
+      this.x += (dx / dist) * drift * dt;
+      this.y += (dy / dist) * drift * dt;
     }
 
     if (this.isAttracted) {

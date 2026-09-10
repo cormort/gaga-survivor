@@ -35,6 +35,11 @@ const NON_EXPIRING_DROP_CAP = 15;
 // 兩次精英擊殺頓格之間的最小間隔 (秒)
 const ELITE_HITSTOP_GAP = 0.5;
 
+// 掉落物堆積到這個數量後，未進入拾取半徑的也開始緩慢飄向玩家
+const DRIFT_THRESHOLD = 40;
+const DRIFT_SPEED = 55;        // px/s
+
+
 // 擊殺里程碑的間隔。固定每 100 殺的話，8 分鐘約 1430 殺 = 14 次彈窗打斷世界，
 // 加上升級卡與寶箱，後期幾乎在看選單而不是在玩。改成愈後面愈稀疏。
 const KILL_MILESTONES = [100, 250, 500, 900, 1400, 2000, 2700];
@@ -1239,6 +1244,8 @@ class Game {
     this.ui.updateCoreHUD(this.core);
     this.updateFacilityHUD();
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
+    this.grantStarterTurret();
+
     this.state = 'PLAYING';
   }
 
@@ -1302,6 +1309,18 @@ class Game {
 
   buildTurret() {
     this.buildFacility('turret');
+  }
+
+  // 守塔模式開局免費給一座塔並說明怎麼蓋。模式定位是「靠佈防而不是靠走位輸出」，
+  // 但過去沒有任何東西告訴玩家該蓋、蓋哪裡、蓋了有什麼差 —— 實測整場十分鐘
+  // 砲塔 0 座，等於整條主線沒被使用。
+  grantStarterTurret() {
+    if (!this.core || !this.mode.turrets) return;
+    const t = new Turret(this.core.x, this.core.y + this.core.radius + 46, 'turret');
+    this.turrets.push(t);
+    this.particles.createShockwave(t.x, t.y, 90, '#00e5ff');
+    this.ui.say('🗼 基地已預置一座機槍砲台 — 走到空地按建造鈕可再佈署更多', '#00e5ff', 4.5);
+    this.updateFacilityHUD();
   }
 
   updateTurrets(dt) {
@@ -2952,10 +2971,14 @@ class Game {
   }
 
   updateDropItems(dt) {
+    // 場上堆太多時給未進入拾取半徑的掉落物一點被動牽引。超過門檻才啟動，
+    // 平常撿取手感不變；牽引很慢，遠處的水晶仍然要花時間才會過來。
+    const drift = this.dropItems.length > DRIFT_THRESHOLD ? DRIFT_SPEED : 0;
+
     let inFlight = 0;
     for (let i = this.dropItems.length - 1; i >= 0; i--) {
       const item = this.dropItems[i];
-      item.update(dt, this.player);
+      item.update(dt, this.player, drift);
       if (item.isAttracted && !item.collected) inFlight++;
 
       // 逾時未撿的雜物折算成金幣再移除。直接蒸發等於「打了怪卻什麼都沒拿到」，

@@ -21,7 +21,7 @@ export class Player {
     this.baseSpeed = 190;
 
     // 基礎拾取範圍
-    this.basePickupRadius = 90;
+    this.basePickupRadius = 130;   // 90 → 130：原本得一直繞路去撿水晶，是操作上最持續的摩擦
 
     // 角色特質提供的基礎值 (被動重算時會回歸到這組數字，而非寫死的 1.0)
     this.baseSpeedMul = 1.0;
