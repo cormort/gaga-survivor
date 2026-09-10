@@ -138,7 +138,8 @@ class Game {
     if (!new URLSearchParams(location.search).has('perf')) return null;
     const el = document.createElement('div');
     el.style.cssText = 'position:fixed;top:0;left:0;z-index:9999;pointer-events:none;' +
-      'font:11px/1.45 ui-monospace,monospace;white-space:pre;color:#00f59b;' +
+      'font:11px/1.45 ui-monospace,monospace;white-space:pre-wrap;color:#00f59b;' +
+      'max-width:100vw;box-sizing:border-box;word-break:break-all;' +
       'background:rgba(0,0,0,0.72);padding:6px 9px;border-bottom-right-radius:8px;';
     document.body.appendChild(el);
     return { el, frames: [], update: 0, render: 0, ticks: 0, last: 0,
@@ -170,6 +171,11 @@ class Game {
       `掉落 ${n(this.dropItems)}  粒子 ${n(this.particles?.particles)}  殘跡 ${n(this.decals)}`,
       `砲塔 ${n(this.turrets)}  傭兵 ${n(this.mercenaries)}  待升級 ${this.pendingLevelUps}`,
       `狀態 ${this.state}`,
+      ...(this.frameErrorCount ? [
+        `\n✖ 每幀例外 ×${this.frameErrorCount}`,
+        `${this.frameError?.message || this.frameError}`,
+        `${String(this.frameError?.stack || '').split('\n')[1]?.trim() || ''}`,
+      ] : []),
     ].join('\n');
 
     pf.frames.length = 0;
@@ -2202,7 +2208,12 @@ class Game {
         }
       }
     } catch (err) {
+      // 例外只要是必然重現的，這裡每幀都會接到 —— rAF 還在跑、畫布留著最後
+      // 一幀、音訊照常，但遊戲世界從此不再前進，看起來就是「畫面卡住」。
+      // 記下來讓效能面板顯示，否則只能靠接主機看 console 才發現。
       console.error('[frame error]', err);
+      this.frameError = err;
+      this.frameErrorCount = (this.frameErrorCount || 0) + 1;
     }
 
     if (this.perf) this.drawPerfHUD(currentTime);
