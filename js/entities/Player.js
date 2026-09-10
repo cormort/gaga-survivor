@@ -276,18 +276,20 @@ export class Player {
     this.hp = Math.min(this.maxHp, this.hp + amount);
   }
 
+  // 回傳這次升了「幾級」。一口氣灌進大量經驗 (磁鐵吸全場) 時會一次跨好幾級，
+  // 只回傳布林的話呼叫端無從得知，升級卡就會少發。
   gainExp(amount) {
     this.exp += amount;
-    let leveledUp = false;
+    let levels = 0;
 
     while (this.exp >= this.nextExp) {
       this.exp -= this.nextExp;
       this.level++;
       this.nextExp = Math.floor(this.nextExp * GAME_CONFIG.EXP_GROWTH_FACTOR);
-      leveledUp = true;
+      levels++;
     }
 
-    return leveledUp;
+    return levels;
   }
 
   draw(ctx, camera) {

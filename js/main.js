@@ -61,6 +61,8 @@ class Game {
     this._pendingSpawns = [];
     this.enemyProjectiles = [];
     this.dropItems = [];
+    this.pendingLevelUps = 0;
+    this._levelUpHold = 0;
     this.turrets = [];
     this.selectedFacility = 'turret';
     this.mercenaries = [];
@@ -880,6 +882,8 @@ class Game {
     this._pendingSpawns = [];
     this.enemyProjectiles = [];
     this.dropItems = [];
+    this.pendingLevelUps = 0;
+    this._levelUpHold = 0;
     this.turrets = [];
     this.mercenaries = [];
     this.decals = [];
@@ -1023,6 +1027,8 @@ class Game {
     this._pendingSpawns = [];
     this.enemyProjectiles = [];
     this.dropItems = [];
+    this.pendingLevelUps = 0;
+    this._levelUpHold = 0;
     this.turrets = [];
     this.mercenaries = [];
     this.decals = [];
@@ -2779,9 +2785,11 @@ class Game {
   }
 
   updateDropItems(dt) {
+    let inFlight = 0;
     for (let i = this.dropItems.length - 1; i >= 0; i--) {
       const item = this.dropItems[i];
       item.update(dt, this.player);
+      if (item.isAttracted && !item.collected) inFlight++;
 
       // 逾時未撿的雜物直接移除，避免場上無限累積
       if (item.expired) {
@@ -2797,6 +2805,20 @@ class Game {
         if (this.state !== 'PLAYING') break;
       }
     }
+
+    // 等這一波全部落袋才彈升級卡。逐顆立刻彈窗的話，磁鐵一次灌進大量經驗會變成
+    // 「彈窗 → 回 PLAYING 撿下一顆 → 再彈窗」反覆數十次；而非 PLAYING 狀態
+    // 不重繪畫布 (見 loop())，玩家看到的就是畫面凍結、升級卡狂跳，音效卻正常。
+    // 但不能無限等 —— 密集刷怪時場上可能永遠有水晶在飛，所以最多壓 0.6 秒。
+    if (this.pendingLevelUps > 0 && this.state === 'PLAYING') {
+      this._levelUpHold += dt;
+      if (inFlight === 0 || this._levelUpHold >= 0.6) {
+        this._levelUpHold = 0;
+        this.triggerLevelUp();
+      }
+    } else {
+      this._levelUpHold = 0;
+    }
   }
 
   handleItemPickup(item) {
@@ -2804,10 +2826,8 @@ class Game {
       sound.playGem();
       // 裝備「領悟」詞條放大經驗水晶 (每顆至少 1)
       const val = Math.max(1, Math.round(item.value * (1 + (this.player.metaExp || 0)) * this.rules.expMul));
-      const leveledUp = this.player.gainExp(val);
-      if (leveledUp) {
-        this.triggerLevelUp();
-      }
+      // 只累積待處理的升級數，彈窗留到整批掉落物都吸完才觸發 (見 updateDropItems)
+      this.pendingLevelUps += this.player.gainExp(val);
     } else if (item.type === 'magnet') {
       sound.playGem();
       // 全場經驗水晶瞬間全部吸向玩家
@@ -2876,6 +2896,7 @@ class Game {
   }
 
   triggerLevelUp() {
+    if (this.pendingLevelUps > 0) this.pendingLevelUps--;
     this.state = 'LEVEL_UP';
     this.ui.say(this.player.character.lines.levelup, this.player.character.accent);
 
@@ -2936,9 +2957,9 @@ class Game {
 
     this.ui.updateSkillSlots(this.weaponManager);
 
-    // 檢查是否還有多餘升級 (連續升級)
-    if (this.player.exp >= this.player.nextExp) {
-      this.player.gainExp(0);
+    // 檢查是否還有多餘升級 (連續升級)。改看待處理計數 —— 原本比對銀行內的 exp，
+    // 一次跨多級時 gainExp 已把 exp 扣光，條件不成立，多出來的升級卡就被吃掉了。
+    if (this.pendingLevelUps > 0) {
       this.triggerLevelUp();
     } else {
       this.state = 'PLAYING';
