@@ -546,9 +546,10 @@ export class Enemy {
     this.stunTimer = Math.max(this.stunTimer, duration);
   }
 
-  // 標記 (基隆型態)：被標記的目標受到額外傷害
-  applyMark(duration) {
+  // 標記 (基隆型態)：被標記的目標受到額外傷害 (加成值由型態資料帶入)
+  applyMark(duration, bonus = 0.25) {
     this.markTimer = Math.max(this.markTimer, duration);
+    this.markBonus = bonus;
   }
 
   // 減速
@@ -579,8 +580,8 @@ export class Enemy {
         if (dot > Math.cos((ai.shieldArc || 1.6) / 2)) mul *= ai.shieldMul != null ? ai.shieldMul : 0.45;
       }
     }
-    // 標記中的目標受到額外傷害 (基隆型態)
-    if (this.markTimer > 0) mul *= 1.25;
+    // 標記中的目標受到額外傷害 (基隆型態；倍率來自 stats.markDamageBonus)
+    if (this.markTimer > 0) mul *= 1 + (this.markBonus != null ? this.markBonus : 0.25);
 
     // 減傷；至少造成 1 點，避免高血量時永遠打不動
     const applied = Math.max(1, Math.round(amount * mul));

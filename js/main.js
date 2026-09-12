@@ -110,6 +110,11 @@ class Game {
     this.player = new Player(0, 0, this.characterId);
     this.player.game = this;
     this.weaponManager = new WeaponManager(this.player);
+    // 武器系統也要能呼叫回遊戲層 (宙斯連鎖閃電 game.chainShock、商人臨時增益
+    // 在被動重算後補回)。先前只設了 player.game，WeaponManager 自己讀的
+    // this.game 永遠是 null，於是 `this.game?.chainShock(...)` 靜默不執行 ——
+    // 宙斯型態的連鎖電弧從來沒有生效過。
+    this.weaponManager.game = this;
     this.spawner = new Spawner();
     this.particles = new ParticleSystem();
     this.ui = new UIManager();
@@ -167,6 +172,7 @@ class Game {
     this._goldRushTimer = 0;       // 淘金狂潮特殊卡的計時
     this._tempBuffs = [];          // 商人臨時增益 [{id, timer, revert, reapply}]
     this._settled = false;         // 本局是否已結算 (防止重複入帳)
+    this._timeStopTimer = 0;       // 時停懷錶：敵方子彈凍結剩餘秒數
     this._settling = false;        // 結算進行中 (防止遞迴)
 
     // 統計數據
@@ -613,6 +619,8 @@ class Game {
     this.ui.say(`💂 傭兵報到！(${cost} 🪙) 擊殺敵人可升級`, '#3ddc84', 2.4);
     this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
+    // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)
+    this.ui.updateFacilityButtons(this.gold, (type) => this.getFacilityCost(type));
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
   }
 
@@ -847,35 +855,40 @@ class Game {
         break;
 
       case 'atk_potion':
-        this.player.atkPotionTimer = Math.max(this.player.atkPotionTimer, 15);
+        this.player.atkPotionTimer = Math.max(this.player.atkPotionTimer, cDef.duration || 15);
         sound.playEvoFanfare();
         this.particles.createShockwave(this.player.x, this.player.y, 130, '#ff4d4d');
         this.ui.say('⚔️ 力量藥水：15 秒內攻擊力 +40%！', '#ff4d4d', 2.5);
         break;
 
       case 'shield_potion':
-        this.player.shieldPotionTimer = Math.max(this.player.shieldPotionTimer, 15);
+        this.player.shieldPotionTimer = Math.max(this.player.shieldPotionTimer, cDef.duration || 15);
         sound.playEvoFanfare();
         this.particles.createShockwave(this.player.x, this.player.y, 130, '#4da6ff');
         this.ui.say('🛡️ 鐵壁藥水：15 秒內受傷減免 50%！', '#4da6ff', 2.5);
         break;
 
       case 'luck_potion':
-        this.player.luckPotionTimer = Math.max(this.player.luckPotionTimer, 20);
+        this.player.luckPotionTimer = Math.max(this.player.luckPotionTimer, cDef.duration || 20);
         sound.playEvoFanfare();
         this.particles.createShockwave(this.player.x, this.player.y, 130, '#33ff99');
         this.ui.say('🍀 幸運藥水：20 秒暴擊率 +25% & 金幣加倍！', '#33ff99', 2.5);
         break;
 
-      case 'stopwatch':
+      case 'stopwatch': {
+        // 秒數改讀資料表 (原本硬寫 5.0，與表上的 3.5 不符)，並且真的把敵方子彈
+        // 一起停住 —— 說明與 README 都寫了「與敵方子彈」，但先前只暈敵人。
+        const dur = cDef.duration || 5;
         sound.playExplosion();
         this.camera.shake = Math.max(this.camera.shake, 10);
         this.particles.createShockwave(this.player.x, this.player.y, 280, '#00ffff');
         for (const e of this.enemies) {
-          e.applyStun(5.0);
+          e.applyStun(dur);
         }
-        this.ui.say('⏱️ 時停懷錶：全場時間凍結 5 秒！', '#00ffff', 3.0);
+        this._timeStopTimer = dur;
+        this.ui.say(`⏱️ 時停懷錶：全場時間凍結 ${dur} 秒！`, '#00ffff', 3.0);
         break;
+      }
 
       case 'holy_water':
         sound.playExplosion();
@@ -1158,6 +1171,11 @@ class Game {
     this.player = new Player(this.core ? this.core.x : 0, spawnY, this.characterId);
     this.player.game = this;
     this.weaponManager = new WeaponManager(this.player);
+    // 武器系統也要能呼叫回遊戲層 (宙斯連鎖閃電 game.chainShock、商人臨時增益
+    // 在被動重算後補回)。先前只設了 player.game，WeaponManager 自己讀的
+    // this.game 永遠是 null，於是 `this.game?.chainShock(...)` 靜默不執行 ——
+    // 宙斯型態的連鎖電弧從來沒有生效過。
+    this.weaponManager.game = this;
     this.applyMetaTalents();
     this.player.modeDmgMul = this.mode.weaponMul;
     this.weaponManager.applyPassives();
@@ -1281,6 +1299,7 @@ class Game {
     this._tempBuffs = [];
     this._eventSpawnMul = 1;   // 迷你事件的生成倍率殘留 (原本只有 endMiniEvent 會清)
     this._settled = false;     // 新的一局可以再結算一次
+    this._timeStopTimer = 0;   // 時停懷錶的敵方子彈凍結
     this.ui.updateBlessings([]);
     this.ui.updateSynergies([]);
     this.ui.updateEventBanner(null);
@@ -1524,6 +1543,8 @@ class Game {
   }
 
   updateEnemyProjectiles(dt) {
+    // 時停懷錶：敵方子彈原地凍結 (說明承諾的效果)
+    if (this._timeStopTimer > 0) return;
     for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
       const ep = this.enemyProjectiles[i];
       ep.update(dt);
@@ -2403,6 +2424,7 @@ class Game {
 
   update(dt) {
     this.gameTime += dt;
+    if (this._timeStopTimer > 0) this._timeStopTimer -= dt;
 
     // 1. 更新特工玩家
     this.player.update(dt, this.input.vector);
@@ -2729,6 +2751,8 @@ class Game {
     // 13. 更新 UI
     this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
+    // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)
+    this.ui.updateFacilityButtons(this.gold, (type) => this.getFacilityCost(type));
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
     this.ui.updateBossHUD(this.boss);
     this.ui.setObjective(this.objectiveText());
@@ -2921,7 +2945,7 @@ class Game {
         }
         // 商人火魔藥附魔
         if (this.player._fireEnchant) {
-          enemy.applyBurn(CHARGE.burn.dps, 2, p.weaponId);
+          enemy.applyBurn(CHARGE.burn.dps, CHARGE.burn.duration, p.weaponId);
         }
         // 協同：導電刀鋒 (苦無 20% 機率觸發落雷)
         if (this.player.synergies?.kunaiThunderChance &&
@@ -2932,12 +2956,46 @@ class Game {
 
         // 基隆型態的追蹤印記：記在敵人身上，受傷 +25% (原本 markOnHit 只被
         // 存進投射物就沒有人讀，_markedTimer 只會被扣、永遠不會被設)
-        if (p.markOnHit) enemy.applyMark(5);
+        if (p.markOnHit) enemy.applyMark(p.markDur, p.markBonus);
         const died = enemy.takeDamage(actualDmg, p.knockback, p.x, p.y);
         if (died && p.mercOwner) p.mercOwner.gainKill(); // 傭兵擊殺 → 經驗升級
         this.weaponManager.recordDamage(p.weaponId, actualDmg);
         this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit);
         sound.playHit();
+
+        // 塔納托斯：每次命中傷害 +bounceDmgGrowth，第 implosionAt 次命中引發虛空引爆。
+        // 先前 thanatosBounces 只被寫入一次、從未遞增或讀取，整個型態不存在。
+        if (p.implosionAt > 0) {
+          p.thanatosBounces++;
+          if (p.thanatosBounces >= p.implosionAt) {
+            p.isDead = true;
+            this.camera.shake = Math.max(this.camera.shake, 12);
+            this.particles.createExplosion(p.x, p.y, p.implosionRadius);
+            this.particles.createShockwave(p.x, p.y, p.implosionRadius, '#b388ff');
+            sound.playExplosion();
+            for (const nearE of this.enemies) {
+              if (nearE.isDead) continue;
+              const ndx = nearE.x - p.x;
+              const ndy = nearE.y - p.y;
+              if (ndx * ndx + ndy * ndy <= (p.implosionRadius + nearE.radius) ** 2) {
+                nearE.takeDamage(p.implosionDamage, 8, p.x, p.y);
+                this.weaponManager.recordDamage(p.weaponId, nearE.lastDamageTaken || p.implosionDamage);
+                this.particles.createDamageText(nearE.x, nearE.y, nearE.lastDamageTaken || p.implosionDamage, true, true);
+              }
+            }
+          } else if (p.bounceGrowth > 0) {
+            p.damage = Math.round(p.damage * (1 + p.bounceGrowth));
+          }
+        }
+        // 阿基里斯：每次命中為特工充能跑速 (步進值/上限/秒數都來自型態資料)
+        if (p.aspect === 'achilles' && this.player) {
+          const ach = (WEAPON_ASPECTS.soccer || []).find((a) => a.id === 'achilles');
+          const st = (ach && ach.stats) || {};
+          const step = st.speedBoostPerHit || 0.06;
+          const maxStacks = Math.max(1, Math.round((st.maxSpeedBoost || 0.42) / step));
+          this.player.achillesSpeedStacks = Math.min(maxStacks, (this.player.achillesSpeedStacks || 0) + 1);
+          this.player.achillesSpeedTimer = st.boostDur || 4.0;
+        }
 
         // 蓄能彈效果 (火箭的毒氣走爆炸，不在這裡)
         if (p.charge === 'burn') {
@@ -2945,7 +3003,7 @@ class Game {
         } else if (p.charge === 'chain') {
           this.chainShock(enemy, p.damage, p.weaponId);
         } else if (p.charge === 'freeze') {
-          enemy.applyFreeze(CHARGE.freeze.duration);
+          enemy.applyFreeze(p.freezeDur || CHARGE.freeze.duration);
         } else if (p.charge === 'poison') {
           enemy.applyPoison(CHARGE.poison.duration, p.weaponId);
         }
@@ -3066,8 +3124,11 @@ class Game {
   }
 
   // 蓄能電擊：從命中的敵人往外連跳，每跳傷害衰減
-  chainShock(origin, damage, weaponId) {
-    const { jumps, range, falloff, color } = CHARGE.chain;
+  chainShock(origin, damage, weaponId, jumpsOverride = 0) {
+    const { range, falloff, color } = CHARGE.chain;
+    // 跳躍數可由武器型態指定 (宙斯：chainTargets 4)。先前呼叫端傳了第 4 個
+    // 參數但這裡沒有收，宣告的 4 名敵人永遠只跳 3 次。
+    const jumps = jumpsOverride > 0 ? jumpsOverride : CHARGE.chain.jumps;
     const hit = new Set([origin]);
     let from = origin;
     let dmg = damage;

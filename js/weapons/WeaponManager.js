@@ -1,12 +1,25 @@
 // 武器管理器 (自動鎖定、冷卻計時、投射物生成、超武進化檢測與傷害統計)
 
-import { WEAPONS, PASSIVES, CHARGE } from '../config.js';
+import { WEAPONS, PASSIVES, CHARGE, WEAPON_ASPECTS } from '../config.js';
 import { Projectile } from '../entities/Projectile.js';
 import { sound } from '../audio.js';
 
 // 同一隻敵人被同一個投射物再次命中的間隔 (秒)
 const ORBIT_REHIT = 0.4;   // 環繞刀刃：每目標 DPS ≈ 單刀傷害 / 0.4
 const SOCCER_REHIT = 0.5;  // 彈跳球：讓「彈跳次數」真的能轉成傷害
+
+// 武器 id → 型態家族。8 把超武都掛在自己基礎武器的型態上（型態由出擊選單選擇，
+// 存在存檔的 weaponAspects，鍵是 6 把基礎武器）。phase_blade 與 phase_storm 的
+// 行為由苦無的型態決定 —— 先前引擎永遠讀 'kunai'，連帶讓「基隆苦無」把進化後的
+// 幽靈手裏劍與相位風暴一起砍成 60% 傷害。
+const ASPECT_FAMILY = {
+  kunai: 'kunai', ghost_shuriken: 'kunai', phase_blade: 'kunai', phase_storm: 'kunai',
+  guardian: 'guardian', eternal_domain: 'guardian', orbit_saw: 'guardian', singularity_ring: 'guardian',
+  rocket: 'rocket', shark_torpedo: 'rocket',
+  molotov: 'molotov', napalm_sea: 'molotov',
+  lightning: 'lightning', plasma_storm: 'lightning',
+  soccer: 'soccer', quantum_sphere: 'soccer',
+};
 
 export class WeaponManager {
   constructor(player) {
@@ -30,6 +43,10 @@ export class WeaponManager {
     // 傭兵部隊與防禦砲塔獨立傷害統計
     this.mercTotalDamage = 0;
     this.turretTotalDamage = 0;
+
+    // 混沌型態的飛盤發射冷卻：以遊戲時間倒數 (原本用 Date.now()，
+    // 暫停或開升級卡時照樣在跑，回來就白送一發)
+    this._sawEjectCd = 0;
 
     // 初始武器由角色決定
     this.addWeapon(player.character.startWeapon || 'kunai');
@@ -155,10 +172,8 @@ export class WeaponManager {
       this.player.damageMultiplier *= this.player.modeDmgMul;
     }
 
-    // 局內祝福效果乘數
-    if (this.player.blessingDmgMul) {
-      this.player.damageMultiplier *= this.player.blessingDmgMul;
-    }
+    // 局內祝福效果乘數。15 個祝福各自用 blessingXxxMul 欄位，這裡集中套用；
+    // 原本還有一個 blessingDmgMul 分支，但全 repo 沒有任何祝福會設定它（死讀取）。
     if (this.player.blessingCdrMul) {
       this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * this.player.blessingCdrMul);
     }
@@ -194,7 +209,20 @@ export class WeaponManager {
     this.player.character.passive?.(this.player);
   }
 
+  // 目前這把武器吃的型態與數值表。型態的數字只放在 config.js 的
+  // WEAPON_ASPECTS[*].stats，引擎不再各自硬寫第二份 —— 先前 18 個 stats 物件
+  // 全部沒有讀者，而塔納托斯／阿基里斯／宙斯連鎖數等宣告的效果根本沒實作。
+  aspectOf(weaponId) {
+    const fam = ASPECT_FAMILY[weaponId] || 'kunai';
+    const list = WEAPON_ASPECTS[fam] || [];
+    const wanted = (this.player.weaponAspects && this.player.weaponAspects[fam]) || (list[0] && list[0].id);
+    const entry = list.find((a) => a.id === wanted) || list[0] || null;
+    return { fam, id: entry ? entry.id : null, stats: (entry && entry.stats) || {} };
+  }
+
   update(dt, enemies, particleSystem) {
+    if (this._sawEjectCd > 0) this._sawEjectCd -= dt;
+
     // 推進延遲射擊佇列 (倒數完才開火，吃暫停也吃遊戲結束)
     for (let i = this.delayed.length - 1; i >= 0; i--) {
       const d = this.delayed[i];
@@ -219,10 +247,13 @@ export class WeaponManager {
       if (item.cooldownTimer <= 0) {
         this.fireWeapon(id, item, def, enemies, particleSystem);
 
-        // 重置冷卻時間 (套用玩家冷卻縮減 cdrMultiplier)
+        // 重置冷卻時間 (套用玩家冷卻縮減 cdrMultiplier 與型態的 cdMul)
         const baseCd = def.baseCooldown + (def.cooldownGrowth ? def.cooldownGrowth * (item.level - 1) : 0);
         const overload = this.player.overloadTimer > 0 ? 0.5 : 1;
-        item.cooldownTimer = Math.max(0.08, baseCd * this.player.cdrMultiplier * overload);
+        // 型態冷卻倍率：札格苦無 0.70 (射速 +30%)、赫斯提亞火箭 1.15 (冷卻 +15%)。
+        // 這兩個數字先前都沒有任何讀者。
+        const aspectCd = this.aspectOf(id).stats.cdMul || 1;
+        item.cooldownTimer = Math.max(0.08, baseCd * this.player.cdrMultiplier * overload * aspectCd);
       }
     }
 
@@ -321,21 +352,20 @@ export class WeaponManager {
     // 型態要跟著「這把武器自己的家族」而不是永遠讀 kunai：fireKunai 同時服務
     // phase_blade / ghost_shuriken / phase_storm，原本選了基隆苦無會讓進化後的
     // 幽靈手裏劍與相位風暴永久只打 60% 傷害 (扇形補償對 isEvo 不生效)。
-    const aspectKey = ['phase_blade', 'phase_storm'].includes(def.id) ? 'phase_blade' : 'kunai';
-    const aspect = this.player.weaponAspects?.[aspectKey] || 'zagreus';
+    const { id: aspect, stats } = this.aspectOf(def.id);
     let finalCrit = crit;
     let finalDmg = damage;
 
-    // 涅墨西斯型態：翻滾後 3.5 秒內必暴 + 傷害 x1.5
-    if (aspect === 'nemesis' && this.player.nemesisCritTimer > 0) {
+    // 涅墨西斯型態：翻滾後 dashCritDur 秒內必暴 + 暴擊傷害倍率
+    if (stats.dashCritDur && this.player.nemesisCritTimer > 0) {
       finalCrit = true;
-      finalDmg = Math.round(damage * 1.5);
+      finalDmg = Math.round(damage * (stats.critDmgMul || 1.5));
     }
 
-    const baseCount = (def.isEvo ? 1 : def.projectiles[item.level - 1]) + (this.player.bonusProjectiles || 0);
+    const baseCount = def.isEvo ? 1 : def.projectiles[item.level - 1];
     const pierce = def.isEvo ? def.pierce : def.pierce[item.level - 1];
-    const speed = def.speed * (aspect === 'zagreus' ? 1.25 : 1);
-    const rangeMul = this.player.rangeMultiplier * (aspect === 'zagreus' ? 1.2 : 1);
+    const speed = def.speed * (stats.speedMul || 1);
+    const rangeMul = this.player.rangeMultiplier * (stats.rangeMul || 1);
 
     for (let i = 0; i < baseCount; i++) {
       const charged = this.chargeFor(def);
@@ -347,8 +377,8 @@ export class WeaponManager {
         const dist = Math.hypot(dx, dy);
         if (dist === 0) return;
 
-        // 基隆型態：每發扇形射出 3 枚標記飛刀
-        const fanCount = (aspect === 'chiron' && !def.isEvo) ? 3 : 1;
+        // 基隆型態：每發扇形射出 fanCount 枚標記飛刀 (只有非超武吃這個扇形)
+        const fanCount = (!def.isEvo && stats.fanCount) ? stats.fanCount : 1;
         for (let f = 0; f < fanCount; f++) {
           const spread = (i - (baseCount - 1) / 2) * 0.12 + (f - (fanCount - 1) / 2) * 0.18;
           const baseAngle = Math.atan2(dy, dx) + spread;
@@ -361,14 +391,18 @@ export class WeaponManager {
               y: this.player.y,
               vx: Math.cos(baseAngle) * speed,
               vy: Math.sin(baseAngle) * speed,
-              damage: aspect === 'chiron' ? Math.round(finalDmg * 0.6) : finalDmg,
+              // 扇形傷害補償只在「真的射出多發」時套用：先前條件寫成 aspect === 'chiron'
+              // 而不管 fanCount，進化武器 (扇形被停用) 因此白吃 ×0.6 的永久減傷
+              damage: fanCount > 1 ? Math.round(finalDmg * (stats.fanDamageMul || 1)) : finalDmg,
               radius: 7 * rangeMul,
               pierce: pierce,
               life: 2.2,
               isEvo: def.isEvo,
               charge: charged,
               knockback: 1.5,
-              markOnHit: aspect === 'chiron',
+              markOnHit: !!stats.markDamageBonus,
+              markDur: stats.markDur || 5,
+              markBonus: stats.markDamageBonus || 0,
             }, finalCrit)
           );
         }
@@ -380,10 +414,33 @@ export class WeaponManager {
   // 2. 守護輪盤 / 永恆守護力場
   fireGuardian(def, item, damage, crit = false) {
     const fam = def.projType || 'guardian';
-    const aspect = this.player.weaponAspects?.guardian || 'zagreus';
-    let count = (def.isEvo ? def.count : def.count[item.level - 1]) + (aspect === 'zagreus' ? 1 : 0);
-    const radius = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier * (aspect === 'shield' ? 1.3 : 1.0);
-    const spinSpeed = def.spinSpeed * (aspect === 'zagreus' ? 1.5 : 1.0) * (this.player.blessingSpinMul || 1) * (this.player.synergies?.orbitSpeedMul || 1);
+    const { stats } = this.aspectOf(def.id);
+    let count = (def.isEvo ? def.count : def.count[item.level - 1]) + (stats.extraBlades || 0);
+    const radius = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier * (stats.radiusMul || 1);
+    const spinSpeed = def.spinSpeed * (stats.spinSpeedMul || 1) * (this.player.blessingSpinMul || 1) * (this.player.synergies?.orbitSpeedMul || 1);
+
+    // 混沌型態：定時向外發射一枚高速穿透飛刃。
+    // 這裡必須放在「超武規格沒變就跳過重建」的早退之前，否則超武版本的輪盤
+    // 永遠不會發射飛盤 (早退會直接 return)。
+    if (stats.ejectRate && this._sawEjectCd <= 0) {
+      this._sawEjectCd = stats.ejectRate;
+      const randAngle = Math.random() * Math.PI * 2;
+      this.projectiles.push(
+        this.mkProjectile({
+          type: 'saw',
+          weaponId: def.id,
+          x: this.player.x,
+          y: this.player.y,
+          vx: Math.cos(randAngle) * (stats.ejectSpeed || 360),
+          vy: Math.sin(randAngle) * (stats.ejectSpeed || 360),
+          damage: Math.round(damage * (stats.ejectDamageMul || 1.2)),
+          radius: 14,
+          pierce: stats.ejectPierce || 8,
+          life: stats.ejectLife || 3.0,
+          knockback: 3,
+        }, crit)
+      );
+    }
 
     const alive = this.projectiles.filter((p) => p.type === fam && !p.isDead);
     if (def.isEvo && alive.length === count &&
@@ -410,28 +467,7 @@ export class WeaponManager {
           isEvo: def.isEvo,
           knockback: 4.5,
           rehit: ORBIT_REHIT,
-          reflectBullets: aspect === 'shield',
-        }, crit)
-      );
-    }
-
-    // 混沌型態：定時向外發射一枚反彈飛盤
-    if (aspect === 'chaos' && (!this._lastSawEject || Date.now() - this._lastSawEject > 2000)) {
-      this._lastSawEject = Date.now();
-      const randAngle = Math.random() * Math.PI * 2;
-      this.projectiles.push(
-        this.mkProjectile({
-          type: 'saw',
-          weaponId: def.id,
-          x: this.player.x,
-          y: this.player.y,
-          vx: Math.cos(randAngle) * 360,
-          vy: Math.sin(randAngle) * 360,
-          damage: Math.round(damage * 1.2),
-          radius: 14,
-          pierce: 8,
-          life: 3.0,
-          knockback: 3,
+          reflectBullets: !!stats.reflectBullets,
         }, crit)
       );
     }
@@ -442,23 +478,22 @@ export class WeaponManager {
     const target = this.getRandomEnemy(enemies);
     if (!target) return;
 
-    const aspect = this.player.weaponAspects?.rocket || 'hestia';
-    let count = (def.isEvo ? def.count : def.count[item.level - 1]) + (this.player.bonusProjectiles || 0);
-    if (aspect === 'eris') count *= 2; // 埃里斯：四發/蜂巢集群微型火箭
+    const { id: aspect, stats } = this.aspectOf(def.id);
+    let count = def.isEvo ? def.count : def.count[item.level - 1];
+    if (stats.clusterMul) count *= stats.clusterMul; // 埃里斯：蜂巢集群微型火箭
 
-    let expRadius = (def.isEvo ? def.explosionRadius : def.explosionRadius[item.level - 1]) * this.player.rangeMultiplier * (this.player.synergies?.explosionRangeMul || 1);
-    if (aspect === 'hestia') expRadius *= 1.8;
+    let expRadius = (def.isEvo ? def.explosionRadius : def.explosionRadius[item.level - 1]) * this.player.rangeMultiplier * (this.player.synergies?.explosionRangeMul || 1) * (stats.blastRadiusMul || 1);
 
     for (let i = 0; i < count; i++) {
       const charged = this.chargeFor(def);
-      this.schedule(i * (aspect === 'eris' ? 0.09 : 0.15), () => {
+      this.schedule(i * (stats.delay || 0.15), () => {
         const dx = target.x + (Math.random() * 60 - 30) - this.player.x;
         const dy = target.y + (Math.random() * 60 - 30) - this.player.y;
         const dist = Math.hypot(dx, dy);
         if (dist === 0) return;
 
-        const spd = def.speed * (aspect === 'hestia' ? 1.35 : 1);
-        const dmg = aspect === 'hestia' ? Math.round(damage * 1.6) : (aspect === 'eris' ? Math.round(damage * 0.65) : damage);
+        const spd = def.speed * (stats.speedMul || 1);
+        const dmg = Math.round(damage * (stats.damageMul || 1));
 
         this.projectiles.push(
           this.mkProjectile({
@@ -469,13 +504,16 @@ export class WeaponManager {
             vx: (dx / dist) * spd,
             vy: (dy / dist) * spd,
             damage: dmg,
-            radius: aspect === 'hestia' ? 16 : 10,
+            radius: stats.projRadius || 10,
             explosionRadius: expRadius,
-            pierce: aspect === 'hestia' ? 6 : 1,
+            pierce: stats.pierce || 1,
             life: Math.min(2.5, dist / spd + 0.1),
             isEvo: def.isEvo,
             charge: charged,
             aspect: aspect,
+            lavaDuration: stats.lavaDuration,
+            lavaRadius: stats.lavaRadius,
+            lavaDamageMul: stats.lavaDamageMul,
           }, crit)
         );
         sound.playShoot();
@@ -485,10 +523,9 @@ export class WeaponManager {
 
   // 4. 燃燒瓶 / 燃油煉獄
   fireMolotov(def, item, damage, enemies, crit = false) {
-    const aspect = this.player.weaponAspects?.molotov || 'zagreus';
-    const count = (def.isEvo ? def.count : def.count[item.level - 1]) + (this.player.bonusProjectiles || 0);
-    let r = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier;
-    if (aspect === 'zagreus') r *= 1.4;
+    const { id: aspect, stats } = this.aspectOf(def.id);
+    const count = def.isEvo ? def.count : def.count[item.level - 1];
+    const r = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier * (stats.radiusMul || 1);
 
     for (let i = 0; i < count; i++) {
       const target = this.getRandomEnemy(enemies);
@@ -496,13 +533,13 @@ export class WeaponManager {
       const targetY = target ? target.y + (Math.random() * 40 - 20) : this.player.y + (Math.random() * 160 - 80);
 
       // 波塞頓型態：落地時激流爆破，強力擊退並減速
-      if (aspect === 'poseidon') {
+      if (stats.splashDamageMul) {
         sound.playExplosion();
         for (const e of enemies) {
           const d = Math.hypot(e.x - targetX, e.y - targetY);
           if (d <= r + 40) {
-            e.takeDamage(Math.round(damage * 1.5), 18, targetX, targetY);
-            e.applySlow(3.0);
+            e.takeDamage(Math.round(damage * stats.splashDamageMul), stats.knockback || 18, targetX, targetY);
+            e.applySlow(stats.slowDur || 3.0);
           }
         }
       }
@@ -519,7 +556,10 @@ export class WeaponManager {
           life: def.duration,
           isEvo: def.isEvo,
           knockback: 0.2,
-          isSanctuary: aspect === 'athena',
+          isSanctuary: !!stats.sanctuary,
+          // 札格型態：火海跳頻 +30% (tickRateMul 0.70) —— 這個欄位先前沒有讀者
+          tickInterval: 0.25 * (stats.tickRateMul || 1),
+          healPerSec: stats.healPerSec || 0,
         }, crit)
       );
     }
@@ -527,15 +567,10 @@ export class WeaponManager {
 
   // 5. 天降狂雷 / 狂雷星暴
   fireLightning(def, item, damage, enemies, particleSystem, crit = false) {
-    const aspect = this.player.weaponAspects?.lightning || 'zeus';
-    let strikes = def.isEvo ? def.strikes : def.strikes[item.level - 1];
-    let finalDmg = damage;
-    let blastRadius = 45 * this.player.rangeMultiplier;
-
-    if (aspect === 'thor') {
-      finalDmg = Math.round(damage * 3.0);
-      blastRadius *= 1.5;
-    }
+    const { id: aspect, stats } = this.aspectOf(def.id);
+    const strikes = def.isEvo ? def.strikes : def.strikes[item.level - 1];
+    const finalDmg = Math.round(damage * (stats.damageMul || 1));
+    const blastRadius = 45 * this.player.rangeMultiplier * (stats.radiusMul || 1);
 
     for (let i = 0; i < strikes; i++) {
       this.schedule(i * 0.12, () => {
@@ -544,7 +579,7 @@ export class WeaponManager {
 
         sound.playLightning();
         if (particleSystem) {
-          particleSystem.createLightning(target.x, target.y, blastRadius, def.isEvo || aspect === 'thor');
+          particleSystem.createLightning(target.x, target.y, blastRadius, def.isEvo || !!stats.stunDur);
         }
 
         for (const enemy of enemies) {
@@ -552,27 +587,26 @@ export class WeaponManager {
           if (d <= blastRadius + enemy.radius) {
             enemy.takeDamage(finalDmg, 2, target.x, target.y);
             this.recordDamage(def.id, finalDmg);
-            if (aspect === 'thor') {
-              enemy.applyStun(1.2);
-            }
+            if (stats.stunDur) enemy.applyStun(stats.stunDur);
             if (particleSystem) {
               particleSystem.createDamageText(enemy.x, enemy.y, finalDmg, true);
             }
           }
         }
 
-        // 宙斯型態：連鎖電弧傳導至 4 名敵人
-        if (aspect === 'zeus' && this.game?.chainShock) {
-          this.game.chainShock(target, Math.round(finalDmg * 0.7), 'lightning', 4);
+        // 宙斯型態：連鎖電弧。跳躍數改由型態資料決定 (chainShock 先前把第 4 個
+        // 參數丟掉、永遠用 CHARGE.chain.jumps = 3，宣告的 4 名敵人沒有生效)
+        if (stats.chainTargets && this.game?.chainShock) {
+          this.game.chainShock(target, Math.round(finalDmg * (stats.chainDamageRatio || 0.7)), 'lightning', stats.chainTargets);
         }
 
-        // 混沌型態：產生電磁吸引風暴
-        if (aspect === 'chaos') {
+        // 混沌型態：電磁脈衝把半徑內的敵人往中心牽引
+        if (stats.pullRadius) {
           for (const e of enemies) {
             const ed = Math.hypot(e.x - target.x, e.y - target.y);
-            if (ed > 10 && ed < 180) {
-              e.x += ((target.x - e.x) / ed) * 80;
-              e.y += ((target.y - e.y) / ed) * 80;
+            if (ed > 10 && ed < stats.pullRadius) {
+              e.x += ((target.x - e.x) / ed) * (stats.pullStrength || 80);
+              e.y += ((target.y - e.y) / ed) * (stats.pullStrength || 80);
             }
           }
         }
@@ -582,11 +616,10 @@ export class WeaponManager {
 
   // 6. 量子足球 / 量子星雲球
   fireSoccer(def, item, damage, enemies, crit = false) {
-    const aspect = this.player.weaponAspects?.soccer || 'achilles';
+    const { id: aspect, stats } = this.aspectOf(def.id);
     const count = def.isEvo ? def.count : def.count[item.level - 1];
     const bounces = def.isEvo ? def.bounces : def.bounces[item.level - 1];
-    let rad = 10 * this.player.rangeMultiplier;
-    if (aspect === 'guanyu') rad *= 1.5;
+    const rad = 10 * this.player.rangeMultiplier * (stats.radiusMul || 1);
 
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -606,9 +639,16 @@ export class WeaponManager {
           isEvo: def.isEvo,
           knockback: 3.5,
           rehit: SOCCER_REHIT,
-          charge: aspect === 'guanyu' ? 'freeze' : this.chargeFor(def),
+          charge: stats.freezeDur ? 'freeze' : this.chargeFor(def),
           aspect: aspect,
+          freezeDur: stats.freezeDur,
+          // 塔納托斯：每次命中傷害成長與第 N 次命中的虛空引爆 (先前 thanatosBounces
+          // 只被寫入一次、從未遞增或讀取，整個型態等於不存在)
           thanatosBounces: 0,
+          bounceGrowth: stats.bounceDmgGrowth || 0,
+          implosionAt: stats.implosionAt || 0,
+          implosionRadius: stats.implosionRadius || 0,
+          implosionDamage: stats.implosionDamage || 0,
         }, crit)
       );
       sound.playShoot();
@@ -663,18 +703,18 @@ export class WeaponManager {
       }
     }
 
-    // 路西法型態：爆炸在地面留下熔岩坑
-    if (rocketProj.aspect === 'lucifer') {
+    // 路西法型態：爆炸在地面留下熔岩坑 (秒數/半徑/傷害倍率都來自型態資料)
+    if (rocketProj.lavaDuration) {
       this.projectiles.push(
         this.mkProjectile({
           type: 'fire_pool',
           weaponId: rocketProj.weaponId,
           x: rocketProj.x,
           y: rocketProj.y,
-          damage: Math.round(rocketProj.damage * 0.4),
-          radius: 55,
+          damage: Math.round(rocketProj.damage * (rocketProj.lavaDamageMul || 0.4)),
+          radius: rocketProj.lavaRadius || 55,
           pierce: 9999,
-          life: 4.0,
+          life: rocketProj.lavaDuration,
           knockback: 0.1,
         })
       );
@@ -686,7 +726,9 @@ export class WeaponManager {
       this.mercTotalDamage += amount;
       return;
     }
-    if (weaponId === 'turret') {
+    if (weaponId === 'turret' || weaponId === 'electric_grid' || weaponId === 'purifier' || weaponId === 'barricade') {
+      // 四種設施都算進「設施傷害」：先前只特判 'turret'，電網與淨化裝置打出的
+      // 傷害會在結算面板上整批消失
       this.turretTotalDamage += amount;
       return;
     }

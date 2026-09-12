@@ -57,14 +57,14 @@ export const LEVELS = {
       { until: 120, pool: [['walker', 0.72], ['bat', 0.28]], interval: 0.72, batch: 1 },
       { until: 240, pool: [['walker', 0.5], ['bat', 0.25], ['runner', 0.15], ['hound', 0.1]], interval: 0.6, batch: 1 },
       { until: 360, pool: [['walker', 0.35], ['bat', 0.22], ['brute', 0.18], ['runner', 0.18], ['hound', 0.07]], interval: 0.45, batch: 1 },
-      { until: 480, pool: [['walker', 0.22], ['bat', 0.16], ['brute', 0.14], ['boomer', 0.13], ['runner', 0.14], ['hound', 0.09], ['spitter', 0.12]], interval: 0.3, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['walker', 0.22], ['bat', 0.16], ['brute', 0.14], ['boomer', 0.13], ['runner', 0.14], ['hound', 0.09], ['spitter', 0.12]], interval: 0.3, batch: 2 },
       // 8 分鐘後：多而脆。玩家唯一要閃的不再只有身體碰撞
       { until: 9999, pool: [['walker', 0.24], ['bat', 0.16], ['brute', 0.1], ['boomer', 0.14], ['runner', 0.16], ['hound', 0.06], ['spitter', 0.14]], interval: 0.26, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 4000, name: '狂暴推土喪屍', speed: 58, damage: 30, skin: 'boss_street' },   // 慢、重、撞一下很痛
       { at: 300, hp: 14000, name: '變異清潔工', speed: 84, damage: 26, behaviors: ['summon'], skin: 'boss_street' },
-      { at: 480, hp: 42000, name: '巨神‧暴虐霸王龍', speed: 68, damage: 30, final: true, behaviors: ['nova', 'summon', 'barrage'], skin: 'boss_street' },
+      { at: LEVEL_DURATION, hp: 42000, name: '巨神‧暴虐霸王龍', speed: 68, damage: 30, final: true, behaviors: ['nova', 'summon', 'barrage'], skin: 'boss_street' },
     ],
   },
 
@@ -117,13 +117,13 @@ export const LEVELS = {
       { until: 100, pool: [['walker', 0.45], ['boomer', 0.28], ['spitter', 0.15], ['spore_host', 0.12]], interval: 0.7, batch: 1 },
       { until: 240, pool: [['walker', 0.3], ['boomer', 0.22], ['bat', 0.16], ['spore_host', 0.14], ['spitter', 0.1], ['hatcher', 0.08]], interval: 0.5, batch: 1 },
       { until: 360, pool: [['boomer', 0.24], ['brute', 0.2], ['bat', 0.16], ['spore_host', 0.16], ['spitter', 0.14], ['hatcher', 0.1]], interval: 0.4, batch: 2 },
-      { until: 480, pool: [['boomer', 0.22], ['brute', 0.22], ['walker', 0.14], ['spore_host', 0.16], ['spitter', 0.16], ['hatcher', 0.1]], interval: 0.28, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['boomer', 0.22], ['brute', 0.22], ['walker', 0.14], ['spore_host', 0.16], ['spitter', 0.16], ['hatcher', 0.1]], interval: 0.28, batch: 2 },
       { until: 9999, pool: [['boomer', 0.22], ['brute', 0.16], ['walker', 0.18], ['spore_host', 0.16], ['spitter', 0.18], ['hatcher', 0.1]], interval: 0.24, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 5500, name: '生化軟泥聚合體', speed: 52, damage: 30, behaviors: ['summon'], skin: 'boss_lab' },  // 極慢但黏
       { at: 300, hp: 19000, name: '外骨骼改造猩猩', speed: 96, damage: 30, behaviors: ['nova', 'barrage'], skin: 'boss_lab' },  // 快、追擊型
-      { at: 480, hp: 55000, name: '母體‧零號實驗體', speed: 64, damage: 32, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_lab' },
+      { at: LEVEL_DURATION, hp: 55000, name: '母體‧零號實驗體', speed: 64, damage: 32, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_lab' },
     ],
   },
 
@@ -178,13 +178,13 @@ export const LEVELS = {
       { until: 100, pool: [['brute', 0.5], ['walker', 0.33], ['bat', 0.17]], interval: 0.75, batch: 1 },
       { until: 240, pool: [['brute', 0.32], ['bat', 0.28], ['walker', 0.14], ['warden', 0.18], ['chimera', 0.08]], interval: 0.5, batch: 2 },
       { until: 360, pool: [['brute', 0.3], ['bat', 0.22], ['boomer', 0.16], ['warden', 0.2], ['hound', 0.06], ['chimera', 0.06]], interval: 0.38, batch: 2 },
-      { until: 480, pool: [['brute', 0.23], ['bat', 0.16], ['boomer', 0.18], ['warden', 0.2], ['hound', 0.05], ['chimera', 0.07], ['spitter', 0.11]], interval: 0.26, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['brute', 0.23], ['bat', 0.16], ['boomer', 0.18], ['warden', 0.2], ['hound', 0.05], ['chimera', 0.07], ['spitter', 0.11]], interval: 0.26, batch: 2 },
       { until: 9999, pool: [['brute', 0.18], ['bat', 0.18], ['boomer', 0.2], ['warden', 0.16], ['hound', 0.08], ['chimera', 0.07], ['spitter', 0.13]], interval: 0.24, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 7000, name: '冰霜機甲', speed: 46, damage: 34, behaviors: ['ground'], skin: 'boss_frost' },  // 最慢最痛的重甲
       { at: 300, hp: 24000, name: '極地穿山甲王', speed: 104, damage: 28, behaviors: ['nova', 'barrage'], skin: 'boss_frost' },  // 最快
-      { at: 480, hp: 68000, name: '冰霜暴君‧雪帝', speed: 60, damage: 34, final: true, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_frost' },
+      { at: LEVEL_DURATION, hp: 68000, name: '冰霜暴君‧雪帝', speed: 60, damage: 34, final: true, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_frost' },
     ],
   },
 
@@ -239,13 +239,13 @@ export const LEVELS = {
       { until: 90, pool: [['brute', 0.4], ['boomer', 0.35], ['spitter', 0.25]], interval: 0.6, batch: 1 },
       { until: 220, pool: [['brute', 0.26], ['boomer', 0.2], ['bat', 0.16], ['runner', 0.16], ['spitter', 0.12], ['hatcher', 0.1]], interval: 0.42, batch: 2 },
       { until: 360, pool: [['brute', 0.24], ['boomer', 0.16], ['bat', 0.12], ['warden', 0.14], ['spore_host', 0.12], ['spitter', 0.1], ['chimera', 0.06], ['hatcher', 0.06]], interval: 0.3, batch: 2 },
-      { until: 480, pool: [['brute', 0.2], ['boomer', 0.16], ['bat', 0.1], ['warden', 0.14], ['spore_host', 0.1], ['runner', 0.06], ['spitter', 0.1], ['hound', 0.06], ['hatcher', 0.08]], interval: 0.22, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['brute', 0.2], ['boomer', 0.16], ['bat', 0.1], ['warden', 0.14], ['spore_host', 0.1], ['runner', 0.06], ['spitter', 0.1], ['hound', 0.06], ['hatcher', 0.08]], interval: 0.22, batch: 3 },
       { until: 9999, pool: [['brute', 0.16], ['boomer', 0.16], ['bat', 0.12], ['warden', 0.12], ['spore_host', 0.1], ['runner', 0.08], ['spitter', 0.14], ['hound', 0.06], ['hatcher', 0.06]], interval: 0.2, batch: 5 },
     ],
     bosses: [
       { at: 120, hp: 9000, name: '烈焰暴君', speed: 88, damage: 32, behaviors: ['nova', 'ground'], skin: 'boss_core' },
       { at: 300, hp: 30000, name: '熔核巨獸', speed: 56, damage: 38, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_core' },  // 慢而致命
-      { at: 480, hp: 88000, name: '毀滅特工‧暗影鴨', speed: 90, damage: 38, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_core' },
+      { at: LEVEL_DURATION, hp: 88000, name: '毀滅特工‧暗影鴨', speed: 90, damage: 38, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_core' },
     ],
   },
 

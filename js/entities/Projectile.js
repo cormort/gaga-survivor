@@ -1,6 +1,12 @@
 // 武器投射物與攻擊實體 (苦無、旋轉輪盤、火箭爆破、地面积火、落雷、彈跳足球)
 
-import { GAME_CONFIG } from '../config.js';
+import { GAME_CONFIG, CHARGE } from '../config.js';
+
+// '#rrggbb' → 'r,g,b' (給 rgba() 字串用)
+function hexToRgbStr(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
 
 export class Projectile {
   constructor(options) {
@@ -27,9 +33,11 @@ export class Projectile {
     this.orbitRadius = options.orbitRadius || 70;
     this.spinSpeed = options.spinSpeed || 3.5;
 
-    // 持續傷害節奏：火海每 0.25 秒跳一次，環繞刀刃/彈跳球用 rehit 決定多久能再打同一隻
+    // 持續傷害節奏：火海預設每 0.25 秒跳一次 (型態可縮短，例如札格燃燒瓶 ×0.70)，
+    // 環繞刀刃/彈跳球用 rehit 決定多久能再打同一隻
     this.tickTimer = 0;
-    this.tickInterval = 0.25;
+    this.tickInterval = options.tickInterval || 0.25;
+    this.healPerSec = options.healPerSec || 0;
     this.rehit = options.rehit || 0;
     this.charge = options.charge || null; // 蓄能彈：'burn' / 'chain'
     this.seed = Math.random() * 100; // 火焰舌動畫相位，讓每灘火各燒各的
@@ -47,9 +55,19 @@ export class Projectile {
     // 武器型態專屬 (Hades Aspects)
     this.aspect = options.aspect || null;
     this.markOnHit = !!options.markOnHit;
+    this.markDur = options.markDur || 5;
+    this.markBonus = options.markBonus || 0.25;
     this.reflectBullets = !!options.reflectBullets;
     this.isSanctuary = !!options.isSanctuary;
+    this.freezeDur = options.freezeDur || 0;      // 關羽型態的冰凍秒數 (覆寫 CHARGE 預設)
     this.thanatosBounces = options.thanatosBounces || 0;
+    this.bounceGrowth = options.bounceGrowth || 0;
+    this.implosionAt = options.implosionAt || 0;
+    this.implosionRadius = options.implosionRadius || 0;
+    this.implosionDamage = options.implosionDamage || 0;
+    this.lavaDuration = options.lavaDuration || 0;
+    this.lavaRadius = options.lavaRadius || 0;
+    this.lavaDamageMul = options.lavaDamageMul || 0;
   }
 
   update(dt, player, onExplosion = null) {
@@ -90,8 +108,9 @@ export class Projectile {
         if (this.isSanctuary && player) {
           if (Math.hypot(player.x - this.x, player.y - this.y) <= this.radius) {
             player.sanctuaryTimer = 0.2;   // 站在池內每幀刷新；離開後自動失效
-            if (this.tickTimer >= this.tickInterval) {
-              player.heal(2);
+            if (this.tickTimer >= this.tickInterval && this.healPerSec > 0) {
+              // 治療量由型態資料決定 (healPerSec 8 ÷ 每秒跳幾次)，不是硬寫的 2
+              player.heal(this.healPerSec * this.tickInterval);
             }
           }
         }
@@ -155,8 +174,10 @@ export class Projectile {
 
     // 蓄能彈：外圈套一層元素光暈，讓玩家看得出這發不一樣
     if (this.charge) {
-      const glow = { burn: '255,123,0', chain: '125,248,255', freeze: '127,216,255', poison: '125,255,143' }[this.charge] || '255,255,255';
-      const pulse = 1 + Math.sin(Date.now() * 0.02 + this.seed) * 0.15;
+      // 顏色改讀 config.js 的 CHARGE 表 (burn/freeze/poison 三個 color 先前沒有任何讀者)
+      const cDef = CHARGE[this.charge];
+      const glow = (cDef && cDef.color) ? hexToRgbStr(cDef.color) : '255,255,255';
+      const pulse = 1 + Math.sin(this.life * 6 + this.seed) * 0.15;
       const g = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius * 2.6 * pulse);
       g.addColorStop(0, `rgba(${glow}, 0.75)`);
       g.addColorStop(0.5, `rgba(${glow}, 0.3)`);

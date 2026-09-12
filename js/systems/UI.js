@@ -726,8 +726,15 @@ export class UIManager {
   }
 
   // 佈署設施按鈕列狀態更新 (金幣不夠就變灰)
+  // 以「上次顯示的值」快取，動作列每幀刷新也不會產生多餘的 DOM 寫入。
+  // 這樣才能安全地跟 updateHUD 一起每幀呼叫 —— 先前只在開局/建造/陣亡時刷新，
+  // 靠擊殺與掉落賺到的金幣不會更新電網/淨化裝置/拒馬，同一條動作列上的
+  // 四顆按鈕因此互相矛盾 (砲塔鈕每幀更新，其餘三顆停在舊狀態)。
   updateFacilityButtons(gold, costFn) {
     if (!this.facilityButtons) return;
+    const c = this._facilityCache || (this._facilityCache = {});
+    if (c.gold === gold) return;
+    c.gold = gold;
     for (const [type, item] of Object.entries(this.facilityButtons)) {
       if (!item || !item.btn) continue;
       const cost = typeof costFn === 'function' ? costFn(type) : 50;
@@ -757,6 +764,12 @@ export class UIManager {
   // 連擊 Combo 與暴走狀態
   updateCombo(combo, isFrenzy) {
     if (!this.comboHud) return;
+    // addCombo() 每次擊殺都會呼叫這裡，而 update() 也每幀呼叫一次 —— 一顆炸彈
+    // 清 200 隻就是同一幀 200 次 classList/textContent 寫入。快取比對即可。
+    const c = this._comboCache || (this._comboCache = {});
+    if (c.combo === combo && c.frenzy === !!isFrenzy) return;
+    c.combo = combo;
+    c.frenzy = !!isFrenzy;
     if (combo >= 5) {
       this.comboHud.classList.remove('hidden');
       this.comboCount.textContent = combo;
@@ -1054,20 +1067,34 @@ export class UIManager {
     }
   }
 
+  // 每幀都會被呼叫，所以每個欄位都要先比對再寫。原本是無條件寫入 5 個屬性，
+  // 等於每秒 300 次不必要的 style/textContent 指派 —— 時間文字一秒才變一次，
+  // 金幣與擊殺也多半幾秒才動一次。同檔的 setObjective() 早就是這個寫法。
   updateHUD(player, gameTime, kills, gold) {
-    // 經驗條
-    const pct = Math.min(100, Math.max(0, (player.exp / player.nextExp) * 100));
-    this.expFill.style.width = `${pct}%`;
-    this.playerLevel.textContent = player.level;
-
-    // 時間
-    const mins = Math.floor(gameTime / 60);
-    const secs = Math.floor(gameTime % 60);
-    this.timerText.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-
-    // 擊殺與金幣
-    this.killsText.textContent = kills;
-    this.goldText.textContent = gold;
+    const hud = this._hudCache || (this._hudCache = {});
+    const pct = Math.round(Math.min(100, Math.max(0, (player.exp / player.nextExp) * 100)) * 10) / 10;
+    if (hud.pct !== pct) {
+      hud.pct = pct;
+      this.expFill.style.width = `${pct}%`;
+    }
+    if (hud.level !== player.level) {
+      hud.level = player.level;
+      this.playerLevel.textContent = player.level;
+    }
+    const secs = Math.floor(gameTime);
+    if (hud.secs !== secs) {
+      hud.secs = secs;
+      const mins = Math.floor(secs / 60);
+      this.timerText.textContent = `${String(mins).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+    }
+    if (hud.kills !== kills) {
+      hud.kills = kills;
+      this.killsText.textContent = kills;
+    }
+    if (hud.gold !== gold) {
+      hud.gold = gold;
+      this.goldText.textContent = gold;
+    }
   }
 
   updateSkillSlots(weaponManager) {
@@ -1170,9 +1197,17 @@ export class UIManager {
       return;
     }
     this.bossHud.classList.remove('hidden');
-    this.bossName.textContent = boss.name;
-    const hpPct = Math.max(0, (boss.hp / boss.maxHp) * 100);
-    this.bossHpFill.style.width = `${hpPct}%`;
+    if (this._bossNameShown !== boss.name) {
+      this._bossNameShown = boss.name;
+      this.bossName.textContent = boss.name;
+    }
+    // style.css 對這條血條宣告了 transition: width 0.1s，每幀無條件寫入等於
+    // 每 16.7ms 就重啟一次轉場 (永遠追不上)。量化到 0.5% 再寫。
+    const hpPct = Math.round(Math.max(0, (boss.hp / boss.maxHp) * 100) * 2) / 2;
+    if (this._bossHpShown !== hpPct) {
+      this._bossHpShown = hpPct;
+      this.bossHpFill.style.width = `${hpPct}%`;
+    }
   }
 
   // 升級三選一對話框：渲染卡牌 + reroll 按鈕狀態

@@ -227,29 +227,30 @@ Boss 技能、升級卡型別都解析得到），所以問題是「死資料」
 | 欄位 | 位置 | 狀態 |
 | :--- | :--- | :--- |
 | `DAILY_MODIFIERS.turretCdr` | `levels.js:335` | ✅ 本輪已修（見 §7）。這是 repo 先前修過的同一類 bug 的**重複發生**：欄位不在 `RULE_DEFAULTS`，所以 `mergeRules` 直接丟掉，也沒有任何地方乘進砲塔冷卻。 |
-| `WEAPON_ASPECTS[*].stats`（18 個物件） | `config.js:621-682` | ❌ **未修**。`grep "\.stats\b" js/` 在 config 之外零命中；18 個型態的 `cdMul / markDamageBonus / blastMul / clusterCount / tickRateMul / sanctuary / chainDamageRatio / vortexDur / pullStrength / spinSpeedMul / extraBlades / ejectRate / speedBoostPerHit / freezeDur / gravityPull / bounceDmgGrowth / fifthImplosion` **全部沒有效果**，每個型態都在 `WeaponManager.js:306-604` 被重新硬寫一次。 |
+| `WEAPON_ASPECTS[*].stats`（18 個物件） | `config.js` | ✅ **第二批已修**：引擎改為只讀這張表（`WeaponManager.aspectOf()` 依武器家族取值），先前 18 個型態的數字都在引擎裡被硬寫第二次。 |
 | `WEAPON_ASPECTS[*].tag` | `config.js:619` | ❌ 未修（從未顯示） |
-| 塔納托斯（Thanatos）型態 | `config.js:682`、`WeaponManager.js:592`、`Projectile.js:52` | ❌ **完全沒有實作**。`thanatosBounces` 只被寫入一次、從未遞增或讀取，「每次彈跳 +25%」與「第 5 次彈跳引爆」都不存在；README:306 又寫成第三種版本（8 次彈跳／半徑 100／200 傷害）。 |
-| 阿基里斯（Achilles）型態的跑速疊層 | `config.js:676`、`Player.js:79,104,151` | ❌ **完全沒有實作**。`achillesSpeedStacks` 沒有任何地方遞增，該型態唯一的效果不可達。 |
-| `CONSUMABLE_ITEMS[*].duration` | `config.js:559,568,577,586,595` | ❌ 未修：持續時間硬寫在呼叫端，且有兩處與表格不符。 |
-| `LEVEL_DURATION` | `levels.js:7` | ❌ 未修：沒有任何 importer，480 秒在四個關卡的 `until`/`at` 各寫一次。 |
-| `GAME_CONFIG.CANVAS_WIDTH/HEIGHT` | `config.js:4-5` | ❌ 未修：引擎用 `this.vw/this.vh`，這兩個只在 import 時算一次（resize 後即失效）。 |
+| 塔納托斯（Thanatos）型態 | `config.js`、`WeaponManager.js`、`main.js` | ✅ **第二批已實作**：每次命中傷害 ×1.25，第 5 次命中引發虛空引爆（半徑 100／200 傷害）。 |
+| 阿基里斯（Achilles）型態的跑速疊層 | `config.js`、`main.js` | ✅ **第二批已實作**：每次命中疊 6% 跑速，上限 +42%、持續 4 秒（步進/上限/秒數都讀 stats）。 |
+| `CONSUMABLE_ITEMS[*].duration` | `config.js` | ✅ **第二批已修**：藥劑與時停懷錶的秒數改讀表格（並把表格校正為實際值）。 |
+| `LEVEL_DURATION` | `levels.js` | ✅ **第二批已修**：四個關卡的波次終點與終極首領時間改用它。 |
+| `GAME_CONFIG.CANVAS_WIDTH/HEIGHT` | `config.js` | ✅ **第二批已移除**（引擎用 `this.vw/this.vh`，這兩個只在 import 時算一次、resize 後即失效）。 |
 | `characters.js` 的 `role` / `classTitle` | `characters.js:10,13,44,47,93,96,135,138,175,176` | ❌ 未修（10 條文案是死的） |
 | `ELITE_AFFIXES[*].name` | `config.js:502-505` | ✅ 本輪已修：精英頭上會顯示詞綴名（原本只讀 `color`，玩家只能靠色調猜） |
-| `CHARGE.burn/freeze/poison.color` | `config.js:284,287,289` | ❌ 未修（只有 `chain.color` 被讀） |
-| `player.blessingDmgMul` / `player.bonusProjectiles` | `WeaponManager.js:159,316,427,470` | ❌ 未修：讀了但**全 repo 沒有寫入者**，兩個分支永遠不可達。 |
+| `CHARGE.burn/freeze/poison.color` | `config.js` | ✅ **第二批已修**：蓄能彈光暈改讀表格（`Projectile.js` 原本硬寫一組 rgb 字串）。 |
+| `player.blessingDmgMul` / `player.bonusProjectiles` | `WeaponManager.js` | ✅ **第二批已移除**（全 repo 沒有寫入者；15 個祝福各自用 `blessingXxxMul`，沒有一個是傷害乘數）。 |
 | 無盡關的 `waves[0].interval/batch` | `levels.js:241` vs `Spawner.js:61-64` | ❌ 未修：無盡關的 interval/batch 被時間公式覆寫，該 entry 只有 `pool` 是活的。 |
 
 ### 6.2 已確認的說明與程式不符（會影響玩家理解）
 
-- **`manna_prism` 與 `magic_ticket` 的描述疑似對調**（`config.js:602`/`:610` vs `main.js:868-887`）：
+- ✅ **第二批已修**：`manna_prism` 與 `magic_ticket` 的名稱／圖示／說明已改回與 README 和實作一致（原本的文案是對調的）。原文記錄如下 ——
   圖示是 🧲、寫著「吸納全地圖所有經驗水晶與金幣」的那個，實際做的是**冷卻歸零**；
   寫著「瞬間折躍至安全空地並引爆 360° 擊退衝擊波」的那個，實際做的是**磁吸 + 100 金幣**，
-  而且折躍與擊退衝擊波根本不存在。❌ 未修（需要你決定是改文案還是改效果）。
+  而且折躍與擊退衝擊波根本不存在。
 - **可破壞物件與藥劑文案漂移**：`config.js:541` 寫「回復 35% 最大生命」實作是固定 `heal(80)`；
   `config.js:584-586` 寫「凍結全場敵人**與敵方子彈** 3.5 秒」實作是 `applyStun(5.0)` 且不凍子彈；
   `config.js:566` 的「霸體」、`config.js:549` 的「消除負面狀態」、`config.js:593-595` 的
-  「持續灼燒並削弱 6 秒」都沒有實作。❌ 未修。
+  「持續灼燒並削弱 6 秒」都沒有實作。✅ **第二批已修**：一律把文案改成與實作相符（不為了文案去改平衡），
+  另外補上時停懷錶真的連敵方子彈一起凍結（說明與 README 原本都這樣承諾）。
 - **README 三處過期數字**（README:144/156/157/158）：精英詞綴公式、雜兵血量斜率、
   傷害上限、移速隨時間成長，全部與 `Spawner.js:92` / `levels.js:299-308` 的現行實作不符
   （程式碼註解自己記錄了改動，README 沒跟上）。❌ 未修。
@@ -262,9 +263,8 @@ Boss 技能、升級卡型別都解析得到），所以問題是「死資料」
   `card.specialId` 分派，但測試把 `SPECIAL_CARDS` 原始表丟進去（欄位叫 `id`），
   每個 case 都不匹配 → 整組「全部通過」卻什麼都沒觸發。曼納稜晶那類筆誤就是這樣
   躲過去的（`0b3f5b3` 修掉的正是同一個位置）。本輪改為照真實升級流程組裝。
-- ❌ **`updateFacilityButtons` 只在開局/建造/砲塔陣亡時刷新**（`UI.js:726-734`），
-  擊殺與掉落拿到的金幣不會更新電網/淨化裝置/拒馬的可用狀態，而砲塔鈕是每幀更新的
-  → 同一條動作列上的四顆按鈕會互相矛盾。未修。
+- ✅ **第二批已修**：`updateFacilityButtons` 加上值快取後改為每幀刷新，擊殺與掉落拿到的
+  金幣會即時更新電網／淨化裝置／拒馬的可用狀態（快取讓它不會產生多餘的 DOM 寫入）。
 
 ---
 
@@ -277,8 +277,9 @@ Boss 技能、升級卡型別都解析得到），所以問題是「死資料」
 | `08a2bb9` | 本報告 |
 | `3863a62` | 地形宏觀結構 + 敵人行為多樣化（+ 位於 `main.js`/`levels.js` 內的邏輯修復） |
 | `b581b1a` | 系統層修復（save/UI/audio/input/Player/Projectile/WeaponManager/Turret）+ 測試 |
+| 待補 | `fix(aspect)` 第二批：型態系統接線、4 個未實作的型態效果、`WeaponManager.game` 接線 bug、死資料清理、HUD 值快取 |
 
-### 7.1 已修（每一項都有對應的自動檢查）
+### 7.1 第一批：已修（每一項都有對應的自動檢查）
 
 BLOCKER／HIGH：`gene_mutate` 突破等級上限導致武器永久啞火 ｜ `sound.playSelect` 不存在 ｜
 軌道核彈的 3 秒無敵 ｜ 聖光結界永久有效 ｜ 力量藥劑／幸運藥劑完全沒有效果 ｜
@@ -292,21 +293,44 @@ MEDIUM：迷你事件／商人計時器隨幀率變動 ｜ 事件橫幅倒數不
 `_eventSpawnMul` 跨局殘留 ｜ 自爆蟲引信只增不減 ｜ 淨化塔永久覆寫敵人減傷欄位 ｜
 生成距離下限落在視野內 ｜ `MAX_ENEMIES` 實際可超額到 254。
 
-### 7.2 未修（已確認，建議下一輪）
+### 7.2 第二批：型態系統與死資料（`fix(aspect)`）
 
-`WEAPON_ASPECTS[*].stats` 18 個死物件與三個未實作的型態（塔納托斯／阿基里斯／宙斯連鎖數）
-是**同一件事**：型態系統的資料層與引擎層完全脫節。建議一次做完「把 `WeaponManager` 的
-硬寫常數換成讀 `stats`」，否則每加一個型態就會再產生一批死資料。
-其餘未修項見 §6.1／§6.2／§6.3，以及 §3 的效能項目（碰撞空間分割、電網傷害飄字、
-火焰池漸層、`EnemyProjectile` 的 `shadowBlur`、粒子系統每幀配置、每幀 DOM 寫入、
-`backdrop-filter` 合成成本）。
+使用者授權「自己拍板」後補完的部分：
+
+- **型態系統接線**：`WeaponManager.aspectOf()` 依武器家族（8 把超武各自掛在自己的基礎武器上）
+  取出 `WEAPON_ASPECTS[*].stats`，引擎不再硬寫第二份數字 —— 18 個 stats 物件全部有讀者。
+- **補上 4 個沒實作的效果**：塔納托斯（每次命中 +25%、第 5 次命中引爆半徑 100／200 傷害）、
+  阿基里斯（每次命中疊 6% 跑速、上限 +42%）、宙斯連鎖數 4（`chainShock` 先前把第 4 個參數丟掉）、
+  燃燒瓶札格跳頻 `tickRateMul` 0.70；另外守護輪盤混沌型態的飛盤改用遊戲時間冷卻。
+- **修掉一個接線 bug（本輪新發現）**：`WeaponManager.game` **從來沒有被賦值**（只有
+  `player.game` 有），所以 `this.game?.chainShock(...)` 一直是靜默不執行 ——
+  **宙斯型態的連鎖電弧從來沒有生效過**，連帶讓「商人臨時增益在被動重算後補回」也失效。
+- **文案與資料對齊**：消耗品名稱／圖示／說明（`manna_prism` 與 `magic_ticket` 原本是對調的）、
+  型態說明、`CONSUMABLE_ITEMS` 秒數、`LEVEL_DURATION`、`CHARGE` 顏色；
+  移除 `GAME_CONFIG.CANVAS_*` 與 `bonusProjectiles`／`blessingDmgMul` 兩個幽靈欄位。
+- **HUD 成本**：`updateHUD`／`updateCombo`／`updateBossHUD`／`updateFacilityButtons` 都加上
+  值快取（原本每幀無條件寫 5～15 個 DOM 屬性；`updateCombo` 還會在炸彈清場時同一幀被呼叫數百次）。
+
+驗證：`verify-review-fixes.mjs` 擴充到 **47 項全過**，逐一驗證每個型態的效果是數值驅動的
+（冷卻倍率比值、印記 0.4 加成反證、宙斯 jumps=4、索爾 1.2 秒、火海 tick 0.175、混沌飛盤、
+塔納托斯 5 次引爆、阿基里斯疊層、關羽 1.5 秒冰凍、時停凍結子彈）。
+
+### 7.3 仍未處理
+
+- `WEAPON_ASPECTS[*].tag`（型態標籤文案）仍未顯示；`characters.js` 的 `role`／`classTitle`
+  10 條文案仍是死資料；無盡關波次的 `interval`／`batch` 仍被時間公式覆蓋。
+- §6.2 的資料表散文（`modes.js` 的「0.6 折」與「金幣收入加倍」、`config.js:779-780` 的「攻速 +40%」）
+  尚未校正。
+- §3 的效能項目：碰撞空間分割（`checkProjectileCollisions` 是 O(P·E)，暴擊時 O(P·E²)）、
+  電網塔每幀每怪一個傷害飄字、火焰池每幀重建漸層、`EnemyProjectile` 的 `shadowBlur`、
+  粒子系統每幀配置、隱藏彈窗的 `backdrop-filter` 合成成本。
 
 ### 7.3 實測數據（改動前 → 改動後）
 
 | 指標 | 前 | 後 |
 | :--- | :--- | :--- |
 | `smoke-branches.mjs` | 56 分支通過 | 56 分支通過（且特殊卡組不再空轉） |
-| `verify-review-fixes.mjs` | —（新增） | **28/28 通過** |
+| `verify-review-fixes.mjs` | —（新增） | **47/47 通過** |
 | 敵人坍塌配對比例（96 隻怪、4 秒收斂） | 14.1% | **0.9%** |
 | 敵人最近鄰平均距離 | 20.7 | **29.5** |
 | 五關巨觀結構種類 | 0（只有色相不同） | **5（道路／板塊／冰原／岩漿渠道／裂縫）** |

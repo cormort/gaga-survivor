@@ -30,7 +30,7 @@ const results = await page.evaluate(async () => {
   const out = [];
   const ok = (name, pass, detail) => out.push({ name, pass: !!pass, detail: String(detail) });
   const g = window.game;
-  const { WEAPONS, ENEMY_TYPES, SPECIAL_CARDS, MERCHANT_ITEMS } = await import('/js/config.js');
+  const { WEAPONS, ENEMY_TYPES, SPECIAL_CARDS, MERCHANT_ITEMS, CONSUMABLE_ITEMS } = await import('/js/config.js');
   const { RULE_DEFAULTS, mergeRules, LEVELS, LEVEL_ORDER } = await import('/js/levels.js');
   const { sound } = await import('/js/audio.js');
   const { save } = await import('/js/save.js');
@@ -223,6 +223,184 @@ const results = await page.evaluate(async () => {
   g.handleGameOver(false);
   const dna2 = save.data.dna;
   ok('結算不會執行兩次', dna1 === dna2, `dna ${dna0} → ${dna1} → ${dna2}`);
+
+  // ── 型態系統：18 個 stats 物件必須真的有讀者 ────────────────────
+  const setAspect = (fam, id) => {
+    g.player.weaponAspects = { ...(g.player.weaponAspects || {}), [fam]: id };
+  };
+  const cdFor = (wid, fam, aspectId) => {
+    setAspect(fam, aspectId);
+    g.weaponManager.weapons.clear();
+    g.weaponManager.addWeapon(wid);
+    const it = g.weaponManager.weapons.get(wid);
+    g.player.cdrMultiplier = 1;
+    g.player.overloadTimer = 0;
+    it.cooldownTimer = 0;
+    g.enemies.length = 0;                    // 冷卻重設與有沒有敵人無關
+    g.weaponManager.update(1 / 60, g.enemies, g.particles);
+    return it.cooldownTimer;
+  };
+  const cdZag = cdFor('kunai', 'kunai', 'zagreus');
+  const cdNem = cdFor('kunai', 'kunai', 'nemesis');
+  ok('苦無札格型態 cdMul 0.70 生效', Math.abs(cdZag / cdNem - 0.70) < 0.02, `zag=${cdZag.toFixed(3)} nem=${cdNem.toFixed(3)}`);
+  const cdHestia = cdFor('rocket', 'rocket', 'hestia');
+  const cdEris = cdFor('rocket', 'rocket', 'eris');
+  ok('火箭赫斯提亞 cdMul 1.15 生效', Math.abs(cdHestia / cdEris - 1.15) < 0.02, `hestia=${cdHestia.toFixed(3)} eris=${cdEris.toFixed(3)}`);
+  // 苦無家族：進化武器要跟著 kunai 型態，而不是永遠 zagreus
+  setAspect('kunai', 'zagreus');
+  const famEvo = g.weaponManager.aspectOf('ghost_shuriken');
+  const famBlade = g.weaponManager.aspectOf('phase_blade');
+  ok('進化武器跟著自己的型態家族', famEvo.fam === 'kunai' && famEvo.stats.cdMul === 0.70 && famBlade.stats.cdMul === 0.70,
+    `fam=${famEvo.fam} cdMul=${famEvo.stats.cdMul}`);
+
+  // 基隆印記：加成值必須來自 stats（用 0.4 反證不是硬寫 0.25）
+  const markE = new Enemy('walker', 0, 0, {});
+  markE.maxHp = markE.hp = 1e6;
+  markE.applyMark(5, 0.4);
+  markE.takeDamage(100, 0, 100, 0);
+  ok('印記加成來自型態資料', markE.lastDamageTaken === 140, markE.lastDamageTaken);
+
+  // 宙斯連鎖數：chainShock 必須收到 4（先前第 4 個參數被丟掉）
+  let chainJumps = null;
+  const origChain = g.chainShock;
+  g.chainShock = (o, d, w, j) => { chainJumps = j; };
+  setAspect('lightning', 'zeus');
+  g.weaponManager.weapons.clear();
+  g.weaponManager.addWeapon('lightning');
+  g.enemies.length = 0;
+  const zTarget = new Enemy('chimera', 120, 0, {});
+  zTarget.maxHp = zTarget.hp = 1e9;
+  g.enemies.push(zTarget);
+  g.weaponManager.projectiles.length = 0;
+  g.weaponManager.fireWeapon('lightning', g.weaponManager.weapons.get('lightning'), WEAPONS.lightning, g.enemies, g.particles);
+  for (let i = 0; i < 40; i++) g.weaponManager.update(1 / 60, g.enemies, g.particles);
+  g.chainShock = origChain;
+  ok('宙斯連鎖數來自型態資料', chainJumps === 4, 'jumps=' + chainJumps);
+
+  // 索爾眩暈秒數
+  setAspect('lightning', 'thor');
+  g.enemies.length = 0;
+  const thTarget = new Enemy('chimera', 120, 0, {});
+  thTarget.maxHp = thTarget.hp = 1e9;
+  g.enemies.push(thTarget);
+  g.weaponManager.projectiles.length = 0;
+  g.weaponManager.fireWeapon('lightning', g.weaponManager.weapons.get('lightning'), WEAPONS.lightning, g.enemies, g.particles);
+  for (let i = 0; i < 40; i++) g.weaponManager.update(1 / 60, g.enemies, g.particles);
+  ok('索爾眩暈 1.2 秒生效', thTarget.stunTimer > 0.9 && thTarget.stunTimer <= 1.21, thTarget.stunTimer.toFixed(2));
+
+  // 燃燒瓶札格：火海跳頻 tickRateMul 0.70
+  setAspect('molotov', 'zagreus');
+  g.weaponManager.weapons.clear();
+  g.weaponManager.addWeapon('molotov');
+  g.enemies.length = 0;
+  const mTarget = new Enemy('chimera', 150, 0, {});
+  mTarget.maxHp = mTarget.hp = 1e9;
+  g.enemies.push(mTarget);
+  g.weaponManager.projectiles.length = 0;
+  g.weaponManager.fireWeapon('molotov', g.weaponManager.weapons.get('molotov'), WEAPONS.molotov, g.enemies, g.particles);
+  const pool = g.weaponManager.projectiles.find((p) => p.type === 'fire_pool');
+  ok('燃燒瓶跳頻來自型態資料', !!pool && Math.abs(pool.tickInterval - 0.175) < 0.001, pool ? pool.tickInterval : 'no pool');
+
+  // 守護輪盤混沌型態：飛盤以遊戲時間每 2 秒發射
+  setAspect('guardian', 'chaos');
+  g.weaponManager.weapons.clear();
+  g.weaponManager.addWeapon('guardian');
+  g.weaponManager.projectiles.length = 0;
+  g.enemies.length = 0;
+  for (let i = 0; i < 200; i++) g.weaponManager.update(1 / 60, g.enemies, g.particles);
+  const saw = g.weaponManager.projectiles.filter((p) => p.type === 'saw' && !p.isDead).length;
+  ok('混沌型態會發射飛盤', saw > 0, 'saw=' + saw);
+
+  // 足球：塔納托斯傷害成長 + 第 5 次命中引爆；阿基里斯疊跑速；關羽冰凍 1.5 秒
+  const soccerRun = (aspectId) => {
+    setAspect('soccer', aspectId);
+    g.weaponManager.weapons.clear();
+    g.weaponManager.addWeapon('soccer');
+    g.enemies.length = 0;
+    // 確定性夾具：把敵人排成一列、強制球往 +x 飛 —— 否則球的初始方向是亂數，
+    // 「第 5 次命中引爆」這種累積條件會變成隨機通過。
+    const line = [];
+    for (let k = 1; k <= 6; k++) {
+      const e = new Enemy('chimera', 40 + k * 55, 0, {});
+      e.maxHp = e.hp = 1e9;
+      e.kbResist = 1;
+      g.enemies.push(e);
+      line.push(e);
+    }
+    g.player.x = 0; g.player.y = 0;
+    g.player.invulnerableTimer = 1e9;
+    g.player.achillesSpeedStacks = 0;
+    g.weaponManager.projectiles.length = 0;
+    g.weaponManager.fireWeapon('soccer', g.weaponManager.weapons.get('soccer'), WEAPONS.soccer, g.enemies, g.particles);
+    // 冷卻調長，避免測試期間射出第二顆球干擾觀測
+    g.weaponManager.weapons.get('soccer').cooldownTimer = 999;
+    for (const p of g.weaponManager.projectiles) {
+      if (p.type !== 'soccer') continue;
+      // 絕對方向：球的初始角度是亂數，若照原方向正規化，有一半機率往 -x 飛、
+      // 整條測試就變成隨機通過
+      p.vx = 300;
+      p.vy = 0;
+      p.x = g.player.x; p.y = g.player.y;
+    }
+    const seq = [];
+    let imploded = false;
+    let maxBounces = 0;
+    let freezeSeen = 0;
+    let last = 0;
+    for (let i = 0; i < 300; i++) {
+      g.update(1 / 60);
+      g.weaponManager.weapons.get('soccer').cooldownTimer = 999;
+      for (const p of g.weaponManager.projectiles) {
+        if (p.type !== 'soccer') continue;
+        p.vx = 300;   // 維持 +x，避免撞牆反彈後亂跑
+        p.vy = 0;
+      }
+      for (const p of g.weaponManager.projectiles) {
+        if (p.type !== 'soccer') continue;
+        maxBounces = Math.max(maxBounces, p.thanatosBounces || 0);
+        if (p.thanatosBounces >= 5) imploded = true;
+      }
+      freezeSeen = Math.max(freezeSeen, line.reduce((mx, e) => Math.max(mx, e.freezeTimer || 0), 0));
+      const maxDmg = g.enemies.reduce((mx, e) => Math.max(mx, e.lastDamageTaken || 0), 0);
+      if (maxDmg !== last) { seq.push(maxDmg); last = maxDmg; }
+    }
+    return { seq, imploded, maxBounces, freezeSeen, stacks: g.player.achillesSpeedStacks };
+  };
+  const th = soccerRun('thanatos');
+  ok('塔納托斯每次命中傷害遞增', th.seq.length >= 2 && th.seq[1] > th.seq[0], th.seq.slice(0, 5).join('→'));
+  ok('塔納托斯第 5 次命中引爆', th.imploded && th.maxBounces >= 5, `bounces=${th.maxBounces}`);
+  const ach = soccerRun('achilles');
+  ok('阿基里斯命中疊跑速', ach.stacks > 0, 'stacks=' + ach.stacks);
+  const gy = soccerRun('guanyu');
+  ok('關羽冰凍 1.5 秒生效', gy.freezeSeen > 1.2 && gy.freezeSeen <= 1.51, gy.freezeSeen.toFixed(2));
+
+  // 時停懷錶：秒數吃資料表，且敵方子彈真的停住
+  g.player.invulnerableTimer = 1e9;
+  g.enemyProjectiles.length = 0;
+  g.spawnEnemyProjectile({ x: 0, y: 0, radius: 10 }, {
+    x: g.player.x + 200, y: g.player.y, vx: -120, vy: 0, damage: 5, radius: 6, color: '#fff', glow: '#fff',
+  });
+  const ep = g.enemyProjectiles[0];
+  const epX0 = ep ? ep.x : 0;
+  g.activateConsumable('stopwatch');
+  for (let i = 0; i < 30; i++) g.update(1 / 60);
+  ok('時停懷錶凍結敵方子彈', !!ep && Math.abs(ep.x - epX0) < 0.001 && g._timeStopTimer > 3.5,
+    `dx=${ep ? (ep.x - epX0).toFixed(2) : 'n/a'} timer=${g._timeStopTimer.toFixed(2)}`);
+  g._timeStopTimer = 0;
+  g.enemyProjectiles.length = 0;
+
+  // 消耗品文案與表一致（manna_prism / magic_ticket 先前是對調的）
+  ok('曼納稜晶說明 = 冷卻歸零', /冷卻立即歸零/.test(CONSUMABLE_ITEMS.manna_prism.desc), CONSUMABLE_ITEMS.manna_prism.desc);
+  ok('魔法門票說明 = 磁吸掉落物', /磁吸所有掉落物/.test(CONSUMABLE_ITEMS.magic_ticket.desc), CONSUMABLE_ITEMS.magic_ticket.desc);
+  ok('時停懷錶表定 5 秒', CONSUMABLE_ITEMS.stopwatch.duration === 5, CONSUMABLE_ITEMS.stopwatch.duration);
+  ok('幸運藥水表定 +25% 暴擊', /\+25%/.test(CONSUMABLE_ITEMS.luck_potion.desc), CONSUMABLE_ITEMS.luck_potion.desc);
+
+  // 武器系統 ↔ 遊戲層的接線（宙斯連鎖、商人增益補回都靠它）
+  ok('weaponManager.game 已接上', g.weaponManager.game === g, String(g.weaponManager.game && 'ok'));
+
+  // 死資料清理
+  const { GAME_CONFIG } = await import('/js/config.js');
+  ok('死欄位 CANVAS_WIDTH 已移除', GAME_CONFIG.CANVAS_WIDTH === undefined);
 
   return out;
 });
