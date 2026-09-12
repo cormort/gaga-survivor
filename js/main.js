@@ -18,7 +18,7 @@ import { CHARACTERS, CHARACTER_ORDER } from './characters.js';
 import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy, enemyScale, mergeRules, getDailyChallenge } from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
-import { drawTerrain } from './systems/Terrain.js';
+import { GroundRenderer } from './systems/Ground.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
 import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, salvageValue, RARITIES } from './items.js';
 import { MODES, MODE_ORDER, getMode } from './modes.js';
@@ -117,6 +117,7 @@ class Game {
     this.weaponManager.game = this;
     this.spawner = new Spawner();
     this.particles = new ParticleSystem();
+    this.ground = new GroundRenderer();
     this.ui = new UIManager();
 
     // 實體清單
@@ -2864,6 +2865,11 @@ class Game {
     }
   }
 
+  // 地面殘跡的薄包裝：把陣列交給 GroundRenderer（呼叫點不必知道它搬去哪裡了）
+  addDecal(x, y, r, fill, alpha = 0.5, accent = null, life = FX.decalLife) {
+    this.ground.addDecal(this.decals, x, y, r, fill, alpha, accent, life);
+  }
+
   checkProjectileCollisions() {
     for (const p of this.weaponManager.projectiles) {
       if (p.isDead || p.type === 'rocket') continue; // 火箭走自帶到達爆炸
@@ -3656,16 +3662,16 @@ class Game {
     };
 
     // 繪製地板漸層 + 網格 (本身即不透明滿版，不需另外清屏)
-    this.drawFloorGrid(renderCam);
+    this.ground.drawFloorGrid(this.ctx, this.level || LEVELS.street, renderCam, this.vw, this.vh, this.gameTime || 0);
 
     // 繪製場景裝飾 (地板之上、掉落物之下)
     drawDecor(this.ctx, renderCam, this.level || LEVELS.street, this.vw, this.vh);
 
     // 地面殘跡 (血漬/焦痕，實體之下)
-    this.drawDecals(this.ctx, renderCam);
+    this.ground.drawDecals(this.ctx, renderCam, this.decals, this.vw, this.vh);
 
     // 全域色調 overlay (Soulstone 風格調光：場景染上關卡色，角色保持原色)
-    this.drawColorGrade();
+    this.ground.drawColorGrade(this.ctx, this.vw, this.vh, this.level || LEVELS.street);
 
     // 繪製掉落物
     for (const item of this.dropItems) {
@@ -3726,7 +3732,7 @@ class Game {
     this.particles.draw(this.ctx, renderCam);
 
     // 畫面後製：暗角 + 玩家聚光，讓視覺焦點集中在主角身上
-    this.drawVignette();
+    this.ground.drawVignette(this.ctx, this.vw, this.vh, this.level || LEVELS.street);
 
     // Boss 大招紅閃 (畫面邊緣泛紅，最上層)
     if (this.redFlash > 0) {
@@ -3879,19 +3885,6 @@ class Game {
   }
 
   // 全域色調 overlay：關卡色上下漸層，極淡染上場景 (角色繪製在其上，不受影響)
-  drawColorGrade() {
-    const theme = (this.level || LEVELS.street).theme;
-    const gr = theme && theme.grade;
-    if (!gr) return;
-    const ctx = this.ctx;
-    const g = ctx.createLinearGradient(0, 0, 0, this.vh);
-    g.addColorStop(0, `rgba(${gr.c1},${gr.a1})`);
-    g.addColorStop(0.55, `rgba(${gr.c1},${(gr.a1 * 0.4).toFixed(4)})`);
-    g.addColorStop(1, `rgba(${gr.c2},${gr.a2})`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, this.vw, this.vh);
-  }
-
   drawMerchant(camera) {
     if (!this.merchant) return;
     const sx = this.merchant.x - camera.x;
@@ -3930,31 +3923,6 @@ class Game {
     ctx.fillStyle = '#ffffff';
     ctx.fillText('靠近選購', sx, sy + 22);
     ctx.restore();
-  }
-
-  drawVignette() {
-    // ponytail: 暗角烘焙進離屏 canvas，每幀只做一次 drawImage
-    const vigLevel = this.level || LEVELS.street;
-    const vigMult = (vigLevel.theme && vigLevel.theme.vignette) || 1;
-    if (!this._vigCanvas || this._vigCanvas.width !== Math.round(this.vw) ||
-        this._vigCanvas.height !== Math.round(this.vh) || this._vigKey !== vigLevel.id) {
-      const oc = document.createElement('canvas');
-      oc.width = Math.max(1, Math.round(this.vw));
-      oc.height = Math.max(1, Math.round(this.vh));
-      const octx = oc.getContext('2d');
-      const g = octx.createRadialGradient(
-        this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.22,
-        this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.72
-      );
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(0.6, `rgba(0,0,0,${(0.28 * vigMult).toFixed(3)})`);
-      g.addColorStop(1, `rgba(0,0,0,${(0.72 * vigMult).toFixed(3)})`);
-      octx.fillStyle = g;
-      octx.fillRect(0, 0, oc.width, oc.height);
-      this._vigCanvas = oc;
-      this._vigKey = vigLevel.id;
-    }
-    this.ctx.drawImage(this._vigCanvas, 0, 0, this.vw, this.vh);
   }
 
   drawMinimap() {
@@ -4048,468 +4016,12 @@ class Game {
     ctx.restore();
   }
 
-  drawFloorGrid(camera) {
-    const ctx = this.ctx;
-    const W = this.vw;
-    const H = this.vh;
-
-    ctx.save();
-
-    // 地板底色漸層 (顏色由關卡主題決定)
-    const theme = (this.level || LEVELS.street).theme;
-    if (!this._floorGrad || this._floorGradH !== H || this._floorTheme !== theme) {
-      const fg = ctx.createLinearGradient(0, 0, 0, H);
-      fg.addColorStop(0, theme.top);
-      fg.addColorStop(0.55, theme.mid);
-      fg.addColorStop(1, theme.bottom);
-      this._floorGrad = fg;
-      this._floorGradH = H;
-      this._floorTheme = theme;
-    }
-    ctx.fillStyle = this._floorGrad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Soulstone 風格地面質感層：汙漬色塊 + 每關專屬地表材質 (畫在網格之下)
-    // 材質細節每關烘焙成一片世界錨定的無接縫紋理磚，逐幀只做 drawImage 拼貼
-    const groundTex = this.getGroundTexture(this.level || LEVELS.street);
-    const gTile = groundTex.width;
-    const gOx = -(((camera.x % gTile) + gTile) % gTile);
-    const gOy = -(((camera.y % gTile) + gTile) % gTile);
-    for (let gy = gOy; gy < H; gy += gTile) {
-      for (let gx = gOx; gx < W; gx += gTile) {
-        ctx.drawImage(groundTex, gx, gy);
-      }
-    }
-
-    // 宏觀地形層 (道路/板塊/冰原/岩漿渠道/裂縫 + 大型地標 + 隨時間劣化)
-    // 畫在地表材質之上、格線之下：讀起來像「地板上的結構」，格線保持為戰術疊層
-    drawTerrain(ctx, camera, this.level || LEVELS.street, W, H, this.gameTime);
-
-    // 細格線 + 每 N 格一條主格線，強化移動感。
-    // 格距/主線週期/虛線由關卡 theme.gridStyle 決定 —— 原本五關都是 grid 64、
-    // 每 4 格一條主線的同一套格線，是「關卡只差色相」的最後一個來源。
-    const gs = theme.gridStyle || {};
-    const grid = gs.size || 64;
-    const majorEvery = gs.major || 4;
-    const dash = gs.dash || 0;
-    const ox = -(((camera.x % grid) + grid) % grid);
-    const oy = -(((camera.y % grid) + grid) % grid);
-    const majorX = Math.floor(camera.x / grid);
-    const majorY = Math.floor(camera.y / grid);
-    if (dash > 0) ctx.setLineDash([dash, dash]);
-
-    for (let i = 0, x = ox; x < W + grid; i++, x += grid) {
-      const major = (majorX + i) % majorEvery === 0;
-      ctx.strokeStyle = major ? theme.major : theme.grid;
-      ctx.lineWidth = major ? 1.5 : 1;
-      ctx.beginPath();
-      ctx.moveTo(Math.round(x) + 0.5, 0);
-      ctx.lineTo(Math.round(x) + 0.5, H);
-      ctx.stroke();
-    }
-    for (let i = 0, y = oy; y < H + grid; i++, y += grid) {
-      const major = (majorY + i) % majorEvery === 0;
-      ctx.strokeStyle = major ? theme.major : theme.grid;
-      ctx.lineWidth = major ? 1.5 : 1;
-      ctx.beginPath();
-      ctx.moveTo(0, Math.round(y) + 0.5);
-      ctx.lineTo(W, Math.round(y) + 0.5);
-      ctx.stroke();
-    }
-    if (dash > 0) ctx.setLineDash([]);
-
-    // 地圖邊界警示線 (發光紅牆)
-    const bounds = GAME_CONFIG.WORLD_BOUNDS;
-    const bMinX = bounds.minX - camera.x;
-    const bMaxX = bounds.maxX - camera.x;
-    const bMinY = bounds.minY - camera.y;
-    const bMaxY = bounds.maxY - camera.y;
-
-    ctx.shadowColor = theme.bounds;
-    ctx.shadowBlur = 18;
-    ctx.strokeStyle = theme.bounds;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(bMinX, bMinY, bMaxX - bMinX, bMaxY - bMinY);
-
-    ctx.restore();
-  }
-
-  // 程序化地面材質烘焙 (Soulstone 風格參考)：世界座標雜湊決定汙漬與材質細節，
-  // 結果烘進一片無接縫紋理磚，之後每幀只做 drawImage。紋理/材質種類由
-  // levels.js theme.ground.motif / material 資料決定。
-  getGroundTexture(level) {
-    const id = (level && level.id) || 'street';
-    if (this._groundTextures && this._groundTextures[id]) return this._groundTextures[id];
-
-    // 世界錨定的接縫消除：先把細節畫在一片比成品大 2×PAD 的畫布上，
-    // 再裁出中央區塊當磚。跨磚界的柔光汙漬光暈照常接合，不會出現週期接縫。
-    const T = 768;            // 成品磚大小
-    const P = 230;            // 出血區 (涵蓋最大光暈半徑與裂縫漂移)
-    const B = T + P * 2;
-
-    const big = document.createElement('canvas');
-    big.width = big.height = B;
-    const bx = big.getContext('2d');
-
-    const g = level.theme && level.theme.ground;
-    const seed = this._groundSeed(id);
-    const h = (cx, cy, k) => {
-      const s = Math.sin(cx * 127.1 + cy * 311.7 + (seed + k * 74.7)) * 43758.5453;
-      return s - Math.floor(s);
-    };
-    const cell = 240;
-    const c0 = Math.floor(-P / cell) - 1;
-    const c1 = Math.ceil((T + P) / cell) + 1;
-
-    // 密度旋鈕：由 levels.js 的 theme.ground.density 提供，缺欄位一律沿用引擎預設。
-    // 這是「五關地表長得一樣」的根因修正 —— 原本機率/半徑/數量全部寫死在這裡，
-    // 資料層完全沒有可調的餘地，所以五關只能靠色相區分。
-    const dens = (g && g.density) || {};
-    const stainChance = dens.stain != null ? dens.stain : 0.6;
-    const stainRadiusMul = dens.stainRadius != null ? dens.stainRadius : 1;
-    const motifMul = dens.motif != null ? dens.motif : 1;
-    const grainMul = dens.grain != null ? dens.grain : 1;
-    const accentMul = dens.accents != null ? dens.accents : 1;
-
-    for (let cy = c0; cy <= c1; cy++) {
-      for (let cx = c0; cx <= c1; cx++) {
-        const x = cx * cell + P;   // 磚面座標 = 世界座標 + 出血位移
-        const y = cy * cell + P;
-        if (!g) continue;
-        const r = h(cx, cy, 1);
-
-        // 1) 大面積柔光汙漬 (光暈半徑最大 ~192 ≤ P，烘焙後無接縫)
-        if (r < stainChance) {
-          const p = g.patches[r < stainChance * 0.42 ? 0 : 1];
-          const px = x + r * cell * 2.6 - cell * 0.8;
-          const py = y + h(cx, cy, 2) * cell * 2.6 - cell * 0.8;
-          const rad = (90 + r * 170) * stainRadiusMul;
-          const grad = bx.createRadialGradient(px, py, 0, px, py, rad);
-          grad.addColorStop(0, `rgba(${p.c},${p.a})`);
-          grad.addColorStop(1, `rgba(${p.c},0)`);
-          bx.fillStyle = grad;
-          bx.beginPath();
-          bx.arc(px, py, rad, 0, Math.PI * 2);
-          bx.fill();
-        }
-
-        // 2) 專屬地表紋理 (每格 1-2 筆，密度可調；r3 提供形狀/角度/鏡射變化)
-        const n = 1 + Math.floor(h(cx, cy, 3) * 2 * motifMul);
-        for (let k = 0; k < n; k++) {
-          this._groundMotif(bx, g, x, y, cell, h(cx, cy, 4 + k), h(cx, cy, 9 + k), h(cx, cy, 14 + k));
-        }
-
-        // 3) 每格的材質微粒 (粗礫 / 刷紋 / 霜雪 / 星塵)
-        if (g.material) this._groundGrain(bx, g, x, y, cell, h(cx, cy, 40), h(cx, cy, 41), h(cx, cy, 42), grainMul);
-      }
-    }
-
-    // 4) 材質大範圍特徵 (油漬裂縫、鉚釘、熔岩餘燼、星點…)
-    if (g && g.material) this._groundMaterialAccents(bx, g, h, T, P, accentMul);
-
-    const tile = document.createElement('canvas');
-    tile.width = tile.height = T;
-    tile.getContext('2d').drawImage(big, P, P, T, T, 0, 0, T, T);
-    if (!this._groundTextures) this._groundTextures = {};
-    this._groundTextures[id] = tile;
-    return tile;
-  }
-
-  _groundSeed(id) {
-    let s = 0;
-    for (let i = 0; i < id.length; i++) s = (s * 31 + id.charCodeAt(i)) >>> 0;
-    return s;
-  }
-
-  // 材質微粒：依材質在每個格子內撒低對比顆粒，做出「材質感」而非純色地板
-  _groundGrain(ctx, g, x, y, cell, r1, r2, r3, mul = 1) {
-    const mat = g.material;
-    const dot = (gx, gy, rad, rgb, a) => {
-      ctx.fillStyle = `rgba(${rgb},${a})`;
-      ctx.beginPath();
-      ctx.arc(gx, gy, rad, 0, Math.PI * 2);
-      ctx.fill();
-    };
-    const base = mat === 'snow' ? 7 : mat === 'metal' ? 2 : 2 + Math.floor(r1 * 4);
-    const count = Math.max(1, Math.round(base * mul));
-    for (let i = 0; i < count; i++) {
-      const gx = x + ((r2 + i * 0.31) % 1) * cell;
-      const gy = y + ((r3 + i * 0.17) % 1) * cell;
-      const rad = 0.6 + ((r2 * 7 + i) % 1) * 1.6;
-      if (mat === 'snow') dot(gx, gy, rad, '235,245,255', 0.1 + r1 * 0.12);
-      else if (mat === 'metal') dot(gx, gy, rad * 0.8, '255,255,255', 0.04);
-      else if (mat === 'lava') dot(gx, gy, rad, '15,8,6', 0.5);
-      else if (mat === 'void') dot(gx, gy, rad * 0.7, '255,255,255', 0.06 + r1 * 0.14);
-      else dot(gx, gy, rad, '0,0,0', 0.1 + r1 * 0.12);   // asphalt 粗礫
-    }
-  }
-
-  // 材質大範圍特徵。中心點都收進「安全帶」([P+m, T-(P+m)])，讓放射狀光暈
-  // 完整落在成品磚內，磚界才不會切到半顆光暈。
-  _groundMaterialAccents(ctx, g, h, T, P, mul = 1) {
-    const mat = g.material;
-    const N = (n) => Math.max(1, Math.round(n * mul));
-    const bandX = (n, a, m, maxR = 10) => P + (maxR + h(n, a, 0) * (T - maxR * 2));
-    const bandY = (n, a, m, maxR = 10) => P + (maxR + h(n, a, 1) * (T - maxR * 2));
-
-    ctx.save();
-    if (mat === 'asphalt') {
-      // 深色柏油縫裂 (短、粗、不走太遠才不會被磚界切段)
-      ctx.lineWidth = 1.3;
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-      for (let n = 0; n < N(6); n++) {
-        const x0 = bandX(n, 0, 0, 160);
-        const y0 = bandY(n, 0, 0, 160);
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        for (let i = 1; i < 5; i++) {
-          ctx.lineTo(x0 + (h(n, i, 0) - 0.5) * 52, y0 + (h(n, i, 0) - 0.5) * 52);
-        }
-        ctx.stroke();
-      }
-      // 偶發圓形人孔蓋縫
-      for (let n = 0; n < N(2); n++) {
-        const cx = P + (120 + h(n, 22, 0) * (T - 240));
-        const cy = P + (120 + h(n, 23, 0) * (T - 240));
-        ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(cx, cy, 26, 0, Math.PI * 2); ctx.stroke();
-      }
-    } else if (mat === 'metal') {
-      // 水平金屬刷紋 + 鉚釘點列。
-      // 間距必須整除磚寬，否則磚界會出現一段不規則的空白 (原本起點從 P+10 開始、
-      // 間距固定 84，768/84 除不盡 → 每次接磚都少一截)。
-      const step = T / Math.round(T / 84);
-      for (let y = 0; y < T; y += step) {
-        const a = Math.max(0, 0.03 + Math.sin(y * 0.25) * 0.02);
-        ctx.fillStyle = `rgba(255,255,255,${a})`;
-        ctx.fillRect(P, P + y, T, 1.2);
-      }
-      for (let n = 0; n < N(10); n++) {
-        const px = bandX(n, 30, 0, 20);
-        const py = bandY(n, 30, 0, 20);
-        ctx.fillStyle = 'rgba(200,255,225,0.16)';
-        ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI * 2); ctx.fill();
-      }
-    } else if (mat === 'snow') {
-      // 大面積霜雪輝光 (安全帶確保光暈不切到磚界)
-      for (let n = 0; n < N(9); n++) {
-        const px = bandX(n, 40, 0, 150);
-        const py = bandY(n, 40, 0, 150);
-        const rad = 60 + h(n, 41, 0) * 90;
-        const gr = ctx.createRadialGradient(px, py, 0, px, py, rad);
-        gr.addColorStop(0, 'rgba(255,255,255,0.06)');
-        gr.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = gr;
-        ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
-      }
-    } else if (mat === 'lava') {
-      // 熔岩餘燼光點 (帶 glow)
-      for (let n = 0; n < N(26); n++) {
-        const px = bandX(n, 50, 0, 8);
-        const py = bandY(n, 50, 0, 8);
-        const rad = 1.2 + h(n, 51, 0) * 2.2;
-        const gr = ctx.createRadialGradient(px, py, 0, px, py, rad * 3.4);
-        gr.addColorStop(0, 'rgba(255,160,50,0.85)');
-        gr.addColorStop(1, 'rgba(255,120,0,0)');
-        ctx.fillStyle = gr;
-        ctx.beginPath(); ctx.arc(px, py, rad * 3.4, 0, Math.PI * 2); ctx.fill();
-      }
-    } else if (mat === 'void') {
-      // 虛空星點 (含少量大星帶星芒)
-      for (let n = 0; n < N(46); n++) {
-        const px = bandX(n, 60, 0, 6);
-        const py = bandY(n, 60, 0, 6);
-        const sz = h(n, 61, 0);
-        if (sz > 0.45) {
-          const big = sz > 0.85;
-          const rad = big ? 2.6 : 1.4;
-          const gr = ctx.createRadialGradient(px, py, 0, px, py, rad * 3.2);
-          gr.addColorStop(0, 'rgba(230,210,255,0.9)');
-          gr.addColorStop(1, 'rgba(230,210,255,0)');
-          ctx.fillStyle = gr;
-          ctx.beginPath(); ctx.arc(px, py, rad * 3.2, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = 'rgba(255,255,255,0.9)';
-          ctx.beginPath(); ctx.arc(px, py, big ? 1.2 : 0.7, 0, Math.PI * 2); ctx.fill();
-        }
-      }
-    }
-    ctx.restore();
-  }
-
-  // r1/r2 決定位置，r3 決定「形狀」：旋轉、鏡射、尺寸分級與模板選擇。
-  // 原本每個 motif 只有一種固定幾何 (lava 永遠是那兩條折線、void 永遠是同半徑圓弧)，
-  // 位置只被平移 → 整張地圖的圖樣重複到會被眼睛抓出來。加上 r3 之後同一種 motif
-  // 至少有多種角度/鏡射/大小組合，磚內就不再是複製貼上。
-  _groundMotif(ctx, g, x, y, cell, r1, r2, r3 = 0.5) {
-    const mx = x + r1 * cell;
-    const my = y + r2 * cell;
-    const rot = (r3 - 0.5) * 1.5;          // ±43°
-    const sz = 0.75 + r3 * 0.6;            // 0.75 ~ 1.35 尺寸分級
-    ctx.save();
-    ctx.translate(mx, my);
-    ctx.rotate(rot);
-    if (r3 > 0.5) ctx.scale(-1, 1);        // 一半鏡射
-    switch (g.motif) {
-      case 'panel': {
-        // 實驗室金屬板接縫 (與主網格錯位的淡框) + 少數鉚釘
-        const h2 = cell * 0.22 * sz;
-        ctx.strokeStyle = g.motifColor;
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(-h2, -h2, h2 * 2, h2 * 2);
-        if (r2 > 0.72) {
-          ctx.fillStyle = g.accent;
-          ctx.beginPath();
-          ctx.arc(0, 0, 1.6 * sz, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        break;
-      }
-      case 'crystal': {
-        // 雪地冰晶簇: 3-5 支半透明藍白三角 (支數與長度都吃 r3)
-        ctx.fillStyle = g.motifColor;
-        const base = 3 + Math.floor(r3 * 3);
-        for (let i = 0; i < base; i++) {
-          const a = -Math.PI / 2 + (i - (base - 1) / 2) * 0.55 + (r2 - 0.5) * 0.4;
-          const len = (5 + r1 * 12 + i * 2) * sz;
-          ctx.beginPath();
-          ctx.moveTo(Math.cos(a + Math.PI / 2) * 3.4, Math.sin(a + Math.PI / 2) * 3.4);
-          ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
-          ctx.lineTo(-Math.cos(a + Math.PI / 2) * 3.4, -Math.sin(a + Math.PI / 2) * 3.4);
-          ctx.closePath();
-          ctx.fill();
-        }
-        break;
-      }
-      case 'lava': {
-        // 熔爐龜裂地殼: 暗色裂縫 + 透出橙紅餘燼光點 (裂縫數 2~3 且走向可變)
-        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-        ctx.lineWidth = 1.6;
-        const lines = r3 > 0.6 ? 3 : 2;
-        for (let i = 0; i < lines; i++) {
-          const off = (i - (lines - 1) / 2) * 9;
-          ctx.beginPath();
-          ctx.moveTo(-13 * sz, off + (i ? 11 : -7) * sz);
-          ctx.lineTo(-3 * sz, off + (i ? 4 : 2) * sz);
-          ctx.lineTo(9 * sz, off + (i ? -7 : 10) * sz);
-          ctx.stroke();
-        }
-        ctx.shadowColor = g.accent;
-        ctx.shadowBlur = 8;
-        ctx.fillStyle = g.accent;
-        ctx.beginPath();
-        ctx.arc((r2 - 0.5) * 15, (r1 - 0.5) * 15, 1.4 + r2 * 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        break;
-      }
-      case 'void': {
-        // 深淵虛空: 淡紫同心弧符文 + 星塵點 (弧半徑/張角/條數都吃 r3)
-        ctx.strokeStyle = g.motifColor;
-        ctx.lineWidth = 1;
-        const r0 = (4 + r2 * 8) * sz;
-        const span = 1.6 + r3 * 1.8;
-        ctx.beginPath();
-        ctx.arc(0, 0, r0, r1 * 6.283, r1 * 6.283 + span);
-        ctx.stroke();
-        if (r3 > 0.72) {
-          ctx.beginPath();
-          ctx.arc(0, 0, r0 * 0.55, r1 * 6.283 + 2, r1 * 6.283 + 2 + span);
-          ctx.stroke();
-        }
-        ctx.fillStyle = g.accent;
-        ctx.beginPath();
-        ctx.arc(11, -7, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      }
-      default: {
-        // 商業街柏油裂紋 + 偶發霓虹微光裂縫
-        // 三種模板：單折線 / 分岔 / 雙折線，避免每格都是同一條裂縫
-        const tmpl = Math.floor(r3 * 3) % 3;
-        ctx.strokeStyle = g.motifColor;
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        if (tmpl === 0) {
-          ctx.moveTo(-15 * sz, (r2 - 0.5) * 17);
-          ctx.lineTo(-4 * sz, (r1 - 0.5) * 10);
-          ctx.lineTo(11 * sz, (r2 - 0.5) * 19);
-        } else if (tmpl === 1) {
-          ctx.moveTo(-16 * sz, (r2 - 0.5) * 12);
-          ctx.lineTo(0, (r1 - 0.5) * 8);
-          ctx.lineTo(8 * sz, (r2 - 0.5) * 16);
-          ctx.moveTo(0, (r1 - 0.5) * 8);
-          ctx.lineTo(-2 * sz, 13 * sz);
-        } else {
-          ctx.moveTo(-14 * sz, -9 * sz);
-          ctx.lineTo(2 * sz, -1 * sz);
-          ctx.lineTo(14 * sz, -11 * sz);
-          ctx.moveTo(2 * sz, -1 * sz);
-          ctx.lineTo(6 * sz, 10 * sz);
-        }
-        ctx.stroke();
-        if (r1 > 0.62) {
-          ctx.strokeStyle = g.accent;
-          ctx.lineWidth = 1;
-          ctx.shadowColor = g.accent;
-          ctx.shadowBlur = 6;
-          ctx.beginPath();
-          ctx.moveTo(-6, 4);
-          ctx.lineTo(6, -3);
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-        }
-        break;
-      }
-    }
-    ctx.restore();
-  }
-  // ── 地面殘跡 (血漬/焦痕，Soulstone 風格) ──
-  addDecal(x, y, r, fill, alpha = 0.5, accent = null, life = FX.decalLife) {
-    if (this.decals.length >= FX.decalCap) this.decals.shift();
-    this.decals.push({
-      x: x + (Math.random() - 0.5) * r * 0.4,
-      y: y + (Math.random() - 0.5) * r * 0.4,
-      r: r * (0.8 + Math.random() * 0.4),
-      life,
-      maxLife: life,
-      fill,
-      a: alpha,
-      accent,
-    });
-  }
-
   _hexRgb(hex) {
     const n = parseInt(hex.slice(1), 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
-
-  drawDecals(ctx, cam) {
-    for (const d of this.decals) {
-      const sx = d.x - cam.x;
-      const sy = d.y - cam.y;
-      const m = d.r + 30;
-      if (sx < -m || sx > this.vw + m || sy < -m || sy > this.vh + m) continue;
-      const p = d.life / d.maxLife; // 1 → 0，隨時間淡出
-      ctx.save();
-      ctx.globalAlpha = d.a * Math.min(1, p * 1.8);
-      ctx.fillStyle = `rgba(${d.fill},0.85)`;
-      ctx.beginPath();
-      ctx.ellipse(sx, sy, d.r * 0.95, d.r * 0.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-      if (d.accent) {
-        ctx.globalAlpha = d.a * p;
-        ctx.strokeStyle = d.accent;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.ellipse(sx, sy, d.r * 0.95, d.r * 0.6, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-  }
 }
+
 
 // 啟動遊戲
 window.addEventListener('DOMContentLoaded', () => {

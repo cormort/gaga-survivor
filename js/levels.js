@@ -33,7 +33,7 @@ export const LEVELS = {
         accent: 'rgba(0,229,255,0.10)',
         // 密度旋鈕 (相對於引擎預設值；1 = 不變)。讓「稀疏的商業街」與
         // 「密集的金屬實驗室」用同一套繪製程式碼卻長得完全不一樣。
-        density: { stain: 0.6, stainRadius: 1, motif: 1.6, grain: 1, accents: 1 },
+        density: { stain: 0.6, stainRadius: 1, motif: 1.6, grain: 1, accents: 1, base: 1.15 },  // base = 材質底層起伏（柏油坑疤多）
         // 宏觀結構：棋盤式街廓 + 霓虹招牌/報廢公車地標
         macro: {
           kind: 'road', cell: 880,
@@ -90,7 +90,7 @@ export const LEVELS = {
         motif: 'panel',      // 金屬板接縫 + 偶發腐蝕斑
         motifColor: 'rgba(140,255,190,0.07)',
         accent: 'rgba(0,245,155,0.08)',
-        density: { stain: 0.78, stainRadius: 1.1, motif: 2.0, grain: 0.6, accents: 1.2 },
+        density: { stain: 0.78, stainRadius: 1.1, motif: 2.0, grain: 0.6, accents: 1.2, base: 0.8 },   // 金屬地板平整
         // 宏觀結構：大型金屬板塊 + 艙位圓環 + 培養槽/反應槽地標
         macro: {
           kind: 'plates', cell: 720,
@@ -149,7 +149,7 @@ export const LEVELS = {
         motif: 'crystal',    // 凍土冰晶簇 + 霜紋
         motifColor: 'rgba(200,240,255,0.5)',
         accent: 'rgba(160,220,255,0.22)',
-        density: { stain: 0.34, stainRadius: 1.25, motif: 2.2, grain: 1.4, accents: 1.1 },
+        density: { stain: 0.34, stainRadius: 1.25, motif: 2.2, grain: 1.4, accents: 1.1, base: 0.75 }, // 雪面起伏平緩
         // 宏觀結構：大面積冰原與凍湖 (長裂縫貫穿) + 墜毀雷達碟/冰晶塔地標
         macro: {
           kind: 'icefield', cell: 950,
@@ -210,7 +210,7 @@ export const LEVELS = {
         motif: 'lava',       // 龜裂熔岩地殼，裂縫透出橙紅餘燼
         motifColor: 'rgba(255,120,0,0.28)',
         accent: 'rgba(255,170,40,0.5)',
-        density: { stain: 0.82, stainRadius: 0.9, motif: 1.8, grain: 1, accents: 1.3 },
+        density: { stain: 0.82, stainRadius: 0.9, motif: 1.8, grain: 1, accents: 1.3, base: 1.3 },     // 玄武岩最粗獷
         // 宏觀結構：貫穿的岩漿渠道切開玄武岩平台 + 巨型齒輪/熔岩瀑布地標
         macro: {
           kind: 'channels', cell: 1050,
@@ -271,7 +271,7 @@ export const LEVELS = {
         motif: 'void',       // 虛空符文刻痕與星塵
         motifColor: 'rgba(200,160,255,0.16)',
         accent: 'rgba(255,255,255,0.14)',
-        density: { stain: 0.30, stainRadius: 1.4, motif: 1.4, grain: 1.2, accents: 1 },
+        density: { stain: 0.30, stainRadius: 1.4, motif: 1.4, grain: 1.2, accents: 1, base: 0.9 },
         // 宏觀結構：虛空裂縫與符文圓陣 + 方尖碑地標
         macro: {
           kind: 'rifts', cell: 1100,
