@@ -8,6 +8,9 @@ import { ELITE_AFFIXES } from '../config.js';
 
 export const MAX_ENEMIES = 250;   // 場上敵人硬上限 (main.js 的孵化/裂解上限由此推導)
 
+// 精英詞綴清單只算一次 (原本每生成一隻怪就 Object.keys 一次)
+const ELITE_KEYS = Object.keys(ELITE_AFFIXES);
+
 export class Spawner {
   constructor() {
     this.setLevel('street');
@@ -74,13 +77,18 @@ export class Spawner {
     // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)
     const scale = enemyScale(gameTime, level, rules);
     for (let i = 0; i < batch; i++) {
-      // 生成距離隨時間縮短 (480 → 340)：後期玩家的清場半徑遠大於此，
+      // 生成距離隨時間縮短 (520 → 440)：後期玩家的清場半徑遠大於此，
       // 生得太遠等於「還沒靠近就被打掉」，威脅永遠傳不到玩家身上。
-      const spawnDist = Math.max(340, 480 - gameTime * 0.16) + Math.random() * 120;
+      // 但下限不能太低 —— 原本 340 在世界座標下已經落在 1280×720 視野內
+      // (半對角線約 735)，後期怪物會直接在玩家眼前冒出來。
+      const spawnDist = Math.max(440, 520 - gameTime * 0.12) + Math.random() * 120;
       const pos = this.getSpawnPosition(player, spawnDist);
       const e = new Enemy(pickEnemy(wave.pool), pos.x, pos.y, scale);
       this.rollElite(e, gameTime);
       enemies.push(e);
+      // 每一隻都要檢查上限：原本只在迴圈外檢查一次，batch 5 時實際上限是 254，
+      // 而 HATCH_ENEMY_CAP 是從名目的 250 推導的
+      if (enemies.length >= MAX_ENEMIES) break;
     }
   }
 
@@ -91,7 +99,7 @@ export class Spawner {
     // 精英，ELITE_AFFIXES 的四種詞綴等於閒置。改成 90 秒到 8%、約 5 分半到頂。
     const chance = Math.min(0.12, 0.035 + gameTime / 2000) * (this.rules || RULE_DEFAULTS).eliteChanceMul;
     if (Math.random() >= chance) return;
-    const keys = Object.keys(ELITE_AFFIXES);
+    const keys = ELITE_KEYS;
     enemy.makeElite(keys[Math.floor(Math.random() * keys.length)]);
   }
 
@@ -105,6 +113,11 @@ export class Spawner {
     // 關卡專屬技能：charge 內建衝鋒，額外技能由 def.behaviors 帶入
     boss.behaviors = Array.isArray(def.behaviors) && def.behaviors.length > 0 ? def.behaviors.slice() : [];
     boss.skillTimer = 4 + Math.random() * 2;
+    // 每隻 Boss 的移動與傷害由關卡資料決定。原本 12 隻 Boss 全部共用
+    // ENEMY_TYPES.boss 的同一組 speed 75 / damage 28 / radius 40，彼此只差
+    // 血量與技能子集 —— 「冰霜機甲」和「極地穿山甲王」打起來一模一樣。
+    if (def.speed) boss.speed = def.speed;
+    if (def.damage) boss.damage = def.damage;
 
     if (def.final) {
       boss.isFinal = true;

@@ -18,6 +18,7 @@ import { CHARACTERS, CHARACTER_ORDER } from './characters.js';
 import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy, enemyScale, mergeRules, getDailyChallenge } from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
+import { GroundRenderer } from './systems/Ground.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
 import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, salvageValue, RARITIES } from './items.js';
 import { MODES, MODE_ORDER, getMode } from './modes.js';
@@ -52,6 +53,19 @@ const DRIFT_SPEED = 55;        // px/s
 // 加上升級卡與寶箱，後期幾乎在看選單而不是在玩。改成愈後面愈稀疏。
 const KILL_MILESTONES = [100, 250, 500, 900, 1400, 2000, 2700];
 const KILL_MILESTONE_STEP = 900;   // 超出表格後的固定間隔
+
+// 均勻洗牌 (Fisher-Yates)。原本三處用 sort(() => Math.random() - 0.5) ——
+// 那是實作相依且有偏的，第一張牌的權重與其他張不同，於是「隨機」祝福三選一
+// 與陣亡保裝都不是真的隨機。同檔 1989 行早就有正確版本，這裡統一抽出來。
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = arr[i];
+    arr[i] = arr[j];
+    arr[j] = t;
+  }
+  return arr;
+}
 
 function nextKillMilestone(current) {
   for (const m of KILL_MILESTONES) if (m > current) return m;
@@ -96,8 +110,14 @@ class Game {
     this.player = new Player(0, 0, this.characterId);
     this.player.game = this;
     this.weaponManager = new WeaponManager(this.player);
+    // 武器系統也要能呼叫回遊戲層 (宙斯連鎖閃電 game.chainShock、商人臨時增益
+    // 在被動重算後補回)。先前只設了 player.game，WeaponManager 自己讀的
+    // this.game 永遠是 null，於是 `this.game?.chainShock(...)` 靜默不執行 ——
+    // 宙斯型態的連鎖電弧從來沒有生效過。
+    this.weaponManager.game = this;
     this.spawner = new Spawner();
     this.particles = new ParticleSystem();
+    this.ground = new GroundRenderer();
     this.ui = new UIManager();
 
     // 實體清單
@@ -151,7 +171,10 @@ class Game {
     this._chestsOpened = 0;
     this._evosThisRun = 0;
     this._goldRushTimer = 0;       // 淘金狂潮特殊卡的計時
-    this._tempBuffs = [];          // 商人臨時增益 [{id, timer, revert}]
+    this._tempBuffs = [];          // 商人臨時增益 [{id, timer, revert, reapply}]
+    this._settled = false;         // 本局是否已結算 (防止重複入帳)
+    this._timeStopTimer = 0;       // 時停懷錶：敵方子彈凍結剩餘秒數
+    this._settling = false;        // 結算進行中 (防止遞迴)
 
     // 統計數據
     this.gameTime = 0;
@@ -543,7 +566,11 @@ class Game {
     if (this.state !== 'PLAYING' || !this.player || !this.mode.turrets) return;
     const upgradeCost = 50;
     const standardTurrets = this.turrets
-      .filter((t) => t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125)
+      // 必須同時是「砲塔」這個設施類型：電網/淨化裝置/拒馬的 variant 預設也是
+      // 'standard'，而 upgrade() 對非砲塔直接 return —— 原本會扣 50 金幣、
+      // 播進化音效、顯示「進化完畢」，實際什麼都沒變
+      .filter((t) => t.facilityType === 'turret' && t.variant === 'standard' &&
+        Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125)
       .sort((a, b) =>
         Math.hypot(a.x - this.player.x, a.y - this.player.y) - Math.hypot(b.x - this.player.x, b.y - this.player.y)
       );
@@ -593,6 +620,8 @@ class Game {
     this.ui.say(`💂 傭兵報到！(${cost} 🪙) 擊殺敵人可升級`, '#3ddc84', 2.4);
     this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
+    // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)
+    this.ui.updateFacilityButtons(this.gold, (type) => this.getFacilityCost(type));
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
   }
 
@@ -664,7 +693,12 @@ class Game {
   // 實際生效的金幣乘數 (夾在上限內)。metaGoldMul 本身不夾 —— 淘金潮是 ×2 後再 ÷2
   // 還原，先夾住會把還原算錯。
   goldMul() {
-    return Math.min(GOLD_MUL_CAP, this.metaGoldMul || 1);
+    // 淘金狂潮與幸運藥劑都改成「讀計時器」而不是改動 metaGoldMul：
+    // 乘數本身可以隨時被重算，不會再有「到期還原一次」造成永久殘留的問題。
+    let mul = this.metaGoldMul || 1;
+    if (this._goldRushTimer > 0) mul *= 2;
+    if (this.player && this.player.luckPotionTimer > 0) mul *= 2;
+    return Math.min(GOLD_MUL_CAP, mul);
   }
 
   // 打擊微頓挫 (Hitstop)
@@ -822,35 +856,40 @@ class Game {
         break;
 
       case 'atk_potion':
-        this.player.atkPotionTimer = Math.max(this.player.atkPotionTimer, 15);
+        this.player.atkPotionTimer = Math.max(this.player.atkPotionTimer, cDef.duration || 15);
         sound.playEvoFanfare();
         this.particles.createShockwave(this.player.x, this.player.y, 130, '#ff4d4d');
         this.ui.say('⚔️ 力量藥水：15 秒內攻擊力 +40%！', '#ff4d4d', 2.5);
         break;
 
       case 'shield_potion':
-        this.player.shieldPotionTimer = Math.max(this.player.shieldPotionTimer, 15);
+        this.player.shieldPotionTimer = Math.max(this.player.shieldPotionTimer, cDef.duration || 15);
         sound.playEvoFanfare();
         this.particles.createShockwave(this.player.x, this.player.y, 130, '#4da6ff');
         this.ui.say('🛡️ 鐵壁藥水：15 秒內受傷減免 50%！', '#4da6ff', 2.5);
         break;
 
       case 'luck_potion':
-        this.player.luckPotionTimer = Math.max(this.player.luckPotionTimer, 20);
+        this.player.luckPotionTimer = Math.max(this.player.luckPotionTimer, cDef.duration || 20);
         sound.playEvoFanfare();
         this.particles.createShockwave(this.player.x, this.player.y, 130, '#33ff99');
         this.ui.say('🍀 幸運藥水：20 秒暴擊率 +25% & 金幣加倍！', '#33ff99', 2.5);
         break;
 
-      case 'stopwatch':
+      case 'stopwatch': {
+        // 秒數改讀資料表 (原本硬寫 5.0，與表上的 3.5 不符)，並且真的把敵方子彈
+        // 一起停住 —— 說明與 README 都寫了「與敵方子彈」，但先前只暈敵人。
+        const dur = cDef.duration || 5;
         sound.playExplosion();
         this.camera.shake = Math.max(this.camera.shake, 10);
         this.particles.createShockwave(this.player.x, this.player.y, 280, '#00ffff');
         for (const e of this.enemies) {
-          e.applyStun(5.0);
+          e.applyStun(dur);
         }
-        this.ui.say('⏱️ 時停懷錶：全場時間凍結 5 秒！', '#00ffff', 3.0);
+        this._timeStopTimer = dur;
+        this.ui.say(`⏱️ 時停懷錶：全場時間凍結 ${dur} 秒！`, '#00ffff', 3.0);
         break;
+      }
 
       case 'holy_water':
         sound.playExplosion();
@@ -1133,6 +1172,11 @@ class Game {
     this.player = new Player(this.core ? this.core.x : 0, spawnY, this.characterId);
     this.player.game = this;
     this.weaponManager = new WeaponManager(this.player);
+    // 武器系統也要能呼叫回遊戲層 (宙斯連鎖閃電 game.chainShock、商人臨時增益
+    // 在被動重算後補回)。先前只設了 player.game，WeaponManager 自己讀的
+    // this.game 永遠是 null，於是 `this.game?.chainShock(...)` 靜默不執行 ——
+    // 宙斯型態的連鎖電弧從來沒有生效過。
+    this.weaponManager.game = this;
     this.applyMetaTalents();
     this.player.modeDmgMul = this.mode.weaponMul;
     this.weaponManager.applyPassives();
@@ -1254,6 +1298,9 @@ class Game {
     this._evosThisRun = 0;
     this._goldRushTimer = 0;
     this._tempBuffs = [];
+    this._eventSpawnMul = 1;   // 迷你事件的生成倍率殘留 (原本只有 endMiniEvent 會清)
+    this._settled = false;     // 新的一局可以再結算一次
+    this._timeStopTimer = 0;   // 時停懷錶的敵方子彈凍結
     this.ui.updateBlessings([]);
     this.ui.updateSynergies([]);
     this.ui.updateEventBanner(null);
@@ -1399,8 +1446,11 @@ class Game {
   // 對外統一的傷害入口 (角色特質、道具都走這裡，才會計入傷害統計與跳字)
   damageEnemy(enemy, damage, knockback, sourceX, sourceY, weaponId = null) {
     enemy.takeDamage(damage, knockback, sourceX, sourceY);
-    if (weaponId) this.weaponManager.recordDamage(weaponId, damage);
-    this.particles.createDamageText(enemy.x, enemy.y, damage, false);
+    // 顯示與統計都要用「實際扣除」的值：裝甲/盾衛/標記會改變最終傷害，
+    // 用傳入值會虛報 (打防暴盾衛時畫面數字是實際的兩倍以上)
+    const applied = enemy.lastDamageTaken || damage;
+    if (weaponId) this.weaponManager.recordDamage(weaponId, applied);
+    this.particles.createDamageText(enemy.x, enemy.y, applied, false);
   }
 
   // Boss 專屬技能效果 (由 Enemy.updateBoss 依冷卻觸發)
@@ -1494,6 +1544,8 @@ class Game {
   }
 
   updateEnemyProjectiles(dt) {
+    // 時停懷錶：敵方子彈原地凍結 (說明承諾的效果)
+    if (this._timeStopTimer > 0) return;
     for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
       const ep = this.enemyProjectiles[i];
       ep.update(dt);
@@ -1823,7 +1875,7 @@ class Game {
   }
 
   // 里程碑獎勵：每 100 殺交替 [舊獎勵 / 祝福二選一]，每 2 分鐘一次後勤補給
-  checkMilestones() {
+  checkMilestones(dt) {
     if (this.state !== 'PLAYING') return;
     if (this._pendingBlessings.length > 0) {
       this.offerBlessingChoice(this._pendingBlessings.shift());
@@ -1849,9 +1901,9 @@ class Game {
       if (this.state !== 'PLAYING') break;
     }
     // 局內事件排程
-    this.checkEventSchedule();
+    this.checkEventSchedule(dt);
     // 商人排程 (僅生存者模式)
-    this.checkMerchantSchedule();
+    this.checkMerchantSchedule(dt);
   }
 
   grantMilestone(tag, title) {
@@ -1907,7 +1959,7 @@ class Game {
       return;
     }
     // 隨機抽兩個不重複的祝福
-    const shuffled = pool.sort(() => Math.random() - 0.5);
+    const shuffled = shuffleInPlace(pool.slice());
     const choices = shuffled.slice(0, Math.min(2, shuffled.length));
     this.state = 'BLESSING_MODAL';
     sound.pauseBGM();
@@ -1950,7 +2002,6 @@ class Game {
     if (this._goldRushTimer > 0) {
       this._goldRushTimer -= dt;
       if (this._goldRushTimer <= 0) {
-        this.metaGoldMul /= 2;
         this.ui.say('淘金狂潮結束', '#ffb703', 1.5);
       }
     }
@@ -1967,9 +2018,11 @@ class Game {
   }
 
   // ── 方向 2：隨機局內事件 ──
-  checkEventSchedule() {
+  checkEventSchedule(dt) {
     if (this.activeEvent) {
-      this.activeEvent.remaining -= 1 / 60; // 近似，實際 dt 在 update 裡已過
+      // 原本寫死 -= 1/60：30fps 時事件持續兩倍、144fps 時只剩 0.42 倍
+      this.activeEvent.remaining -= dt;
+      this.ui.updateEventTimer(this.activeEvent.remaining);
       if (this.activeEvent.remaining <= 0) {
         this.endMiniEvent();
       }
@@ -2118,9 +2171,9 @@ class Game {
   }
 
   // ── 方向 5：局內商人 ──
-  checkMerchantSchedule() {
+  checkMerchantSchedule(dt) {
     if (this.merchant || !this.mode || this.mode.id !== 'survivor') return;
-    this._merchantTimer -= 1 / 60;
+    this._merchantTimer -= dt;   // 原本寫死 1/60，120Hz 時商人會提早一倍出現
     if (this._merchantTimer <= 0) {
       this.spawnMerchant();
       this._merchantTimer = 150; // 下次 2.5 分鐘後
@@ -2133,7 +2186,7 @@ class Game {
     const mx = this.player.x + Math.cos(ang) * dist;
     const my = this.player.y + Math.sin(ang) * dist;
     // 隨機挑 3 件商品
-    const shuffled = [...MERCHANT_ITEMS].sort(() => Math.random() - 0.5);
+    const shuffled = shuffleInPlace([...MERCHANT_ITEMS]);
     this.merchant = {
       x: mx, y: my,
       timer: 25, // 停留 25 秒
@@ -2206,6 +2259,8 @@ class Game {
         this._tempBuffs.push({
           id: item.id, timer: item.duration,
           revert: (p) => { p.cdrMultiplier = Math.min(1, p.cdrMultiplier / 0.6); },
+          // applyPassives 會把 cdrMultiplier 從頭算，這裡讓重算後能補回 buff
+          reapply: (p) => { p.cdrMultiplier = Math.max(0.3, p.cdrMultiplier * 0.6); },
         });
         break;
       case 'energy_shield':
@@ -2217,6 +2272,7 @@ class Game {
         this._tempBuffs.push({
           id: item.id, timer: item.duration,
           revert: (p) => { p.magnetMultiplier /= 3; },
+          reapply: (p) => { p.magnetMultiplier *= 3; },
         });
         break;
       case 'orbital_strike':
@@ -2276,7 +2332,7 @@ class Game {
       charClears.add(this.characterId);
       d.charClears = [...charClears];
       save.flush();
-      stats.clearedWithAllChars = charClears.size >= 4;
+      stats.clearedWithAllChars = charClears.size >= CHARACTER_ORDER.length;
     }
     const newlyUnlocked = [];
     const unlocked = new Set(save.data.achievements || []);
@@ -2369,6 +2425,7 @@ class Game {
 
   update(dt) {
     this.gameTime += dt;
+    if (this._timeStopTimer > 0) this._timeStopTimer -= dt;
 
     // 1. 更新特工玩家
     this.player.update(dt, this.input.vector);
@@ -2408,6 +2465,7 @@ class Game {
     // 守塔模式：雜兵朝基地核心進攻；Boss 仍鎖玩家 (技能全以玩家為原點，且核心撐不住 Boss)
     const mobTarget = this.core && this.mode.enemyTarget === 'core' ? this.core : this.player;
     for (const enemy of this.enemies) {
+      if (enemy.isDead) continue;
       enemy.update(dt, enemy.isBoss ? this.player : mobTarget, {
         onExplode: (boomer) => {
           // 自爆蟲引爆
@@ -2422,6 +2480,28 @@ class Game {
         onBossSkill: (boss, act) => this.handleBossSkill(boss, act),
         onShoot: (shooter, projData) => this.spawnEnemyProjectile(shooter, projData),
         onHatch: (e) => this.spawnHatchling(e),
+        onSlam: (e, slam) => {
+          // 攻城巨像踏地：範圍震波對特工造成傷害，也把周圍雜兵震開
+          // (原本巨像只有「走得慢、血很厚」，沒有任何自己的節奏)
+          this.particles.createShockwave(e.x, e.y, slam.radius, '#ffb703');
+          this.particles.createExplosion(e.x, e.y, slam.radius * 0.6);
+          this.camera.shake = Math.max(this.camera.shake, 10);
+          const sdx = this.player.x - e.x;
+          const sdy = this.player.y - e.y;
+          if (Math.sqrt(sdx * sdx + sdy * sdy) <= slam.radius + this.player.radius) {
+            if (this.player.takeDamage(slam.dmg)) {
+              this.particles.createHurtText(this.player.x, this.player.y, slam.dmg);
+            }
+          }
+          for (const other of this.enemies) {
+            if (other === e || other.isDead || other.isBoss) continue;
+            const odx = other.x - e.x;
+            const ody = other.y - e.y;
+            if (odx * odx + ody * ody <= slam.radius * slam.radius) {
+              other.takeDamage(0, 5, e.x, e.y);
+            }
+          }
+        },
         onBurn: (e, dmg, src) => this.weaponManager.recordDamage(src, dmg),
       });
 
@@ -2456,6 +2536,10 @@ class Game {
         }
       }
     }
+
+    // 4.1 怪物互相推擠 (分離力)。沒有這一步的話，全部敵人會收斂到同一個座標上
+    // 變成一坨在移動 —— 這是「敵人看起來很單調」最強的單一來源，比美術更關鍵。
+    this.applyEnemySeparation(dt);
 
     // 4.2 更新敵方投射物與判定
     this.updateEnemyProjectiles(dt);
@@ -2668,12 +2752,122 @@ class Game {
     // 13. 更新 UI
     this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
+    // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)
+    this.ui.updateFacilityButtons(this.gold, (type) => this.getFacilityCost(type));
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
     this.ui.updateBossHUD(this.boss);
     this.ui.setObjective(this.objectiveText());
 
     // 14. 里程碑獎勵 (擊殺數 / 存活時間)
-    this.checkMilestones();
+    this.checkMilestones(dt);
+  }
+
+  // 敵人互相推擠 (separation)。
+  //
+  // 為什麼需要：所有近戰怪的移動程式碼只有「朝目標點直線前進」一行，沒有任何
+  // 鄰居排斥，於是 250 隻上限下整群怪會塌成同一個座標、像一坨在移動。這是視覺上
+  // 最強的單調來源，也讓「包夾」「繞背」這類戰術完全不存在。
+  //
+  // 成本控制：用空間雜湊 (44 單位一格) 把鄰居查詢從 O(n²) 壓成 O(n)；格子用
+  // 平鋪的鏈結串列 (head/next + frame stamp)，暖機後每幀零配置 —— 原本若用
+  // Map<cell, array> 每幀會重建數百個小陣列，反而製造 GC 壓力。
+  applyEnemySeparation(dt) {
+    const list = this.enemies;
+    const n = list.length;
+    if (n < 2) return;
+
+    const CELL = 44;
+    const CW = 96;                       // 4000 / 44 ≈ 91，取 96 留邊
+    const B = GAME_CONFIG.WORLD_BOUNDS;
+    if (!this._sep) {
+      this._sep = {
+        head: new Int32Array(CW * CW),
+        stamp: new Int32Array(CW * CW),
+        next: new Int32Array(512),
+        frame: 0,
+      };
+    }
+    const sep = this._sep;
+    if (sep.next.length < n) sep.next = new Int32Array(Math.max(256, n * 2));
+    sep.frame++;
+    if (sep.frame > 2000000000) {        // 極端長局才需要，整批重置
+      sep.stamp.fill(0);
+      sep.frame = 1;
+    }
+
+    const cellI = (v, min) => {
+      const c = Math.floor((v - min) / CELL);
+      return c < 0 ? 0 : (c >= CW ? CW - 1 : c);
+    };
+
+    // 建立雜湊格
+    for (let i = 0; i < n; i++) {
+      const e = list[i];
+      if (e.isDead || e.isBoss) continue;
+      const ai = e.ai;
+      if (!ai || !(ai.sepMul > 0)) continue;
+      const cell = cellI(e.x, B.minX) * CW + cellI(e.y, B.minY);
+      if (sep.stamp[cell] !== sep.frame) {
+        sep.stamp[cell] = sep.frame;
+        sep.head[cell] = -1;
+      }
+      sep.next[i] = sep.head[cell];
+      sep.head[cell] = i;
+    }
+
+    const STRENGTH = 90;                 // 最大推擠速度 (px/s)：必須大於雜兵的逼近速度，
+                                         // 否則推力永遠打不贏「全部朝同一點收斂」
+    const cxMin = cellI(B.minX, B.minX);
+    const cyMin = cellI(B.minY, B.minY);
+
+    for (let i = 0; i < n; i++) {
+      const e = list[i];
+      if (e.isDead || e.isBoss) continue;
+      const ai = e.ai;
+      if (!ai || !(ai.sepMul > 0)) continue;
+
+      const ecx = cellI(e.x, B.minX);
+      const ecy = cellI(e.y, B.minY);
+      let px = 0;
+      let py = 0;
+
+      for (let ox = -1; ox <= 1; ox++) {
+        const gx = ecx + ox;
+        if (gx < cxMin || gx >= CW) continue;
+        for (let oy = -1; oy <= 1; oy++) {
+          const gy = ecy + oy;
+          if (gy < cyMin || gy >= CW) continue;
+          const cell = gx * CW + gy;
+          if (sep.stamp[cell] !== sep.frame) continue;
+          for (let j = sep.head[cell]; j !== -1; j = sep.next[j]) {
+            if (j === i) continue;
+            const o = list[j];
+            const dx = e.x - o.x;
+            const dy = e.y - o.y;
+            const minD = (e.radius + o.radius) * 0.92;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= minD * minD) continue;
+            const d = Math.sqrt(d2) || 0.01;
+            const w = (minD - d) / minD;   // 0..1：重疊越深推得越用力
+            px += (dx / d) * w;
+            py += (dy / d) * w;
+          }
+        }
+      }
+
+      const mag = Math.sqrt(px * px + py * py);
+      if (mag < 0.001) continue;
+      const push = Math.min(1, mag) * STRENGTH * ai.sepMul * dt;
+      const nx = (px / mag) * push;
+      const ny = (py / mag) * push;
+      e.x = Math.max(B.minX, Math.min(B.maxX, e.x + nx));
+      e.y = Math.max(B.minY, Math.min(B.maxY, e.y + ny));
+    }
+  }
+
+  // 地面殘跡的薄包裝：把陣列交給 GroundRenderer（呼叫點不必知道它搬去哪裡了）
+  addDecal(x, y, r, fill, alpha = 0.5, accent = null, life = FX.decalLife) {
+    this.ground.addDecal(this.decals, x, y, r, fill, alpha, accent, life);
   }
 
   checkProjectileCollisions() {
@@ -2757,7 +2951,7 @@ class Game {
         }
         // 商人火魔藥附魔
         if (this.player._fireEnchant) {
-          enemy.applyBurn(CHARGE.burn.dps, 2, p.weaponId);
+          enemy.applyBurn(CHARGE.burn.dps, CHARGE.burn.duration, p.weaponId);
         }
         // 協同：導電刀鋒 (苦無 20% 機率觸發落雷)
         if (this.player.synergies?.kunaiThunderChance &&
@@ -2766,11 +2960,48 @@ class Game {
           this.chainShock(enemy, Math.round(actualDmg * 0.8), 'lightning');
         }
 
+        // 基隆型態的追蹤印記：記在敵人身上，受傷 +25% (原本 markOnHit 只被
+        // 存進投射物就沒有人讀，_markedTimer 只會被扣、永遠不會被設)
+        if (p.markOnHit) enemy.applyMark(p.markDur, p.markBonus);
         const died = enemy.takeDamage(actualDmg, p.knockback, p.x, p.y);
         if (died && p.mercOwner) p.mercOwner.gainKill(); // 傭兵擊殺 → 經驗升級
         this.weaponManager.recordDamage(p.weaponId, actualDmg);
         this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit);
         sound.playHit();
+
+        // 塔納托斯：每次命中傷害 +bounceDmgGrowth，第 implosionAt 次命中引發虛空引爆。
+        // 先前 thanatosBounces 只被寫入一次、從未遞增或讀取，整個型態不存在。
+        if (p.implosionAt > 0) {
+          p.thanatosBounces++;
+          if (p.thanatosBounces >= p.implosionAt) {
+            p.isDead = true;
+            this.camera.shake = Math.max(this.camera.shake, 12);
+            this.particles.createExplosion(p.x, p.y, p.implosionRadius);
+            this.particles.createShockwave(p.x, p.y, p.implosionRadius, '#b388ff');
+            sound.playExplosion();
+            for (const nearE of this.enemies) {
+              if (nearE.isDead) continue;
+              const ndx = nearE.x - p.x;
+              const ndy = nearE.y - p.y;
+              if (ndx * ndx + ndy * ndy <= (p.implosionRadius + nearE.radius) ** 2) {
+                nearE.takeDamage(p.implosionDamage, 8, p.x, p.y);
+                this.weaponManager.recordDamage(p.weaponId, nearE.lastDamageTaken || p.implosionDamage);
+                this.particles.createDamageText(nearE.x, nearE.y, nearE.lastDamageTaken || p.implosionDamage, true, true);
+              }
+            }
+          } else if (p.bounceGrowth > 0) {
+            p.damage = Math.round(p.damage * (1 + p.bounceGrowth));
+          }
+        }
+        // 阿基里斯：每次命中為特工充能跑速 (步進值/上限/秒數都來自型態資料)
+        if (p.aspect === 'achilles' && this.player) {
+          const ach = (WEAPON_ASPECTS.soccer || []).find((a) => a.id === 'achilles');
+          const st = (ach && ach.stats) || {};
+          const step = st.speedBoostPerHit || 0.06;
+          const maxStacks = Math.max(1, Math.round((st.maxSpeedBoost || 0.42) / step));
+          this.player.achillesSpeedStacks = Math.min(maxStacks, (this.player.achillesSpeedStacks || 0) + 1);
+          this.player.achillesSpeedTimer = st.boostDur || 4.0;
+        }
 
         // 蓄能彈效果 (火箭的毒氣走爆炸，不在這裡)
         if (p.charge === 'burn') {
@@ -2778,7 +3009,7 @@ class Game {
         } else if (p.charge === 'chain') {
           this.chainShock(enemy, p.damage, p.weaponId);
         } else if (p.charge === 'freeze') {
-          enemy.applyFreeze(CHARGE.freeze.duration);
+          enemy.applyFreeze(p.freezeDur || CHARGE.freeze.duration);
         } else if (p.charge === 'poison') {
           enemy.applyPoison(CHARGE.poison.duration, p.weaponId);
         }
@@ -2899,8 +3130,11 @@ class Game {
   }
 
   // 蓄能電擊：從命中的敵人往外連跳，每跳傷害衰減
-  chainShock(origin, damage, weaponId) {
-    const { jumps, range, falloff, color } = CHARGE.chain;
+  chainShock(origin, damage, weaponId, jumpsOverride = 0) {
+    const { range, falloff, color } = CHARGE.chain;
+    // 跳躍數可由武器型態指定 (宙斯：chainTargets 4)。先前呼叫端傳了第 4 個
+    // 參數但這裡沒有收，宣告的 4 名敵人永遠只跳 3 次。
+    const jumps = jumpsOverride > 0 ? jumpsOverride : CHARGE.chain.jumps;
     const hit = new Set([origin]);
     let from = origin;
     let dmg = damage;
@@ -3259,7 +3493,9 @@ class Game {
           else e.takeDamage(9999, 12, this.player.x, this.player.y);
         }
         this.particles.createExplosion(this.player.x, this.player.y, 250);
-        this.player.invincible = 3;
+        // Player 用的是 invulnerableTimer，沒有 invincible 這個欄位 ——
+        // 原本這行只是寫了一個沒人讀的屬性，卡片宣稱的「3 秒無敵」完全沒發生
+        this.player.invulnerableTimer = Math.max(this.player.invulnerableTimer || 0, 3);
         this.ui.say('💣 軌道核彈發射！3 秒無敵！', '#ff0055', 3);
         break;
       case 'gene_mutate': {
@@ -3267,7 +3503,11 @@ class Game {
         if (wIds.length > 0) {
           const pickId = wIds[Math.floor(Math.random() * wIds.length)];
           const wItem = this.weaponManager.weapons.get(pickId);
-          wItem.level = Math.min(wItem.level + 2, 7); // 可超過正常上限
+          // 上限是武器自己的 maxLevel。原本硬寫 7，而所有基礎武器 maxLevel 都是 5、
+          // 各等級索引表長度也都是 5 —— 升到 6/7 級會索引到 undefined，
+          // WeaponManager 的 for (i < undefined) 一次都不跑，該武器整局啞火。
+          const maxLv = WEAPONS[pickId].maxLevel || 5;
+          wItem.level = Math.min(wItem.level + 2, maxLv);
           this.ui.say(`🧬 ${WEAPONS[pickId].name} 突變到 LV ${wItem.level}！`, '#00f59b', 2.5);
         }
         break;
@@ -3277,7 +3517,8 @@ class Game {
         break;
       case 'gold_rush':
         this.gold += Math.round(200 * this.goldMul());
-        this.metaGoldMul *= 2;
+        // 只開計時器，不動 metaGoldMul。原本是 metaGoldMul *= 2 再由 goldMul()
+        // 乘一次 → 實際 ×4；而且到期固定 /= 2，30 秒內吃到第二次就永久洩漏 ×2。
         this._goldRushTimer = 30;
         this.ui.say('🪙 淘金狂潮！30 秒金幣翻倍！', '#ffb703', 3);
         break;
@@ -3294,6 +3535,31 @@ class Game {
 
 
   handleGameOver(isVictory = false) {
+    // 結算保護：一局只能結算一次，且結算過程中不能再進來。
+    // _settled 是「本局已結算」旗標 (start() 會重設)，_settling 擋的是結算
+    // 中途的遞迴呼叫 —— 兩者都需要：實測只擋遞迴時，連續呼叫兩次結算會讓
+    // DNA 重複入帳 (60 → 62 → 64)。
+    if (this._settled || this._settling) return;
+    this._settled = true;
+    this._settling = true;
+    try {
+      this.settleRun(isVictory);
+    } catch (err) {
+      // 結算中途拋例外時，state 已經變成 GAME_OVER（update 不會再跑），
+      // 而結算面板是唯一的出口 —— 例外被 loop 的 catch 吞掉就會永久卡死。
+      // 這裡保證一定回得到主選單。
+      console.error('[結算] 流程發生例外，改為直接返回主選單', err);
+      try {
+        this.returnToMenu();
+      } catch (e2) {
+        console.error('[結算] 連返回主選單都失敗', e2);
+      }
+    } finally {
+      this._settling = false;
+    }
+  }
+
+  settleRun(isVictory = false) {
     this.state = 'GAME_OVER';
     sound.stopBGM();
     save.consumeBoosters(); // 本局結算了才真正消耗戰術興奮劑
@@ -3334,8 +3600,10 @@ class Game {
       if (isVictory) {
         for (const it of this.pendingGear) secure(it);
       } else {
-        const shuffled = [...this.pendingGear].sort(() => Math.random() - 0.5);
-        const keepCount = Math.ceil(shuffled.length * 0.5);
+        const shuffled = shuffleInPlace([...this.pendingGear]);
+        // 真正 50%：Math.ceil 在只有 1 件時等於 100% 保留，與說明不符
+        let keepCount = Math.floor(shuffled.length * 0.5);
+        if (shuffled.length % 2 === 1 && Math.random() < 0.5) keepCount++;
         for (const it of shuffled.slice(0, keepCount)) secure(it);
         lostGear.push(...shuffled.slice(keepCount));
       }
@@ -3394,16 +3662,16 @@ class Game {
     };
 
     // 繪製地板漸層 + 網格 (本身即不透明滿版，不需另外清屏)
-    this.drawFloorGrid(renderCam);
+    this.ground.drawFloorGrid(this.ctx, this.level || LEVELS.street, renderCam, this.vw, this.vh, this.gameTime || 0);
 
     // 繪製場景裝飾 (地板之上、掉落物之下)
     drawDecor(this.ctx, renderCam, this.level || LEVELS.street, this.vw, this.vh);
 
     // 地面殘跡 (血漬/焦痕，實體之下)
-    this.drawDecals(this.ctx, renderCam);
+    this.ground.drawDecals(this.ctx, renderCam, this.decals, this.vw, this.vh);
 
     // 全域色調 overlay (Soulstone 風格調光：場景染上關卡色，角色保持原色)
-    this.drawColorGrade();
+    this.ground.drawColorGrade(this.ctx, this.vw, this.vh, this.level || LEVELS.street);
 
     // 繪製掉落物
     for (const item of this.dropItems) {
@@ -3464,7 +3732,7 @@ class Game {
     this.particles.draw(this.ctx, renderCam);
 
     // 畫面後製：暗角 + 玩家聚光，讓視覺焦點集中在主角身上
-    this.drawVignette();
+    this.ground.drawVignette(this.ctx, this.vw, this.vh, this.level || LEVELS.street);
 
     // Boss 大招紅閃 (畫面邊緣泛紅，最上層)
     if (this.redFlash > 0) {
@@ -3617,19 +3885,6 @@ class Game {
   }
 
   // 全域色調 overlay：關卡色上下漸層，極淡染上場景 (角色繪製在其上，不受影響)
-  drawColorGrade() {
-    const theme = (this.level || LEVELS.street).theme;
-    const gr = theme && theme.grade;
-    if (!gr) return;
-    const ctx = this.ctx;
-    const g = ctx.createLinearGradient(0, 0, 0, this.vh);
-    g.addColorStop(0, `rgba(${gr.c1},${gr.a1})`);
-    g.addColorStop(0.55, `rgba(${gr.c1},${(gr.a1 * 0.4).toFixed(4)})`);
-    g.addColorStop(1, `rgba(${gr.c2},${gr.a2})`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, this.vw, this.vh);
-  }
-
   drawMerchant(camera) {
     if (!this.merchant) return;
     const sx = this.merchant.x - camera.x;
@@ -3668,31 +3923,6 @@ class Game {
     ctx.fillStyle = '#ffffff';
     ctx.fillText('靠近選購', sx, sy + 22);
     ctx.restore();
-  }
-
-  drawVignette() {
-    // ponytail: 暗角烘焙進離屏 canvas，每幀只做一次 drawImage
-    const vigLevel = this.level || LEVELS.street;
-    const vigMult = (vigLevel.theme && vigLevel.theme.vignette) || 1;
-    if (!this._vigCanvas || this._vigCanvas.width !== Math.round(this.vw) ||
-        this._vigCanvas.height !== Math.round(this.vh) || this._vigKey !== vigLevel.id) {
-      const oc = document.createElement('canvas');
-      oc.width = Math.max(1, Math.round(this.vw));
-      oc.height = Math.max(1, Math.round(this.vh));
-      const octx = oc.getContext('2d');
-      const g = octx.createRadialGradient(
-        this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.22,
-        this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.72
-      );
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(0.6, `rgba(0,0,0,${(0.28 * vigMult).toFixed(3)})`);
-      g.addColorStop(1, `rgba(0,0,0,${(0.72 * vigMult).toFixed(3)})`);
-      octx.fillStyle = g;
-      octx.fillRect(0, 0, oc.width, oc.height);
-      this._vigCanvas = oc;
-      this._vigKey = vigLevel.id;
-    }
-    this.ctx.drawImage(this._vigCanvas, 0, 0, this.vw, this.vh);
   }
 
   drawMinimap() {
@@ -3786,407 +4016,12 @@ class Game {
     ctx.restore();
   }
 
-  drawFloorGrid(camera) {
-    const ctx = this.ctx;
-    const W = this.vw;
-    const H = this.vh;
-
-    ctx.save();
-
-    // 地板底色漸層 (顏色由關卡主題決定)
-    const theme = (this.level || LEVELS.street).theme;
-    if (!this._floorGrad || this._floorGradH !== H || this._floorTheme !== theme) {
-      const fg = ctx.createLinearGradient(0, 0, 0, H);
-      fg.addColorStop(0, theme.top);
-      fg.addColorStop(0.55, theme.mid);
-      fg.addColorStop(1, theme.bottom);
-      this._floorGrad = fg;
-      this._floorGradH = H;
-      this._floorTheme = theme;
-    }
-    ctx.fillStyle = this._floorGrad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Soulstone 風格地面質感層：汙漬色塊 + 每關專屬地表材質 (畫在網格之下)
-    // 材質細節每關烘焙成一片世界錨定的無接縫紋理磚，逐幀只做 drawImage 拼貼
-    const groundTex = this.getGroundTexture(this.level || LEVELS.street);
-    const gTile = groundTex.width;
-    const gOx = -(((camera.x % gTile) + gTile) % gTile);
-    const gOy = -(((camera.y % gTile) + gTile) % gTile);
-    for (let gy = gOy; gy < H; gy += gTile) {
-      for (let gx = gOx; gx < W; gx += gTile) {
-        ctx.drawImage(groundTex, gx, gy);
-      }
-    }
-
-    // 細格線 + 每 4 格一條主格線，強化移動感
-    const grid = 64;
-    const ox = -(((camera.x % grid) + grid) % grid);
-    const oy = -(((camera.y % grid) + grid) % grid);
-    const majorX = Math.floor(camera.x / grid);
-    const majorY = Math.floor(camera.y / grid);
-
-    for (let i = 0, x = ox; x < W + grid; i++, x += grid) {
-      const major = (majorX + i) % 4 === 0;
-      ctx.strokeStyle = major ? theme.major : theme.grid;
-      ctx.lineWidth = major ? 1.5 : 1;
-      ctx.beginPath();
-      ctx.moveTo(Math.round(x) + 0.5, 0);
-      ctx.lineTo(Math.round(x) + 0.5, H);
-      ctx.stroke();
-    }
-    for (let i = 0, y = oy; y < H + grid; i++, y += grid) {
-      const major = (majorY + i) % 4 === 0;
-      ctx.strokeStyle = major ? theme.major : theme.grid;
-      ctx.lineWidth = major ? 1.5 : 1;
-      ctx.beginPath();
-      ctx.moveTo(0, Math.round(y) + 0.5);
-      ctx.lineTo(W, Math.round(y) + 0.5);
-      ctx.stroke();
-    }
-
-    // 地圖邊界警示線 (發光紅牆)
-    const bounds = GAME_CONFIG.WORLD_BOUNDS;
-    const bMinX = bounds.minX - camera.x;
-    const bMaxX = bounds.maxX - camera.x;
-    const bMinY = bounds.minY - camera.y;
-    const bMaxY = bounds.maxY - camera.y;
-
-    ctx.shadowColor = theme.bounds;
-    ctx.shadowBlur = 18;
-    ctx.strokeStyle = theme.bounds;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(bMinX, bMinY, bMaxX - bMinX, bMaxY - bMinY);
-
-    ctx.restore();
-  }
-
-  // 程序化地面材質烘焙 (Soulstone 風格參考)：世界座標雜湊決定汙漬與材質細節，
-  // 結果烘進一片無接縫紋理磚，之後每幀只做 drawImage。紋理/材質種類由
-  // levels.js theme.ground.motif / material 資料決定。
-  getGroundTexture(level) {
-    const id = (level && level.id) || 'street';
-    if (this._groundTextures && this._groundTextures[id]) return this._groundTextures[id];
-
-    // 世界錨定的接縫消除：先把細節畫在一片比成品大 2×PAD 的畫布上，
-    // 再裁出中央區塊當磚。跨磚界的柔光汙漬光暈照常接合，不會出現週期接縫。
-    const T = 768;            // 成品磚大小
-    const P = 230;            // 出血區 (涵蓋最大光暈半徑與裂縫漂移)
-    const B = T + P * 2;
-
-    const big = document.createElement('canvas');
-    big.width = big.height = B;
-    const bx = big.getContext('2d');
-
-    const g = level.theme && level.theme.ground;
-    const seed = this._groundSeed(id);
-    const h = (cx, cy, k) => {
-      const s = Math.sin(cx * 127.1 + cy * 311.7 + (seed + k * 74.7)) * 43758.5453;
-      return s - Math.floor(s);
-    };
-    const cell = 240;
-    const c0 = Math.floor(-P / cell) - 1;
-    const c1 = Math.ceil((T + P) / cell) + 1;
-
-    for (let cy = c0; cy <= c1; cy++) {
-      for (let cx = c0; cx <= c1; cx++) {
-        const x = cx * cell + P;   // 磚面座標 = 世界座標 + 出血位移
-        const y = cy * cell + P;
-        if (!g) continue;
-        const r = h(cx, cy, 1);
-
-        // 1) 大面積柔光汙漬 (光暈半徑最大 ~192 ≤ P，烘焙後無接縫)
-        if (r < 0.6) {
-          const p = g.patches[r < 0.25 ? 0 : 1];
-          const px = x + r * cell * 2.6 - cell * 0.8;
-          const py = y + h(cx, cy, 2) * cell * 2.6 - cell * 0.8;
-          const rad = 90 + r * 170;
-          const grad = bx.createRadialGradient(px, py, 0, px, py, rad);
-          grad.addColorStop(0, `rgba(${p.c},${p.a})`);
-          grad.addColorStop(1, `rgba(${p.c},0)`);
-          bx.fillStyle = grad;
-          bx.beginPath();
-          bx.arc(px, py, rad, 0, Math.PI * 2);
-          bx.fill();
-        }
-
-        // 2) 專屬地表紋理 (每格 1-2 筆)
-        const n = 1 + Math.floor(h(cx, cy, 3) * 2);
-        for (let k = 0; k < n; k++) {
-          this._groundMotif(bx, g, x, y, cell, h(cx, cy, 4 + k), h(cx, cy, 9 + k));
-        }
-
-        // 3) 每格的材質微粒 (粗礫 / 刷紋 / 霜雪 / 星塵)
-        if (g.material) this._groundGrain(bx, g, x, y, cell, h(cx, cy, 40), h(cx, cy, 41), h(cx, cy, 42));
-      }
-    }
-
-    // 4) 材質大範圍特徵 (油漬裂縫、鉚釘、熔岩餘燼、星點…)
-    if (g && g.material) this._groundMaterialAccents(bx, g, h, T, P);
-
-    const tile = document.createElement('canvas');
-    tile.width = tile.height = T;
-    tile.getContext('2d').drawImage(big, P, P, T, T, 0, 0, T, T);
-    if (!this._groundTextures) this._groundTextures = {};
-    this._groundTextures[id] = tile;
-    return tile;
-  }
-
-  _groundSeed(id) {
-    let s = 0;
-    for (let i = 0; i < id.length; i++) s = (s * 31 + id.charCodeAt(i)) >>> 0;
-    return s;
-  }
-
-  // 材質微粒：依材質在每個格子內撒低對比顆粒，做出「材質感」而非純色地板
-  _groundGrain(ctx, g, x, y, cell, r1, r2, r3) {
-    const mat = g.material;
-    const dot = (gx, gy, rad, rgb, a) => {
-      ctx.fillStyle = `rgba(${rgb},${a})`;
-      ctx.beginPath();
-      ctx.arc(gx, gy, rad, 0, Math.PI * 2);
-      ctx.fill();
-    };
-    const count = mat === 'snow' ? 7 : mat === 'metal' ? 2 : 2 + Math.floor(r1 * 4);
-    for (let i = 0; i < count; i++) {
-      const gx = x + ((r2 + i * 0.31) % 1) * cell;
-      const gy = y + ((r3 + i * 0.17) % 1) * cell;
-      const rad = 0.6 + ((r2 * 7 + i) % 1) * 1.6;
-      if (mat === 'snow') dot(gx, gy, rad, '235,245,255', 0.1 + r1 * 0.12);
-      else if (mat === 'metal') dot(gx, gy, rad * 0.8, '255,255,255', 0.04);
-      else if (mat === 'lava') dot(gx, gy, rad, '15,8,6', 0.5);
-      else if (mat === 'void') dot(gx, gy, rad * 0.7, '255,255,255', 0.06 + r1 * 0.14);
-      else dot(gx, gy, rad, '0,0,0', 0.1 + r1 * 0.12);   // asphalt 粗礫
-    }
-  }
-
-  // 材質大範圍特徵。中心點都收進「安全帶」([P+m, T-(P+m)])，讓放射狀光暈
-  // 完整落在成品磚內，磚界才不會切到半顆光暈。
-  _groundMaterialAccents(ctx, g, h, T, P) {
-    const mat = g.material;
-    const bandX = (n, a, m, maxR = 10) => P + (maxR + h(n, a, 0) * (T - maxR * 2));
-    const bandY = (n, a, m, maxR = 10) => P + (maxR + h(n, a, 1) * (T - maxR * 2));
-
-    ctx.save();
-    if (mat === 'asphalt') {
-      // 深色柏油縫裂 (短、粗、不走太遠才不會被磚界切段)
-      ctx.lineWidth = 1.3;
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-      for (let n = 0; n < 6; n++) {
-        const x0 = bandX(n, 0, 0, 160);
-        const y0 = bandY(n, 0, 0, 160);
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        for (let i = 1; i < 5; i++) {
-          ctx.lineTo(x0 + (h(n, i, 0) - 0.5) * 52, y0 + (h(n, i, 0) - 0.5) * 52);
-        }
-        ctx.stroke();
-      }
-      // 偶發圓形人孔蓋縫
-      for (let n = 0; n < 2; n++) {
-        const cx = P + (120 + h(n, 22, 0) * (T - 240));
-        const cy = P + (120 + h(n, 23, 0) * (T - 240));
-        ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(cx, cy, 26, 0, Math.PI * 2); ctx.stroke();
-      }
-    } else if (mat === 'metal') {
-      // 水平金屬刷紋 + 鉚釘點列
-      for (let y = 10; y < T + P; y += 84) {
-        const a = Math.max(0, 0.03 + Math.sin(y * 0.25) * 0.02);
-        ctx.fillStyle = `rgba(255,255,255,${a})`;
-        ctx.fillRect(P, P + y, T, 1.2);
-      }
-      for (let n = 0; n < 10; n++) {
-        const px = bandX(n, 30, 0, 20);
-        const py = bandY(n, 30, 0, 20);
-        ctx.fillStyle = 'rgba(200,255,225,0.16)';
-        ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI * 2); ctx.fill();
-      }
-    } else if (mat === 'snow') {
-      // 大面積霜雪輝光 (安全帶確保光暈不切到磚界)
-      for (let n = 0; n < 9; n++) {
-        const px = bandX(n, 40, 0, 150);
-        const py = bandY(n, 40, 0, 150);
-        const rad = 60 + h(n, 41, 0) * 90;
-        const gr = ctx.createRadialGradient(px, py, 0, px, py, rad);
-        gr.addColorStop(0, 'rgba(255,255,255,0.06)');
-        gr.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = gr;
-        ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
-      }
-    } else if (mat === 'lava') {
-      // 熔岩餘燼光點 (帶 glow)
-      for (let n = 0; n < 26; n++) {
-        const px = bandX(n, 50, 0, 8);
-        const py = bandY(n, 50, 0, 8);
-        const rad = 1.2 + h(n, 51, 0) * 2.2;
-        const gr = ctx.createRadialGradient(px, py, 0, px, py, rad * 3.4);
-        gr.addColorStop(0, 'rgba(255,160,50,0.85)');
-        gr.addColorStop(1, 'rgba(255,120,0,0)');
-        ctx.fillStyle = gr;
-        ctx.beginPath(); ctx.arc(px, py, rad * 3.4, 0, Math.PI * 2); ctx.fill();
-      }
-    } else if (mat === 'void') {
-      // 虛空星點 (含少量大星帶星芒)
-      for (let n = 0; n < 46; n++) {
-        const px = bandX(n, 60, 0, 6);
-        const py = bandY(n, 60, 0, 6);
-        const sz = h(n, 61, 0);
-        if (sz > 0.45) {
-          const big = sz > 0.85;
-          const rad = big ? 2.6 : 1.4;
-          const gr = ctx.createRadialGradient(px, py, 0, px, py, rad * 3.2);
-          gr.addColorStop(0, 'rgba(230,210,255,0.9)');
-          gr.addColorStop(1, 'rgba(230,210,255,0)');
-          ctx.fillStyle = gr;
-          ctx.beginPath(); ctx.arc(px, py, rad * 3.2, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = 'rgba(255,255,255,0.9)';
-          ctx.beginPath(); ctx.arc(px, py, big ? 1.2 : 0.7, 0, Math.PI * 2); ctx.fill();
-        }
-      }
-    }
-    ctx.restore();
-  }
-
-  _groundMotif(ctx, g, x, y, cell, r1, r2) {
-    const mx = x + r1 * cell;
-    const my = y + r2 * cell;
-    ctx.save();
-    switch (g.motif) {
-      case 'panel': {
-        // 實驗室金屬板接縫 (與主網格錯位的淡框) + 少數鉚釘
-        ctx.strokeStyle = g.motifColor;
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(mx - cell * 0.22, my - cell * 0.22, cell * 0.44, cell * 0.44);
-        if (r2 > 0.72) {
-          ctx.fillStyle = g.accent;
-          ctx.beginPath();
-          ctx.arc(mx, my, 1.6, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        break;
-      }
-      case 'crystal': {
-        // 雪地冰晶簇: 3-4 支半透明藍白三角
-        ctx.fillStyle = g.motifColor;
-        const base = r1 > 0.5 ? 4 : 3;
-        for (let i = 0; i < base; i++) {
-          const a = -Math.PI / 2 + (i - (base - 1) / 2) * 0.55 + (r2 - 0.5) * 0.4;
-          const len = 5 + r1 * 12 + i * 2;
-          ctx.beginPath();
-          ctx.moveTo(mx + Math.cos(a + Math.PI / 2) * 3.4, my + Math.sin(a + Math.PI / 2) * 3.4);
-          ctx.lineTo(mx + Math.cos(a) * len, my + Math.sin(a) * len);
-          ctx.lineTo(mx - Math.cos(a + Math.PI / 2) * 3.4, my - Math.sin(a + Math.PI / 2) * 3.4);
-          ctx.closePath();
-          ctx.fill();
-        }
-        break;
-      }
-      case 'lava': {
-        // 熔爐龜裂地殼: 暗色裂縫 + 透出橙紅餘燼光點
-        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-        ctx.lineWidth = 1.6;
-        for (let i = 0; i < 2; i++) {
-          ctx.beginPath();
-          ctx.moveTo(mx - 13, my + (i ? 11 : -7));
-          ctx.lineTo(mx - 3, my + (i ? 4 : 2));
-          ctx.lineTo(mx + 9, my + (i ? -7 : 10));
-          ctx.stroke();
-        }
-        ctx.shadowColor = g.accent;
-        ctx.shadowBlur = 8;
-        ctx.fillStyle = g.accent;
-        ctx.beginPath();
-        ctx.arc(mx + (r2 - 0.5) * 15, my + (r1 - 0.5) * 15, 1.4 + r2 * 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        break;
-      }
-      case 'void': {
-        // 深淵虛空: 淡紫同心弧符文 + 星塵點
-        ctx.strokeStyle = g.motifColor;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(mx, my, 5 + r2 * 7, r1 * 6.283, r1 * 6.283 + 2.4);
-        ctx.stroke();
-        ctx.fillStyle = g.accent;
-        ctx.beginPath();
-        ctx.arc(mx + 11, my - 7, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      }
-      default: {
-        // 商業街柏油裂紋 + 偶發霓虹微光裂縫
-        ctx.strokeStyle = g.motifColor;
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(mx - 15, my + (r2 - 0.5) * 17);
-        ctx.lineTo(mx - 4, my + (r1 - 0.5) * 10);
-        ctx.lineTo(mx + 11, my + (r2 - 0.5) * 19);
-        ctx.stroke();
-        if (r1 > 0.62) {
-          ctx.strokeStyle = g.accent;
-          ctx.lineWidth = 1;
-          ctx.shadowColor = g.accent;
-          ctx.shadowBlur = 6;
-          ctx.beginPath();
-          ctx.moveTo(mx - 6, my + 4);
-          ctx.lineTo(mx + 6, my - 3);
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-        }
-        break;
-      }
-    }
-    ctx.restore();
-  }
-  // ── 地面殘跡 (血漬/焦痕，Soulstone 風格) ──
-  addDecal(x, y, r, fill, alpha = 0.5, accent = null, life = FX.decalLife) {
-    if (this.decals.length >= FX.decalCap) this.decals.shift();
-    this.decals.push({
-      x: x + (Math.random() - 0.5) * r * 0.4,
-      y: y + (Math.random() - 0.5) * r * 0.4,
-      r: r * (0.8 + Math.random() * 0.4),
-      life,
-      maxLife: life,
-      fill,
-      a: alpha,
-      accent,
-    });
-  }
-
   _hexRgb(hex) {
     const n = parseInt(hex.slice(1), 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
-
-  drawDecals(ctx, cam) {
-    for (const d of this.decals) {
-      const sx = d.x - cam.x;
-      const sy = d.y - cam.y;
-      const m = d.r + 30;
-      if (sx < -m || sx > this.vw + m || sy < -m || sy > this.vh + m) continue;
-      const p = d.life / d.maxLife; // 1 → 0，隨時間淡出
-      ctx.save();
-      ctx.globalAlpha = d.a * Math.min(1, p * 1.8);
-      ctx.fillStyle = `rgba(${d.fill},0.85)`;
-      ctx.beginPath();
-      ctx.ellipse(sx, sy, d.r * 0.95, d.r * 0.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-      if (d.accent) {
-        ctx.globalAlpha = d.a * p;
-        ctx.strokeStyle = d.accent;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.ellipse(sx, sy, d.r * 0.95, d.r * 0.6, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-  }
 }
+
 
 // 啟動遊戲
 window.addEventListener('DOMContentLoaded', () => {

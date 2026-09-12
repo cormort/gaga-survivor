@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  嘎嘎特攻隊 / Gaga Survivor 應用圖示 (maskable purpose)
+  畫面與 icons/icon.svg 相同，但依 Maskable 規範縮進安全區：
+  背景延伸滿版 (512×512 無圓角、無透明)，圖形主體全部收在中心 80% 圓 (半徑 204.8) 之內
+  —— 霓虹環半徑 166、特工鴨最遠點約 134，被裁成圓/水滴/方形都不會切到主角。
+  修改鴨子時請與 icons/icon.svg 同步。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-label="嘎嘎特攻隊 特工鴨">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="80%">
+      <stop offset="0" stop-color="#1a2436"/>
+      <stop offset="0.55" stop-color="#0d1420"/>
+      <stop offset="1" stop-color="#070a10"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#00e5ff" stop-opacity="0.22"/>
+      <stop offset="0.6" stop-color="#00e5ff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#00e5ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ringGrad" gradientUnits="userSpaceOnUse" x1="90" y1="90" x2="422" y2="422">
+      <stop offset="0" stop-color="#00e5ff"/>
+      <stop offset="0.32" stop-color="#00b4d8"/>
+      <stop offset="0.58" stop-color="#b5179e"/>
+      <stop offset="0.85" stop-color="#ff0055"/>
+      <stop offset="1" stop-color="#ff2d7a"/>
+    </linearGradient>
+    <filter id="neon" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <radialGradient id="bodyGrad" gradientUnits="userSpaceOnUse"
+                    cx="0" cy="0" r="16.8" fx="-6.4" fy="-7.2" fr="0.8">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.36"/>
+      <stop offset="0.42" stop-color="#ffd21a"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.3"/>
+    </radialGradient>
+    <linearGradient id="wingGrad" gradientUnits="userSpaceOnUse" x1="-7" y1="-5" x2="7" y2="5">
+      <stop offset="0" stop-color="#ffd94a"/>
+      <stop offset="1" stop-color="#dc9c00"/>
+    </linearGradient>
+    <linearGradient id="billGrad" gradientUnits="userSpaceOnUse" x1="8" y1="0" x2="21" y2="4">
+      <stop offset="0" stop-color="#ffa940"/>
+      <stop offset="1" stop-color="#f06a00"/>
+    </linearGradient>
+    <clipPath id="lensClip">
+      <path d="M2 -10 H10 A6 6 0 0 1 16 -4 V-6.5 A6 6 0 0 1 10 -0.5 H2 A3 3 0 0 1 -1 -3.5 V-7 A3 3 0 0 1 2 -10 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- 滿版深藍底 (maskable 不可有透明或圓角) -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="200" fill="url(#halo)"/>
+  <circle cx="256" cy="256" r="166" fill="none" stroke="url(#ringGrad)" stroke-width="9"
+          opacity="0.9" filter="url(#neon)"/>
+  <circle cx="256" cy="256" r="166" fill="none" stroke="url(#ringGrad)" stroke-width="2.5"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#00e5ff" stroke-width="1"
+          opacity="0.28"/>
+
+  <!-- 特工鴨 (縮至安全區內) -->
+  <g transform="translate(256 262) scale(5.6) translate(1.5 -1)">
+    <path d="M-4 14 L0 19 L-8 19 Z" fill="#e8710a" stroke="#a34600" stroke-width="1.2"/>
+    <path d="M2 14 L6 19 L-2 19 Z" fill="#e8710a" stroke="#a34600" stroke-width="1.2"/>
+    <path d="M-11 1 L-24 -7 L-19 0 L-23 4 L-12 8 Z" fill="#dda000" stroke="#8a5600" stroke-width="1.4"/>
+    <circle r="16" fill="url(#bodyGrad)" stroke="#7d4d00" stroke-width="2"/>
+    <ellipse cx="-1" cy="6" rx="9" ry="6" fill="#fff7be" opacity="0.5"/>
+    <path d="M-1.05 -1.39 A6 6 0 0 1 -2.27 6.7" fill="none" stroke="#8a5600" stroke-opacity="0.28" stroke-width="1"/>
+    <path d="M-1.05 2.11 A6 6 0 0 1 -2.27 10.2" fill="none" stroke="#8a5600" stroke-opacity="0.28" stroke-width="1"/>
+    <path d="M-1.05 5.61 A6 6 0 0 1 -2.27 13.7" fill="none" stroke="#8a5600" stroke-opacity="0.28" stroke-width="1"/>
+    <g transform="translate(-3 4) rotate(-20.05)">
+      <ellipse rx="8" ry="5.5" fill="url(#wingGrad)" stroke="#7d4d00" stroke-width="1.3"/>
+      <path d="M-5 -2 L6 -2.4 M-5 0 L6 0 M-5 2 L6 2.4" fill="none"
+            stroke="#7d4d00" stroke-opacity="0.5" stroke-width="0.9"/>
+    </g>
+    <path d="M7 -2 L21 1 L21 3 L7 8 Z" fill="url(#billGrad)" stroke="#a34600" stroke-width="1.4"/>
+    <path d="M8 3.4 L20.5 2.2" fill="none" stroke="#8c3c00" stroke-opacity="0.75" stroke-width="1.2"/>
+    <circle cx="-9" cy="-5" r="3.2" fill="#1b222e"/>
+    <circle cx="-9" cy="-5" r="1.2" fill="#00e5ff"/>
+    <path d="M2 -10 H10 A6 6 0 0 1 16 -4 V-6.5 A6 6 0 0 1 10 -0.5 H2 A3 3 0 0 1 -1 -3.5 V-7 A3 3 0 0 1 2 -10 Z"
+          fill="#0b0e14" stroke="#00e5ff" stroke-opacity="0.65" stroke-width="1"/>
+    <g clip-path="url(#lensClip)">
+      <path d="M2 -11 L7 1" fill="none" stroke="#a0f0ff" stroke-opacity="0.85" stroke-width="2.2"/>
+      <path d="M7 -11 L11 1" fill="none" stroke="#a0f0ff" stroke-opacity="0.45" stroke-width="1.2"/>
+    </g>
+    <path d="M-1 -6 L-9 -5.5" fill="none" stroke="#0b0e14" stroke-width="2"/>
+    <path d="M-6 7 L6 7 L3 12 L-4 11 Z" fill="#141b26"/>
+    <path d="M-1 8 L4 8 L1.5 12 Z" fill="#ff0055"/>
+    <path d="M0 12 L3.5 12 L3 18 L1.5 20 L0 18 Z" fill="#c40040"/>
+  </g>
+</svg>

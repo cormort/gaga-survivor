@@ -1,8 +1,8 @@
 // 嘎嘎特攻 (Gaga Survivor) - 遊戲全局設定與數值配置
 
 export const GAME_CONFIG = {
-  CANVAS_WIDTH: window.innerWidth,
-  CANVAS_HEIGHT: window.innerHeight,
+  // 原本這裡還有 CANVAS_WIDTH/HEIGHT，但它們在 import 時算一次就固定，
+  // resize 後即失效，而且引擎用的是 Game 的 this.vw/this.vh —— 沒有任何讀者。
   WORLD_BOUNDS: {
     minX: -2000,
     maxX: 2000,
@@ -356,6 +356,7 @@ export const FX = {
 export const ENEMY_TYPES = {
   walker: {
     name: '喪屍步兵',
+    ai: { kind: 'shamble', wander: 0.35, animSpeed: 8, sepMul: 1.0 },
     hp: 20,
     speed: 90,
     damage: 8,
@@ -365,6 +366,7 @@ export const ENEMY_TYPES = {
   },
   bat: {
     name: '狂暴突襲蝠',
+    ai: { kind: 'weave', weaveAmp: 46, weaveFreq: 3.6, hoverAmp: 0.40, hoverFreq: 2.4, animSpeed: 13, sepMul: 0.5 },
     hp: 12,
     speed: 160,
     damage: 6,
@@ -374,6 +376,7 @@ export const ENEMY_TYPES = {
   },
   brute: {
     name: '生化巨漢',
+    ai: { kind: 'plod', kbResist: 0.40, animSpeed: 5.5, sepMul: 1.6 },
     hp: 90,
     speed: 65,
     damage: 16,
@@ -383,6 +386,7 @@ export const ENEMY_TYPES = {
   },
   boomer: {
     name: '劇毒自爆蟲',
+    ai: { kind: 'suicide', fuse: 0.8, animSpeed: 9, sepMul: 0.8 },
     hp: 35,
     speed: 120,
     damage: 22,
@@ -393,26 +397,29 @@ export const ENEMY_TYPES = {
   },
   runner: {
     name: '狂奔感染者',
+    ai: { kind: 'lunge', lunge: { every: 3.2, windup: 0.40, dur: 0.45, mul: 3.4 }, animSpeed: 11, sepMul: 0.6 },
     hp: 26,
     speed: 105,
     damage: 10,
     color: '#ff6b35',
     radius: 13,
     exp: 2,
-    dash: { every: 3.2, dur: 0.45, mul: 3.4 }, // 週期性衝刺，逼玩家提早轉向
   },
   warden: {
     name: '防暴盾衛',
+    // 正面盾：減傷只看「來襲方向 vs 面向」，從背後打是完整傷害 (原本是一顆
+    // 不分方向的 damageTakenMul，README 寫的「正面大盾」在程式裡根本不存在)
+    ai: { kind: 'shield', shieldArc: 1.6, shieldMul: 0.45, animSpeed: 6, sepMul: 1.3 },
     hp: 140,
     speed: 55,
     damage: 14,
     color: '#4cc9f0',
     radius: 20,
     exp: 4,
-    damageTakenMul: 0.55, // 盾牌減傷，靠爆發或穿透才好處理
   },
   spore_host: {
     name: '孢子母體',
+    ai: { kind: 'shamble', wander: 0.20, animSpeed: 7, sepMul: 1.0 },
     hp: 60,
     speed: 80,
     damage: 12,
@@ -424,6 +431,7 @@ export const ENEMY_TYPES = {
   },
   sporeling: {
     name: '孢子幼體',
+    ai: { kind: 'swarm', jitter: 0.9, animSpeed: 14, sepMul: 2.2 },
     hp: 8,
     speed: 175,
     damage: 5,
@@ -433,6 +441,8 @@ export const ENEMY_TYPES = {
   },
   spitter: {
     name: '酸液噴吐者',
+    // 繞行方向在生成時隨機，否則整關的噴吐者會一起同方向繞圈
+    ai: { kind: 'kite', windup: 0.35, animSpeed: 6.5, sepMul: 0.9 },
     hp: 42,
     speed: 75,
     damage: 8,
@@ -450,16 +460,18 @@ export const ENEMY_TYPES = {
   },
   hound: {
     name: '嗜血獵犬',
+    // 繞邊再撲：先沿著 standoff 半徑繞行，再發起可預警的撲咬 (與狂奔感染者區隔)
+    ai: { kind: 'flank', standoff: 190, lunge: { every: 2.8, windup: 0.35, dur: 0.40, mul: 3.2 }, animSpeed: 12, sepMul: 0.7 },
     hp: 32,
     speed: 165,
     damage: 9,
     color: '#b0753b',
     radius: 12,
     exp: 2,
-    dash: { every: 2.8, dur: 0.4, mul: 3.2 }, // 追擊型衝刺，會先繞再撲
   },
   hatcher: {
     name: '增殖胞囊',
+    ai: { kind: 'rooted', kbResist: 0.70, animSpeed: 3.5, sepMul: 2.5 },
     hp: 130,
     speed: 16,
     damage: 12,
@@ -475,6 +487,8 @@ export const ENEMY_TYPES = {
   },
   chimera: {
     name: '攻城巨像',
+    // 週期性踏地：停下 → 預警圈 → 範圍震波，給坦克一個自己的節奏
+    ai: { kind: 'slam', slam: { every: 3.4, windup: 0.70, radius: 135, dmg: 22 }, kbResist: 0.55, animSpeed: 4.5, sepMul: 2.0 },
     hp: 300,
     speed: 42,
     damage: 24,
@@ -487,6 +501,7 @@ export const ENEMY_TYPES = {
   },
   boss: {
     name: '毀滅巨神‧暴君',
+    ai: { kind: 'boss', animSpeed: 5, sepMul: 0 },
     hp: 1400,
     speed: 75,
     damage: 28,
@@ -533,153 +548,83 @@ export const DROP_TYPES = {
 
 // ── 惡魔城經典消費道具定義 (Consumable Items) ──
 export const CONSUMABLE_ITEMS = {
-  potion: {
-    id: 'potion',
-    name: '生命藥水',
-    icon: '🧪',
-    color: '#00f59b',
-    desc: '立即回復 35% 最大生命值',
-    radius: 11,
-  },
-  elixir: {
-    id: 'elixir',
-    name: '特級靈藥',
-    icon: '💖',
-    color: '#ff4d6d',
-    desc: '完全回滿生命值 + 消除負面狀態',
-    radius: 12,
-  },
-  atk_potion: {
-    id: 'atk_potion',
-    name: '力量藥劑',
-    icon: '🗡️',
-    color: '#ff7b00',
-    desc: '15 秒內攻擊力 +40%',
-    radius: 11,
-    duration: 15,
-  },
-  shield_potion: {
-    id: 'shield_potion',
-    name: '防禦藥劑',
-    icon: '🛡️',
-    color: '#4cc9f0',
-    desc: '15 秒內受傷 -50% 且具備霸體',
-    radius: 11,
-    duration: 15,
-  },
-  luck_potion: {
-    id: 'luck_potion',
-    name: '幸運藥劑',
-    icon: '🍀',
-    color: '#70e000',
-    desc: '20 秒內暴擊率 +30%，金幣掉落翻倍',
-    radius: 11,
-    duration: 20,
-  },
-  stopwatch: {
-    id: 'stopwatch',
-    name: '時停懷錶',
-    icon: '⏱️',
-    color: '#ffd166',
-    desc: '凍結全場敵人與敵方子彈 3.5 秒',
-    radius: 12,
-    duration: 3.5,
-  },
-  holy_water: {
-    id: 'holy_water',
-    name: '神聖聖水',
-    icon: '💧',
-    color: '#00e5ff',
-    desc: '投擲神聖結界，持續灼燒並削弱敵人 6 秒',
-    radius: 11,
-    duration: 6,
-  },
-  manna_prism: {
-    id: 'manna_prism',
-    name: '魔晶石',
-    icon: '🧲',
-    color: '#b5179e',
-    desc: '立即吸納全地圖所有經驗水晶與金幣',
-    radius: 12,
-  },
-  magic_ticket: {
-    id: 'magic_ticket',
-    name: '神奇門票',
-    icon: '🎫',
-    color: '#ffd60a',
-    desc: '瞬間折躍至安全開闊空地，原地引爆 360° 擊退衝擊波',
-    radius: 12,
-  },
+  potion:        { name: '恢復藥水', icon: '🍷', kind: 'heal',    value: 80,   desc: '立即回復 80 點生命值' },
+  elixir:        { name: '高級萬靈藥', icon: '✨', kind: 'fullHeal', value: 100, desc: '完全回滿生命值，並額外獲得 100 點能量護盾' },
+  atk_potion:    { name: '力量藥水', icon: '⚔️', kind: 'buff', duration: 15, desc: '15 秒內全武器攻擊力 +40%' },
+  shield_potion: { name: '鐵壁藥水', icon: '🛡️', kind: 'buff', duration: 15, desc: '15 秒內受到傷害減免 50%' },
+  luck_potion:   { name: '幸運藥水', icon: '🍀', kind: 'buff', duration: 20, desc: '20 秒內暴擊率 +25%、金幣掉落翻倍' },
+  stopwatch:     { name: '時停懷錶', icon: '⏱️', kind: 'cc',   duration: 5,  desc: '凍結全場敵人與敵方子彈 5 秒' },
+  holy_water:    { name: '聖水',     icon: '🍶', kind: 'aoe',  value: 260,  desc: '在特工周圍引爆神聖淨化光環，造成 260 點範圍傷害並擊退敵人' },
+  manna_prism:   { name: '曼納稜晶', icon: '💎', kind: 'cd',   value: 0,    desc: '所有武器與閃避冷卻立即歸零，瞬間觸發全彈齊發' },
+  magic_ticket:  { name: '魔法門票', icon: '🎫', kind: 'magnet', value: 100, desc: '引導神秘信標，瞬間全圖磁吸所有掉落物，並額外獲得 100 金幣' },
 };
 
-// ── 武器型態系統 (Hades Weapon Aspects) ──
-// 每把武器提供 3 種不同型態 (Aspects)，影響發射模式、射程、機制或連動
 export const WEAPON_ASPECTS = {
   kunai: [
     { id: 'zagreus', name: '札格型態 (疾風)', icon: '💨', tag: '極速連射',
-      desc: '基礎射速 +30%，射程 +20%，單體擊殺手感極速流暢。',
-      stats: { cdMul: 0.70, rangeMul: 1.20 } },
+      desc: '基礎射速 +30%、彈速 +25%、射程 +20%。',
+      stats: { cdMul: 0.70, speedMul: 1.25, rangeMul: 1.20 } },
     { id: 'chiron',  name: '基隆型態 (箭雨)', icon: '🏹', tag: '扇形標記',
-      desc: '每輪齊射 3 枚扇形飛刀，被命中的目標標記 5 秒（受傷 +25%）。',
-      stats: { fanCount: 3, markDamageBonus: 0.25 } },
+      desc: '每輪齊射 3 枚扇形飛刀（單發傷害 ×0.6），命中的目標標記 5 秒、受傷 +25%。',
+      stats: { fanCount: 3, fanDamageMul: 0.60, markDamageBonus: 0.25, markDur: 5 } },
     { id: 'nemesis', name: '涅墨西斯 (裁決)', icon: '⚖️', tag: '翻滾必暴',
       desc: '戰術閃避翻滾後 3.5 秒內，所有苦無 100% 致命暴擊且暴擊傷害 ×1.5！',
-      stats: { dashCrit: true, dashCritDur: 3.5, critDmgMul: 1.5 } },
+      stats: { dashCritDur: 3.5, critDmgMul: 1.5 } },
   ],
   rocket: [
     { id: 'hestia',  name: '赫斯提亞 (穿甲狙擊)', icon: '🎯', tag: '貫穿巨彈',
-      desc: '冷卻 +15%，但火箭化為超重型穿甲導彈，貫穿直線上怪物並在末端引爆 250% 核爆。',
-      stats: { cdMul: 1.15, pierce: 6, blastMul: 2.5, scale: 1.6 } },
+      desc: '冷卻 +15%，火箭化為超重型穿甲導彈：彈體傷害 ×1.6、彈速 +35%、貫穿 6 名敵人、爆炸半徑 +80%。',
+      stats: { cdMul: 1.15, pierce: 6, damageMul: 1.6, blastRadiusMul: 1.8, speedMul: 1.35, projRadius: 16 } },
     { id: 'eris',    name: '埃里斯 (蜂巢集群)', icon: '🐝', tag: '四發齊射',
-      desc: '連射 4 枚微型追蹤火箭，自動精準索敵多個不同怪物轟炸。',
-      stats: { clusterCount: 4, damageMul: 0.65, scale: 0.75 } },
+      desc: '連射微型追蹤火箭（發射數 ×2、單發傷害 ×0.65），自動精準索敵多個目標轟炸。',
+      stats: { clusterMul: 2, damageMul: 0.65, delay: 0.09 } },
     { id: 'lucifer', name: '路西法 (熔岩地火)', icon: '🌋', tag: '熔岩火坑',
-      desc: '火箭爆炸後在地面留下滾燙熔岩坑，持續灼燒與減速踩過的怪物 4 秒。',
-      stats: { lavaPool: true, lavaDuration: 4.0 } },
+      desc: '火箭爆炸後在地面留下滾燙熔岩坑 4 秒，持續灼燒踩過的怪物。',
+      stats: { lavaDuration: 4.0, lavaRadius: 55, lavaDamageMul: 0.4 } },
   ],
   molotov: [
     { id: 'zagreus',  name: '札格型態 (烈火海)', icon: '🔥', tag: '大範圍爆燃',
       desc: '燃燒半徑 +40%，火海傷害跳頻加快 30%。',
       stats: { radiusMul: 1.40, tickRateMul: 0.70 } },
     { id: 'poseidon', name: '波塞頓 (激流爆破)', icon: '🌊', tag: '激流擊退',
-      desc: '燃燒瓶落地引發洶湧水汽激流，大幅擊退周遭敵人並施加 50% 潮濕減速。',
-      stats: { knockback: 280, slowRatio: 0.50, slowDur: 3.0 } },
+      desc: '燃燒瓶落地引發激流爆破：範圍傷害 ×1.5、強力擊退並施加 3 秒減速（半速）。',
+      stats: { splashDamageMul: 1.5, knockback: 18, slowDur: 3.0 } },
     { id: 'athena',   name: '雅典娜 (聖光領域)', icon: '✨', tag: '聖光庇護',
       desc: '化為神聖守護領域，玩家處於領域內受傷 -25% 且每秒回復 8 HP。',
       stats: { sanctuary: true, dmgResist: 0.25, healPerSec: 8 } },
   ],
   lightning: [
     { id: 'zeus',  name: '宙斯型態 (連鎖狂雷)', icon: '⚡', tag: '連鎖彈射',
-      desc: '落雷命中目標後引發連鎖電弧，在周圍最多 4 名敵人之間跳躍傳導。',
+      desc: '落雷命中目標後引發連鎖電弧，在周圍最多 4 名敵人之間跳躍傳導（每跳 70% 傷害）。',
       stats: { chainTargets: 4, chainDamageRatio: 0.70 } },
     { id: 'thor',  name: '索爾型態 (定點天罰)', icon: '🔨', tag: '巨雷眩暈',
-      desc: '召喚天頂巨雷，造成 300% 巨額傷害並使目標與周圍敵怪眩暈 1.2 秒。',
+      desc: '召喚天頂巨雷，造成 300% 巨額傷害、爆炸半徑 +50%，並使命中目標與周圍敵怪眩暈 1.2 秒。',
       stats: { damageMul: 3.0, stunDur: 1.2, radiusMul: 1.5 } },
     { id: 'chaos', name: '混沌型態 (電磁風暴)', icon: '🌀', tag: '引力聚怪',
-      desc: '落雷點生成旋轉電磁風暴，持續將周邊敵人吸引至中心聚集。',
-      stats: { vortex: true, vortexDur: 2.0, pullStrength: 220 } },
+      desc: '落雷點引爆電磁脈衝，將半徑 180 內的敵人強制往中心牽引。',
+      stats: { pullRadius: 180, pullStrength: 80 } },
   ],
   guardian: [
     { id: 'zagreus', name: '札格型態 (疾速環)', icon: '🥏', tag: '高速旋轉',
       desc: '輪盤旋轉速度 +50%，基礎飛盤數量 +1。',
       stats: { spinSpeedMul: 1.50, extraBlades: 1 } },
     { id: 'chaos',   name: '混沌型態 (彈射飛刃)', icon: '🪚', tag: '發射飛盤',
-      desc: '輪盤旋轉時，每 2 秒向外發射一枚反彈刀刃穿透敵群。',
-      stats: { ejectRate: 2.0 } },
+      desc: '輪盤旋轉時，每 2 秒向外發射一枚高速穿透飛刃。',
+      stats: { ejectRate: 2.0, ejectSpeed: 360, ejectDamageMul: 1.2, ejectPierce: 8, ejectLife: 3.0 } },
     { id: 'shield',  name: '聖盾型態 (投射反彈)', icon: '🛡️', tag: '消彈護盾',
       desc: '防禦力場擴大 30%，能阻擋消滅甚至反彈所有敵方投射物。',
       stats: { radiusMul: 1.30, reflectBullets: true } },
   ],
   soccer: [
     { id: 'achilles', name: '阿基里斯 (超導衝鋒)', icon: '🏃', tag: '彈射充能',
-      desc: '足球每次彈射命中，為特工提供 6% 跑速（可疊加至 42%），彈跳速度遞增。',
-      stats: { speedBoostPerHit: 0.06, maxSpeedBoost: 0.42 } },
+      desc: '足球每次命中為特工充能 6% 跑速（可疊加至 42%，持續 4 秒）。',
+      stats: { speedBoostPerHit: 0.06, maxSpeedBoost: 0.42, boostDur: 4.0 } },
     { id: 'guanyu',   name: '關羽型態 (寒冰重力球)', icon: '❄️', tag: '冰凍引力',
-      desc: '足球直徑增大 50%，自帶重力牽引周遭怪物並強制冰凍 1.5 秒。',
-      stats: { radiusMul: 1.50, freezeDur: 1.5, gravityPull: true } },
+      desc: '足球直徑增大 50%，命中附帶 1.5 秒冰凍定身。',
+      stats: { radiusMul: 1.50, freezeDur: 1.5 } },
     { id: 'thanatos', name: '塔納托斯 (湮滅死球)', icon: '💀', tag: '第5擊核爆',
-      desc: '足球每次彈跳傷害提升 25%，累積第 5 次彈跳時產生湮滅黑洞爆炸。',
-      stats: { bounceDmgGrowth: 0.25, fifthImplosion: true } },
+      desc: '足球每次命中傷害提升 25%，第 5 次命中時引發虛空引爆（半徑 100、200 點終結傷害）。',
+      stats: { bounceDmgGrowth: 0.25, implosionAt: 5, implosionRadius: 100, implosionDamage: 200 } },
   ],
 };
 
@@ -812,6 +757,6 @@ export const ACHIEVEMENTS = [
     check: (s) => s.merchantBuys >= 3, reward: 40 },
   { id: 'endless_10m',     name: '深淵倖存者',   icon: '🌀', desc: '深淵無盡戰存活超過 10 分鐘',
     check: (s) => s.levelId === 'endless' && s.time >= 600, reward: 200 },
-  { id: 'all_chars',       name: '特工大閱兵',   icon: '🦆', desc: '使用全部 4 位特工各通關一次',
+  { id: 'all_chars',       name: '特工大閱兵',   icon: '🦆', desc: '使用全部 5 位特工各通關一次',
     check: (s) => s.clearedWithAllChars, reward: 300 },
 ];

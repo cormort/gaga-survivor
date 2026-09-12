@@ -30,6 +30,9 @@ const SCENARIOS = [
   { id: 'burn',     敵人: 250, burn: true,  poison: 0, 說明: '滿場灼燒' },
   { id: 'burn5',    敵人: 250, burn: true,  poison: 5, 說明: '滿場灼燒 + 中毒 5 層（最壞）' },
   { id: 'drops',    敵人: 100, burn: false, poison: 0, 掉落物: 400, 說明: '大量掉落物' },
+  // 三個舊情境都沒有「敵方子彈、火焰池、粒子滿載」—— 而這正是繪圖成本最集中的地方
+  // （150 發會發光的酸液彈、6 灘各 6~11 束火舌的火海、900 顆粒子＋110 個傷害飄字）。
+  { id: 'barrage',  敵人: 60,  burn: false, poison: 0, 額外: '彈幕火海粒子', 說明: '150 酸液彈 + 6 火海 + 粒子滿載（繪圖成本最壞）' },
 ];
 
 async function probe(page, sc) {
@@ -63,6 +66,43 @@ async function probe(page, sc) {
         g.dropItems.push(new DropItem(g.player.x + Math.cos(a) * d, g.player.y + Math.sin(a) * d, 'EXP_GREEN'));
       }
     }
+
+    if (sc.額外 === '彈幕火海粒子') {
+      const { Projectile } = await import('/js/entities/Projectile.js');
+      // 6 灘火海：每灘自己會畫 6~11 束火舌（燃油煉獄的數量級）
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        g.weaponManager.projectiles.push(new Projectile({
+          type: 'fire_pool', weaponId: 'molotov',
+          x: g.player.x + Math.cos(a) * 220, y: g.player.y + Math.sin(a) * 220,
+          damage: 40, radius: 120, pierce: 9999, life: 9999, knockback: 0.2, tickInterval: 0.25,
+        }));
+      }
+      // 150 發酸液彈（遊戲內上限）
+      for (let i = 0; i < 150; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = 220 + Math.random() * 500;
+        g.spawnEnemyProjectile({ x: 0, y: 0, radius: 10 }, {
+          x: g.player.x + Math.cos(a) * d, y: g.player.y + Math.sin(a) * d,
+          vx: 0, vy: 0, damage: 12, radius: 6, color: '#06d6a0', glow: '#06d6a0',
+        });
+      }
+      // 粒子與傷害飄字滿載
+      for (let i = 0; i < 120; i++) {
+        const px = g.player.x + (Math.random() - 0.5) * 900;
+        const py = g.player.y + (Math.random() - 0.5) * 600;
+        g.particles.createDamageText(px, py, 1234, i % 3 === 0, i % 5 === 0);
+        g.particles.createDeathParticles(px, py, '#ff0055', 6);
+      }
+      g.player.invulnerableTimer = 1e9;
+    }
+
+    // ── 預熱：把「一次性」成本排除在量測之外 ────────────────
+    // 地表材質磚、巨觀地形層、暗角畫布、各角色的 sprite 都是在第一次繪製時才烘焙。
+    // 不先預熱的話，那幾百毫秒會被攤進 120 帧的窗期裡，量到的是「開場」而不是
+    // 「穩態」—— 實測 250 隻燃燒+中毒：含烘焙 20.2ms/幀，預熱後 16.3ms/幀。
+    g.render();
+    g.render();
 
     // ── 繪圖指令與塗抹面積的計數器 ──
     const ctx = g.ctx;

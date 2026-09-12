@@ -150,6 +150,7 @@ body, html {
   gap: 6px;
   background: var(--bg-card);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   padding: 6px 14px;
   border-radius: 20px;
   border: 1px solid var(--border-color);
@@ -359,6 +360,7 @@ body, html {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 #joystick-stick {
@@ -382,6 +384,7 @@ body, html {
   height: 100%;
   background: rgba(5, 8, 15, 0.85);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -393,6 +396,11 @@ body, html {
 .overlay.hidden {
   opacity: 0;
   pointer-events: none;
+  /* 原本只關 opacity，backdrop-filter 還留著 —— 11 個隱藏彈窗疊在每幀重繪的 canvas
+     上，等於每一幀都還要為看不見的模糊層取樣一次背景。顯示狀態與 0.25s 淡入不受
+     影響（transition 只有 opacity，取消隱藏時模糊會跟著淡入一起回來）。 */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* 升級模態框 */
@@ -1941,6 +1949,7 @@ body, html {
   border: 1px solid rgba(0, 229, 255, 0.28);
   border-radius: 999px;
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   font-family: var(--font-text);
   pointer-events: none;
 }
@@ -1976,10 +1985,24 @@ body, html {
   opacity: 0.8;
 }
 
-/* 核心告急：整條轉紅並呼吸 */
+/* 核心告急：整條轉紅並呼吸。
+   原本直接在 #core-hud 上無限動畫 box-shadow —— 那等於每一幀重畫整個元素，
+   而這個元素還帶 backdrop-filter，等於每幀都要重新取樣一次背景。
+   現在紅光移到 ::after，只動畫 opacity/transform（合成器可處理），
+   元素本身不再需要每幀重新點陣化，紅色呼吸的視覺意圖不變。 */
 #core-hud.danger {
+  position: relative;
   border-color: rgba(255, 0, 85, 0.6);
+}
+
+#core-hud.danger::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 16px 2px rgba(255, 0, 85, 0.5);
   animation: corePulse 0.7s ease-in-out infinite;
+  pointer-events: none;
 }
 
 #core-hud.danger .core-hp-fill {
@@ -1987,8 +2010,8 @@ body, html {
 }
 
 @keyframes corePulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.35); }
-  50%      { box-shadow: 0 0 16px 2px rgba(255, 0, 85, 0.5); }
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.03); }
 }
 
 /* ==================== 貨幣與特工黑市 (Shop Modal) ==================== */
@@ -2233,7 +2256,11 @@ body, html {
 
 .event-icon {
   font-size: 24px;
-  filter: drop-shadow(0 0 6px var(--event-color));
+  /* 原本是 filter: drop-shadow(0 0 6px …)。filter 會把整個子樹拉進自己的合成層，
+     而外層 .event-banner 是持續動畫的元素 —— 等於每一幀都要為這個圖示重新點陣化。
+     圖示是文字 emoji，用 text-shadow 取代可以保留字形輪廓的光暈（box-shadow 只會
+     在行內框外畫一個方形光暈，反而看得出差別），也不再建立合成層。 */
+  text-shadow: 0 0 6px var(--event-color);
 }
 
 .event-body {
@@ -2743,3 +2770,133 @@ body, html {
   line-height: 1.35;
 }
 
+
+/* ==================== PWA 提示橫幅 (更新 / 安裝) ==================== */
+/* 由 js/pwa.js 動態建立；沿用 .event-banner 的霓虹玻璃語言：
+   深色漸層底 + 霓虹描邊 + 外發光，文字用 --font-display / --font-text。
+   位置固定在頂部 HUD 底下、畫面中央 —— 左下虛擬搖桿與右下動作列都在底部，
+   這個橫幅不進它們的範圍；盒子本身 pointer-events: auto，以外的區域完全穿透。 */
+.pwa-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 112px);
+  left: 50%;
+  transform: translateX(-50%);
+  /* 蓋過 .overlay (z-index: 100)：安裝提示在主選單/結算畫面之上也該看得到 */
+  z-index: 105;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* width: max-content 必要 —— 只用 left:50% 時，可用寬度會被算成「畫面一半」，
+     說明文字會提早被 ellipsis 吃掉。這裡先取內容寬度，再交給 max-width 收斂。 */
+  width: max-content;
+  max-width: min(92vw, 460px);
+  padding: 6px 10px 6px 12px;
+  background: linear-gradient(135deg, rgba(18, 26, 43, 0.94) 0%, rgba(10, 14, 23, 0.96) 100%);
+  border: 1px solid var(--border-glow);
+  border-radius: 12px;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.28), inset 0 0 10px rgba(0, 229, 255, 0.1);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: auto;
+  animation: pwaBannerIn 0.28s ease-out;
+}
+
+/* 版本更新用警示色 (--color-accent 洋紅)，與局內隨機事件橫幅同一個色系 */
+.pwa-banner.pwa-update {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 20px rgba(255, 0, 85, 0.32), inset 0 0 12px rgba(255, 0, 85, 0.14);
+}
+
+@keyframes pwaBannerIn {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.pwa-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.65));
+}
+
+.pwa-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.pwa-title {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pwa-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  /* 一律維持兩行以內：橫幅小、可關，不佔戰鬥畫面 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pwa-action {
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #04121a;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-green));
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.45);
+}
+
+.pwa-banner.pwa-update .pwa-action {
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-purple));
+  box-shadow: 0 0 10px rgba(255, 0, 85, 0.45);
+}
+
+.pwa-dismiss {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* 手機：再縮一級，維持細細一條不擋戰鬥視線 (頂端 74px = #objective 下緣) */
+@media (max-width: 620px) {
+  .pwa-banner {
+    top: calc(env(safe-area-inset-top) + 74px);
+    gap: 7px;
+    max-width: 96vw;
+    padding: 5px 8px 5px 10px;
+    border-radius: 10px;
+  }
+  .pwa-icon { font-size: 15px; }
+  .pwa-title { font-size: 11.5px; }
+  .pwa-desc { font-size: 10px; }
+  .pwa-action { padding: 4px 9px; font-size: 10.5px; }
+  .pwa-dismiss { width: 20px; height: 20px; }
+}
+
+/* 橫向手機 (高度很矮)：貼齊 HUD 下緣，避免佔到中間的戰鬥區 */
+@media (max-height: 480px) {
+  .pwa-banner { top: calc(env(safe-area-inset-top) + 86px); }
+  .pwa-desc { display: none; }
+}

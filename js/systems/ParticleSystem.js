@@ -6,14 +6,35 @@ const MAX_PARTICLES = 900;
 const MAX_DAMAGE_TEXTS = 110;
 const MAX_LIGHTNINGS = 12;
 
+// 跳字字型是固定的三種，原本每幀重新建一個 fonts 陣列 + 三個字串常值；
+// 拉出來當模組常數，順便讓三桶的容器也能重複使用。
+const TEXT_FONTS = [
+  "bold 14px 'Chakra Petch', sans-serif",
+  "bold 20px 'Chakra Petch', sans-serif",
+  "bold 27px 'Chakra Petch', sans-serif",
+];
+const TEXT_BUCKETS = [[], [], []];
+
 export class ParticleSystem {
   constructor() {
     this.particles = [];
+    // 跳字環狀緩衝：這仍是一個陣列，但滿了之後是「就地覆寫最舊槽位」，
+    // 而不是 shift() 把後面 110 筆整排往前搬。_dtHead 指向最舊的一筆。
     this.damageTexts = [];
+    this._dtHead = 0;
+    this._dtCount = 0;
     this.lightnings = [];
+    // 每幀的摩擦衰減倍率快取 (見 update)
+    this._frictionMul = new Map();
   }
 
   update(dt) {
+    // 摩擦衰減：原本每顆粒子每幀各算一次 Math.pow(friction, dt*60)（最多 900 次），
+    // 但 friction 只有少數幾個寫死的值 —— 每幀每個值算一次就夠，其餘查表。
+    const exp = dt * 60;
+    const frictions = this._frictionMul;
+    frictions.clear();
+
     // 更新粒子
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -24,18 +45,24 @@ export class ParticleSystem {
       }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vx *= Math.pow(p.friction || 0.92, dt * 60);
-      p.vy *= Math.pow(p.friction || 0.92, dt * 60);
+      const f = p.friction || 0.92;
+      let mul = frictions.get(f);
+      if (mul === undefined) {
+        mul = Math.pow(f, exp);
+        frictions.set(f, mul);
+      }
+      p.vx *= mul;
+      p.vy *= mul;
     }
 
-    // 更新傷害數字
-    for (let i = this.damageTexts.length - 1; i >= 0; i--) {
-      const dtText = this.damageTexts[i];
+    // 更新傷害數字。過期的留在槽位裡變成死槽（draw 會跳過），等新跳字來覆寫；
+    // 因為壽命只有 0.65/0.7 兩種且都遞增，死槽必定是環上最舊的一段，淘汰順序不變。
+    const texts = this.damageTexts;
+    for (let i = 0; i < texts.length; i++) {
+      const dtText = texts[i];
+      if (dtText.life <= 0) continue;
       dtText.life -= dt;
-      if (dtText.life <= 0) {
-        this.damageTexts.splice(i, 1);
-        continue;
-      }
+      if (dtText.life <= 0) continue;
       dtText.y -= 25 * dt; // 向上漂浮 (字級固定，靠 alpha 淡出即可)
     }
 
@@ -51,9 +78,8 @@ export class ParticleSystem {
 
   createDamageText(x, y, text, isCrit = false, isRealCrit = false) {
     // 跳字太多時丟掉最舊的 (已淡出大半)，保留最新傷害反饋
-    if (this.damageTexts.length >= MAX_DAMAGE_TEXTS) this.damageTexts.shift();
     const displayText = typeof text === 'number' ? String(Math.round(text)) : String(text);
-    this.damageTexts.push({
+    this._pushDamageText({
       x: x + (Math.random() * 16 - 8),
       y: y - 10 + (Math.random() * 10 - 5),
       text: displayText,
@@ -67,10 +93,21 @@ export class ParticleSystem {
     });
   }
 
+  // 把新跳字放進環狀緩衝：未滿就 append，滿了就覆寫最舊槽位 (O(1))
+  _pushDamageText(obj) {
+    const texts = this.damageTexts;
+    if (this._dtCount < MAX_DAMAGE_TEXTS) {
+      texts.push(obj);
+      this._dtCount++;
+      return;
+    }
+    texts[this._dtHead] = obj;
+    this._dtHead = (this._dtHead + 1) % MAX_DAMAGE_TEXTS;
+  }
+
   // 玩家受傷的跳字：負號 + 紅字，跟自己打出的暴擊 (大紅字加驚嘆號) 區分開
   createHurtText(x, y, amount) {
-    if (this.damageTexts.length >= MAX_DAMAGE_TEXTS) this.damageTexts.shift();
-    this.damageTexts.push({
+    this._pushDamageText({
       x: x + (Math.random() * 10 - 5),
       y: y - 24,
       text: `-${Math.round(amount)}`,
@@ -247,7 +284,11 @@ export class ParticleSystem {
       ctx.restore();
     }
 
-    // 繪製粒子與衝擊波
+    // 繪製粒子與衝擊波。
+    // 原本每顆自己 save/restore 一次（900 顆 = 1800 次狀態指令），但兩個分支各自
+    // 都把自己用到的屬性 (fillStyle/strokeStyle/lineWidth/globalAlpha) 設滿，
+    // 所以整段包一組 save/restore 就等價 —— 繪製順序與混合結果完全不變。
+    ctx.save();
     for (const p of this.particles) {
       const screenX = p.x - camera.x;
       const screenY = p.y - camera.y;
@@ -255,41 +296,40 @@ export class ParticleSystem {
 
       if (p.type === 'shockwave') {
         const curR = p.radius + (p.maxRadius - p.radius) * (1 - alpha);
-        ctx.save();
         ctx.strokeStyle = p.color;
         ctx.lineWidth = 4 * alpha;
         ctx.globalAlpha = alpha;
         ctx.beginPath();
         ctx.arc(screenX, screenY, curR, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.restore();
       } else {
-        ctx.save();
         ctx.fillStyle = p.color;
         ctx.globalAlpha = alpha;
         ctx.beginPath();
         ctx.arc(screenX, screenY, p.radius * alpha, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
       }
     }
+    ctx.restore();
 
     // 繪製浮動傷害跳字：依大小分三桶，每桶只設一次 canvas font。
     // (canvas 切字型會清 glyph cache，大量跳字時逐顆設定是主要的繪製成本)
-    const buckets = [[], [], []];
-    for (const dt of this.damageTexts) {
-      buckets[dt.bucket || 0].push(dt);
+    // 桶與字型都是模組常數，不再每幀重新配置陣列。
+    // 走訪順序照環狀緩衝的年齡順序 (最舊→最新)，重疊時的疊放次序與原本相同。
+    const texts = this.damageTexts;
+    const head = this._dtHead;
+    const total = texts.length;
+    for (let b = 0; b < 3; b++) TEXT_BUCKETS[b].length = 0;
+    for (let k = 0; k < total; k++) {
+      const dt = texts[(head + k) % total];
+      if (dt.life <= 0) continue;   // 死槽
+      TEXT_BUCKETS[dt.bucket || 0].push(dt);
     }
-    const fonts = [
-      "bold 14px 'Chakra Petch', sans-serif",
-      "bold 20px 'Chakra Petch', sans-serif",
-      "bold 27px 'Chakra Petch', sans-serif",
-    ];
     for (let b = 0; b < 3; b++) {
-      const list = buckets[b];
+      const list = TEXT_BUCKETS[b];
       if (list.length === 0) continue;
       ctx.save();
-      ctx.font = fonts[b];
+      ctx.font = TEXT_FONTS[b];
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 3;
@@ -309,6 +349,8 @@ export class ParticleSystem {
   clear() {
     this.particles = [];
     this.damageTexts = [];
+    this._dtHead = 0;
+    this._dtCount = 0;
     this.lightnings = [];
   }
 }

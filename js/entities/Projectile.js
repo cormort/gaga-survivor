@@ -1,6 +1,79 @@
 // 武器投射物與攻擊實體 (苦無、旋轉輪盤、火箭爆破、地面积火、落雷、彈跳足球)
 
-import { GAME_CONFIG } from '../config.js';
+import { GAME_CONFIG, CHARGE } from '../config.js';
+
+// '#rrggbb' → 'r,g,b' (給 rgba() 字串用)
+function hexToRgbStr(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+
+// ── 火海/蓄能彈的漸層快取 ──────────────────────────────────────────
+// CanvasGradient 的座標是在「填色當下的 CTM」下解讀的，所以一顆從 (0,0) 到 (0,±1)
+// 的單位漸層，配上 translate/scale 就能重現任意半徑、任意高度的漸層。
+// 原本每根火舌、每灘火、每發蓄能彈每幀各建一顆漸層（後期 6 灘 × 6~11 根 ≈ 每幀近百顆），
+// 每顆還附帶 3~4 次 rgba() 模板字串解析；改成共用單位漸層後，這些全部只發生一次。
+//
+// 漸層的裝置座標綁在「建立它的 ctx」上，跨畫布共用會畫錯 —— 所以快取依 ctx 分開放。
+const UNIT_GRADS = new WeakMap();
+
+function gradCache(ctx) {
+  let m = UNIT_GRADS.get(ctx);
+  if (!m) {
+    m = new Map();
+    UNIT_GRADS.set(ctx, m);
+  }
+  return m;
+}
+
+function unitLinearGrad(ctx, key, stops) {
+  const cache = gradCache(ctx);
+  let g = cache.get('L' + key);
+  if (g) return g;
+  g = ctx.createLinearGradient(0, 0, 0, -1);
+  for (const [pos, color] of stops) g.addColorStop(pos, color);
+  cache.set('L' + key, g);
+  return g;
+}
+
+function unitRadialGrad(ctx, key, inner, stops) {
+  const cache = gradCache(ctx);
+  let g = cache.get('R' + key);
+  if (g) return g;
+  g = ctx.createRadialGradient(0, 0, inner, 0, 0, 1);
+  for (const [pos, color] of stops) g.addColorStop(pos, color);
+  cache.set('R' + key, g);
+  return g;
+}
+
+// 火海配色：色停字串在建表時就組好 (只有兩套配色)，畫的時候一個字串都不用建
+function makeFlamePalette(key, hot, mid, cool, ember) {
+  return {
+    key,
+    ember: `rgb(${ember})`,   // 火星改用固定色 + globalAlpha 調變，不再每顆組 rgba()
+    poolStops: [[0, `rgba(${hot}, 0.55)`], [0.45, `rgba(${mid}, 0.38)`], [1, `rgba(${cool}, 0)`]],
+    tongueStops: [[0, `rgba(${hot}, 0.95)`], [0.3, `rgba(${mid}, 0.62)`],
+                  [0.62, `rgba(${cool}, 0.16)`], [1, `rgba(${cool}, 0)`]],
+    coreStops: [[0, `rgba(${hot}, 0.9)`], [1, `rgba(${mid}, 0)`]],
+  };
+}
+const FLAME_NORMAL = makeFlamePalette('n', '255,248,210', '255,145,25', '190,25,0', '255,160,60');
+const FLAME_EVO = makeFlamePalette('e', '245,252,255', '70,170,255', '80,30,220', '150,215,255');
+
+// 蓄能彈外圈光暈：顏色只跟 charge 種類有關，同樣只烘一顆單位徑向漸層
+function chargeGlowGrad(ctx, charge) {
+  const cache = gradCache(ctx);
+  let g = cache.get('C' + charge);
+  if (g) return g;
+  const cDef = CHARGE[charge];
+  const glow = (cDef && cDef.color) ? hexToRgbStr(cDef.color) : '255,255,255';
+  g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+  g.addColorStop(0, `rgba(${glow}, 0.75)`);
+  g.addColorStop(0.5, `rgba(${glow}, 0.3)`);
+  g.addColorStop(1, `rgba(${glow}, 0)`);
+  cache.set('C' + charge, g);
+  return g;
+}
 
 export class Projectile {
   constructor(options) {
@@ -27,9 +100,11 @@ export class Projectile {
     this.orbitRadius = options.orbitRadius || 70;
     this.spinSpeed = options.spinSpeed || 3.5;
 
-    // 持續傷害節奏：火海每 0.25 秒跳一次，環繞刀刃/彈跳球用 rehit 決定多久能再打同一隻
+    // 持續傷害節奏：火海預設每 0.25 秒跳一次 (型態可縮短，例如札格燃燒瓶 ×0.70)，
+    // 環繞刀刃/彈跳球用 rehit 決定多久能再打同一隻
     this.tickTimer = 0;
-    this.tickInterval = 0.25;
+    this.tickInterval = options.tickInterval || 0.25;
+    this.healPerSec = options.healPerSec || 0;
     this.rehit = options.rehit || 0;
     this.charge = options.charge || null; // 蓄能彈：'burn' / 'chain'
     this.seed = Math.random() * 100; // 火焰舌動畫相位，讓每灘火各燒各的
@@ -47,9 +122,19 @@ export class Projectile {
     // 武器型態專屬 (Hades Aspects)
     this.aspect = options.aspect || null;
     this.markOnHit = !!options.markOnHit;
+    this.markDur = options.markDur || 5;
+    this.markBonus = options.markBonus || 0.25;
     this.reflectBullets = !!options.reflectBullets;
     this.isSanctuary = !!options.isSanctuary;
+    this.freezeDur = options.freezeDur || 0;      // 關羽型態的冰凍秒數 (覆寫 CHARGE 預設)
     this.thanatosBounces = options.thanatosBounces || 0;
+    this.bounceGrowth = options.bounceGrowth || 0;
+    this.implosionAt = options.implosionAt || 0;
+    this.implosionRadius = options.implosionRadius || 0;
+    this.implosionDamage = options.implosionDamage || 0;
+    this.lavaDuration = options.lavaDuration || 0;
+    this.lavaRadius = options.lavaRadius || 0;
+    this.lavaDamageMul = options.lavaDamageMul || 0;
   }
 
   update(dt, player, onExplosion = null) {
@@ -89,9 +174,10 @@ export class Projectile {
         this.tickTimer += dt;
         if (this.isSanctuary && player) {
           if (Math.hypot(player.x - this.x, player.y - this.y) <= this.radius) {
-            player.inSanctuary = true;
-            if (this.tickTimer >= this.tickInterval) {
-              player.heal(2);
+            player.sanctuaryTimer = 0.2;   // 站在池內每幀刷新；離開後自動失效
+            if (this.tickTimer >= this.tickInterval && this.healPerSec > 0) {
+              // 治療量由型態資料決定 (healPerSec 8 ÷ 每秒跳幾次)，不是硬寫的 2
+              player.heal(this.healPerSec * this.tickInterval);
             }
           }
         }
@@ -155,16 +241,17 @@ export class Projectile {
 
     // 蓄能彈：外圈套一層元素光暈，讓玩家看得出這發不一樣
     if (this.charge) {
-      const glow = { burn: '255,123,0', chain: '125,248,255', freeze: '127,216,255', poison: '125,255,143' }[this.charge] || '255,255,255';
-      const pulse = 1 + Math.sin(Date.now() * 0.02 + this.seed) * 0.15;
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius * 2.6 * pulse);
-      g.addColorStop(0, `rgba(${glow}, 0.75)`);
-      g.addColorStop(0.5, `rgba(${glow}, 0.3)`);
-      g.addColorStop(1, `rgba(${glow}, 0)`);
-      ctx.fillStyle = g;
+      // 顏色改讀 config.js 的 CHARGE 表 (burn/freeze/poison 三個 color 先前沒有任何讀者)
+      const pulse = 1 + Math.sin(this.life * 6 + this.seed) * 0.15;
+      const R = this.radius * 2.6 * pulse;
+      // 單位徑向漸層 + 縮放：換來的是每發每幀不再建漸層、不再組 3 個 rgba() 字串
+      const base = ctx.getTransform();
+      ctx.transform(R, 0, 0, R, 0, 0);
+      ctx.fillStyle = chargeGlowGrad(ctx, this.charge);
       ctx.beginPath();
-      ctx.arc(0, 0, this.radius * 2.6 * pulse, 0, Math.PI * 2);
+      ctx.arc(0, 0, 1, 0, Math.PI * 2);
       ctx.fill();
+      ctx.setTransform(base);
     }
 
     switch (this.type) {
@@ -414,26 +501,25 @@ export class Projectile {
 
     const t = Date.now() * 0.003 + this.seed;
     // 藍色煉獄與一般火海只差色溫。火焰的三個關鍵：根部最亮、火舌會歪、舌尖要透明
-    const c = this.isEvo
-      ? { hot: '245,252,255', mid: '70,170,255', cool: '80,30,220', ember: '150,215,255' }
-      : { hot: '255,248,210', mid: '255,145,25', cool: '190,25,0', ember: '255,160,60' };
+    const pal = this.isEvo ? FLAME_EVO : FLAME_NORMAL;
+    // 後面所有填色都靠 CTM 擺位，先記住原點 (translate 到池心)，畫完再還原
+    const base = ctx.getTransform();
 
     // 1. 地上的燃燒油漬 (壓扁橢圓)，火要有附著的地面
-    ctx.save();
-    ctx.scale(1, 0.4);
-    const pool = ctx.createRadialGradient(0, 0, r * 0.1, 0, 0, r);
-    pool.addColorStop(0, `rgba(${c.hot}, 0.55)`);
-    pool.addColorStop(0.45, `rgba(${c.mid}, 0.38)`);
-    pool.addColorStop(1, `rgba(${c.cool}, 0)`);
-    ctx.fillStyle = pool;
+    //    單位圓 + scale(r, r*0.4) 完全等價於 scale(1,0.4) + arc(r)，但漸層可以共用
+    ctx.transform(r, 0, 0, r * 0.4, 0, 0);
+    ctx.fillStyle = unitRadialGrad(ctx, pal.key + 'pool', 0.1, pal.poolStops);
     ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.arc(0, 0, 1, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
 
     // 2. 火舌：一根根獨立竄動、互相交疊。每根都會左右擺 (lean)，
     //    漸層從根部的亮白熱一路透明到舌尖 —— 反過來畫就會變成水晶柱。
+    //    火舌路徑寫在「以舌根為原點、高度為 1」的正規化座標，用 transform 擺回去，
+    //    這樣那顆根部→舌尖的線性漸層也能所有火舌共用一顆（原本每根一顆）。
     ctx.globalCompositeOperation = 'lighter';
+    const tongueGrad = unitLinearGrad(ctx, pal.key + 'tongue', pal.tongueStops);
+    ctx.fillStyle = tongueGrad;   // 迴圈內不再動 fillStyle/save/restore
     const N = Math.max(6, Math.min(11, Math.round(r / 14))); // 大灘火 = 更多更細的火舌，不會變成粗積木
     for (let i = 0; i < N; i++) {
       const seed = i * 2.399;
@@ -445,42 +531,39 @@ export class Projectile {
       const w = (r / N) * 1.5 * (0.75 + 0.25 * Math.sin(t * 3.7 + seed));
       const lean = Math.sin(t * 1.9 + seed) * r * 0.22;         // 火舌歪斜
 
-      const g = ctx.createLinearGradient(0, by, 0, by - h);
-      g.addColorStop(0, `rgba(${c.hot}, 0.95)`);
-      g.addColorStop(0.3, `rgba(${c.mid}, 0.62)`);
-      g.addColorStop(0.62, `rgba(${c.cool}, 0.16)`);
-      g.addColorStop(1, `rgba(${c.cool}, 0)`);
-      ctx.fillStyle = g;
-
+      ctx.setTransform(base);
+      ctx.transform(1, 0, 0, h, bx, by);   // (u,v) → (bx+u, by+h*v)
       ctx.beginPath();
-      ctx.moveTo(bx - w, by);
-      ctx.bezierCurveTo(bx - w, by - h * 0.5, bx + lean - w * 0.22, by - h * 0.85, bx + lean, by - h);
-      ctx.bezierCurveTo(bx + lean + w * 0.22, by - h * 0.85, bx + w, by - h * 0.5, bx + w, by);
-      ctx.quadraticCurveTo(bx, by + w * 0.5, bx - w, by);
+      ctx.moveTo(-w, 0);
+      ctx.bezierCurveTo(-w, -0.5, lean - w * 0.22, -0.85, lean, -1);
+      ctx.bezierCurveTo(lean + w * 0.22, -0.85, w, -0.5, w, 0);
+      ctx.quadraticCurveTo(0, (w * 0.5) / h, -w, 0);   // 舌根下緣的 y 要用 h 換算回正規化座標
       ctx.fill();
     }
 
     // 3. 根部的高溫白熱帶 (壓扁)，把所有火舌的根連成一條燒紅的線
-    ctx.save();
-    ctx.scale(1, 0.3);
-    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.85);
-    core.addColorStop(0, `rgba(${c.hot}, 0.9)`);
-    core.addColorStop(1, `rgba(${c.mid}, 0)`);
-    ctx.fillStyle = core;
+    ctx.setTransform(base);
+    const coreR = r * 0.85;
+    ctx.transform(coreR, 0, 0, coreR * 0.3, 0, 0);
+    ctx.fillStyle = unitRadialGrad(ctx, pal.key + 'core', 0, pal.coreStops);
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
+    ctx.arc(0, 0, 1, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
 
-    // 4. 竄升的火星
+    // 4. 竄升的火星：固定色 + globalAlpha（= 原本 rgba(色, a) 的等價寫法，兩者相乘）
+    ctx.setTransform(base);
+    const ga = ctx.globalAlpha;
+    ctx.fillStyle = pal.ember;
     for (let i = 0; i < 5; i++) {
       const p = (t * 0.35 + i * 0.2) % 1;
       const ex = Math.sin(t * 1.3 + i * 2.1) * r * 0.55;
-      ctx.fillStyle = `rgba(${c.ember}, ${(1 - p) * 0.8})`;
+      ctx.globalAlpha = ga * (1 - p) * 0.8;
       ctx.beginPath();
       ctx.arc(ex, -p * r * 1.6, r * 0.045 * (1 - p * 0.6), 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.globalAlpha = ga;
+    ctx.setTransform(base);
     ctx.globalCompositeOperation = 'source-over';
   }
 

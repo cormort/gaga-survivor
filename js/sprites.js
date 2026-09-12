@@ -2031,6 +2031,69 @@ function drawGear(x) {
 }
 
 
+// 深淵無盡戰專屬裝飾：虛空晶簇與破碎方尖碑。
+// 原本無盡關的 decor 沿用 ['lava_crack','gear','radar'] —— 把雪地雷達碟擺在
+// 虛空星盤上，整關讀起來像「別關剩下的素材」。
+function drawVoidCrystal(x) {
+  shadow(x, 14, 12);
+  const shard = (dx, hgt, wdt, alpha) => {
+    const g = x.createLinearGradient(0, -hgt, 0, 12);
+    g.addColorStop(0, `rgba(215,180,255,${alpha})`);
+    g.addColorStop(1, 'rgba(70,30,120,0.9)');
+    x.fillStyle = g;
+    x.strokeStyle = 'rgba(200,160,255,0.55)';
+    x.lineWidth = 1.3;
+    x.beginPath();
+    x.moveTo(dx, -hgt);
+    x.lineTo(dx + wdt, 10);
+    x.lineTo(dx - wdt, 10);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  };
+  shard(-9, 26, 7, 0.75);
+  shard(2, 36, 9, 0.9);
+  shard(12, 20, 6, 0.6);
+  x.fillStyle = 'rgba(180,120,255,0.25)';
+  x.beginPath();
+  x.ellipse(0, 11, 20, 6, 0, 0, Math.PI * 2);
+  x.fill();
+}
+
+function drawVoidObelisk(x) {
+  shadow(x, 14, 14);
+  x.fillStyle = '#241a3a';
+  x.strokeStyle = '#0f0a1c';
+  x.lineWidth = 1.6;
+  x.beginPath();
+  x.moveTo(0, -30);
+  x.lineTo(9, -18);
+  x.lineTo(6, 14);
+  x.lineTo(-6, 14);
+  x.lineTo(-9, -18);
+  x.closePath();
+  x.fill();
+  x.stroke();
+  x.strokeStyle = 'rgba(190,140,255,0.85)';
+  x.lineWidth = 1.6;
+  x.beginPath();
+  x.moveTo(0, -22);
+  x.lineTo(0, 6);
+  x.stroke();
+  x.beginPath();
+  x.arc(0, -8, 4, 0, Math.PI * 2);
+  x.stroke();
+  // 折斷滾落的一角
+  x.fillStyle = '#1a1230';
+  x.beginPath();
+  x.moveTo(-14, 14);
+  x.lineTo(-4, 10);
+  x.lineTo(-6, 16);
+  x.closePath();
+  x.fill();
+}
+
+
 function drawRunner(x, t, r) {
   const p = t * Math.PI * 2;
   const gallop = Math.sin(p);          // 前後腿交替
@@ -2787,6 +2850,8 @@ const BUILDERS = {
   lava_crack: { w: 56, h: 20, static: true, fn: drawLavaCrack },
   steel:      { w: 52, h: 34, static: true, fn: drawSteelPlate },
   gear:       { w: 42, h: 42, static: true, fn: drawGear },
+  void_crystal: { w: 44, h: 52, static: true, fn: drawVoidCrystal },
+  void_obelisk: { w: 40, h: 52, static: true, fn: drawVoidObelisk },
 };
 
 // 關卡主題 Boss：4 主題 × (一般/最終) × (待機/衝鋒)，尺寸與半徑照最終形放大
@@ -2799,6 +2864,15 @@ for (const [theme, fn] of Object.entries({
         { w: size, h: size, fn: (x, t) => fn(x, t, r, charging, final) };
     }
   }
+}
+
+// 查詢 sprite key 是否真的存在。getSprite 對未知 key 會靜默退回 walker，
+// 裝飾物 key 打錯就會在場景裡畫出一隻殭屍而完全沒有錯誤訊息 —— 這個查詢讓
+// Decor 能在啟動時濾掉打錯的 key 並警告。
+export function hasSprite(key) {
+  if (BUILDERS[key]) return true;
+  const m = String(key).match(/^(.+):v[0-2]$/);
+  return !!(m && BUILDERS[m[1]]);
 }
 
 // 取得某角色的 sprite 組 (首次呼叫才烘焙，之後直接命中快取)
