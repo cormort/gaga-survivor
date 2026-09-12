@@ -763,7 +763,7 @@ class Game {
   triggerPropExplosion(prop) {
     this.particles.createExplosion(prop.x, prop.y, 140);
     this.particles.createShockwave(prop.x, prop.y, 180, '#ff9e00');
-    sound.playExplosion();
+    sound.playExplosion(prop.x);
     this.camera.shake = Math.max(this.camera.shake, 14);
     // 爆炸焦痕
     this.addDecal(prop.x, prop.y, 150, FX.scorch.fill, FX.scorch.a, FX.scorch.accent, FX.decalLife + 2);
@@ -1730,7 +1730,7 @@ class Game {
 
   // 地雷/噴發引爆：敵我皆傷 (噴發對敵傷害高，幫清場但要閃)
   explodeHazard(h) {
-    sound.playExplosion();
+    sound.playExplosion(h.x);
     this.camera.shake = Math.max(this.camera.shake, 9);
     this.particles.createExplosion(h.x, h.y, h.r, h.kind === 'geyser');
     this.particles.createShockwave(h.x, h.y, h.r, h.color);
@@ -2749,6 +2749,16 @@ class Game {
       }
     }
 
+    // 音訊：把畫面中心當成聽者 (音效左右定位)，並依戰況餵入音樂張力。
+    // 張力高時 BGM 會疊上 16 分音符琶音層、lead 變密、ghost hat 出現。
+    sound.setListener(this.camera.x + this.vw / 2, this.vw);
+    {
+      const bossAlive = this.boss && !this.boss.isDead ? 0.4 : 0;
+      const lowHp = this.player.hp / this.player.maxHp < 0.35 ? 0.35 : 0;
+      const frenzy = this.frenzyTimer > 0 ? 0.3 : 0;
+      sound.setIntensity(Math.min(1, bossAlive + lowHp + frenzy));
+    }
+
     // 13. 更新 UI
     this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
@@ -2886,7 +2896,7 @@ class Game {
           prop.hp -= p.damage;
           prop.flashTimer = 0.12;
           this.particles.createDamageText(prop.x, prop.y, p.damage, false);
-          sound.playHit();
+          sound.playHit(prop.x);
           p.pierce--;
           if (p.pierce <= 0) {
             p.isDead = true;
@@ -2910,7 +2920,7 @@ class Game {
         if (dx * dx + dy * dy < rr * rr) {
           const destroyed = crate.takeDamage(p.damage);
           this.particles.createDamageText(crate.x, crate.y, Math.round(p.damage), false);
-          sound.playHit();
+          sound.playHit(crate.x);
           if (p.pierce > 0) {
             p.pierce--;
             if (p.pierce <= 0) {
@@ -2967,7 +2977,7 @@ class Game {
         if (died && p.mercOwner) p.mercOwner.gainKill(); // 傭兵擊殺 → 經驗升級
         this.weaponManager.recordDamage(p.weaponId, actualDmg);
         this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit);
-        sound.playHit();
+        sound.playHit(enemy.x);
 
         // 塔納托斯：每次命中傷害 +bounceDmgGrowth，第 implosionAt 次命中引發虛空引爆。
         // 先前 thanatosBounces 只被寫入一次、從未遞增或讀取，整個型態不存在。

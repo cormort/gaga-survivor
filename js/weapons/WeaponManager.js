@@ -406,7 +406,7 @@ export class WeaponManager {
             }, finalCrit)
           );
         }
-        sound.playShoot();
+        sound.playShoot('kunai');
       });
     }
   }
@@ -516,7 +516,7 @@ export class WeaponManager {
             lavaDamageMul: stats.lavaDamageMul,
           }, crit)
         );
-        sound.playShoot();
+        sound.playShoot('rocket');
       });
     }
   }
@@ -532,9 +532,10 @@ export class WeaponManager {
       const targetX = target ? target.x + (Math.random() * 40 - 20) : this.player.x + (Math.random() * 160 - 80);
       const targetY = target ? target.y + (Math.random() * 40 - 20) : this.player.y + (Math.random() * 160 - 80);
 
+      sound.playShoot('molotov');   // 燃燒瓶原本沒有任何投擲音效（六種武器唯一的靜音）
       // 波塞頓型態：落地時激流爆破，強力擊退並減速
       if (stats.splashDamageMul) {
-        sound.playExplosion();
+        sound.playExplosion(targetX);
         for (const e of enemies) {
           const d = Math.hypot(e.x - targetX, e.y - targetY);
           if (d <= r + 40) {
@@ -651,7 +652,7 @@ export class WeaponManager {
           implosionDamage: stats.implosionDamage || 0,
         }, crit)
       );
-      sound.playShoot();
+      sound.playShoot('soccer');
     }
   }
 
@@ -661,7 +662,7 @@ export class WeaponManager {
     rocketProj.hasExploded = true;
     rocketProj.isDead = true;
 
-    sound.playExplosion();
+    sound.playExplosion(rocketProj.x);
 
     if (particleSystem) {
       particleSystem.createExplosion(rocketProj.x, rocketProj.y, rocketProj.explosionRadius, rocketProj.isEvo);
