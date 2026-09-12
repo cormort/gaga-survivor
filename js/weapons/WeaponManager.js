@@ -170,6 +170,17 @@ export class WeaponManager {
     }
 
     // 協同效果：彈幕風暴 (投射物冷卻 -20%)
+    // 商人臨時增益必須在每次被動重算後重新套用。applyPassives 會把
+    // cdrMultiplier / magnetMultiplier 從頭算，而買了「臨時過載晶片」之後
+    // 只要再升一級就會被重置掉 —— 計時器還在跑，效果卻消失了。
+    const buffs = this.game && this.game._tempBuffs;
+    if (buffs && buffs.length > 0) {
+      for (const b of buffs) {
+        if (!b.reapply) continue;
+        b.reapply(this.player);
+      }
+    }
+
     if (this.player.synergies?.projCdrMul) {
       this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * this.player.synergies.projCdrMul);
     }
@@ -248,9 +259,13 @@ export class WeaponManager {
         id !== 'orbit_saw' && id !== 'singularity_ring') return;
 
     const baseDmg = def.baseDamage + (def.damageGrowth ? def.damageGrowth * (item.level - 1) : 0);
-    const crit = Math.random() < (this.player.critChance || 0) + (this.player.metaCrit || 0);
+    // 幸運藥劑 (+25% 暴擊率) 與力量藥劑 (+40% 傷害) 在這裡讀計時器。
+    // 兩者原本都只被倒數與畫光環，沒有任何傷害路徑讀取 —— 撿到等於沒撿。
+    const crit = Math.random() < (this.player.critChance || 0) + (this.player.metaCrit || 0) +
+      (this.player.luckPotionTimer > 0 ? 0.25 : 0);
     const critMul = 2 + (this.player.metaCritDmg || 0);
-    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * (crit ? critMul : 1) * (this.player.blessingBerserkerMul || 1));
+    const potionDmgMul = this.player.atkPotionTimer > 0 ? 1.4 : 1;
+    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * potionDmgMul * (crit ? critMul : 1) * (this.player.blessingBerserkerMul || 1));
 
     switch (id) {
       case 'kunai':
@@ -303,7 +318,11 @@ export class WeaponManager {
     const target = this.getClosestEnemy(enemies);
     if (!target) return;
 
-    const aspect = this.player.weaponAspects?.kunai || 'zagreus';
+    // 型態要跟著「這把武器自己的家族」而不是永遠讀 kunai：fireKunai 同時服務
+    // phase_blade / ghost_shuriken / phase_storm，原本選了基隆苦無會讓進化後的
+    // 幽靈手裏劍與相位風暴永久只打 60% 傷害 (扇形補償對 isEvo 不生效)。
+    const aspectKey = ['phase_blade', 'phase_storm'].includes(def.id) ? 'phase_blade' : 'kunai';
+    const aspect = this.player.weaponAspects?.[aspectKey] || 'zagreus';
     let finalCrit = crit;
     let finalDmg = damage;
 

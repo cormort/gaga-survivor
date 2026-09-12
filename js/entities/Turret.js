@@ -145,6 +145,13 @@ export class Turret {
     sound.playGem();
   }
 
+  // 砲塔冷卻倍率 (每日詞綴「淘金狂熱」的 turretCdr)。規則層在 mergeRules 之後
+  // 掛在 game.rules 上；先前 turretCdr 沒有任何讀者，README 的 -35% 從未生效。
+  cdMul(game) {
+    const m = game && game.rules && game.rules.turretCdr;
+    return typeof m === 'number' && m > 0 ? m : 1;
+  }
+
   update(dt, enemies, onHit, player = null, game = null) {
     this.animTimer += dt;
     if (this.muzzleTimer > 0) this.muzzleTimer -= dt;
@@ -206,7 +213,7 @@ export class Turret {
 
     if (this.variant === 'cryo') {
       if (this.cooldownTimer <= 0) {
-        this.cooldownTimer = this.conf.cooldown;
+        this.cooldownTimer = this.conf.cooldown * this.cdMul(game);
         this.pulseTimer = 0.35;
         sound.playExplosion();
         for (const e of enemies) {
@@ -246,7 +253,7 @@ export class Turret {
     this.angle = Math.atan2(target.y - this.y, target.x - this.x);
 
     if (this.cooldownTimer > 0) return;
-    this.cooldownTimer = this.conf.cooldown;
+    this.cooldownTimer = this.conf.cooldown * this.cdMul(game);
     this.muzzleTimer = 0.08;
 
     if (this.variant === 'flame') {

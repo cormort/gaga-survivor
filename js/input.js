@@ -53,6 +53,14 @@ export class InputController {
       if (['d', 'arrowright'].includes(key)) this.keys.right = false;
       this.updateKeyboardVector();
     });
+
+    // 視窗失焦時清掉所有按鍵狀態。原本只監聽 window 的 keyup —— Alt-Tab、
+    // 切換 App 或通知彈出時若正按住方向鍵，keyup 永遠不會送達，回來後角色
+    // 會一直往同一個方向走。reset() 本來就有，只是從來沒有呼叫者。
+    window.addEventListener('blur', () => this.reset());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.reset();
+    });
   }
 
   updateKeyboardVector() {

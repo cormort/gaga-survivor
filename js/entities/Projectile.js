@@ -89,7 +89,7 @@ export class Projectile {
         this.tickTimer += dt;
         if (this.isSanctuary && player) {
           if (Math.hypot(player.x - this.x, player.y - this.y) <= this.radius) {
-            player.inSanctuary = true;
+            player.sanctuaryTimer = 0.2;   // 站在池內每幀刷新；離開後自動失效
             if (this.tickTimer >= this.tickInterval) {
               player.heal(2);
             }

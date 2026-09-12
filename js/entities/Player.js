@@ -74,6 +74,9 @@ export class Player {
     this.atkPotionTimer = 0;
     this.shieldPotionTimer = 0;
     this.luckPotionTimer = 0;
+    // 雅典娜聖光結界用「計時器」而不是布林旗標：原本只在踩進池子時設 true，
+    // 全 repo 沒有任何地方設回 false —— 踩過一次整局受傷 -25%，而且跨局殘留。
+    this.sanctuaryTimer = 0;
     this.nemesisCritTimer = 0;
     this.achillesSpeedTimer = 0;
     this.achillesSpeedStacks = 0;
@@ -145,6 +148,8 @@ export class Player {
     if (this.atkPotionTimer > 0) this.atkPotionTimer -= dt;
     if (this.shieldPotionTimer > 0) this.shieldPotionTimer -= dt;
     if (this.luckPotionTimer > 0) this.luckPotionTimer -= dt;
+    // 聖光結界：站在池子裡時每幀被刷新 (來源見 Projectile 的 fire_pool)
+    if (this.sanctuaryTimer > 0) this.sanctuaryTimer -= dt;
     if (this.nemesisCritTimer > 0) this.nemesisCritTimer -= dt;
     if (this.achillesSpeedTimer > 0) {
       this.achillesSpeedTimer -= dt;
@@ -237,7 +242,7 @@ export class Player {
       dmg = Math.round(dmg * 0.5);
     }
     // 雅典娜聖光結界：領域減傷 25%
-    if (this.inSanctuary) {
+    if (this.sanctuaryTimer > 0) {
       dmg = Math.round(dmg * 0.75);
     }
     if (this.shield && this.shield > 0) {

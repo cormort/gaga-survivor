@@ -568,8 +568,11 @@ export class UIManager {
     }
 
     // 倉庫清單 (依種類 / 部位分組，同種類內由高至低降冪排序)
-    this.gearCount.textContent = `倉庫 ${stash.length} / ${STASH_CAP}`;
-    this.gearCount.classList.toggle('full', stash.length >= STASH_CAP);
+    // 上限要用實際容量：黑市可以擴充到 60，原本寫死常數 30 會顯示
+    // 「倉庫 35 / 30」並在還沒滿的時候就標記成滿
+    const cap = (save.getStashCap && save.getStashCap()) || STASH_CAP;
+    this.gearCount.textContent = `倉庫 ${stash.length} / ${cap}`;
+    this.gearCount.classList.toggle('full', stash.length >= cap);
     this.gearList.innerHTML = '';
 
     if (stash.length === 0) {
@@ -969,15 +972,18 @@ export class UIManager {
       sound.playHurt();
       return;
     }
+    // save.redeemCode() 回傳的是 { success, message }，原本這裡讀的是
+    // res.ok / res.reward / res.reason —— 三個欄位都不存在，所以每一次兌換
+    // (包含成功) 都顯示「❌ undefined」，成功時也不會更新 HUD 晶片。
     const res = save.redeemCode(code);
-    if (res.ok) {
-      this.giftStatus.textContent = `🎉 兌換成功！獲得：${res.reward}`;
+    if (res.success) {
+      this.giftStatus.textContent = `🎉 ${res.message}`;
       this.giftStatus.className = 'menu-status gift-status ok';
       this.giftInput.value = '';
       this.updateDnaChip(save.data.dna, save.data.gold);
       sound.playEvoFanfare();
     } else {
-      this.giftStatus.textContent = `❌ ${res.reason}`;
+      this.giftStatus.textContent = `❌ ${res.message || '兌換失敗'}`;
       this.giftStatus.className = 'menu-status gift-status err';
       sound.playHurt();
     }
@@ -1702,6 +1708,18 @@ export class UIManager {
       </div>
       <span class="event-timer">${Math.ceil(activeEvent.remaining)}s</span>
     `;
+    this._eventTimerShown = Math.ceil(activeEvent.remaining);
+  }
+
+  // 只更新倒數秒數，不重建整個橫幅。原本 remaining 會倒數但 DOM 只在
+  // 觸發與結束時各寫一次，畫面上的秒數從頭到尾都是同一個數字。
+  updateEventTimer(remaining) {
+    if (!this.eventBanner || this.eventBanner.classList.contains('hidden')) return;
+    const secs = Math.ceil(remaining);
+    if (secs === this._eventTimerShown) return;
+    this._eventTimerShown = secs;
+    const el = this.eventBanner.querySelector('.event-timer');
+    if (el) el.textContent = `${secs}s`;
   }
 
   // ── 方向 4：武器協同 UI ──

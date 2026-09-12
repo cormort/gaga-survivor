@@ -75,8 +75,14 @@ const results = await page.evaluate(async () => {
   }
 
   // 5. 特殊升級卡
+  // 注意：applySpecialCard 依 card.specialId 分派，而 SPECIAL_CARDS 的欄位叫 id。
+  // 直接把原始表丟進去，每個 case 都不匹配 —— 這組會「全部通過」但什麼都沒觸發
+  // (曼納稜晶那類筆誤就是這樣躲過測試的)。這裡照真實升級流程的形狀組裝。
   for (const card of cfg.SPECIAL_CARDS) {
-    run('特殊卡', card.specialId || card.id, () => { reset(); g.applySpecialCard(card); });
+    run('特殊卡', card.id, () => {
+      reset();
+      g.applySpecialCard({ type: 'special', specialId: card.id, name: card.name, icon: card.icon });
+    });
   }
 
   // 6. Boss 技能

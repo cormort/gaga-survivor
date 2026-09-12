@@ -227,6 +227,26 @@ class SoundEngine {
     osc.stop(t + 0.09);
   }
 
+  // 選取音效 (武器型態晶片等 UI 回饋)。main.js 一直在呼叫 playSelect，
+  // 但 audio.js 從來沒有實作過 —— 點型態晶片會在 listener 裡丟 TypeError，
+  // 同一行後面的 .active 樣式與 tooltip 更新永遠不執行。
+  playSelect() {
+    if (!this.enabled || this._throttle('select', 30)) return;
+    this.ensureContext();
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(660, t);
+    osc.frequency.exponentialRampToValueAtTime(990, t + 0.07);
+    gain.gain.setValueAtTime(0.16, t);
+    gain.gain.exponentialRampToValueAtTime(0.005, t + 0.1);
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(t);
+    osc.stop(t + 0.1);
+  }
+
   // 爆炸音效 (火箭、地雷、手榴彈)
   playExplosion() {
     if (!this.enabled || this._throttle('explosion', 90)) return;
