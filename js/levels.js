@@ -20,6 +20,7 @@ export const LEVELS = {
     theme: {
       top: '#141d30', mid: '#0b1220', bottom: '#070a11',
       grid: 'rgba(255,255,255,0.035)', major: 'rgba(0,229,255,0.10)',
+      gridStyle: { size: 64, major: 4 },          // 街廓：標準細格
       bounds: 'rgba(255,0,85,0.65)',
       // 全域調光 (Batch 4)：上下漸層色調 overlay + 暗角強度
       grade: { c1: '80,60,230', a1: 0.05, c2: '8,18,70', a2: 0.09 },
@@ -30,9 +31,20 @@ export const LEVELS = {
         motif: 'crack',        // 柏油裂紋 + 偶發霓虹微光裂縫
         motifColor: 'rgba(0,0,0,0.28)',
         accent: 'rgba(0,229,255,0.10)',
+        // 密度旋鈕 (相對於引擎預設值；1 = 不變)。讓「稀疏的商業街」與
+        // 「密集的金屬實驗室」用同一套繪製程式碼卻長得完全不一樣。
+        density: { stain: 0.6, stainRadius: 1, motif: 1.6, grain: 1, accents: 1 },
+        // 宏觀結構：棋盤式街廓 + 霓虹招牌/報廢公車地標
+        macro: {
+          kind: 'road', cell: 880,
+          base: 'rgba(255,255,255,0.045)', line: 'rgba(0,0,0,0.30)', accent: 'rgba(0,229,255,0.16)',
+          landmark: ['billboard', 'bus'], landmarkCell: 1150, landmarkChance: 0.6,
+          escalate: { rgb: '255,60,120', count: 20 },   // 越到後期地上越多霓虹火星
+        },
       },
     },
-    decor: ['car', 'bin', 'neon'],
+    decor: ['car', 'bin', 'neon', 'hazard'],
+    decorDensity: 0.45,
     hpScale: 1.0,
     // 基準關：不加任何規則，讓新手先熟悉底層手感
     rules: { label: '標準交戰規則', desc: '沒有額外環境修正，適合熟悉操作' },
@@ -41,7 +53,8 @@ export const LEVELS = {
       { type: 'supply', interval: 45, jitter: 20 },
     ],
     waves: [
-      { until: 120, pool: [['walker', 1]], interval: 0.85, batch: 1 },
+      { until: 65, pool: [['walker', 1]], interval: 0.85, batch: 1 },
+      { until: 120, pool: [['walker', 0.72], ['bat', 0.28]], interval: 0.72, batch: 1 },
       { until: 240, pool: [['walker', 0.5], ['bat', 0.25], ['runner', 0.15], ['hound', 0.1]], interval: 0.6, batch: 1 },
       { until: 360, pool: [['walker', 0.35], ['bat', 0.22], ['brute', 0.18], ['runner', 0.18], ['hound', 0.07]], interval: 0.45, batch: 1 },
       { until: 480, pool: [['walker', 0.22], ['bat', 0.16], ['brute', 0.14], ['boomer', 0.13], ['runner', 0.14], ['hound', 0.09], ['spitter', 0.12]], interval: 0.3, batch: 2 },
@@ -49,9 +62,9 @@ export const LEVELS = {
       { until: 9999, pool: [['walker', 0.24], ['bat', 0.16], ['brute', 0.1], ['boomer', 0.14], ['runner', 0.16], ['hound', 0.06], ['spitter', 0.14]], interval: 0.26, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 4000, name: '狂暴推土喪屍', skin: 'boss_street' },
-      { at: 300, hp: 14000, name: '變異清潔工', behaviors: ['summon'], skin: 'boss_street' },
-      { at: 480, hp: 42000, name: '巨神‧暴虐霸王龍', final: true, behaviors: ['nova', 'summon', 'barrage'], skin: 'boss_street' },
+      { at: 120, hp: 4000, name: '狂暴推土喪屍', speed: 58, damage: 30, skin: 'boss_street' },   // 慢、重、撞一下很痛
+      { at: 300, hp: 14000, name: '變異清潔工', speed: 84, damage: 26, behaviors: ['summon'], skin: 'boss_street' },
+      { at: 480, hp: 42000, name: '巨神‧暴虐霸王龍', speed: 68, damage: 30, final: true, behaviors: ['nova', 'summon', 'barrage'], skin: 'boss_street' },
     ],
   },
 
@@ -67,6 +80,7 @@ export const LEVELS = {
     theme: {
       top: '#12251c', mid: '#0a1712', bottom: '#050c09',
       grid: 'rgba(180,255,200,0.045)', major: 'rgba(0,245,155,0.12)',
+      gridStyle: { size: 96, major: 3 },          // 實驗室：大塊金屬板
       bounds: 'rgba(120,255,120,0.55)',
       grade: { c1: '0,170,110', a1: 0.05, c2: '0,50,30', a2: 0.08 },
       vignette: 0.9,
@@ -76,9 +90,18 @@ export const LEVELS = {
         motif: 'panel',      // 金屬板接縫 + 偶發腐蝕斑
         motifColor: 'rgba(140,255,190,0.07)',
         accent: 'rgba(0,245,155,0.08)',
+        density: { stain: 0.78, stainRadius: 1.1, motif: 2.0, grain: 0.6, accents: 1.2 },
+        // 宏觀結構：大型金屬板塊 + 艙位圓環 + 培養槽/反應槽地標
+        macro: {
+          kind: 'plates', cell: 720,
+          base: 'rgba(255,255,255,0.030)', line: 'rgba(0,0,0,0.34)', accent: 'rgba(0,245,155,0.14)',
+          landmark: ['containment', 'tank'], landmarkCell: 1080, landmarkChance: 0.62,
+          escalate: { rgb: '0,245,155', count: 18 },
+        },
       },
     },
-    decor: ['tank', 'pipes', 'hazard'],
+    decor: ['tank', 'pipes', 'hazard', 'steel'],
+    decorDensity: 0.5,
     hpScale: 1.3,
     // 蟲海壓迫：怪多而脆，考驗清群面積而非單體輸出
     rules: {
@@ -90,16 +113,17 @@ export const LEVELS = {
       { type: 'pool', interval: 24, jitter: 8, radius: 115, dur: 6, dmg: 6, color: '#b5179e' },
     ],
     waves: [
-      { until: 100, pool: [['walker', 0.6], ['boomer', 0.25], ['spitter', 0.15]], interval: 0.7, batch: 1 },
+      { until: 55, pool: [['walker', 0.72], ['boomer', 0.28]], interval: 0.8, batch: 1 },
+      { until: 100, pool: [['walker', 0.45], ['boomer', 0.28], ['spitter', 0.15], ['spore_host', 0.12]], interval: 0.7, batch: 1 },
       { until: 240, pool: [['walker', 0.3], ['boomer', 0.22], ['bat', 0.16], ['spore_host', 0.14], ['spitter', 0.1], ['hatcher', 0.08]], interval: 0.5, batch: 1 },
       { until: 360, pool: [['boomer', 0.24], ['brute', 0.2], ['bat', 0.16], ['spore_host', 0.16], ['spitter', 0.14], ['hatcher', 0.1]], interval: 0.4, batch: 2 },
       { until: 480, pool: [['boomer', 0.22], ['brute', 0.22], ['walker', 0.14], ['spore_host', 0.16], ['spitter', 0.16], ['hatcher', 0.1]], interval: 0.28, batch: 2 },
       { until: 9999, pool: [['boomer', 0.22], ['brute', 0.16], ['walker', 0.18], ['spore_host', 0.16], ['spitter', 0.18], ['hatcher', 0.1]], interval: 0.24, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 5500, name: '生化軟泥聚合體', behaviors: ['summon'], skin: 'boss_lab' },
-      { at: 300, hp: 19000, name: '外骨骼改造猩猩', behaviors: ['nova', 'barrage'], skin: 'boss_lab' },
-      { at: 480, hp: 55000, name: '母體‧零號實驗體', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_lab' },
+      { at: 120, hp: 5500, name: '生化軟泥聚合體', speed: 52, damage: 30, behaviors: ['summon'], skin: 'boss_lab' },  // 極慢但黏
+      { at: 300, hp: 19000, name: '外骨骼改造猩猩', speed: 96, damage: 30, behaviors: ['nova', 'barrage'], skin: 'boss_lab' },  // 快、追擊型
+      { at: 480, hp: 55000, name: '母體‧零號實驗體', speed: 64, damage: 32, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_lab' },
     ],
   },
 
@@ -115,6 +139,7 @@ export const LEVELS = {
     theme: {
       top: '#16283d', mid: '#0d1a2a', bottom: '#060c14',
       grid: 'rgba(200,235,255,0.05)', major: 'rgba(120,200,255,0.14)',
+      gridStyle: { size: 64, major: 6, dash: 6 }, // 雪地：虛線格 (風雪感)
       bounds: 'rgba(120,200,255,0.6)',
       grade: { c1: '150,225,255', a1: 0.06, c2: '30,70,140', a2: 0.06 },
       vignette: 1,
@@ -124,9 +149,18 @@ export const LEVELS = {
         motif: 'crystal',    // 凍土冰晶簇 + 霜紋
         motifColor: 'rgba(200,240,255,0.5)',
         accent: 'rgba(160,220,255,0.22)',
+        density: { stain: 0.34, stainRadius: 1.25, motif: 2.2, grain: 1.4, accents: 1.1 },
+        // 宏觀結構：大面積冰原與凍湖 (長裂縫貫穿) + 墜毀雷達碟/冰晶塔地標
+        macro: {
+          kind: 'icefield', cell: 950,
+          base: 'rgba(190,235,255,0.085)', line: 'rgba(0,0,0,0.20)', accent: 'rgba(255,255,255,0.50)',
+          landmark: ['radar', 'icespire'], landmarkCell: 1200, landmarkChance: 0.55,
+          escalate: { rgb: '190,235,255', count: 16 },
+        },
       },
     },
-    decor: ['ice_spike', 'snow', 'radar'],
+    decor: ['ice_spike', 'snow', 'radar', 'steel'],
+    decorDensity: 0.4,
     hpScale: 1.6,
     // 凍原重甲：怪走得慢但更厚，加上冰面滑行 → 風箏走位關
     rules: {
@@ -140,16 +174,17 @@ export const LEVELS = {
       { type: 'ice', friction: 0.92 },
     ],
     waves: [
-      { until: 100, pool: [['brute', 0.5], ['walker', 0.5]], interval: 0.75, batch: 1 },
+      { until: 50, pool: [['walker', 0.7], ['brute', 0.3]], interval: 0.8, batch: 1 },
+      { until: 100, pool: [['brute', 0.5], ['walker', 0.33], ['bat', 0.17]], interval: 0.75, batch: 1 },
       { until: 240, pool: [['brute', 0.32], ['bat', 0.28], ['walker', 0.14], ['warden', 0.18], ['chimera', 0.08]], interval: 0.5, batch: 2 },
       { until: 360, pool: [['brute', 0.3], ['bat', 0.22], ['boomer', 0.16], ['warden', 0.2], ['hound', 0.06], ['chimera', 0.06]], interval: 0.38, batch: 2 },
       { until: 480, pool: [['brute', 0.23], ['bat', 0.16], ['boomer', 0.18], ['warden', 0.2], ['hound', 0.05], ['chimera', 0.07], ['spitter', 0.11]], interval: 0.26, batch: 2 },
       { until: 9999, pool: [['brute', 0.18], ['bat', 0.18], ['boomer', 0.2], ['warden', 0.16], ['hound', 0.08], ['chimera', 0.07], ['spitter', 0.13]], interval: 0.24, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 7000, name: '冰霜機甲', behaviors: ['ground'], skin: 'boss_frost' },
-      { at: 300, hp: 24000, name: '極地穿山甲王', behaviors: ['nova', 'barrage'], skin: 'boss_frost' },
-      { at: 480, hp: 68000, name: '冰霜暴君‧雪帝', final: true, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_frost' },
+      { at: 120, hp: 7000, name: '冰霜機甲', speed: 46, damage: 34, behaviors: ['ground'], skin: 'boss_frost' },  // 最慢最痛的重甲
+      { at: 300, hp: 24000, name: '極地穿山甲王', speed: 104, damage: 28, behaviors: ['nova', 'barrage'], skin: 'boss_frost' },  // 最快
+      { at: 480, hp: 68000, name: '冰霜暴君‧雪帝', speed: 60, damage: 34, final: true, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_frost' },
     ],
   },
 
@@ -165,6 +200,7 @@ export const LEVELS = {
     theme: {
       top: '#301410', mid: '#1c0b09', bottom: '#0d0504',
       grid: 'rgba(255,180,120,0.05)', major: 'rgba(255,120,0,0.16)',
+      gridStyle: { size: 48, major: 4 },          // 熔爐：密鋼格柵
       bounds: 'rgba(255,90,0,0.7)',
       grade: { c1: '255,120,30', a1: 0.06, c2: '70,8,0', a2: 0.1 },
       vignette: 1.15,
@@ -174,9 +210,18 @@ export const LEVELS = {
         motif: 'lava',       // 龜裂熔岩地殼，裂縫透出橙紅餘燼
         motifColor: 'rgba(255,120,0,0.28)',
         accent: 'rgba(255,170,40,0.5)',
+        density: { stain: 0.82, stainRadius: 0.9, motif: 1.8, grain: 1, accents: 1.3 },
+        // 宏觀結構：貫穿的岩漿渠道切開玄武岩平台 + 巨型齒輪/熔岩瀑布地標
+        macro: {
+          kind: 'channels', cell: 1050,
+          base: 'rgba(255,80,0,0.30)', line: 'rgba(0,0,0,0.35)', accent: 'rgba(255,225,150,0.55)',
+          landmark: ['gear', 'lavafall'], landmarkCell: 1150, landmarkChance: 0.62,
+          escalate: { rgb: '255,150,40', count: 30 },
+        },
       },
     },
-    decor: ['lava_crack', 'steel', 'gear'],
+    decor: ['lava_crack', 'steel', 'gear', 'pipes'],
+    decorDensity: 0.5,
     hpScale: 2.0,
     // 熔爐試煉：高風險高報酬，玩家與敵人都變得極脆
     rules: {
@@ -190,16 +235,17 @@ export const LEVELS = {
       { type: 'safeZone', interval: 25, jitter: 8, radius: 130, duration: 8, dmg: 6, color: '#ff9500' },
     ],
     waves: [
-      { until: 90, pool: [['brute', 0.45], ['boomer', 0.4], ['spitter', 0.15]], interval: 0.6, batch: 1 },
+      { until: 45, pool: [['walker', 0.55], ['boomer', 0.45]], interval: 0.72, batch: 1 },
+      { until: 90, pool: [['brute', 0.4], ['boomer', 0.35], ['spitter', 0.25]], interval: 0.6, batch: 1 },
       { until: 220, pool: [['brute', 0.26], ['boomer', 0.2], ['bat', 0.16], ['runner', 0.16], ['spitter', 0.12], ['hatcher', 0.1]], interval: 0.42, batch: 2 },
       { until: 360, pool: [['brute', 0.24], ['boomer', 0.16], ['bat', 0.12], ['warden', 0.14], ['spore_host', 0.12], ['spitter', 0.1], ['chimera', 0.06], ['hatcher', 0.06]], interval: 0.3, batch: 2 },
       { until: 480, pool: [['brute', 0.2], ['boomer', 0.16], ['bat', 0.1], ['warden', 0.14], ['spore_host', 0.1], ['runner', 0.06], ['spitter', 0.1], ['hound', 0.06], ['hatcher', 0.08]], interval: 0.22, batch: 3 },
       { until: 9999, pool: [['brute', 0.16], ['boomer', 0.16], ['bat', 0.12], ['warden', 0.12], ['spore_host', 0.1], ['runner', 0.08], ['spitter', 0.14], ['hound', 0.06], ['hatcher', 0.06]], interval: 0.2, batch: 5 },
     ],
     bosses: [
-      { at: 120, hp: 9000, name: '烈焰暴君', behaviors: ['nova', 'ground'], skin: 'boss_core' },
-      { at: 300, hp: 30000, name: '熔核巨獸', behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_core' },
-      { at: 480, hp: 88000, name: '毀滅特工‧暗影鴨', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_core' },
+      { at: 120, hp: 9000, name: '烈焰暴君', speed: 88, damage: 32, behaviors: ['nova', 'ground'], skin: 'boss_core' },
+      { at: 300, hp: 30000, name: '熔核巨獸', speed: 56, damage: 38, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_core' },  // 慢而致命
+      { at: 480, hp: 88000, name: '毀滅特工‧暗影鴨', speed: 90, damage: 38, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_core' },
     ],
   },
 
@@ -215,6 +261,7 @@ export const LEVELS = {
     theme: {
       top: '#241637', mid: '#140b24', bottom: '#07030f',
       grid: 'rgba(200,160,255,0.05)', major: 'rgba(180,120,255,0.14)',
+      gridStyle: { size: 80, major: 5, dash: 12 },// 深淵：疏落符文格
       bounds: 'rgba(180,90,255,0.6)',
       grade: { c1: '170,80,255', a1: 0.06, c2: '30,8,70', a2: 0.1 },
       vignette: 1.1,
@@ -224,9 +271,18 @@ export const LEVELS = {
         motif: 'void',       // 虛空符文刻痕與星塵
         motifColor: 'rgba(200,160,255,0.16)',
         accent: 'rgba(255,255,255,0.14)',
+        density: { stain: 0.30, stainRadius: 1.4, motif: 1.4, grain: 1.2, accents: 1 },
+        // 宏觀結構：虛空裂縫與符文圓陣 + 方尖碑地標
+        macro: {
+          kind: 'rifts', cell: 1100,
+          base: 'rgba(60,20,110,0.35)', line: 'rgba(0,0,0,0.30)', accent: 'rgba(200,140,255,0.45)',
+          landmark: ['obelisk', 'runecircle'], landmarkCell: 1250, landmarkChance: 0.6,
+          escalate: { rgb: '170,80,255', count: 24 },
+        },
       },
     },
-    decor: ['lava_crack', 'gear', 'radar'],
+    decor: ['void_crystal', 'void_obelisk', 'gear'],
+    decorDensity: 0.42,
     hpScale: 1,
     // 無盡深淵：全面加壓，用經驗加成補償
     rules: {
@@ -271,6 +327,8 @@ export const RULE_DEFAULTS = {
   damageTakenMul: 1,  // 玩家受到的傷害
   goldMul: 1,         // 金幣收益
   expMul: 1,          // 經驗獲得
+  turretCdr: 1,       // 砲塔冷卻倍率 (每日詞綴「淘金狂熱」用；先前沒有這個欄位
+                      // 導致 mergeRules 直接丟掉它，README 宣傳的 -35% 從未生效)
 };
 
 // 把關卡規則與每日詞綴相乘合併 (缺的欄位一律當 1)

@@ -356,6 +356,7 @@ export const FX = {
 export const ENEMY_TYPES = {
   walker: {
     name: '喪屍步兵',
+    ai: { kind: 'shamble', wander: 0.35, animSpeed: 8, sepMul: 1.0 },
     hp: 20,
     speed: 90,
     damage: 8,
@@ -365,6 +366,7 @@ export const ENEMY_TYPES = {
   },
   bat: {
     name: '狂暴突襲蝠',
+    ai: { kind: 'weave', weaveAmp: 46, weaveFreq: 3.6, hoverAmp: 0.40, hoverFreq: 2.4, animSpeed: 13, sepMul: 0.5 },
     hp: 12,
     speed: 160,
     damage: 6,
@@ -374,6 +376,7 @@ export const ENEMY_TYPES = {
   },
   brute: {
     name: '生化巨漢',
+    ai: { kind: 'plod', kbResist: 0.40, animSpeed: 5.5, sepMul: 1.6 },
     hp: 90,
     speed: 65,
     damage: 16,
@@ -383,6 +386,7 @@ export const ENEMY_TYPES = {
   },
   boomer: {
     name: '劇毒自爆蟲',
+    ai: { kind: 'suicide', fuse: 0.8, animSpeed: 9, sepMul: 0.8 },
     hp: 35,
     speed: 120,
     damage: 22,
@@ -393,26 +397,29 @@ export const ENEMY_TYPES = {
   },
   runner: {
     name: '狂奔感染者',
+    ai: { kind: 'lunge', lunge: { every: 3.2, windup: 0.40, dur: 0.45, mul: 3.4 }, animSpeed: 11, sepMul: 0.6 },
     hp: 26,
     speed: 105,
     damage: 10,
     color: '#ff6b35',
     radius: 13,
     exp: 2,
-    dash: { every: 3.2, dur: 0.45, mul: 3.4 }, // 週期性衝刺，逼玩家提早轉向
   },
   warden: {
     name: '防暴盾衛',
+    // 正面盾：減傷只看「來襲方向 vs 面向」，從背後打是完整傷害 (原本是一顆
+    // 不分方向的 damageTakenMul，README 寫的「正面大盾」在程式裡根本不存在)
+    ai: { kind: 'shield', shieldArc: 1.6, shieldMul: 0.45, animSpeed: 6, sepMul: 1.3 },
     hp: 140,
     speed: 55,
     damage: 14,
     color: '#4cc9f0',
     radius: 20,
     exp: 4,
-    damageTakenMul: 0.55, // 盾牌減傷，靠爆發或穿透才好處理
   },
   spore_host: {
     name: '孢子母體',
+    ai: { kind: 'shamble', wander: 0.20, animSpeed: 7, sepMul: 1.0 },
     hp: 60,
     speed: 80,
     damage: 12,
@@ -424,6 +431,7 @@ export const ENEMY_TYPES = {
   },
   sporeling: {
     name: '孢子幼體',
+    ai: { kind: 'swarm', jitter: 0.9, animSpeed: 14, sepMul: 2.2 },
     hp: 8,
     speed: 175,
     damage: 5,
@@ -433,6 +441,8 @@ export const ENEMY_TYPES = {
   },
   spitter: {
     name: '酸液噴吐者',
+    // 繞行方向在生成時隨機，否則整關的噴吐者會一起同方向繞圈
+    ai: { kind: 'kite', windup: 0.35, animSpeed: 6.5, sepMul: 0.9 },
     hp: 42,
     speed: 75,
     damage: 8,
@@ -450,16 +460,18 @@ export const ENEMY_TYPES = {
   },
   hound: {
     name: '嗜血獵犬',
+    // 繞邊再撲：先沿著 standoff 半徑繞行，再發起可預警的撲咬 (與狂奔感染者區隔)
+    ai: { kind: 'flank', standoff: 190, lunge: { every: 2.8, windup: 0.35, dur: 0.40, mul: 3.2 }, animSpeed: 12, sepMul: 0.7 },
     hp: 32,
     speed: 165,
     damage: 9,
     color: '#b0753b',
     radius: 12,
     exp: 2,
-    dash: { every: 2.8, dur: 0.4, mul: 3.2 }, // 追擊型衝刺，會先繞再撲
   },
   hatcher: {
     name: '增殖胞囊',
+    ai: { kind: 'rooted', kbResist: 0.70, animSpeed: 3.5, sepMul: 2.5 },
     hp: 130,
     speed: 16,
     damage: 12,
@@ -475,6 +487,8 @@ export const ENEMY_TYPES = {
   },
   chimera: {
     name: '攻城巨像',
+    // 週期性踏地：停下 → 預警圈 → 範圍震波，給坦克一個自己的節奏
+    ai: { kind: 'slam', slam: { every: 3.4, windup: 0.70, radius: 135, dmg: 22 }, kbResist: 0.55, animSpeed: 4.5, sepMul: 2.0 },
     hp: 300,
     speed: 42,
     damage: 24,
@@ -487,6 +501,7 @@ export const ENEMY_TYPES = {
   },
   boss: {
     name: '毀滅巨神‧暴君',
+    ai: { kind: 'boss', animSpeed: 5, sepMul: 0 },
     hp: 1400,
     speed: 75,
     damage: 28,

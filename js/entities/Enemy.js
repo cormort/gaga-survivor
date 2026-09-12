@@ -81,12 +81,31 @@ export class Enemy {
     // 外觀變異：一般怪隨機套一組烘焙好的尺寸變體，成群時不會看起來都一樣
     // (Boss 用關卡主題 skin，不套尺寸抖動)
     this.spriteVariant = this.isBoss ? 0 : Math.floor(Math.random() * 3);
+    this.baseSpriteKey = this.spriteVariant > 0 ? this.typeKey + ':v' + this.spriteVariant : this.typeKey;
     this.explodes = !!config.explodes;
-    this.dash = config.dash || null;          // 狂奔感染者：週期衝刺
     this.splitInto = config.splitInto || null; // 孢子母體：死亡裂解
     this.splitCount = config.splitCount || 0;
-    this.dashTimer = this.dash ? Math.random() * this.dash.every : 0;
-    this.dashLeft = 0;
+
+    // ── 行為資料 (config.js 的 ENEMY_TYPES[key].ai) ──────────────
+    // 原本 13 種敵人沒有任何一種帶行為資料，分派只有三條分支，其餘全是
+    // 「直線逼近」換數字。現在每一種都有自己的 ai.kind 與參數。
+    const ai = config.ai || {};
+    this.ai = ai;
+    this.animSpeed = ai.animSpeed || 8;        // 走動畫速度 (原為全體共用的 8)
+    this.kbResist = ai.kbResist || 0;          // 擊退抗性 (重裝單位不會被推著走)
+    this.wanderPhase = Math.random() * Math.PI * 2;
+    this.orbitDir = Math.random() < 0.5 ? -1 : 1;  // 噴吐者繞行方向逐一隨機
+    this.facingX = 0;                          // 面向 (盾衛正面判定、撲擊鎖定)
+    this.facingY = 1;
+    this.windupTimer = 0;                      // > 0 = 預警中 (可被玩家看見並反應)
+    this.windupMax = 0;
+    this.windupKind = null;                    // 'lunge' | 'slam' | 'shoot'
+    this.windupDir = { x: 0, y: 0 };
+    this.lungeTimer = ai.lunge ? Math.random() * ai.lunge.every : 0;
+    this.lungeLeft = 0;
+    this.lungeDir = { x: 0, y: 0 };
+    this.slamTimer = ai.slam ? ai.slam.every * 0.6 : 0;
+    this.fuseMax = ai.fuse || 0.8;             // 自爆引信長度 (原為引擎硬寫 0.8)
     this.ranged = config.ranged ? { ...config.ranged } : null; // 遠程噴吐怪
     this.shootTimer = this.ranged ? Math.random() * this.ranged.cd : 0;
     this.hatchMinion = config.hatchMinion || null; // 增殖胞囊：定時孵化雜兵
@@ -117,10 +136,13 @@ export class Enemy {
     this.burnDps = 0;
     this.burnSource = null; // 灼燒傷害要記回原武器 (結算榜)
     this.freezeTimer = 0;   // 冰凍定身剩餘秒數 (Boss 不吃，改吃 slowTimer)
+    this.stunTimer = 0;     // 眩暈剩餘秒數 (與冰凍分開，才畫得出不同的視覺)
+    this.markTimer = 0;     // 基隆型態的追蹤印記剩餘秒數 (受傷加成)
     this.poisonTimer = 0;   // 中毒剩餘秒數
     this.poisonStacks = 0;  // 中毒層數 (可疊，最多 CHARGE.poison.maxStacks)
     this.poisonSource = null;
     this.isDead = false;
+    this.lastDamageTaken = 0;  // 實際扣除的傷害 (供飄字/傷害榜顯示減傷後的數字)
 
     // Boss 專屬技能冷卻
     if (this.isBoss) {
@@ -129,6 +151,7 @@ export class Enemy {
       this.chargeDir = { x: 0, y: 0 };
       this.skillTimer = 5;       // 離下一次專屬技能的時間
       this.behaviors = [];       // 由關卡 boss 定義帶入：'summon' / 'nova'
+      this._lastSkill = null;    // 上一招 (避免連放同一招)
       this._bossStageSeen = 0;   // 已進入的狂暴階段 (0/1/2)
       this._enrageFlash = 0;     // 進階瞬間的紅光殘餘秒數
     }
@@ -140,6 +163,7 @@ export class Enemy {
     if (!a) return;
     this.isElite = true;
     this.affixKey = affixKey;
+    this.affixName = a.name;   // 顯示用 (原本只讀 color，玩家只能靠色調猜詞綴)
     this.eliteColor = a.color;
     this.maxHp = Math.round(this.maxHp * (a.hpMul || 1));
     this.hp = this.maxHp;
@@ -189,17 +213,17 @@ export class Enemy {
       }
     }
 
-    if (this._markedTimer > 0) {
-      this._markedTimer -= dt;
-    }
+    if (this.markTimer > 0) this.markTimer -= dt;
+    if (this.stunTimer > 0) this.stunTimer = Math.max(0, this.stunTimer - dt);
 
-    this.animTimer += dt * 8;
+    this.animTimer += dt * this.animSpeed;   // 走動畫節奏逐種不同，不再全體同步
     if (this.flashTimer > 0) this.flashTimer -= dt;
 
-    // 計算朝向目標的向量
+    // 計算朝向目標的向量 (用 sqrt 而非 Math.hypot：hypot 的溢位保護很貴，
+    // 而這是每隻每幀都跑的最熱路徑)
     const dx = target.x - this.x;
     const dy = target.y - this.y;
-    const dist = Math.hypot(dx, dy);
+    const dist = Math.sqrt(dx * dx + dy * dy);
 
     let moveX = 0;
     let moveY = 0;
@@ -207,58 +231,61 @@ export class Enemy {
     if (this.isBoss) {
       this.updateBoss(dt, dx, dy, dist, cb.onBossSkill);
     } else if (this.ranged) {
-      // 遠程怪邏輯：在射程外保持距離開火，太近則後撤
+      // 遠程怪邏輯：在射程外保持距離開火，太近則後撤；繞行方向逐隻隨機
       const desiredRange = this.ranged.range;
-      const spd = this.speed * this.speedFactor() * this.dashSpeedMul(dt);
+      const spd = this.speed * this.speedFactor();
+      const nx = dist > 0.1 ? dx / dist : 0;
+      const ny = dist > 0.1 ? dy / dist : 0;
       if (dist > desiredRange) {
-        moveX = (dx / dist) * spd;
-        moveY = (dy / dist) * spd;
+        moveX = nx * spd;
+        moveY = ny * spd;
       } else if (dist < desiredRange * 0.45) {
-        moveX = -(dx / dist) * spd * 0.6;
-        moveY = -(dy / dist) * spd * 0.6;
+        moveX = -nx * spd * 0.6;
+        moveY = -ny * spd * 0.6;
       } else {
-        moveX = -(dy / dist) * spd * 0.25;
-        moveY = (dx / dist) * spd * 0.25;
+        moveX = -ny * spd * 0.25 * this.orbitDir;
+        moveY = nx * spd * 0.25 * this.orbitDir;
       }
+      this.facingX = nx;
+      this.facingY = ny;
 
-      // 遠程射擊冷卻與發射
+      // 射擊：先預警再發射 (原版冷卻一到當幀就開火，玩家完全無法預判)
       this.shootTimer += dt;
-      if (this.shootTimer >= this.ranged.cd) {
+      if (this.windupTimer > 0 && this.windupKind === 'shoot') {
+        this.windupTimer -= dt;
+        if (this.windupTimer <= 0) {
+          this.windupKind = null;
+          this.fireRanged(dist, nx, ny, cb);
+        }
+      } else if (this.shootTimer >= this.ranged.cd) {
         this.shootTimer = 0;
-        if (dist > 0 && dist <= desiredRange * 1.6 && cb.onShoot && this.freezeTimer <= 0) {
-          const pDirX = dx / dist;
-          const pDirY = dy / dist;
-          cb.onShoot(this, {
-            x: this.x + pDirX * (this.radius + 6),
-            y: this.y + pDirY * (this.radius + 6),
-            vx: pDirX * this.ranged.speed,
-            vy: pDirY * this.ranged.speed,
-            damage: this.ranged.damage,
-            radius: this.ranged.radius,
-            color: this.eliteColor || this.ranged.color,
-            glow: this.eliteColor || this.ranged.color,
-          });
+        if (dist > 0 && dist <= desiredRange * 1.6 && this.freezeTimer <= 0 && this.stunTimer <= 0) {
+          this.windupTimer = this.windupMax = this.ai.windup || 0.35;
+          this.windupKind = 'shoot';
         }
       }
     } else {
-      const spd = this.speed * this.speedFactor() * this.dashSpeedMul(dt); // 每幀只推進一次衝刺計時
-      if (dist > 0.1) {
-        moveX = (dx / dist) * spd;
-        moveY = (dy / dist) * spd;
-      }
+      const m = this.moveMelee(dt, dx, dy, dist, target, cb);
+      moveX = m.x;
+      moveY = m.y;
     }
 
-    // 自爆蟲邏輯
-    if (this.explodes && dist < 65) {
-      this.fuseTimer += dt;
-      if (this.fuseTimer >= 0.8) {
+    // 自爆蟲邏輯：引信會隨距離增減。
+    // 原本只增不減 —— 靠近過一次就永遠是「已武裝」的膨脹狀態，離開也不會解除。
+    if (this.explodes) {
+      if (dist < 65 && this.freezeTimer <= 0 && this.stunTimer <= 0) {
+        this.fuseTimer += dt;
+      } else if (this.fuseTimer > 0) {
+        this.fuseTimer = Math.max(0, this.fuseTimer - dt * 0.6);
+      }
+      if (this.fuseTimer >= this.fuseMax) {
         this.isDead = true;
         cb.onExplode?.(this);
       }
     }
 
     // 增殖胞囊邏輯：定時孵化雜兵 (孵化中的小小吞嚥動畫可從 animTimer 推得)
-    if (this.hatchMinion && !this.isDead && this.freezeTimer <= 0) {
+    if (this.hatchMinion && !this.isDead && this.freezeTimer <= 0 && this.stunTimer <= 0) {
       this.hatchTimer -= dt;
       if (this.hatchTimer <= 0) {
         this.hatchTimer = this.hatchInterval;
@@ -275,25 +302,160 @@ export class Enemy {
     this.kbY *= Math.pow(0.05, dt);
   }
 
-  // 衝刺怪：平時走路，冷卻到就短暫加速直撲玩家 (回傳當幀速度倍率)
-  dashSpeedMul(dt) {
-    if (!this.dash) return 1;
-    if (this.dashLeft > 0) {
-      this.dashLeft -= dt;
-      return this.dash.mul;
+  // 遠程射擊 (從 update 抽出，讓預警與發射分離)
+  fireRanged(dist, nx, ny, cb) {
+    if (!cb.onShoot || dist <= 0 || dist > this.ranged.range * 1.6) return;
+    cb.onShoot(this, {
+      x: this.x + nx * (this.radius + 6),
+      y: this.y + ny * (this.radius + 6),
+      vx: nx * this.ranged.speed,
+      vy: ny * this.ranged.speed,
+      damage: this.ranged.damage,
+      radius: this.ranged.radius,
+      color: this.eliteColor || this.ranged.color,
+      glow: this.eliteColor || this.ranged.color,
+    });
+  }
+
+  // 近戰移動：回傳「已乘上速度」的位移向量，由 update 統一積分。
+  // 每種 ai.kind 一種轉向模型，並在這裡處理可預警的撲擊與踏地。
+  moveMelee(dt, dx, dy, dist, target, cb) {
+    const ai = this.ai || {};
+    const kind = ai.kind || 'plod';
+    const nx = dist > 0.1 ? dx / dist : 0;
+    const ny = dist > 0.1 ? dy / dist : 0;
+    let speedMul = 1;
+    let mx = nx;
+    let my = ny;
+
+    // ── 撲擊 (lunge)：狂奔感染者 / 嗜血獵犬 ─────────────────────
+    // 舊版是「冷卻一到直接 ×3.2~3.4 速度」，唯一的視覺還畫在爆發之後，玩家零反應窗。
+    // 新版拆成 預警(減速、畫出方向扇形) → 鎖定方向突進 → 收尾。
+    const lunge = ai.lunge;
+    if (lunge) {
+      if (this.lungeLeft > 0) {
+        this.lungeLeft -= dt;
+        this.facingX = this.lungeDir.x;
+        this.facingY = this.lungeDir.y;
+        const burst = this.speed * this.speedFactor() * lunge.mul;
+        return { x: this.lungeDir.x * burst, y: this.lungeDir.y * burst };
+      }
+      if (this.windupKind === 'lunge') {
+        this.windupTimer -= dt;
+        this.facingX = this.windupDir.x;
+        this.facingY = this.windupDir.y;
+        if (this.windupTimer <= 0) {
+          this.windupKind = null;
+          this.lungeLeft = lunge.dur;
+          this.lungeDir = { x: this.windupDir.x, y: this.windupDir.y };
+        }
+      } else {
+        this.lungeTimer += dt;
+        if (this.lungeTimer >= lunge.every && dist < 460) {
+          this.lungeTimer = 0;
+          this.windupTimer = this.windupMax = lunge.windup;
+          this.windupKind = 'lunge';
+          this.windupDir = { x: nx, y: ny };
+        }
+      }
     }
-    this.dashTimer += dt;
-    if (this.dashTimer >= this.dash.every) {
-      this.dashTimer = 0;
-      this.dashLeft = this.dash.dur;
-      return this.dash.mul;
+
+    // ── 踏地 (slam)：攻城巨像 ─────────────────────────────────
+    const slam = ai.slam;
+    if (slam) {
+      if (this.windupKind === 'slam') {
+        this.windupTimer -= dt;
+        speedMul = 0.08;
+        if (this.windupTimer <= 0) {
+          this.windupKind = null;
+          cb.onSlam?.(this, slam);
+        }
+      } else if (this.lungeLeft <= 0) {
+        this.slamTimer += dt;
+        if (this.slamTimer >= slam.every && dist < slam.radius * 0.85) {
+          this.slamTimer = 0;
+          this.windupTimer = this.windupMax = slam.windup;
+          this.windupKind = 'slam';
+        }
+      }
     }
-    return 1;
+
+    // 預警中：明顯減速 (玩家看得到「牠要動作了」)
+    if (this.windupKind === 'lunge') speedMul = 0.2;
+    if (this.windupKind === 'shoot') speedMul = 0.3;
+
+    // ── 轉向模型 ─────────────────────────────────────────────
+    if (kind === 'weave') {
+      // 狂暴突襲蝠：垂直於接近方向的編織擺動 + 速度忽快忽慢 (難瞄、難預測)
+      const w = Math.sin(this.animTimer * (ai.weaveFreq || 3.6) * 0.5 + this.wanderPhase) * ((ai.weaveAmp || 46) / 90);
+      mx = nx - ny * w;
+      my = ny + nx * w;
+      speedMul *= 1 + Math.sin(this.animTimer * (ai.hoverFreq || 2.4)) * (ai.hoverAmp || 0.4);
+    } else if (kind === 'shamble') {
+      // 喪屍步兵 / 孢子母體：慢速蛇行，成群時像一整片搖晃過來
+      const w = Math.sin(this.animTimer * 1.1 + this.wanderPhase) * (ai.wander || 0.3);
+      mx = nx - ny * w;
+      my = ny + nx * w;
+    } else if (kind === 'swarm') {
+      // 孢子幼體：瘋狂抖動 + 速度脈動
+      const j = ai.jitter || 0.8;
+      const s = Math.sin(this.animTimer * 4.2 + this.wanderPhase) * j;
+      mx = nx - ny * s;
+      my = ny + nx * s;
+      speedMul *= 0.9 + (Math.sin(this.animTimer * 6 + this.wanderPhase) * 0.5 + 0.5) * 0.3;
+    } else if (kind === 'flank') {
+      // 嗜血獵犬：保持在 standoff 半徑上側繞，再發起撲咬 (與狂奔感染者直衝區隔)
+      const standoff = ai.standoff || 190;
+      const err = Math.max(-1.2, Math.min(1.2, (dist - standoff) / standoff));
+      const tang = this.orbitDir;
+      mx = nx * err - ny * tang * 0.9;
+      my = ny * err + nx * tang * 0.9;
+    } else if (kind === 'rooted') {
+      speedMul *= 0.5;   // 增殖胞囊幾乎不移動
+    }
+    // plod / shield / kite / suicide 走直進，差別在數值與抗性
+
+    const ml = Math.sqrt(mx * mx + my * my);
+    if (ml > 0.0001) {
+      mx /= ml;
+      my /= ml;
+    }
+
+    // 接觸距離內不再往內擠：怪會「圍住」目標而不是全部疊在目標身上。
+    // 沒有這一條，分離力永遠打不贏逼近速度 (實測 96 隻怪：推力 30px/s 對上
+    // 逼近 90~175px/s，坍塌比例只從 14.1% 降到 13.9%)，因為所有怪的目標
+    // 都是同一個點。改成只保留切線分量後，怪群自然圍成一圈。
+    const contactD = this.radius + (target && target.radius ? target.radius : 0);
+    if (dist < contactD * 1.08 && dist > 0.001) {
+      const radial = mx * nx + my * ny;      // 朝目標的分量
+      if (radial > 0) {
+        mx -= nx * radial;                   // 扣掉朝內分量，只留切線
+        my -= ny * radial;
+        const sl = Math.sqrt(mx * mx + my * my);
+        if (sl > 0.0001) {
+          mx /= sl;
+          my /= sl;
+        } else {
+          mx = -ny;                          // 完全正對時改為繞行
+          my = nx;
+        }
+      }
+    }
+
+    this.facingX = mx;
+    this.facingY = my;
+    if (this.windupKind === 'lunge') {
+      // 預警時面向已鎖定的撲擊方向，不是當前朝向
+      this.facingX = this.windupDir.x;
+      this.facingY = this.windupDir.y;
+    }
+    const spd = this.speed * this.speedFactor() * speedMul;
+    return { x: mx * spd, y: my * spd };
   }
 
   // 極寒脈衝減速：回傳當幀速度倍率 (0.5 = 半速；slowTimer 由遊戲時間倒數，暫停即凍結)
   speedFactor() {
-    if (this.freezeTimer > 0) return 0; // 冰凍定身 (擊退位移不受影響)
+    if (this.freezeTimer > 0 || this.stunTimer > 0) return 0; // 定身/眩暈 (擊退位移不受影響)
     return this.slowTimer > 0 ? 0.5 : 1;
   }
 
@@ -346,7 +508,13 @@ export class Enemy {
       this.skillTimer -= dt;
       if (this.skillTimer <= 0 && this.behaviors && this.behaviors.length > 0) {
         this.skillTimer = (8 + Math.random() * 3) / rage;
-        const act = this.behaviors[Math.floor(Math.random() * this.behaviors.length)];
+        // 不連續重複同一招：兩招的 Boss 原本可能連放四次同一招
+        let act = this.behaviors[Math.floor(Math.random() * this.behaviors.length)];
+        if (this.behaviors.length > 1 && act === this._lastSkill) {
+          const other = this.behaviors.filter((b) => b !== act);
+          act = other[Math.floor(Math.random() * other.length)];
+        }
+        this._lastSkill = act;
         if (onBossSkill) onBossSkill(this, act);
       }
     }
@@ -368,13 +536,19 @@ export class Enemy {
     this.freezeTimer = Math.max(this.freezeTimer, duration);
   }
 
-  // 眩暈：同冰凍定身機制
+  // 眩暈：與冰凍共用「定身」機制但用獨立欄位，才畫得出不同的視覺
+  // (原本兩者都寫 freezeTimer，閃電眩暈的敵人是顯示成冰晶的)
   applyStun(duration) {
     if (this.isBoss) {
       this.slowTimer = Math.max(this.slowTimer, duration * 0.5);
       return;
     }
-    this.freezeTimer = Math.max(this.freezeTimer, duration);
+    this.stunTimer = Math.max(this.stunTimer, duration);
+  }
+
+  // 標記 (基隆型態)：被標記的目標受到額外傷害
+  applyMark(duration) {
+    this.markTimer = Math.max(this.markTimer, duration);
   }
 
   // 減速
@@ -390,18 +564,39 @@ export class Enemy {
   }
 
   takeDamage(amount, knockbackDist = 0, sourceX = 0, sourceY = 0) {
-    // 裝甲詞綴減傷；至少造成 1 點，避免高血量時永遠打不動
-    this.hp -= Math.max(1, Math.round(amount * (this.damageTakenMul || 1)));
+    // 方向性防禦：防暴盾衛的「正面大盾」只看來襲方向 vs 面向。
+    // 原本是一顆不分方向的 damageTakenMul: 0.55 —— README 寫的「正面」在程式裡
+    // 根本不存在，從背後打也減傷 45%，於是「繞背」這個戰術完全不成立。
+    let mul = this.damageTakenMul || 1;
+    const ai = this.ai || {};
+    if (ai.kind === 'shield' && !this.isBoss) {
+      const kdx = sourceX - this.x;
+      const kdy = sourceY - this.y;
+      const kd = Math.sqrt(kdx * kdx + kdy * kdy);
+      if (kd > 0.001) {
+        const dot = (kdx / kd) * this.facingX + (kdy / kd) * this.facingY;
+        // dot > cos(arc/2) = 命中來自正面 → 吃盾牌減傷；否則完整傷害
+        if (dot > Math.cos((ai.shieldArc || 1.6) / 2)) mul *= ai.shieldMul != null ? ai.shieldMul : 0.45;
+      }
+    }
+    // 標記中的目標受到額外傷害 (基隆型態)
+    if (this.markTimer > 0) mul *= 1.25;
+
+    // 減傷；至少造成 1 點，避免高血量時永遠打不動
+    const applied = Math.max(1, Math.round(amount * mul));
+    this.hp -= applied;
+    this.lastDamageTaken = applied;
     this.flashTimer = 0.08; // 閃白效果
 
-    // 施加擊退
+    // 施加擊退 (重裝單位有抗性，不會被推著走)
     if (knockbackDist > 0 && !this.isBoss) {
       const kdx = this.x - sourceX;
       const kdy = this.y - sourceY;
-      const kdist = Math.hypot(kdx, kdy);
+      const kdist = Math.sqrt(kdx * kdx + kdy * kdy);
       if (kdist > 0) {
-        this.kbX += (kdx / kdist) * knockbackDist * 12;
-        this.kbY += (kdy / kdist) * knockbackDist * 12;
+        const kb = knockbackDist * 12 * (1 - this.kbResist);
+        this.kbX += (kdx / kdist) * kb;
+        this.kbY += (kdy / kdist) * kb;
       }
     }
 
@@ -419,7 +614,8 @@ export class Enemy {
       const base = this.skin || 'boss';
       return this.isCharging ? base + '_charging' : base;
     }
-    return this.spriteVariant > 0 ? this.typeKey + ':v' + this.spriteVariant : this.typeKey;
+    // 靜態鍵在建構子就算好：原本每幀重建字串 (250 隻就是每幀 250 次串接)
+    return this.baseSpriteKey;
   }
 
   draw(ctx, camera) {
@@ -456,18 +652,8 @@ export class Enemy {
       blit(ctx, sprite, frame, screenX, screenY, this.flashTimer > 0);
     }
 
-    // 衝刺中的紅色尾焰警示
-    if (this.dashLeft > 0) {
-      ctx.save();
-      ctx.translate(screenX, screenY);
-      ctx.strokeStyle = this.color;
-      ctx.globalAlpha = 0.5;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, this.radius + 6, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
+    // 預警前搖 (撲擊方向扇形 / 踏地範圍圈 / 射擊瞄準線)
+    if (this.windupKind) this.drawWindup(ctx, screenX, screenY);
 
     // 非滿血且非 Boss 時顯示小血條 (Boss 有頂部專屬 HUD)
     if (!this.isBoss && this.hp < this.maxHp) {
@@ -534,6 +720,27 @@ export class Enemy {
       ctx.restore();
     }
 
+    // 眩暈中：黃色電弧 (與冰凍的冰晶區隔開來，玩家才分得出「定身」與「麻痺」)
+    if (this.stunTimer > 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      const t = this.animTimer * 9;
+      ctx.strokeStyle = '#ffe066';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.75;
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const a = t + (i / 3) * Math.PI * 2;
+        const r1 = this.radius * 0.4;
+        const r2 = this.radius + 7;
+        ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+        ctx.lineTo(Math.cos(a + 0.5) * r2 * 0.7, Math.sin(a + 0.5) * r2 * 0.7);
+        ctx.lineTo(Math.cos(a + 0.9) * r2, Math.sin(a + 0.9) * r2);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // 中毒中：綠色毒霧氣泡，層數越多越濃
     if (this.poisonTimer > 0) {
       ctx.save();
@@ -570,7 +777,7 @@ export class Enemy {
       ctx.restore();
     }
 
-    // 精英光環 (呼吸燈標示詞綴怪)
+    // 精英光環 (呼吸燈標示詞綴怪) + 詞綴名稱
     if (this.isElite && this.eliteColor) {
       const pulse = 0.4 + Math.sin(this.animTimer * 2.2) * 0.18;
       ctx.save();
@@ -581,6 +788,17 @@ export class Enemy {
       ctx.beginPath();
       ctx.arc(0, 0, Math.max(18, this.radius + 8), 0, Math.PI * 2);
       ctx.stroke();
+      // 詞綴名稱：疾風/裝甲/巨獸/劇毒 —— 精英是「哪一種」比「是精英」更重要
+      if (this.affixName) {
+        ctx.globalAlpha = 0.9;
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        const ty = -this.radius - (this.hp < this.maxHp ? 18 : 10);
+        ctx.fillText(this.affixName, 0, ty + 1);
+        ctx.fillStyle = this.eliteColor;
+        ctx.fillText(this.affixName, 0, ty);
+      }
       ctx.restore();
     }
 
@@ -626,6 +844,79 @@ export class Enemy {
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  // 預警前搖的視覺：三種動作三種形狀，而且畫在「動作之前」。
+  // 這是敵人可讀性的核心 —— 玩家必須能預判，撲擊才閃得掉、踏地才躲得開。
+  drawWindup(ctx, screenX, screenY) {
+    const prog = this.windupMax > 0 ? Math.max(0, Math.min(1, 1 - this.windupTimer / this.windupMax)) : 0.5;
+    ctx.save();
+    ctx.translate(screenX, screenY);
+
+    if (this.windupKind === 'lunge') {
+      // 撲擊：朝鎖定方向張開的扇形 (角度與長度隨預警進度收斂)
+      const R = 190 - prog * 40;
+      const half = 0.5 - prog * 0.16;
+      const base = Math.atan2(this.windupDir.y, this.windupDir.x);
+      ctx.globalAlpha = 0.14 + prog * 0.3;
+      ctx.fillStyle = '#ff3860';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, R, base - half, base + half);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 0.5 + prog * 0.5;
+      ctx.strokeStyle = '#ff0055';
+      ctx.lineWidth = 2 + prog * 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, R, base - half, base + half);
+      ctx.stroke();
+      // 中央指向線
+      ctx.globalAlpha = 0.35 + prog * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(base) * this.radius, Math.sin(base) * this.radius);
+      ctx.lineTo(Math.cos(base) * R, Math.sin(base) * R);
+      ctx.stroke();
+    } else if (this.windupKind === 'slam') {
+      // 踏地：範圍圈由大收縮到定值，圈內填色越來越實
+      const target = (this.ai.slam && this.ai.slam.radius) || 130;
+      const R = target * (1.35 - prog * 0.35);
+      ctx.globalAlpha = 0.10 + prog * 0.22;
+      ctx.fillStyle = '#ff9500';
+      ctx.beginPath();
+      ctx.arc(0, 0, R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.45 + prog * 0.5;
+      ctx.strokeStyle = '#ffb703';
+      ctx.lineWidth = 3 + prog * 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, R, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + this.animTimer * 0.4;
+        ctx.moveTo(Math.cos(a) * R * 0.86, Math.sin(a) * R * 0.86);
+        ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R);
+      }
+      ctx.stroke();
+    } else if (this.windupKind === 'shoot') {
+      // 射擊：細瞄準線 + 槍口亮點
+      ctx.globalAlpha = 0.25 + prog * 0.5;
+      ctx.strokeStyle = this.eliteColor || this.ranged.color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([7, 6]);
+      ctx.beginPath();
+      ctx.moveTo(this.facingX * (this.radius + 4), this.facingY * (this.radius + 4));
+      ctx.lineTo(this.facingX * this.ranged.range, this.facingY * this.ranged.range);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = this.eliteColor || this.ranged.color;
+      ctx.beginPath();
+      ctx.arc(this.facingX * (this.radius + 6), this.facingY * (this.radius + 6), 2.5 + prog * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   drawMiniHpBar(ctx) {
