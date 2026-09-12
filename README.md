@@ -469,7 +469,11 @@ js/systems/           Spawner (波次與 Boss 排程) / UI / ParticleSystem
                       Ground (地面繪製管線：材質磚烘焙、地板格線、色調 overlay、暗角、地面殘跡)
                       Decor (關卡裝飾散佈)
 tools/                smoke-branches.mjs (罕見分支煙霧測試) / perf-probe.mjs (硬體無關效能探針)
+                      probe-targeted.mjs (敵彈/火海/粒子等熱點的效能探針)
+                      worst-case.mjs (250 灼燒中毒 + 火海 + 敵彈的整合最壞情境)
+                      visual-equiv.mjs (以 route 攔截舊模組做逐像素等價比對)
                       verify-review-fixes.mjs (內容與修復的回歸驗證)
+                      verify-pwa.mjs / verify-pwa-update.mjs / bannerbox.mjs (PWA 離線、更新與版面)
 ```
 
 ---
