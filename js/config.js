@@ -757,6 +757,6 @@ export const ACHIEVEMENTS = [
     check: (s) => s.merchantBuys >= 3, reward: 40 },
   { id: 'endless_10m',     name: '深淵倖存者',   icon: '🌀', desc: '深淵無盡戰存活超過 10 分鐘',
     check: (s) => s.levelId === 'endless' && s.time >= 600, reward: 200 },
-  { id: 'all_chars',       name: '特工大閱兵',   icon: '🦆', desc: '使用全部 4 位特工各通關一次',
+  { id: 'all_chars',       name: '特工大閱兵',   icon: '🦆', desc: '使用全部 5 位特工各通關一次',
     check: (s) => s.clearedWithAllChars, reward: 300 },
 ];
