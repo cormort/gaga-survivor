@@ -20,6 +20,16 @@ node tools/smoke-branches.mjs       # 終端機 B
 **預期**：`✅ 51 個分支全部通過`，離開碼 0。
 （分支數會隨程式成長，以實際輸出為準；重點是 **0 個 FAIL**。）
 
+同時先跑這三支（各自都是秒級，任何一項紅燈就先修，不要往下測）：
+
+```bash
+node tools/check-refactor-refs.mjs   # 模組化殘留引用（game.X 已搬走、import 不存在）
+node tools/verify-perf.mjs           # 自適應 DPR 政策 + 碰撞網格與暴力解等價
+node tools/verify-audio.mjs          # 音訊（OfflineAudioContext 實際算圖後分析）
+```
+
+**預期**：`✅ 沒有殘留引用`、`8 passed, 0 failed`、`32 passed, 0 failed`。
+
 **若已經 FAIL**：立刻回報，**不要往下測** —— 表示 checkout 的版本有問題，
 後面所有結論都不可信。
 

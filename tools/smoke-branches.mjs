@@ -51,9 +51,11 @@ const results = await page.evaluate(async () => {
     run('消耗品', id, () => { reset(); g.activateConsumable(id); });
   }
 
-  // 2. 里程碑獎勵
+  // 2. 里程碑獎勵（grantMilestone 已搬到 systems/Progression.js，直接呼叫實作）
+  const { grantMilestone, triggerMiniEvent, endMiniEvent } = await import('/js/systems/Progression.js');
+  const { buyMerchantItem } = await import('/js/systems/Merchant.js');   // 商人已搬到 systems/Merchant.js
   for (const tag of ['magnet', 'gold', 'heal', 'bomb', 'resupply']) {
-    run('里程碑', tag, () => { reset(); g.grantMilestone(tag, '煙霧測試'); });
+    run('里程碑', tag, () => { reset(); grantMilestone(g, tag, '煙霧測試'); });
   }
 
   // 3. 局內事件：直接指定 evt，走完整觸發邏輯
@@ -63,14 +65,14 @@ const results = await page.evaluate(async () => {
     run('局內事件', evt.id, () => {
       reset();
       Math.random = () => i / cfg.MINI_EVENTS.length + 1e-6;   // 釘住抽選結果
-      try { g.triggerMiniEvent(); } finally { Math.random = origRandom; }
-      g.endMiniEvent?.();
+      try { triggerMiniEvent(g); } finally { Math.random = origRandom; }
+      endMiniEvent(g);
     });
   }
 
   // 4. 商人商品
   for (const item of cfg.MERCHANT_ITEMS) {
-    run('商人', item.id, () => { reset(); g.gold = 99999; g.buyMerchantItem(item); });
+    run('商人', item.id, () => { reset(); g.gold = 99999; buyMerchantItem(g, item); });
   }
 
   // 5. 特殊升級卡

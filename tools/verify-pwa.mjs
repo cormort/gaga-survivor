@@ -47,6 +47,7 @@ const killServer = () => {
 
 /* ── 0) 靜態：sw.js 的預快取清單 vs 磁碟實際檔案 ── */
 const swSrc = await readFile(path.join(ROOT, 'sw.js'), 'utf8');
+const cacheVersion = (swSrc.match(/const CACHE_VERSION\s*=\s*'([^']+)'/) || [])[1] || '';
 const listBlock = swSrc.match(/const PRECACHE = \[([\s\S]*?)\];/);
 const precache = listBlock ? [...listBlock[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
 ok('sw.js 找得到 PRECACHE 清單', !!listBlock && precache.length > 0, `${precache.length} 筆`);
@@ -183,8 +184,8 @@ const cacheInfo = await page.evaluate(async () => {
   }
   return out;
 });
-const shellKeys = cacheInfo.entries['gaga-v1'] || [];
-ok('快取名稱為 gaga-v1 (+runtime)', cacheInfo.names.includes('gaga-v1'), cacheInfo.names.join(', '));
+const shellKeys = cacheInfo.entries[cacheVersion] || [];
+ok(`快取名稱與 sw.js 的 CACHE_VERSION 一致 (${cacheVersion})`, cacheInfo.names.includes(cacheVersion), cacheInfo.names.join(', '));
 const notCached = precache.filter((p) => !shellKeys.includes(new URL(p, `${BASE}/`).href));
 ok('預快取清單每一筆都真的進了快取', notCached.length === 0,
   notCached.length ? `漏 ${notCached.length}: ${notCached.join(', ')}` : `${shellKeys.length} 筆`);
@@ -376,7 +377,7 @@ ok('pwa.js 不在 iOS 顯示安裝按鈕、且有 Safari 加入主畫面提示',
   /isIOS\(\)/.test(pwaSrc) && /加入主畫面/.test(pwaSrc), 'ok');
 ok('sw.js 有 skipWaiting / clients.claim / 版本化快取 / message / 同源過濾',
   /skipWaiting\(\)/.test(swSrc) && /clients\.claim\(\)/.test(swSrc)
-  && /gaga-v1/.test(swSrc) && /SKIP_WAITING/.test(swSrc)
+  && swSrc.includes(cacheVersion) && /SKIP_WAITING/.test(swSrc)
   && /url\.origin !== self\.location\.origin/.test(swSrc), 'ok');
 
 await browser.close();

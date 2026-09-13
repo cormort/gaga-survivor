@@ -10,7 +10,7 @@
 import { GAME_CONFIG, FX } from '../config.js';
 import { LEVELS } from '../levels.js';
 import { drawTerrain } from './Terrain.js';
-import { makePeriodicNoise, makeFbm, reliefDot, bevelRect, reliefCrack, starPoint } from './Texture.js';
+import { makeFbm, reliefDot, bevelRect, reliefCrack, starPoint } from './Texture.js';
 
 export class GroundRenderer {
   constructor() {
