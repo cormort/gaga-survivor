@@ -9,7 +9,7 @@
 
 | 項目 | 結果 |
 | :--- | :--- |
-| `tools/smoke-branches.mjs` | ✅ 56 個分支全部通過，離開碼 0 |
+| `tools/smoke-branches.mjs` | ✅ 56 個分支全部通過，離開碼 0（禮包碼移除後為 51） |
 | `tools/perf-probe.mjs` 每幀繪圖指令 | idle 68 / mobs 573 / burn 1786 / burn5 4209 / drops 636 |
 | `tools/perf-probe.mjs` 每幀色彩字串 | idle 10 / mobs 16 / burn 16 / **burn5 499** / drops 15 |
 | `tools/perf-probe.mjs` renderMs | idle 0.1 / mobs 9.7 / burn 13.1 / **burn5 17.1** / drops 8.4 |
@@ -199,7 +199,7 @@ else                  { moveX = (dx/dist)*spd; ... }    // 其餘全部：直線
 - **跨系統可變狀態共用**：`triggerMiniEvent` 直接改寫傳給 Spawner 的 `this.rules.spawnMul`（`main.js:2006`, `:2063`），等於 Spawner 持有的 config 物件被事件系統就地改動。目前靠 `mergeRules` 每局重建才沒出事（`main.js:1125`），但這是典型的隱性耦合。
 - **單一傷害入口名存實亡**（M3）：`damageEnemy()` 是唯一該走的路，實際有 6+ 處繞過。
 - **`enemyScale` 的成長公式**（`levels.js:294-310`）已經疊了時間、關卡、規則、無盡、二次項五層，註解比程式長；調平衡時很難預測結果。建議拆成具名項。
-- **測試**：專案有 `tools/smoke-branches.mjs`（56 分支）與 `tools/perf-probe.mjs`，比 README:479 寫的「沒有測試框架」好，但**兩者都不在 CI**，且都不覆蓋本報告的 B1/H2/H3/M1 這類「資料與程式對不上」的缺陷 —— 煙霧測試只驗證「不會拋例外」，不驗證「效果真的發生」。
+- **測試**：專案有 `tools/smoke-branches.mjs`（51 分支，禮包碼移除前為 56）與 `tools/perf-probe.mjs`，比 README:479 寫的「沒有測試框架」好，但**兩者都不在 CI**，且都不覆蓋本報告的 B1/H2/H3/M1 這類「資料與程式對不上」的缺陷 —— 煙霧測試只驗證「不會拋例外」，不驗證「效果真的發生」。
 
 ---
 
@@ -369,6 +369,12 @@ MEDIUM：迷你事件／商人計時器隨幀率變動 ｜ 事件橫幅倒數不
 
 **新增的三支工具**：`tools/probe-targeted.mjs`（把變因鎖在官方探針涵蓋不到的熱點）、`tools/worst-case.mjs`（250 灼燒中毒＋6 火海＋150 敵彈的整合情境，7 項斷言）、`tools/visual-equiv.mjs`（route 攔截舊模組做逐像素等價比對）。
 
+### 7.2c 後續變更：禮包碼功能整支移除
+
+擁有者表示「目前沒有官方禮包」，因此整支功能移除（`GIFT_CODES`、`save.redeemCode()`、存檔的 `redeemedCodes` 欄位、選單的 🎁 官方禮包按鈕、兌換彈窗與 5 個快速填入籌碼、UI 的 `openGiftModal`／`tryRedeemGiftCode`、以及煙霧測試的 5 個禮包碼分支與回歸腳本的 4 項檢查）。
+
+因此 §2 的 **H1（禮包碼 UI 永遠顯示「❌ undefined」）已隨功能移除而不存在**，該紀錄保留作為「資料與程式對不上」的案例。分支數：煙霧測試 56 → **51**，`verify-review-fixes` 47 → **43**。
+
 ### 7.3 仍未處理
 
 - `WEAPON_ASPECTS[*].tag`（型態標籤文案）仍未顯示；`characters.js` 的 `role`／`classTitle`
@@ -385,7 +391,7 @@ MEDIUM：迷你事件／商人計時器隨幀率變動 ｜ 事件橫幅倒數不
 
 | 指標 | 前 | 後 |
 | :--- | :--- | :--- |
-| `smoke-branches.mjs` | 56 分支通過 | 56 分支通過（且特殊卡組不再空轉） |
+| `smoke-branches.mjs` | 56 分支通過 | 56 分支通過（且特殊卡組不再空轉；禮包碼移除後 51） |
 | `verify-review-fixes.mjs` | —（新增） | **47/47 通過** |
 | 敵人坍塌配對比例（96 隻怪、4 秒收斂） | 14.1% | **0.9%** |
 | 敵人最近鄰平均距離 | 20.7 | **29.5** |

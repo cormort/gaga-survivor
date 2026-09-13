@@ -8,7 +8,7 @@
 //   - 淘金狂潮是 ×2 且不會殘留、聖光結界會到期
 //   - 盾衛正面減傷 vs 背後完整傷害、基隆印記 +25%
 //   - 13 種敵人都有各自 ai.kind、五關巨觀地形與格線樣式互不相同
-//   - 禮包碼 UI 走真實點擊、倉庫容量、結算不會重複入帳
+//   - 倉庫容量、結算不會重複入帳、型態效果是否真的由 stats 驅動
 //
 // 用法：
 //   npx http-server -p 8899 -s          # 另一個終端機，專案根目錄
@@ -190,22 +190,6 @@ const results = await page.evaluate(async () => {
   const dens5 = LEVEL_ORDER.map((id) => LEVELS[id].theme.ground.density && LEVELS[id].theme.ground.density.stain);
   ok('五關汙漬密度不再寫死', new Set(dens5).size >= 4, dens5.join('/'));
   ok('五關格線樣式不同', new Set(LEVEL_ORDER.map((id) => JSON.stringify(LEVELS[id].theme.gridStyle))).size === 5);
-
-  // 11.5) 禮包碼 UI 路徑 (實際點按鈕，不是只測 save)
-  const gi = document.getElementById('input-gift-code');
-  const gs = document.getElementById('gift-status');
-  gi.value = 'VIP666';
-  document.getElementById('btn-redeem-code').click();
-  const txt = (gs.textContent || '');
-  ok('禮包碼 UI 顯示成功訊息 (非 undefined)', txt.includes('🎉') && !txt.includes('undefined'), txt.slice(0, 40));
-  gi.value = 'VIP666';
-  document.getElementById('btn-redeem-code').click();
-  ok('禮包碼 UI 顯示重複領取訊息', gs.textContent.includes('已領取') && !gs.textContent.includes('undefined'), gs.textContent.slice(0, 30));
-
-  // 12) 禮包碼回饋
-  const res = save.redeemCode('DUCK888');
-  ok('禮包碼回傳 success 欄位', 'success' in res && res.success === true, JSON.stringify(res).slice(0, 60));
-  ok('禮包碼已領取時回傳失敗訊息', save.redeemCode('DUCK888').success === false);
 
   // 13) 倉庫容量
   ok('save.getStashCap 存在', typeof save.getStashCap === 'function');

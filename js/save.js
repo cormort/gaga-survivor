@@ -1,45 +1,12 @@
 // 局外存檔層：整份進度存在單一 localStorage key，其他系統一律走這裡讀寫。
 
 import { TALENTS, talentCost } from './meta.js';
-import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes, FUSION_COST, fuseItems, rollItem } from './items.js';
+import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes, FUSION_COST, fuseItems } from './items.js';
 
 export const STASH_CAP = 30;
 
 const KEY = 'gaga_save';
 const VERSION = 4;
-
-export const GIFT_CODES = {
-  DUCK888: {
-    code: 'DUCK888',
-    name: '開荒金幣密鑰包',
-    desc: '+888 🪙 特工金幣、+60 🧬 基因密鑰',
-    reward: { gold: 888, dna: 60 },
-  },
-  GAGA999: {
-    code: 'GAGA999',
-    name: '超頻科研密鑰箱',
-    desc: '+300 🪙 特工金幣、+200 🧬 基因密鑰',
-    reward: { gold: 300, dna: 200 },
-  },
-  GAGAFIGHT: {
-    code: 'GAGAFIGHT',
-    name: '特攻先鋒武裝包',
-    desc: '+500 🪙 金幣、隨機 1 件【紫色卓越】特工裝備',
-    reward: { gold: 500, randomPurpleGear: true },
-  },
-  DUCKGO: {
-    code: 'DUCKGO',
-    name: '出擊整備福利',
-    desc: '+200 🪙 特工金幣、+100 🧬 基因密鑰',
-    reward: { gold: 200, dna: 100 },
-  },
-  VIP666: {
-    code: 'VIP666',
-    name: '尊榮特工補給',
-    desc: '+666 🪙 特工金幣、+88 🧬 基因密鑰',
-    reward: { gold: 666, dna: 88 },
-  },
-};
 
 // 兩種模式的進度分開記 (最佳紀錄與關卡解鎖)，但養成完全共用：
 // DNA、天賦、裝備倉庫、已解鎖特工都跨模式共享。
@@ -63,7 +30,6 @@ function blank() {
     settings: { sfx: 1, bgm: 0.8 }, // 音量 (主選單滑桿)
     daily: { date: '', bestTime: 0, completed: false },
     evolvedEver: [],            // 歷史上合成過的超武 id (合成圖鑑打勾用)
-    redeemedCodes: [],          // 已兌換過的官方禮包碼
     weaponAspects: {            // Hades 武器型態配置
       kunai: 'zagreus',
       rocket: 'hestia',
@@ -127,7 +93,6 @@ function ensureDefaults(d) {
   if (typeof d.gold !== 'number') d.gold = 0;
   if (!Array.isArray(d.boosters)) d.boosters = [];
   if (typeof d.stashCap !== 'number') d.stashCap = STASH_CAP;
-  if (!Array.isArray(d.redeemedCodes)) d.redeemedCodes = [];
   if (!d.settings || typeof d.settings !== 'object') d.settings = {};
   d.settings = { sfx: 1, bgm: 0.8, ...d.settings };
 
@@ -149,27 +114,6 @@ function ensureDefaults(d) {
 
 export const save = {
   data: blank(),
-
-  redeemCode(rawCode) {
-    const code = (rawCode || '').trim().toUpperCase();
-    const def = GIFT_CODES[code];
-    if (!def) return { success: false, message: '無效的禮包碼，請確認代碼是否正確！' };
-    this.data.redeemedCodes = this.data.redeemedCodes || [];
-    if (this.data.redeemedCodes.includes(code)) {
-      return { success: false, message: '此禮包碼已領取過，無法重複兌換！' };
-    }
-    this.data.redeemedCodes.push(code);
-    if (def.reward.gold) this.data.gold += def.reward.gold;
-    if (def.reward.dna) this.data.dna += def.reward.dna;
-    if (def.reward.randomPurpleGear) {
-      const gear = rollItem({ rarity: 'epic' });
-      if (this.data.stash.length < (this.data.stashCap || STASH_CAP)) {
-        this.data.stash.push(gear);
-      }
-    }
-    this.flush();
-    return { success: true, message: `成功領取【${def.name}】！獲得 ${def.desc}` };
-  },
 
   load() {
     try {

@@ -96,34 +96,6 @@ export class UIManager {
       barricade: { btn: document.getElementById('btn-build-barricade'), cost: document.getElementById('build-barricade-cost') },
     };
 
-    // 官方禮包兌換
-    this.giftModal = document.getElementById('gift-code-modal');
-    this.giftInput = document.getElementById('input-gift-code');
-    this.giftStatus = document.getElementById('gift-status');
-    this.giftRedeemBtn = document.getElementById('btn-redeem-code');
-    this.giftBtn = document.getElementById('btn-gift');
-
-    this.giftBtn?.addEventListener('click', () => {
-      this.openGiftModal();
-    });
-    document.getElementById('btn-close-gift')?.addEventListener('click', () => {
-      this.giftModal?.classList.add('hidden');
-    });
-    document.querySelectorAll('.gift-chip').forEach((chip) => {
-      chip.addEventListener('click', () => {
-        if (this.giftInput) {
-          this.giftInput.value = chip.dataset.code || '';
-          this.giftInput.focus();
-        }
-      });
-    });
-    this.giftRedeemBtn?.addEventListener('click', () => {
-      this.tryRedeemGiftCode();
-    });
-    this.giftInput?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') this.tryRedeemGiftCode();
-    });
-
     this.dashBtn = document.getElementById('btn-dash');
     this.dashOverlay = document.getElementById('dash-cooldown-overlay');
     this.turretUpBtn = document.getElementById('btn-turret-upgrade');
@@ -961,45 +933,6 @@ export class UIManager {
     this.buildBtn?.classList.toggle('hidden', !mode.turrets);
     this.hireBtn?.classList.toggle('hidden', !mode.mercs);
     if (!mode.turrets) this.showTurretUpgrade(false);
-  }
-
-  // 官方禮包彈窗
-  openGiftModal() {
-    if (this.giftStatus) {
-      this.giftStatus.textContent = '';
-      this.giftStatus.className = 'menu-status gift-status';
-    }
-    this.giftModal?.classList.remove('hidden');
-    if (this.giftInput) {
-      this.giftInput.value = '';
-      this.giftInput.focus();
-    }
-  }
-
-  tryRedeemGiftCode() {
-    if (!this.giftInput || !this.giftStatus) return;
-    const code = this.giftInput.value.trim();
-    if (!code) {
-      this.giftStatus.textContent = '請輸入禮包密令！';
-      this.giftStatus.className = 'menu-status gift-status err';
-      sound.playHurt();
-      return;
-    }
-    // save.redeemCode() 回傳的是 { success, message }，原本這裡讀的是
-    // res.ok / res.reward / res.reason —— 三個欄位都不存在，所以每一次兌換
-    // (包含成功) 都顯示「❌ undefined」，成功時也不會更新 HUD 晶片。
-    const res = save.redeemCode(code);
-    if (res.success) {
-      this.giftStatus.textContent = `🎉 ${res.message}`;
-      this.giftStatus.className = 'menu-status gift-status ok';
-      this.giftInput.value = '';
-      this.updateDnaChip(save.data.dna, save.data.gold);
-      sound.playEvoFanfare();
-    } else {
-      this.giftStatus.textContent = `❌ ${res.message || '兌換失敗'}`;
-      this.giftStatus.className = 'menu-status gift-status err';
-      sound.playHurt();
-    }
   }
 
   // 基地核心血條 (守塔模式)
