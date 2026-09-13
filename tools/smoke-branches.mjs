@@ -32,7 +32,6 @@ const results = await page.evaluate(async () => {
   for (let i = 0; i < 40 && !g.enemies.length; i++) await new Promise((r) => setTimeout(r, 200));
 
   const cfg = await import('/js/config.js');
-  const cfg2 = await import('/js/save.js');
   const out = [];
   const run = (群組, 名稱, fn) => {
     try {
@@ -94,16 +93,6 @@ const results = await page.evaluate(async () => {
   // 7. 祝福
   for (const b of (cfg.BLESSINGS || [])) {
     run('祝福', b.id, () => { reset(); g.applyBlessing?.(b); });
-  }
-
-  // 8. 禮包碼 (獎勵已寫進 data 才呼叫持久化，那行拋錯就等於獎勵永遠存不下去)
-  const { save } = await import('/js/save.js');
-  for (const code of Object.keys(cfg2.GIFT_CODES || {})) {
-    run('禮包碼', code, () => {
-      save.data.redeemedCodes = (save.data.redeemedCodes || []).filter((c) => c !== code);
-      const r = save.redeemCode(code);
-      if (!r.success) throw new Error(r.message);
-    });
   }
 
   // 9. 結算 (兩條路徑都要，成就解鎖分支只在其中一條)

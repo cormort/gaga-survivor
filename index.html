@@ -301,47 +301,6 @@
       </div>
     </div>
 
-    <!-- 官方禮包兌換彈窗 (Gift Code Modal) -->
-    <div id="gift-code-modal" class="overlay hidden">
-      <div class="modal-content gift-content">
-        <div class="modal-header">
-          <h2 class="glow-text">🎁 嘎嘎特攻 · 官方禮包兌換</h2>
-          <p class="subtitle">專屬公測豪禮即刻領取！</p>
-        </div>
-        <div class="gift-box-body">
-          <div class="gift-input-row">
-            <input type="text" id="input-gift-code" class="gift-input" placeholder="請輸入禮包碼 (例: DUCK888)" maxlength="20" autocomplete="off" spellcheck="false" />
-            <button id="btn-redeem-code" class="game-btn primary-btn gift-redeem-btn">兌換獎勵 ✨</button>
-          </div>
-          <div class="gift-quick-label">點擊快速填入官方限定密令：</div>
-          <div class="gift-chips-grid">
-            <button class="gift-chip" data-code="DUCK888">
-              <span class="chip-code">DUCK888</span>
-              <span class="chip-reward">🪙 888 金幣</span>
-            </button>
-            <button class="gift-chip" data-code="GAGA999">
-              <span class="chip-code">GAGA999</span>
-              <span class="chip-reward">🧬 150 基因密鑰</span>
-            </button>
-            <button class="gift-chip" data-code="GAGAFIGHT">
-              <span class="chip-code">GAGAFIGHT</span>
-              <span class="chip-reward">💜 紫色史詩裝備</span>
-            </button>
-            <button class="gift-chip" data-code="DUCKGO">
-              <span class="chip-code">DUCKGO</span>
-              <span class="chip-reward">🪙 500 + 🧬 50</span>
-            </button>
-            <button class="gift-chip" data-code="VIP666">
-              <span class="chip-code">VIP666</span>
-              <span class="chip-reward">🪙 666 金幣</span>
-            </button>
-          </div>
-          <div id="gift-status" class="menu-status gift-status"></div>
-        </div>
-        <button id="btn-close-gift" class="game-btn secondary-btn">關閉視窗</button>
-      </div>
-    </div>
-
     <!-- 開局/開始介面 -->
     <div id="start-screen" class="overlay">
       <div class="start-box">
@@ -363,7 +322,6 @@
         <div class="menu-meta">
           <span id="dna-chip" class="dna-chip">🧬 0</span>
           <span id="gold-chip" class="dna-chip gold-chip">🪙 0</span>
-          <button id="btn-gift" class="game-btn talent-btn gift-btn">🎁 官方禮包</button>
           <button id="btn-shop" class="game-btn talent-btn shop-btn">🛒 特工黑市</button>
           <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
           <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
