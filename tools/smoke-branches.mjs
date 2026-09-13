@@ -53,6 +53,7 @@ const results = await page.evaluate(async () => {
 
   // 2. 里程碑獎勵（grantMilestone 已搬到 systems/Progression.js，直接呼叫實作）
   const { grantMilestone, triggerMiniEvent, endMiniEvent } = await import('/js/systems/Progression.js');
+  const { buyMerchantItem } = await import('/js/systems/Merchant.js');   // 商人已搬到 systems/Merchant.js
   for (const tag of ['magnet', 'gold', 'heal', 'bomb', 'resupply']) {
     run('里程碑', tag, () => { reset(); grantMilestone(g, tag, '煙霧測試'); });
   }
@@ -71,7 +72,7 @@ const results = await page.evaluate(async () => {
 
   // 4. 商人商品
   for (const item of cfg.MERCHANT_ITEMS) {
-    run('商人', item.id, () => { reset(); g.gold = 99999; g.buyMerchantItem(item); });
+    run('商人', item.id, () => { reset(); g.gold = 99999; buyMerchantItem(g, item); });
   }
 
   // 5. 特殊升級卡

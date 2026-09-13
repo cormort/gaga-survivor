@@ -32,6 +32,10 @@ import {
   getFacilityCost, updateFacilityHUD, buildFacility, grantStarterTurret,
   updateTurrets, tryUpgradeNearestTurret, hireMercenary, updateMercenaries, facilityGoldMul,
 } from './systems/Facilities.js';
+import {
+  checkMerchantSchedule, spawnMerchant, updateMerchant, dismissMerchant,
+  openMerchantPanel, closeMerchantPanel, buyMerchantItem, drawMerchant,
+} from './systems/Merchant.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
 import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, salvageValue, RARITIES } from './items.js';
 import { MODES, MODE_ORDER, getMode } from './modes.js';
@@ -1131,7 +1135,7 @@ class Game {
     this.ui.updateBlessings([]);
     this.ui.updateSynergies([]);
     this.ui.updateEventBanner(null);
-    this.ui.onMerchantClose = () => this.dismissMerchant();
+    this.ui.onMerchantClose = () => dismissMerchant(this);
     this.input.reset();
 
     this.ui.updateSkillSlots(this.weaponManager);
@@ -1364,141 +1368,13 @@ class Game {
   // ── 方向 4：武器協同效果 ──
 
   // ── 方向 5：局內商人 ──
-  checkMerchantSchedule(dt) {
-    if (this.merchant || !this.mode || this.mode.id !== 'survivor') return;
-    this._merchantTimer -= dt;   // 原本寫死 1/60，120Hz 時商人會提早一倍出現
-    if (this._merchantTimer <= 0) {
-      this.spawnMerchant();
-      this._merchantTimer = 150; // 下次 2.5 分鐘後
-    }
-  }
 
-  spawnMerchant() {
-    const ang = Math.random() * Math.PI * 2;
-    const dist = 250 + Math.random() * 150;
-    const mx = this.player.x + Math.cos(ang) * dist;
-    const my = this.player.y + Math.sin(ang) * dist;
-    // 隨機挑 3 件商品
-    const shuffled = shuffleInPlace([...MERCHANT_ITEMS]);
-    this.merchant = {
-      x: mx, y: my,
-      timer: 25, // 停留 25 秒
-      items: shuffled.slice(0, 3),
-      interactDist: 80,
-    };
-    this.ui.say('🏪 流浪商人出現了！快去看看', '#ffd166', 3);
-  }
 
-  updateMerchant(dt) {
-    if (!this.merchant) return;
-    this.merchant.timer -= dt;
-    if (this.merchant.timer <= 0) {
-      this.closeMerchantPanel();
-      this.merchant = null;
-      return;
-    }
-    // 玩家靠近時顯示購買面板
-    const dx = this.player.x - this.merchant.x;
-    const dy = this.player.y - this.merchant.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < this.merchant.interactDist) {
-      if (!this.merchant.panelOpen) this.openMerchantPanel();
-    } else if (this.merchant.panelOpen) {
-      this.closeMerchantPanel();
-    }
-  }
 
   // 「離開商店」：關閉面板並讓商人立刻收攤，避免玩家還站在原地時面板又跳出來
-  dismissMerchant() {
-    this.closeMerchantPanel();
-    this.merchant = null;
-  }
 
-  openMerchantPanel() {
-    if (this.state !== 'PLAYING') return;
-    this.merchant.panelOpen = true;
-    this.state = 'MERCHANT_MODAL';
-    sound.pauseBGM();
-    this.ui.showMerchant(this.merchant, this.gold, (item) => this.buyMerchantItem(item));
-  }
 
-  closeMerchantPanel() {
-    if (this.merchant) this.merchant.panelOpen = false;
-    if (this.state === 'MERCHANT_MODAL') {
-      this.state = 'PLAYING';
-      sound.resumeBGM();
-    }
-    this.ui.hideMerchant();
-  }
 
-  buyMerchantItem(item) {
-    const cost = Math.round(item.cost * (this.mode.turretCostMul || 1));
-    if (this.gold < cost) {
-      this.ui.say('金幣不足！', '#ff0055', 1.5);
-      sound.playHurt();
-      return;
-    }
-    this.gold -= cost;
-    this._merchantBuys++;
-    sound.playGem();
-    this.particles.createShockwave(this.player.x, this.player.y, 120, item.color);
-
-    switch (item.id) {
-      case 'mega_heal':
-        this.player.heal(80);
-        break;
-      case 'temp_overclock':
-        this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * 0.6);
-        this._tempBuffs.push({
-          id: item.id, timer: item.duration,
-          revert: (p) => { p.cdrMultiplier = Math.min(1, p.cdrMultiplier / 0.6); },
-          // applyPassives 會把 cdrMultiplier 從頭算，這裡讓重算後能補回 buff
-          reapply: (p) => { p.cdrMultiplier = Math.max(0.3, p.cdrMultiplier * 0.6); },
-        });
-        break;
-      case 'energy_shield':
-        this.player.shield = (this.player.shield || 0) + 100;
-        this.player.maxShield = Math.max(this.player.maxShield || 0, this.player.shield);
-        break;
-      case 'hyper_magnet':
-        this.player.magnetMultiplier *= 3;
-        this._tempBuffs.push({
-          id: item.id, timer: item.duration,
-          revert: (p) => { p.magnetMultiplier /= 3; },
-          reapply: (p) => { p.magnetMultiplier *= 3; },
-        });
-        break;
-      case 'orbital_strike':
-        this.weaponManager.schedule(3, () => {
-          this.camera.shake = Math.max(this.camera.shake, 20);
-          sound.playExplosion();
-          for (const e of this.enemies) {
-            if (e.isBoss) e.takeDamage(500, 8, this.player.x, this.player.y);
-            else e.takeDamage(500, 12, this.player.x, this.player.y);
-          }
-          this.particles.createExplosion(this.player.x, this.player.y, 220);
-        });
-        break;
-      case 'fire_enchant':
-        this.player._fireEnchant = true;
-        this._tempBuffs.push({
-          id: item.id, timer: item.duration,
-          revert: (p) => { p._fireEnchant = false; },
-        });
-        break;
-    }
-    // 從商人貨架移除已購買的商品
-    if (this.merchant) {
-      this.merchant.items = this.merchant.items.filter((i) => i.id !== item.id);
-      if (this.merchant.items.length === 0) {
-        this.closeMerchantPanel();
-        this.merchant = null;
-      } else {
-        this.ui.showMerchant(this.merchant, this.gold, (it) => this.buyMerchantItem(it));
-      }
-    }
-    this.ui.say(`購買：${item.icon} ${item.name}`, item.color, 2);
-  }
 
   // ── 方向 6：成就系統 ──
 
@@ -1567,7 +1443,7 @@ class Game {
     // 1. 更新特工玩家
     this.player.update(dt, this.input.vector);
     tickBlessingEffects(this, dt);
-    this.updateMerchant(dt);
+    updateMerchant(this, dt);
 
     // 檢查特工是否身亡
     if (this.player.isDead) {
@@ -2014,6 +1890,12 @@ class Game {
 
   // 木箱掉寶：WeaponManager 的爆炸波及木箱時呼叫 game.dropCrateLoot(...)，
   // 保留同名薄包裝，外部呼叫端不必知道它搬去 Hazards 模組了
+  // 商人排程：Progression 的擊殺里程碑會呼叫 game.checkMerchantSchedule(dt)，
+  // 保留同名薄包裝（同時避免 Progression ↔ Merchant 互相 import 形成循環）
+  checkMerchantSchedule(dt) {
+    return checkMerchantSchedule(this, dt);
+  }
+
   // 金幣乘數：Progression 的里程碑獎勵與回歸測試都呼叫 game.goldMul()，
   // 保留同名薄包裝，呼叫端不必知道它搬去 Facilities 模組了
   goldMul() {
@@ -2943,7 +2825,7 @@ class Game {
 
     // 繪製流浪黑市商人
     if (this.merchant) {
-      this.drawMerchant(renderCam);
+      drawMerchant(this, renderCam);
     }
 
     // 繪製粒子、衝擊波與傷害飄字
@@ -3014,45 +2896,6 @@ class Game {
   }
 
   // 全域色調 overlay：關卡色上下漸層，極淡染上場景 (角色繪製在其上，不受影響)
-  drawMerchant(camera) {
-    if (!this.merchant) return;
-    const sx = this.merchant.x - camera.x;
-    const sy = this.merchant.y - camera.y;
-    const ctx = this.ctx;
-
-    // 互動範圍金色光圈 (脈衝效果)
-    const pulse = 1 + Math.sin(Date.now() / 200) * 0.08;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(sx, sy, this.merchant.interactDist * pulse, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 215, 0, 0.45)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 6]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // 腳下金色光暈
-    ctx.beginPath();
-    ctx.arc(sx, sy, 26, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 215, 0, 0.25)';
-    ctx.fill();
-
-    // 商人圖標 (黑市浣熊商人)
-    ctx.font = '32px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🦝', sx, sy - 6);
-
-    // 標籤與剩餘時間
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillStyle = '#ffd166';
-    ctx.fillText(`流浪商人 (${Math.ceil(this.merchant.timer)}s)`, sx, sy - 34);
-
-    ctx.font = '10px sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText('靠近選購', sx, sy + 22);
-    ctx.restore();
-  }
 
   drawMinimap() {
     const ctx = this.ctx;
