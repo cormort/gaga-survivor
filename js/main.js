@@ -44,6 +44,22 @@ const GOLD_MUL_CAP = 8;
 // 局內待回收裝備的上限，超出的自動分解成金幣 (原本無上限，實測 23 分鐘累積數百件)
 const PENDING_GEAR_CAP = 40;
 
+// ── 自適應解析度 (DPR) ─────────────────────────────────────────
+// 為什麼需要：原本畫布解析度寫死 `Math.min(devicePixelRatio, 1.5)`，而現在的手機
+// dpr 普遍是 2.75~3 —— 等於只以 1.5× 算圖再被瀏覽器放大約 2 倍，材質細節全部被
+// 抹掉（DOM 的 HUD 卻是銳利的，對比之下更明顯）。這個上限原本是為了舊機／軟體
+// 渲染的安全值，但對所有裝置一視同仁。
+//
+// 改成階梯：起始取裝置 dpr 與 2 之間的最高階（細節看得出來），真的跟不上時
+// 自動往下退。判斷用的是「update + render 的實測耗時」而不是幀距 —— 有 vsync 時
+// 幀距永遠是 16.7ms，量不出真正的餘裕。
+const DPR_STEPS = [1, 1.25, 1.5, 2];
+const DPR_MAX = 2;            // 上限（2× 以上的邊際效益低、填充率卻是平方成長）
+const DPR_SAMPLE = 30;        // 每 30 幀（約 0.5 秒）結算一次平均
+const DPR_DOWN_MS = 12;       // 平均 update+render 超過這個值 → 降一階
+const DPR_UP_MS = 7;          // 降階後若長期低於這個值 → 升回一階（滯後避免震盪）
+const DPR_UP_STREAK = 4;      // 連續幾次結算都很快才升階
+
 // 掉落物堆積到這個數量後，未進入拾取半徑的也開始緩慢飄向玩家
 const DRIFT_THRESHOLD = 40;
 const DRIFT_SPEED = 55;        // px/s
@@ -303,19 +319,69 @@ class Game {
 
   initWindow() {
     const resize = () => {
-      // ponytail: DPR 縮放讓 retina 上線條不糊；vw/vh 為邏輯像素尺寸
-      // ponytail: DPR 上限 1.5，2 倍在軟體渲染的瀏覽器上會直接卡死
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       this.vw = window.innerWidth;
       this.vh = window.innerHeight;
-      this.canvas.width = Math.round(this.vw * dpr);
-      this.canvas.height = Math.round(this.vh * dpr);
-      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // 暫停/結算中改變視窗大小時補畫一幀，避免畫布留白
-      if (this.player && this.state !== 'PLAYING') this.render();
+      this._applyCanvasSize();
     };
     window.addEventListener('resize', resize);
+
+    // 可用階梯 = 裝置 dpr 與 DPR_MAX 之間的所有階（例：dpr 3 → [1, 1.25, 1.5, 2]）。
+    // ?dpr=N 可強制指定並鎖定（測試與效能對照用，不會被自動調整）。
+    const override = new URLSearchParams(location.search).get('dpr');
+    const device = Math.max(1, Math.min(DPR_MAX, window.devicePixelRatio || 1));
+    if (override !== null && !Number.isNaN(parseFloat(override))) {
+      this._dprSteps = [Math.max(1, Math.min(DPR_MAX, parseFloat(override)))];
+      this._dprLocked = true;
+    } else {
+      this._dprSteps = DPR_STEPS.filter((v) => v <= device);
+      if (this._dprSteps.length === 0) this._dprSteps = [1];
+    }
+    this._dprIdx = this._dprSteps.length - 1;   // 起始取最高階
     resize();
+  }
+
+  // 依目前階梯套用畫布解析度（vw/vh 是邏輯像素，畫布乘上 dpr）
+  _applyCanvasSize() {
+    const dpr = this._dprSteps[this._dprIdx];
+    this.dpr = dpr;
+    this.canvas.width = Math.round(this.vw * dpr);
+    this.canvas.height = Math.round(this.vh * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 暫停/結算中改變解析度時補畫一幀，避免畫布留白
+    if (this.player && this.state !== 'PLAYING') this.render();
+  }
+
+  // 累積每幀的 update+render 耗時，每 DPR_SAMPLE 幀結算一次
+  _trackFrame(ms) {
+    this._dprAcc = (this._dprAcc || 0) + ms;
+    this._dprN = (this._dprN || 0) + 1;
+    if (this._dprN < DPR_SAMPLE) return;
+    const avg = this._dprAcc / this._dprN;
+    this._dprAcc = 0;
+    this._dprN = 0;
+    this._adaptDpr(avg);
+  }
+
+  // 真的跟不上就降階；降階後長期有餘裕才升回（升階要連續 DPR_UP_STREAK 次）
+  _adaptDpr(avgMs) {
+    const steps = this._dprSteps;
+    if (!steps || this._dprLocked || steps.length <= 1) return;
+    if (avgMs > DPR_DOWN_MS && this._dprIdx > 0) {
+      this._dprIdx--;
+      this._dprFastStreak = 0;
+      this._applyCanvasSize();
+      return;
+    }
+    if (avgMs < DPR_UP_MS && this._dprIdx < steps.length - 1) {
+      this._dprFastStreak = (this._dprFastStreak || 0) + 1;
+      if (this._dprFastStreak >= DPR_UP_STREAK) {
+        this._dprFastStreak = 0;
+        this._dprIdx++;
+        this._applyCanvasSize();
+      }
+    } else {
+      this._dprFastStreak = 0;
+    }
   }
 
   bindEvents() {
@@ -2390,17 +2456,20 @@ class Game {
           this.hitstopTimer = Math.max(0, this.hitstopTimer - dt);
           this.render();
           if (this.perf) this.perf.hitstopFrames++;
-        } else if (this.perf) {
+        } else {
+          // 一律量測 update/render（三次 performance.now 成本可忽略）：效能面板要用，
+          // 自適應解析度也要用它判斷餘裕 —— 幀距有 vsync 夾住，量不出真正剩多少。
           const t0 = performance.now();
           this.update(dt);
           const t1 = performance.now();
           this.render();
-          this.perf.update += t1 - t0;
-          this.perf.render += performance.now() - t1;
-          this.perf.ticks++;
-        } else {
-          this.update(dt);
-          this.render();
+          const t2 = performance.now();
+          if (this.perf) {
+            this.perf.update += t1 - t0;
+            this.perf.render += t2 - t1;
+            this.perf.ticks++;
+          }
+          this._trackFrame(t2 - t0);
         }
       }
       this.frameErrorStreak = 0;
