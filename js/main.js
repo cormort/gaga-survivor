@@ -28,6 +28,10 @@ import {
   checkEventSchedule, triggerMiniEvent, endMiniEvent, checkSynergies, checkAchievements,
   objectiveText, shuffleInPlace, buildEventSchedule,
 } from './systems/Progression.js';
+import {
+  getFacilityCost, updateFacilityHUD, buildFacility, grantStarterTurret,
+  updateTurrets, tryUpgradeNearestTurret, hireMercenary, updateMercenaries, facilityGoldMul,
+} from './systems/Facilities.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
 import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, salvageValue, RARITIES } from './items.js';
 import { MODES, MODE_ORDER, getMode } from './modes.js';
@@ -44,11 +48,6 @@ const NON_EXPIRING_DROP_CAP = 15;
 
 // 兩次精英擊殺頓格之間的最小間隔 (秒)
 const ELITE_HITSTOP_GAP = 0.5;
-
-// 金幣乘數的天花板。天賦財運 × 模式 2.2 × 祝福 1.3 × 每日規則 × 淘金潮 2 是純
-// 乘法疊加、原本沒有上限 —— 實測空存檔 23 分鐘 5.8 萬金，帶滿 meta 加成的存檔
-// 同時間 142 萬，差 25 倍，砲塔與傭兵變成無限供應。
-const GOLD_MUL_CAP = 8;
 
 // 局內待回收裝備的上限，超出的自動分解成金幣 (原本無上限，實測 23 分鐘累積數百件)
 const PENDING_GEAR_CAP = 40;
@@ -543,13 +542,13 @@ class Game {
 
     // 佈署戰場防禦設施 (1/2/3/4/B、HUD 按鈕)
     window.addEventListener('keydown', (e) => {
-      if (e.key === '1') this.buildFacility('turret');
-      if (e.key === '2') this.buildFacility('electric_grid');
-      if (e.key === '3') this.buildFacility('purifier');
-      if (e.key === '4') this.buildFacility('barricade');
-      if (e.key === 'b' || e.key === 'B') this.buildFacility(this.selectedFacility || 'turret');
-      if (e.key === 't' || e.key === 'T') this.tryUpgradeNearestTurret();
-      if (e.key === 'g' || e.key === 'G') this.hireMercenary();
+      if (e.key === '1') buildFacility(this, 'turret');
+      if (e.key === '2') buildFacility(this, 'electric_grid');
+      if (e.key === '3') buildFacility(this, 'purifier');
+      if (e.key === '4') buildFacility(this, 'barricade');
+      if (e.key === 'b' || e.key === 'B') buildFacility(this, this.selectedFacility || 'turret');
+      if (e.key === 't' || e.key === 'T') tryUpgradeNearestTurret(this);
+      if (e.key === 'g' || e.key === 'G') hireMercenary(this);
       if (e.key === 'e' || e.key === 'E' || e.key === 'f' || e.key === 'F') this.usePocketItem();
     });
 
@@ -561,7 +560,7 @@ class Game {
       if (item && item.btn) {
         item.btn.addEventListener('click', () => {
           this.selectedFacility = type;
-          this.buildFacility(type);
+          buildFacility(this, type);
         });
       }
     }
@@ -571,7 +570,7 @@ class Game {
     this.ui.dashBtn?.addEventListener('click', () => this.triggerDash());
 
     // 僱傭傭兵 (G / 行動端按鈕)
-    this.ui.hireBtn?.addEventListener('click', () => this.hireMercenary());
+    this.ui.hireBtn?.addEventListener('click', () => hireMercenary(this));
 
     // 砲塔進化專精按鈕 (UI 建構子已掛 click，走 _turretUpCb；這裡不要再掛，避免一次點擊雙重觸發)
 
@@ -598,68 +597,8 @@ class Game {
   }
 
   // 砲塔專精進化 (消耗 50 金幣)
-  tryUpgradeNearestTurret() {
-    if (this.state !== 'PLAYING' || !this.player || !this.mode.turrets) return;
-    const upgradeCost = 50;
-    const standardTurrets = this.turrets
-      // 必須同時是「砲塔」這個設施類型：電網/淨化裝置/拒馬的 variant 預設也是
-      // 'standard'，而 upgrade() 對非砲塔直接 return —— 原本會扣 50 金幣、
-      // 播進化音效、顯示「進化完畢」，實際什麼都沒變
-      .filter((t) => t.facilityType === 'turret' && t.variant === 'standard' &&
-        Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125)
-      .sort((a, b) =>
-        Math.hypot(a.x - this.player.x, a.y - this.player.y) - Math.hypot(b.x - this.player.x, b.y - this.player.y)
-      );
-    if (standardTurrets.length === 0) {
-      this.ui.say('附近沒有可進化的標準砲塔', '#ffb703', 1.5);
-      return;
-    }
-    if (this.gold < upgradeCost) {
-      this.ui.say(`金幣不足，砲塔進化需要 ${upgradeCost} 🪙`, '#ff0055', 1.8);
-      sound.playHurt();
-      return;
-    }
-    const target = standardTurrets[0];
-    const variants = ['flame', 'cryo', 'tesla'];
-    const chosen = variants[Math.floor(Math.random() * variants.length)];
-    this.gold -= upgradeCost;
-    target.upgrade(chosen);
-    this.particles.createShockwave(target.x, target.y, 140, TURRET_VARIANTS[chosen].color);
-    sound.playEvoFanfare();
-    this.ui.say(`砲塔進化完畢：【${TURRET_VARIANTS[chosen].name}】！`, TURRET_VARIANTS[chosen].color, 2.8);
-    this.ui.updateBuildBtn(this.gold, this.turretCost);
-  }
 
   // 僱傭傭兵 (局內金幣消耗；最多 MERC.maxCount 名，費用隨人數成長)
-  hireMercenary() {
-    if (this.state !== 'PLAYING' || !this.player) return;
-    if (!this.mode.mercs) {
-      this.ui.say('生存者模式沒有傭兵 —— 靠走位活下來', '#8a9bb0', 1.6);
-      return;
-    }
-    if (this.mercenaries.length >= MERC.maxCount) {
-      this.ui.say(`傭兵小隊已滿員 (${MERC.maxCount}/${MERC.maxCount})`, '#8a9bb0', 1.6);
-      sound.playHurt();
-      return;
-    }
-    const cost = this.mercCost;
-    if (this.gold < cost) {
-      this.ui.say(`金幣不足，僱傭傭兵需要 ${cost} 🪙`, '#ff0055', 1.8);
-      sound.playHurt();
-      return;
-    }
-    this.gold -= cost;
-    const m = new Mercenary(this.player.x, this.player.y, this.mercenaries.length);
-    this.mercenaries.push(m);
-    this.particles.createShockwave(this.player.x, this.player.y, 90, '#3ddc84');
-    sound.playEvoFanfare();
-    this.ui.say(`💂 傭兵報到！(${cost} 🪙) 擊殺敵人可升級`, '#3ddc84', 2.4);
-    this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
-    this.ui.updateBuildBtn(this.gold, this.turretCost);
-    // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)
-    this.ui.updateFacilityButtons(this.gold, (type) => this.getFacilityCost(type));
-    this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
-  }
 
   get mercCost() {
     const n = this.mercenaries.length;
@@ -667,54 +606,6 @@ class Game {
   }
 
   // 傭兵 AI 更新：跟隨/索敵開火 + 被敵人啃食；陣亡清掉
-  updateMercenaries(dt) {
-    for (let i = this.mercenaries.length - 1; i >= 0; i--) {
-      const m = this.mercenaries[i];
-      m.update(dt, this.player, this.enemies, (merc, target) => {
-        const dx = target.x - merc.x;
-        const dy = target.y - merc.y;
-        const dist = Math.hypot(dx, dy) || 1;
-        this.weaponManager.projectiles.push(new Projectile({
-          type: 'merc',
-          weaponId: 'merc',
-          x: merc.x + (dx / dist) * 10,
-          y: merc.y + (dy / dist) * 10,
-          vx: (dx / dist) * MERC.bulletSpeed,
-          vy: (dy / dist) * MERC.bulletSpeed,
-          damage: merc.damage,
-          radius: 6,
-          pierce: 1,
-          life: 1.7,
-          knockback: 1,
-          mercOwner: merc,
-        }));
-        sound.playShoot();
-      });
-
-      // 敵人貼身啃傭兵 (比照砲塔被啃)：推開 + 持續傷害
-      for (const e of this.enemies) {
-        if (e.isDead) continue;
-        const dx = e.x - m.x;
-        const dy = e.y - m.y;
-        const minD = 11 + e.radius;
-        const d2 = dx * dx + dy * dy;
-        if (d2 >= minD * minD || d2 === 0) continue;
-        const d = Math.sqrt(d2);
-        e.x = m.x + (dx / d) * minD;
-        e.y = m.y + (dy / d) * minD;
-        m.takeDamage(e.damage * dt * 1.5);
-      }
-
-      if (m.isDead) {
-        this.particles.createExplosion(m.x, m.y, 40);
-        this.particles.createShockwave(m.x, m.y, 80, '#4a7c3f');
-        sound.playHurt();
-        this.ui.say('💂 傭兵陣亡！重新僱傭一位吧', '#ff5e5e', 2.2);
-        this.mercenaries.splice(i, 1);
-        this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
-      }
-    }
-  }
 
   // 啟動每日挑戰。固定跑生存者模式 —— 每日挑戰的賣點是「同一天所有人條件一致」，
   // 讓它跟著當前選的模式跑就破功了。
@@ -728,14 +619,6 @@ class Game {
 
   // 實際生效的金幣乘數 (夾在上限內)。metaGoldMul 本身不夾 —— 淘金潮是 ×2 後再 ÷2
   // 還原，先夾住會把還原算錯。
-  goldMul() {
-    // 淘金狂潮與幸運藥劑都改成「讀計時器」而不是改動 metaGoldMul：
-    // 乘數本身可以隨時被重算，不會再有「到期還原一次」造成永久殘留的問題。
-    let mul = this.metaGoldMul || 1;
-    if (this._goldRushTimer > 0) mul *= 2;
-    if (this.player && this.player.luckPotionTimer > 0) mul *= 2;
-    return Math.min(GOLD_MUL_CAP, mul);
-  }
 
   // 打擊微頓挫 (Hitstop)
   triggerHitstop(duration = 0.05) {
@@ -867,7 +750,7 @@ class Game {
         for (const d of this.dropItems) {
           d.isAttracted = true;
         }
-        this.gold += Math.round(100 * this.goldMul());
+        this.gold += Math.round(100 * facilityGoldMul(this));
         this.particles.createShockwave(this.player.x, this.player.y, 220, '#ffcc00');
         this.particles.createDamageText(this.player.x, this.player.y, '+100 🪙', false);
         this.ui.say('🎫 魔法門票：全圖寶石磁吸 + 100 🪙！', '#ffcc00', 2.5);
@@ -900,7 +783,7 @@ class Game {
     const count = roll < 0.2 ? 1 : roll < 0.85 ? 3 : 5;
 
     const rewardPool = [
-      { name: '金幣大獎', desc: '+120 🪙 戰備金', icon: '🪙', isGold: true, apply: () => { this.gold += Math.round(120 * this.goldMul()); } },
+      { name: '金幣大獎', desc: '+120 🪙 戰備金', icon: '🪙', isGold: true, apply: () => { this.gold += Math.round(120 * facilityGoldMul(this)); } },
       { name: '急救補給包', desc: '+45 HP 治療', icon: '🩹', apply: () => { this.player.heal(45); } },
       { name: '超導磁石', desc: '瞬間吸收全圖寶石', icon: '🧲', apply: () => { for (const d of this.dropItems) d.isAttracted = true; } },
       { name: '基因碎片', desc: '+35 🧬 密鑰', icon: '🧬', apply: () => { save.data.dna += 35; save.flush(); } },
@@ -1270,122 +1153,25 @@ class Game {
 
     this.ui.setModeButtons(this.mode);
     this.ui.updateCoreHUD(this.core);
-    this.updateFacilityHUD();
+    updateFacilityHUD(this);
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
-    this.grantStarterTurret();
+    grantStarterTurret(this);
 
     this.state = 'PLAYING';
   }
 
-  getFacilityCost(type = 'turret') {
-    const conf = FACILITY_TYPES[type] || FACILITY_TYPES.turret;
-    const count = this.turrets.filter((t) => (t.facilityType || 'turret') === type).length;
-    // 原本是線性 (60 + 35n)，蓋 20 座也才 760 —— 後期金幣以萬計，等於無限重建。
-    // 乘上 1.12^n 形成軟天花板：20 座約 7.3k、30 座約 33k、40 座約 136k。
-    let raw = (conf.baseCost + conf.costGrowth * count) * Math.pow(1.12, count);
-    if (this.player && this.player.facilityCostMul) {
-      raw *= this.player.facilityCostMul;
-    }
-    const modeMul = (this.mode && this.mode.turretCostMul != null) ? this.mode.turretCostMul : 1;
-    return Math.max(10, Math.round(raw * modeMul));
-  }
 
   get turretCost() {
-    return this.getFacilityCost('turret');
+    return getFacilityCost(this, 'turret');
   }
 
-  updateFacilityHUD() {
-    this.ui.updateFacilityButtons(this.gold, (type) => this.getFacilityCost(type));
-    this.ui.updateBuildBtn(this.gold, this.turretCost);
-  }
 
-  buildFacility(type = 'turret') {
-    if (this.state !== 'PLAYING' || !this.player) return;
-    const conf = FACILITY_TYPES[type] || FACILITY_TYPES.turret;
-    if (!this.mode.turrets) {
-      this.ui.say('目前模式無法建造防禦工事', '#8a9bb0', 1.6);
-      return;
-    }
 
-    const cost = this.getFacilityCost(type);
-    if (this.gold < cost) {
-      this.ui.say(`金幣不足，佈署【${conf.name}】需要 ${cost} 🪙`, '#ffb703', 1.6);
-      return;
-    }
-
-    const minD = conf.minSpacing || 40;
-    const tooClose = this.turrets.some(
-      (t) => Math.hypot(t.x - this.player.x, t.y - this.player.y) < minD
-    );
-    if (tooClose) {
-      this.ui.say('這裡太靠近其他工事設施了', '#ffb703', 1.6);
-      return;
-    }
-
-    this.gold -= cost;
-    const facility = new Turret(this.player.x, this.player.y, type);
-    if (this.player && this.player.facilityHpMul) {
-      facility.maxHp = Math.round(facility.maxHp * this.player.facilityHpMul);
-      facility.hp = facility.maxHp;
-    }
-    this.turrets.push(facility);
-
-    const fxColor = type === 'electric_grid' ? '#b5179e' : type === 'purifier' ? '#00f59b' : type === 'barricade' ? '#ffb703' : '#00e5ff';
-    this.particles.createShockwave(this.player.x, this.player.y, 80, fxColor);
-    sound.playEvoFanfare();
-    this.ui.say(`已部署【${conf.name}】！`, fxColor, 1.4);
-    this.updateFacilityHUD();
-  }
-
-  buildTurret() {
-    this.buildFacility('turret');
-  }
 
   // 守塔模式開局免費給一座塔並說明怎麼蓋。模式定位是「靠佈防而不是靠走位輸出」，
   // 但過去沒有任何東西告訴玩家該蓋、蓋哪裡、蓋了有什麼差 —— 實測整場十分鐘
   // 砲塔 0 座，等於整條主線沒被使用。
-  grantStarterTurret() {
-    if (!this.core || !this.mode.turrets) return;
-    const t = new Turret(this.core.x, this.core.y + this.core.radius + 46, 'turret');
-    this.turrets.push(t);
-    this.particles.createShockwave(t.x, t.y, 90, '#00e5ff');
-    this.ui.say('🗼 基地已預置一座機槍砲台 — 走到空地按建造鈕可再佈署更多', '#00e5ff', 4.5);
-    this.updateFacilityHUD();
-  }
 
-  updateTurrets(dt) {
-    for (let i = this.turrets.length - 1; i >= 0; i--) {
-      const t = this.turrets[i];
-
-      t.update(dt, this.enemies, (target, dmg) => {
-        this.damageEnemy(target, dmg, 1, t.x, t.y, t.facilityType || 'turret');
-        sound.playShoot();
-      }, this.player, this);
-
-      // 敵人被設施擋住：推開並持續啃食 (反傷拒馬自動反射傷害)
-      for (const e of this.enemies) {
-        if (e.isDead) continue;
-        const dx = e.x - t.x;
-        const dy = e.y - t.y;
-        const minD = t.radius + e.radius;
-        const d2 = dx * dx + dy * dy;
-        if (d2 >= minD * minD || d2 === 0) continue;
-
-        const d = Math.sqrt(d2);
-        e.x = t.x + (dx / d) * minD;
-        e.y = t.y + (dy / d) * minD;
-        t.takeDamage(e.damage * dt * 1.5, e);
-      }
-
-      if (t.isDead) {
-        this.particles.createExplosion(t.x, t.y, 70);
-        sound.playExplosion();
-        this.camera.shake = 8;
-        this.turrets.splice(i, 1);
-        this.updateFacilityHUD();
-      }
-    }
-  }
 
   // 對外統一的傷害入口 (角色特質、道具都走這裡，才會計入傷害統計與跳字)
   damageEnemy(enemy, damage, knockback, sourceX, sourceY, weaponId = null) {
@@ -1897,7 +1683,7 @@ class Game {
     this.checkEnemyProjectileHits();
 
     // 4.5 砲塔開火與被啃
-    this.updateTurrets(dt);
+    updateTurrets(this, dt);
 
     // 4.55 基地核心 (守塔模式)：雜兵貼上來就啃，破了即任務失敗。
     // 推擠對所有貼上來的怪都生效 (物理阻擋)，但「打得到核心」的只有最外圈的
@@ -1941,12 +1727,12 @@ class Game {
     }
 
     // 4.6 傭兵 AI (跟隨/索敵/被啃)
-    this.updateMercenaries(dt);
+    updateMercenaries(this, dt);
 
     // 開局送的那一座之外，玩家還是不知道自己「可以再蓋」。金幣第一次夠的時候
     // 提示一次就好 —— 實測整場只蓋一座 (就是預置的那座)，主線仍然沒被使用。
     if (this.core && this.mode.turrets && !this._buildHintShown
-        && this.gold >= this.getFacilityCost('turret')) {
+        && this.gold >= getFacilityCost(this, 'turret')) {
       this._buildHintShown = true;
       this.ui.say('🪙 金幣足夠了 — 走到空地按建造鈕，多一座砲台就多一道防線', '#ffb703', 4);
     }
@@ -1957,7 +1743,7 @@ class Game {
     );
     if (nearStandardTurret && this.gold >= 50) {
       // 第二參數才是點擊回呼 (UI 簽名 showTurretUpgrade(show, onUpgrade)) — 別把砲塔物件當回呼傳
-      this.ui.showTurretUpgrade(true, () => this.tryUpgradeNearestTurret());
+      this.ui.showTurretUpgrade(true, () => tryUpgradeNearestTurret(this));
     } else {
       this.ui.showTurretUpgrade(false);
     }
@@ -2114,7 +1900,7 @@ class Game {
     this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
     this.ui.updateBuildBtn(this.gold, this.turretCost);
     // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)
-    this.ui.updateFacilityButtons(this.gold, (type) => this.getFacilityCost(type));
+    this.ui.updateFacilityButtons(this.gold, (type) => getFacilityCost(this, type));
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
     this.ui.updateBossHUD(this.boss);
     this.ui.setObjective(objectiveText(this));
@@ -2228,6 +2014,12 @@ class Game {
 
   // 木箱掉寶：WeaponManager 的爆炸波及木箱時呼叫 game.dropCrateLoot(...)，
   // 保留同名薄包裝，外部呼叫端不必知道它搬去 Hazards 模組了
+  // 金幣乘數：Progression 的里程碑獎勵與回歸測試都呼叫 game.goldMul()，
+  // 保留同名薄包裝，呼叫端不必知道它搬去 Facilities 模組了
+  goldMul() {
+    return facilityGoldMul(this);
+  }
+
   dropCrateLoot(x, y, kind = 'crate') {
     return dropCrateLoot(this, x, y, kind);
   }
@@ -2726,7 +2518,7 @@ class Game {
   // 否則長局會被回收訊息洗版。
   recycleDrop(item) {
     const worth = item.type === 'gold'
-      ? Math.round(item.value * this.goldMul())
+      ? Math.round(item.value * facilityGoldMul(this))
       : Math.max(1, Math.round((item.value || 1) * 0.5));
     this.gold += worth;
     this._recycleTally = (this._recycleTally || 0) + worth;
@@ -2782,7 +2574,7 @@ class Game {
       this.particles.createDamageText(this.player.x, this.player.y, `+${item.heal} HP`, false);
     } else if (item.type === 'gold') {
       sound.playGem();
-      this.gold += Math.round(item.value * this.goldMul());
+      this.gold += Math.round(item.value * facilityGoldMul(this));
     } else if (item.type === 'chest') {
       this.openLuckyChest();
     } else if (item.type === 'gear') {
@@ -2808,7 +2600,7 @@ class Game {
       this.ui.say(`拾獲 ${itemName(gear)}！(暫存待回收)`, color, 2.6);
     } else if (item.type === 'supply') {
       // 街頭空投物資箱：金幣 + 回血 + 金色衝擊波
-      const gold = Math.round(30 * this.goldMul());
+      const gold = Math.round(30 * facilityGoldMul(this));
       this.gold += gold;
       this.player.heal(25);
       sound.playEvoFanfare();
@@ -2894,7 +2686,7 @@ class Game {
       this.applySpecialCard(selectedOption);
     } else if (selectedOption.type === 'heal') {
       this.player.heal(this.player.maxHp * 0.5);
-      this.gold += Math.round(50 * this.goldMul());
+      this.gold += Math.round(50 * facilityGoldMul(this));
     }
 
     this.ui.updateSkillSlots(this.weaponManager);
@@ -2942,7 +2734,7 @@ class Game {
         this.openLuckyChest();
         break;
       case 'gold_rush':
-        this.gold += Math.round(200 * this.goldMul());
+        this.gold += Math.round(200 * facilityGoldMul(this));
         // 只開計時器，不動 metaGoldMul。原本是 metaGoldMul *= 2 再由 goldMul()
         // 乘一次 → 實際 ×4；而且到期固定 /= 2，30 秒內吃到第二次就永久洩漏 ×2。
         this._goldRushTimer = 30;
