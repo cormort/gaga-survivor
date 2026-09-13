@@ -106,6 +106,79 @@ async function probe(deviceScaleFactor, query = '') {
   await ctx.close();
 }
 
+// 6) 碰撞空間分割：與暴力解在同一組狀態下逐隻比對傷害。
+//    快不等於對 —— 這一項確保網格只是少算了「不可能碰到」的配對，判定條件完全沒動。
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errs.push(`collision: ${e.message}`));
+  await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForFunction(() => window.game);
+  const r = await page.evaluate(async () => {
+    const { Enemy } = await import('/js/entities/Enemy.js');
+    const { Projectile } = await import('/js/entities/Projectile.js');
+    const g = window.game;
+    g.ui.startScreen.classList.add('hidden');
+    g.start();
+    g.enemies.length = 0;
+    g.weaponManager.projectiles.length = 0;
+    let seed = 999;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const build = () => {
+      seed = 999;   // 每次都從同一個種子重建：兩條路徑必須面對完全相同的局面
+      g.enemies.length = 0;
+      g.weaponManager.projectiles.length = 0;
+      for (let i = 0; i < 250; i++) {
+        const e = new Enemy('walker', rnd() * 900 - 300, rnd() * 900 - 300, {});
+        e.maxHp = e.hp = 1e9;
+        e.lastDamageTaken = 0;
+        g.enemies.push(e);
+      }
+      for (let i = 0; i < 120; i++) {
+        g.weaponManager.projectiles.push(new Projectile({
+          type: 'kunai', weaponId: 'kunai',
+          x: rnd() * 900 - 300, y: rnd() * 900 - 300, vx: 0, vy: 0,
+          damage: 10, radius: 8, pierce: 9999, life: 9999, knockback: 0,
+        }));
+      }
+      g.player.x = 0;
+      g.player.y = 0;
+    };
+    // A：現行的網格版
+    build();
+    g.checkProjectileCollisions();
+    const gridDmg = g.enemies.map((e) => e.lastDamageTaken || 0);
+    // B：暴力參考解（照原本 O(P·E) 的逐一走訪，只算傷害）
+    build();
+    for (const p of g.weaponManager.projectiles) {
+      for (const enemy of g.enemies) {
+        if (p.isDead || enemy.isDead || p.hitEnemies.has(enemy)) continue;
+        const dx = enemy.x - p.x;
+        const dy = enemy.y - p.y;
+        const rr = p.radius + enemy.radius;
+        if (dx * dx + dy * dy >= rr * rr) continue;
+        p.hitEnemies.add(enemy);
+        enemy.takeDamage(p.damage, 0, p.x, p.y);
+      }
+    }
+    const bruteDmg = g.enemies.map((e) => e.lastDamageTaken || 0);
+    let diff = 0;
+    const samples = [];
+    for (let i = 0; i < gridDmg.length; i++) {
+      if (gridDmg[i] !== bruteDmg[i]) { diff++; if (samples.length < 3) samples.push(`${i}:${gridDmg[i]}≠${bruteDmg[i]}`); }
+    }
+    return {
+      n: gridDmg.length, diff, samples,
+      hitGrid: gridDmg.filter((d) => d > 0).length,
+      hitBrute: bruteDmg.filter((d) => d > 0).length,
+    };
+  });
+  ok('碰撞網格與暴力解結果一致（250 隻 × 120 發，逐隻比對傷害）',
+    r.diff === 0 && r.hitGrid === r.hitBrute && r.hitGrid > 0,
+    `命中 ${r.hitGrid}/${r.hitBrute} 隻、差異 ${r.diff}${r.samples.length ? ' ' + r.samples.join(',') : ''}`);
+  await ctx.close();
+}
+
 let pass = 0, fail = 0;
 for (const r of out) {
   if (r.pass) { pass++; console.log(`PASS  ${r.name}  [${r.detail}]`); }

@@ -2949,7 +2949,59 @@ class Game {
     this.ground.addDecal(this.decals, x, y, r, fill, alpha, accent, life);
   }
 
+  // 敵人空間網格：把「投射物 × 全部敵人」的 O(P·E) 降成「投射物 × 附近幾格」。
+  // 滿級彈幕（上百發投射物）× 250 隻怪原本是每幀數萬次距離計算，現在只檢查
+  // 投射物周圍與其半徑相符的格子。每幀重建一次（O(E) 很便宜），格子陣列重用，
+  // 不每幀配置數百個小陣列。
+  _buildEnemyGrid() {
+    const cell = 96;
+    const g = this._enemyGrid || (this._enemyGrid = { cell, map: new Map(), pool: [], used: 0, maxR: 0 });
+    g.used = 0;
+    g.map.clear();
+    let maxR = 0;
+    for (const e of this.enemies) {
+      if (e.isDead) continue;
+      if (e.radius > maxR) maxR = e.radius;
+      const k = (Math.floor(e.x / cell) + 4096) * 8192 + (Math.floor(e.y / cell) + 4096);
+      let arr = g.map.get(k);
+      if (!arr) {
+        arr = g.pool[g.used];
+        if (!arr) arr = g.pool[g.used] = [];
+        arr.length = 0;
+        g.used++;
+        g.map.set(k, arr);
+      }
+      arr.push(e);
+    }
+    g.maxR = maxR;
+    return g;
+  }
+
+  // 走訪 (x, y) 半徑 r 內所有格子裡的敵人。回呼回傳 true 代表要求提前停止
+  // （取代原本的 break），會直接結束整個走訪。
+  _forEachNearbyEnemy(grid, x, y, r, fn) {
+    const cell = grid.cell;
+    const x0 = Math.floor((x - r) / cell);
+    const x1 = Math.floor((x + r) / cell);
+    const y0 = Math.floor((y - r) / cell);
+    const y1 = Math.floor((y + r) / cell);
+    for (let cx = x0; cx <= x1; cx++) {
+      for (let cy = y0; cy <= y1; cy++) {
+        const arr = grid.map.get((cx + 4096) * 8192 + (cy + 4096));
+        if (!arr) continue;
+        for (const e of arr) {
+          if (fn(e) === true) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   checkProjectileCollisions() {
+    // 沒有投射物就直接跳過，別為了幾隻怪白建一張網格（開局與空場時最常見）
+    if (this.weaponManager.projectiles.length === 0) return;
+    // 每幀只建一次網格；本次呼叫內的所有查詢（含暴擊衝擊波、塔納托斯引爆）共用
+    const grid = this._buildEnemyGrid();
     for (const p of this.weaponManager.projectiles) {
       if (p.isDead || p.type === 'rocket') continue; // 火箭走自帶到達爆炸
 
@@ -3005,15 +3057,16 @@ class Game {
         }
       }
 
-      for (const enemy of this.enemies) {
-        if (p.isDead) break; // 投射物已撞爆可引爆物件身亡，不再繼續掃怪
-        if (enemy.isDead || p.hitEnemies.has(enemy)) continue;
+      // 只掃投射物附近的敵人（取代原本逐一走訪全部敵人）
+      this._forEachNearbyEnemy(grid, p.x, p.y, hitR + grid.maxR, (enemy) => {
+        if (p.isDead) return true; // 投射物已撞爆可引爆物件身亡，不再繼續掃怪
+        if (enemy.isDead || p.hitEnemies.has(enemy)) return;
 
         // 平方距離比較：省掉每組碰撞一次的開根號 (滿級彈幕×兩百隻怪是每幀幾萬次運算)
         const dx = enemy.x - p.x;
         const dy = enemy.y - p.y;
         const rr = hitR + enemy.radius;
-        if (dx * dx + dy * dy >= rr * rr) continue;
+        if (dx * dx + dy * dy >= rr * rr) return;
 
         p.hitEnemies.add(enemy);
 
@@ -3058,8 +3111,8 @@ class Game {
             this.particles.createExplosion(p.x, p.y, p.implosionRadius);
             this.particles.createShockwave(p.x, p.y, p.implosionRadius, '#b388ff');
             sound.playExplosion();
-            for (const nearE of this.enemies) {
-              if (nearE.isDead) continue;
+            this._forEachNearbyEnemy(grid, p.x, p.y, p.implosionRadius + grid.maxR, (nearE) => {
+              if (nearE.isDead) return;
               const ndx = nearE.x - p.x;
               const ndy = nearE.y - p.y;
               if (ndx * ndx + ndy * ndy <= (p.implosionRadius + nearE.radius) ** 2) {
@@ -3067,7 +3120,7 @@ class Game {
                 this.weaponManager.recordDamage(p.weaponId, nearE.lastDamageTaken || p.implosionDamage);
                 this.particles.createDamageText(nearE.x, nearE.y, nearE.lastDamageTaken || p.implosionDamage, true, true);
               }
-            }
+            });
           } else if (p.bounceGrowth > 0) {
             p.damage = Math.round(p.damage * (1 + p.bounceGrowth));
           }
@@ -3096,19 +3149,25 @@ class Game {
         // 傳奇特效：暴擊衝擊波
         if (p.isCrit && this.player.legendaryEffects?.includes('crit_blast')) {
           this.particles.createShockwave(enemy.x, enemy.y, 45, '#ffb703');
-          for (const nearE of this.enemies) {
-            if (nearE !== enemy && !nearE.isDead && Math.hypot(nearE.x - enemy.x, nearE.y - enemy.y) < 55) {
-              nearE.takeDamage(Math.round(p.damage * 0.4), 3, enemy.x, enemy.y);
+          // 判定條件與原本完全相同（中心距離 < 55，不看半徑）；查詢半徑放大到
+          // 55 + maxR 只會多掃幾格，不會改變誰受傷。
+          this._forEachNearbyEnemy(grid, enemy.x, enemy.y, 55 + grid.maxR, (nearE) => {
+            if (nearE !== enemy && !nearE.isDead) {
+              const bdx = nearE.x - enemy.x;
+              const bdy = nearE.y - enemy.y;
+              if (bdx * bdx + bdy * bdy < 55 * 55) {
+                nearE.takeDamage(Math.round(p.damage * 0.4), 3, enemy.x, enemy.y);
+              }
             }
-          }
+          });
         }
 
         p.pierce--;
         if (p.pierce <= 0) {
           p.isDead = true;
-          break;
+          return true;   // 穿透耗盡 → 結束走訪（等同原本的 break）
         }
-      }
+      });
     }
   }
 
