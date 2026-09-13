@@ -36,6 +36,10 @@ import {
   checkMerchantSchedule, spawnMerchant, updateMerchant, dismissMerchant,
   openMerchantPanel, closeMerchantPanel, buyMerchantItem, drawMerchant,
 } from './systems/Merchant.js';
+import {
+  bindEvents, refreshCharSelect, refreshModeSelect, refreshLevelSelect,
+  tryUnlockCharacter, investTalent, returnToMenu, startDailyChallenge,
+} from './systems/Menu.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
 import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, salvageValue, RARITIES } from './items.js';
 import { MODES, MODE_ORDER, getMode } from './modes.js';
@@ -187,7 +191,7 @@ class Game {
     this.perf = this.initPerfHUD();
 
     this.initWindow();
-    this.bindEvents();
+    bindEvents(this);
     this.loop = this.loop.bind(this);
 
     requestAnimationFrame(this.loop);
@@ -357,239 +361,6 @@ class Game {
     }
   }
 
-  bindEvents() {
-    // 特工 / 關卡選擇 (可重繪：解鎖或回主選單時刷新)
-    this.refreshModeSelect();
-    this.refreshCharSelect();
-    this.refreshLevelSelect();
-    this.ui.updateDnaChip(save.data.dna, save.data.gold);
-
-    // 特工黑市 (Shop)
-    document.getElementById('btn-shop')?.addEventListener('click', () => {
-      sound.playGem();
-      const buy = (cur, costGold, costDna, onPaid) => {
-        if (cur === 'gold' ? save.data.gold < costGold : save.data.dna < costDna) {
-          this.ui.sayStatus(`${cur === 'gold' ? '金幣' : 'DNA'} 不足！`, true);
-          sound.playHurt();
-          return;
-        }
-        save.spend(cur === 'gold' ? costGold : 0, cur === 'dna' ? costDna : 0);
-        sound.playEvoFanfare();
-        this.ui.updateDnaChip(save.data.dna, save.data.gold);
-        onPaid();
-        this.ui.rebuildShopView(save);
-      };
-
-      this.ui.openShopModal(save, {
-        onBuyCrate: (crateKey, currency) => {
-          const crate = SHOP_CRATES[crateKey];
-          if (!crate) return;
-          if (save.stashFull()) {
-            this.ui.sayStatus('倉庫已滿，請先清理或擴充倉庫！', true);
-            sound.playHurt();
-            return;
-          }
-          buy(currency, crate.costGold, crate.costDna, () => {
-            const item = crate.roll();
-            save.addItem(item);
-            this.ui.sayStatus(`成功開啟 ${crate.name}！獲得【${item.rarity.toUpperCase()}】特工裝備！`);
-          });
-        },
-        onBuyBooster: (boosterKey, currency) => {
-          const booster = SHOP_BOOSTERS[boosterKey];
-          if (!booster) return;
-          if (save.hasBooster(boosterKey)) {
-            this.ui.sayStatus('該戰術興奮劑已就緒，將於下局自動生效！', true);
-            return;
-          }
-          buy(currency, booster.costGold, booster.costDna, () => {
-            save.addBooster(boosterKey);
-            this.ui.sayStatus(`戰備完成：${booster.name} 已裝備，將於下局生效！`);
-          });
-        },
-        onExpandStash: (currency) => {
-          if (save.getStashCap() >= MAX_STASH_CAP) {
-            this.ui.sayStatus('倉庫已擴建至最大容量！', true);
-            return;
-          }
-          buy(currency, STASH_EXPAND_COST.costGold, STASH_EXPAND_COST.costDna, () => {
-            save.expandStash(STASH_EXPANSION_STEP, MAX_STASH_CAP);
-            this.ui.sayStatus(`特工倉庫擴充成功！當前容量上限：${save.getStashCap()}`);
-          });
-        },
-      });
-    });
-
-    // 基因強化 (天賦樹)
-    document.getElementById('btn-talents').addEventListener('click', () => {
-      sound.playGem();
-      this.ui.openTalentModal(save, (id) => this.investTalent(id));
-    });
-
-    // 裝備倉庫
-    document.getElementById('btn-gear').addEventListener('click', () => {
-      sound.playGem();
-      this.ui.openGearModal(save, {
-        onEquip: (id) => {
-          save.equipItem(id);
-          sound.playEvoFanfare();
-          this.ui.rebuildGearView(save);
-        },
-        onUnequip: (slot) => {
-          save.unequipSlot(slot);
-          sound.playGem();
-          this.ui.rebuildGearView(save);
-        },
-        onSalvage: (id) => {
-          const dna = save.salvageItem(id);
-          if (dna < 0) {
-            this.ui.sayStatus('這件正穿在身上，要先脫下才能分解', true);
-            sound.playHurt();
-            return;
-          }
-          sound.playGem();
-          this.ui.sayStatus(`分解完成，回收 ${dna} 🧬`);
-          this.ui.updateDnaChip(save.data.dna);
-          this.ui.rebuildGearView(save);
-        },
-        onReforge: (id) => {
-          const res = save.reforgeItem(id);
-          if (!res.ok) {
-            this.ui.sayStatus(res.reason, true);
-            sound.playHurt();
-            return;
-          }
-          sound.playEvoFanfare();
-          this.ui.sayStatus(`重鑄完成：詞條已重新洗牌 (花費 ${res.cost} 🧬)`);
-          this.ui.updateDnaChip(save.data.dna);
-          this.ui.rebuildGearView(save);
-        },
-        onSalvageAll: (rarity) => {
-          const res = save.salvageAll(rarity);
-          if (res.count === 0) return;
-          sound.playEvoFanfare();
-          this.ui.sayStatus(`分解 ${res.count} 件，回收 ${res.dna} 🧬`);
-          this.ui.updateDnaChip(save.data.dna);
-          this.ui.rebuildGearView(save);
-        },
-        onFuse: (ids) => {
-          const res = save.fuseItems(ids);
-          if (!res.ok) {
-            this.ui.sayStatus(res.reason, true);
-            sound.playHurt();
-            return;
-          }
-          sound.playEvoFanfare();
-          this.ui.sayStatus(`合成成功！獲得【${itemName(res.item)}】(消耗 ${res.cost} 🧬)`);
-          this.ui.updateDnaChip(save.data.dna);
-          this.ui.rebuildGearView(save);
-        },
-      });
-    });
-
-    // 主選單音量滑桿 (直接寫入存檔)
-    const sfxVol = document.getElementById('sfx-vol');
-    const bgmVol = document.getElementById('bgm-vol');
-    if (sfxVol && bgmVol) {
-      const applyVol = () => {
-        const settings = { sfx: sfxVol.value / 100, bgm: bgmVol.value / 100 };
-        save.set({ settings });
-        sound.setVolumes(settings.sfx, settings.bgm);
-      };
-      sfxVol.value = Math.round((save.data.settings.sfx || 1) * 100);
-      bgmVol.value = Math.round((save.data.settings.bgm || 0.8) * 100);
-      sfxVol.addEventListener('input', applyVol);
-      bgmVol.addEventListener('input', applyVol);
-      sound.setVolumes(save.data.settings.sfx || 1, save.data.settings.bgm || 0.8);
-    }
-
-    // 開始遊戲按鈕
-    document.getElementById('btn-start-game').addEventListener('click', () => {
-      this.ui.startScreen.classList.add('hidden');
-      this.start();
-    });
-
-    // 重新開始按鈕
-    document.getElementById('btn-restart').addEventListener('click', () => {
-      this.ui.gameOverModal.classList.add('hidden');
-      this.start();
-    });
-
-    // 結算 → 回主選單 (換角/換關/強化都要先回來這裡)
-    document.getElementById('btn-menu').addEventListener('click', () => {
-      this.returnToMenu();
-    });
-
-    // 暫停按鈕
-    this.ui.pauseBtn.addEventListener('click', () => {
-      if (this.state === 'PLAYING') {
-        this.state = 'PAUSED';
-        sound.pauseBGM();
-        this.ui.pauseBtn.textContent = '▶️';
-        this.ui.quitBtn?.classList.remove('hidden');
-      } else if (this.state === 'PAUSED') {
-        this.state = 'PLAYING';
-        sound.resumeBGM();
-        this.ui.pauseBtn.textContent = '⏸️';
-        this.ui.quitBtn?.classList.add('hidden');
-      }
-    });
-
-    // 放棄任務 (暫停時可見)：以「陣亡」結算後回主選單
-    this.ui.quitBtn?.addEventListener('click', () => {
-      if (this.state !== 'PAUSED') return;
-      if (!confirm('確定要放棄本次任務？（將以失敗結算）')) return;
-      this.ui.quitBtn.classList.add('hidden');
-      this.handleGameOver(false);
-      this.returnToMenu();
-    });
-
-    // 佈署戰場防禦設施 (1/2/3/4/B、HUD 按鈕)
-    window.addEventListener('keydown', (e) => {
-      if (e.key === '1') buildFacility(this, 'turret');
-      if (e.key === '2') buildFacility(this, 'electric_grid');
-      if (e.key === '3') buildFacility(this, 'purifier');
-      if (e.key === '4') buildFacility(this, 'barricade');
-      if (e.key === 'b' || e.key === 'B') buildFacility(this, this.selectedFacility || 'turret');
-      if (e.key === 't' || e.key === 'T') tryUpgradeNearestTurret(this);
-      if (e.key === 'g' || e.key === 'G') hireMercenary(this);
-      if (e.key === 'e' || e.key === 'E' || e.key === 'f' || e.key === 'F') this.usePocketItem();
-    });
-
-    // 戰術口袋道具點擊使用 (HUD 口袋槽 / 行動端快捷鍵)
-    this.ui.pocketSlot?.addEventListener('click', () => this.usePocketItem());
-    this.ui.btnPocket?.addEventListener('click', () => this.usePocketItem());
-    // 設施列各按鈕點擊
-    for (const [type, item] of Object.entries(this.ui.facilityButtons || {})) {
-      if (item && item.btn) {
-        item.btn.addEventListener('click', () => {
-          this.selectedFacility = type;
-          buildFacility(this, type);
-        });
-      }
-    }
-
-    // 戰術閃避翻滾 (Space / 行動端按鈕)
-    this.input.onDash = () => this.triggerDash();
-    this.ui.dashBtn?.addEventListener('click', () => this.triggerDash());
-
-    // 僱傭傭兵 (G / 行動端按鈕)
-    this.ui.hireBtn?.addEventListener('click', () => hireMercenary(this));
-
-    // 砲塔進化專精按鈕 (UI 建構子已掛 click，走 _turretUpCb；這裡不要再掛，避免一次點擊雙重觸發)
-
-    // 每日挑戰入口按鈕
-    this.ui.dailyBtn?.addEventListener('click', () => this.startDailyChallenge());
-
-    // 超武合成圖鑑 (主選單查閱配方)
-    this.ui.recipeBtn?.addEventListener('click', () => this.ui.openRecipeModal(save.data));
-
-    // 音效切換按鈕
-    this.ui.soundBtn.addEventListener('click', () => {
-      const enabled = sound.toggleSound();
-      this.ui.soundBtn.textContent = enabled ? '🔊' : '🔇';
-    });
-  }
 
   // 戰術閃避翻滾
   triggerDash() {
@@ -613,13 +384,6 @@ class Game {
 
   // 啟動每日挑戰。固定跑生存者模式 —— 每日挑戰的賣點是「同一天所有人條件一致」，
   // 讓它跟著當前選的模式跑就破功了。
-  startDailyChallenge() {
-    this.dailyConfig = getDailyChallenge();
-    this.modeId = 'survivor';
-    this.mode = getMode('survivor');
-    this.ui.startScreen.classList.add('hidden');
-    this.start(true);
-  }
 
   // 實際生效的金幣乘數 (夾在上限內)。metaGoldMul 本身不夾 —— 淘金潮是 ×2 後再 ÷2
   // 還原，先夾住會把還原算錯。
@@ -837,113 +601,13 @@ class Game {
   }
 
   // 主選單特工卡 (含 DNA 解鎖與武器流派型態選擇)
-  refreshCharSelect() {
-    this.ui.buildCharacterSelect(
-      CHARACTERS, CHARACTER_ORDER, save,
-      (id) => {
-        this.characterId = id;
-        save.set({ character: id });
-      },
-      (id) => this.tryUnlockCharacter(id),
-      this.characterId,
-      (weaponId, aspectId) => {
-        save.setWeaponAspect(weaponId, aspectId);
-        sound.playSelect();
-      }
-    );
-  }
 
   // 切模式：解鎖清單與最佳紀錄都依模式而分，所以要連帶重繪關卡卡片
-  refreshModeSelect() {
-    this.ui.buildModeSelect(MODES, MODE_ORDER, this.modeId, (id) => {
-      this.modeId = id;
-      this.mode = getMode(id);
-      save.set({ mode: id });
-      // 換模式後原本選的關卡可能還沒在這個模式解鎖
-      if (!save.isUnlocked(this.levelId, id)) {
-        this.levelId = 'street';
-        save.set({ lastLevel: 'street' });
-      }
-      this.refreshLevelSelect();
-    });
-  }
 
-  refreshLevelSelect() {
-    this.ui.buildLevelSelect(LEVELS, LEVEL_ORDER, save, (id) => {
-      this.levelId = id;
-      save.set({ lastLevel: id });
-    }, this.levelId);
-  }
 
-  tryUnlockCharacter(id) {
-    const def = CHARACTERS[id];
-    if (!def || save.characterUnlocked(id)) return;
-    const cost = def.unlockCost || 0;
-    if (!save.unlockCharacter(id, cost)) {
-      this.ui.sayStatus(`DNA 不足：解鎖「${def.title}」需要 ${cost} 🧬`, true);
-      sound.playHurt();
-      return;
-    }
-    this.characterId = id;
-    save.set({ character: id });
-    this.refreshCharSelect();
-    this.ui.updateDnaChip(save.data.dna);
-    this.ui.sayStatus(`特工「${def.codename}」已就緒，隨時可以出擊！`);
-    sound.playEvoFanfare();
-  }
 
-  investTalent(id) {
-    const res = save.investTalent(id);
-    if (!res.ok) {
-      this.ui.sayStatus(res.reason, true);
-      sound.playHurt();
-      return;
-    }
-    this.ui.updateDnaChip(save.data.dna);
-    this.ui.rebuildTalentView(save);
-    this.ui.sayStatus(`天賦強化成功 (花費 ${res.cost} 🧬)`);
-    sound.playGem();
-  }
 
   // 結算畫面 → 回主選單：清掉戰局殘留並重繪選單 (DNA 等資料已由 recordRun 更新)
-  returnToMenu() {
-    this.state = 'START';
-    // 每日挑戰會強制切成生存者，回選單要把玩家自己選的模式還原回來
-    this.modeId = MODES[save.data.mode] ? save.data.mode : 'survivor';
-    this.mode = getMode(this.modeId);
-    this.isDaily = false;
-    this.ui.gameOverModal.classList.add('hidden');
-    this.ui.startScreen.classList.remove('hidden');
-
-    this.enemies = [];
-    this._pendingSpawns = [];
-    this.enemyProjectiles = [];
-    this.dropItems = [];
-    this.pendingLevelUps = 0;
-    this._levelUpHold = 0;
-    this.turrets = [];
-    this.mercenaries = [];
-    this.decals = [];
-    this.hazards = [];
-    this.boss = null;
-    this.core = null;
-    this.ui.updateCoreHUD(null);
-    this.particles.clear();
-    this.camera.x = 0;
-    this.camera.y = 0;
-    this.camera.shake = 0;
-
-    this.ui.updateBossHUD(null);
-    this.ui.updateHUD(this.player, 0, 0, 0);
-    this.ui.pauseBtn.textContent = '⏸️';
-    this.ui.quitBtn?.classList.add('hidden');
-    this.ui.updateDnaChip(save.data.dna, save.data.gold);
-    this.refreshModeSelect();
-    this.refreshCharSelect();
-    this.refreshLevelSelect();
-    this.ui.sayStatus('');
-    sound.stopBGM();
-  }
 
   // 把局外天賦加成套進這一局的玩家身上 (傷害天賦需在被動重算時保留 → 寫進 metaDmg)
   applyMetaTalents() {
@@ -2650,7 +2314,7 @@ class Game {
       // 這裡保證一定回得到主選單。
       console.error('[結算] 流程發生例外，改為直接返回主選單', err);
       try {
-        this.returnToMenu();
+        returnToMenu(this);
       } catch (e2) {
         console.error('[結算] 連返回主選單都失敗', e2);
       }

@@ -88,21 +88,22 @@ async function probe(deviceScaleFactor, query = '') {
   await ctx.close();
 }
 
-// 5) 幀耗時量測確實有在跑（自適應的判據來源）
+// 5) 幀耗時量測確實有在跑（自適應的判據）
+//    這裡直接驅動 loop()（rAF 的 callback）而不是等 requestAnimationFrame：
+//    批次連續跑多個 headless 頁面時 rAF 會被節流，等待式寫法會間歇性紅燈（實際發生過）。
 {
   const { page, ctx } = await probe(2);
-  const t = await page.evaluate(async () => {
+  const t = await page.evaluate(() => {
     const g = window.game;
     g.ui.startScreen.classList.add('hidden');
     g.start();
     const before = g._dprN || 0;
-    for (let i = 0; i < 5; i++) {
-      await new Promise((r) => requestAnimationFrame(r));
-    }
-    return { before, after: g._dprN || 0, acc: g._dprAcc || 0 };
+    const accBefore = g._dprAcc || 0;
+    for (let i = 0; i < 5; i++) g.loop(performance.now() + i);
+    return { before, after: g._dprN || 0, accBefore, acc: g._dprAcc || 0 };
   });
-  ok('每一幀的 update+render 耗時有被累積（自適應的判據）', t.after > t.before || t.acc > 0,
-    `取樣計數 ${t.before} → ${t.after}，累積 ${t.acc.toFixed(2)}ms`);
+  ok('每一幀的 update+render 耗時有被累積（自適應的判據）', t.after > t.before && t.acc > t.accBefore,
+    `取樣計數 ${t.before} → ${t.after}，累積 ${t.accBefore.toFixed(2)} → ${t.acc.toFixed(2)}ms`);
   await ctx.close();
 }
 
