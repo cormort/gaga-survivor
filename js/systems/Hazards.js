@@ -162,7 +162,7 @@ export function initDestructibles(game) {
   game.destructibles = [];
   const count = 18;
   for (let i = 0; i < count; i++) {
-    spawnSingleDestructible(game, );
+    spawnSingleDestructible(game);
   }
 }
 

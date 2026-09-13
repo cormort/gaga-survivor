@@ -1,50 +1,89 @@
 // 嘎嘎特攻 (Gaga Survivor) - 遊戲核心主循環與遊戲狀態機
 
-import { GAME_CONFIG, ENEMY_TYPES, WEAPONS, FX, CHARGE, ELITE_AFFIXES, BLESSINGS, MINI_EVENTS, SYNERGIES, SPECIAL_CARDS, MERCHANT_ITEMS, ACHIEVEMENTS, CONSUMABLE_ITEMS, WEAPON_ASPECTS } from './config.js';
+import {
+  GAME_CONFIG,
+  ENEMY_TYPES,
+  WEAPONS,
+  FX,
+  CHARGE,
+  CONSUMABLE_ITEMS,
+  WEAPON_ASPECTS,
+} from './config.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
-import { DropItem, DestructibleCrate } from './entities/DropItem.js';
-import { Mercenary, MERC } from './entities/Mercenary.js';
-import { Projectile } from './entities/Projectile.js';
-import { Turret, TURRET, TURRET_VARIANTS, FACILITY_TYPES } from './entities/Turret.js';
+import { DropItem } from './entities/DropItem.js';
+import { MERC } from './entities/Mercenary.js';
+
+
 import { InputController } from './input.js';
 import { WeaponManager } from './weapons/WeaponManager.js';
 import { Spawner, MAX_ENEMIES as SPAWNER_MAX_ENEMIES } from './systems/Spawner.js';
 import { ParticleSystem } from './systems/ParticleSystem.js';
 import { UIManager } from './systems/UI.js';
 import { sound } from './audio.js';
-import { CHARACTERS, CHARACTER_ORDER } from './characters.js';
-import { LEVELS, LEVEL_ORDER, currentWave, pickEnemy, enemyScale, mergeRules, getDailyChallenge } from './levels.js';
+import { CHARACTERS } from './characters.js';
+import {
+  LEVELS,
+  LEVEL_ORDER,
+  currentWave,
+  pickEnemy,
+  enemyScale,
+  mergeRules,
+  getDailyChallenge,
+} from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
 import { GroundRenderer } from './systems/Ground.js';
 import {
-  initExplodableProps, initDestructibles, spawnSingleDestructible, dropCrateLoot,
-  updateHazards, drawExplodableProps, drawHazards, triggerPropExplosion,
+  initExplodableProps,
+  initDestructibles,
+  spawnSingleDestructible,
+  dropCrateLoot,
+  updateHazards,
+  drawExplodableProps,
+  drawHazards,
+  triggerPropExplosion,
 } from './systems/Hazards.js';
 import {
-  checkMilestones, grantMilestone, offerBlessingChoice, applyBlessing, tickBlessingEffects,
-  checkEventSchedule, triggerMiniEvent, endMiniEvent, checkSynergies, checkAchievements,
-  objectiveText, shuffleInPlace, buildEventSchedule,
+  checkMilestones,
+  tickBlessingEffects,
+  endMiniEvent,
+  checkSynergies,
+  checkAchievements,
+  objectiveText,
+  shuffleInPlace,
+  buildEventSchedule,
 } from './systems/Progression.js';
 import {
-  getFacilityCost, updateFacilityHUD, buildFacility, grantStarterTurret,
-  updateTurrets, tryUpgradeNearestTurret, hireMercenary, updateMercenaries, facilityGoldMul,
+  getFacilityCost,
+  updateFacilityHUD,
+  grantStarterTurret,
+  updateTurrets,
+  tryUpgradeNearestTurret,
+  updateMercenaries,
+  facilityGoldMul,
 } from './systems/Facilities.js';
 import {
-  checkMerchantSchedule, spawnMerchant, updateMerchant, dismissMerchant,
-  openMerchantPanel, closeMerchantPanel, buyMerchantItem, drawMerchant,
+  checkMerchantSchedule,
+  updateMerchant,
+  dismissMerchant,
+  drawMerchant,
 } from './systems/Merchant.js';
-import {
-  bindEvents, refreshCharSelect, refreshModeSelect, refreshLevelSelect,
-  tryUnlockCharacter, investTalent, returnToMenu, startDailyChallenge,
-} from './systems/Menu.js';
+import { bindEvents, returnToMenu } from './systems/Menu.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
-import { rollItem, rollRarity, itemLevelFor, itemName, gearBonuses, salvageValue, RARITIES } from './items.js';
-import { MODES, MODE_ORDER, getMode } from './modes.js';
+import {
+  rollItem,
+  rollRarity,
+  itemLevelFor,
+  itemName,
+  gearBonuses,
+  salvageValue,
+  RARITIES,
+} from './items.js';
+import { MODES, getMode } from './modes.js';
 import { Core } from './entities/Core.js';
-import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXPANSION_STEP } from './shop.js';
+
 
 // 孵化/裂解用的上限：比 Spawner 的 MAX_ENEMIES 低 10 隻，留給波次生成的餘裕，
 // 否則自我增殖的怪會把名額吃光、後續波次的新怪種再也進不來。

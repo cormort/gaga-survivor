@@ -197,14 +197,14 @@ export function checkEventSchedule(game, dt) {
     game.activeEvent.remaining -= dt;
     game.ui.updateEventTimer(game.activeEvent.remaining);
     if (game.activeEvent.remaining <= 0) {
-      endMiniEvent(game, );
+      endMiniEvent(game);
     }
     return;
   }
   if (game._eventIdx >= game._eventSchedule.length) return;
   if (game.gameTime >= game._eventSchedule[game._eventIdx]) {
     game._eventIdx++;
-    triggerMiniEvent(game, );
+    triggerMiniEvent(game);
   }
 }
 

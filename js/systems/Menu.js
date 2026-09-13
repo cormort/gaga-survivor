@@ -18,9 +18,9 @@ import { buildFacility, hireMercenary, tryUpgradeNearestTurret } from './Facilit
 
 export function bindEvents(game) {
   // 特工 / 關卡選擇 (可重繪：解鎖或回主選單時刷新)
-  refreshModeSelect(game, );
-  refreshCharSelect(game, );
-  refreshLevelSelect(game, );
+  refreshModeSelect(game);
+  refreshCharSelect(game);
+  refreshLevelSelect(game);
   game.ui.updateDnaChip(save.data.dna, save.data.gold);
 
   // 特工黑市 (Shop)
@@ -176,7 +176,7 @@ export function bindEvents(game) {
 
   // 結算 → 回主選單 (換角/換關/強化都要先回來這裡)
   document.getElementById('btn-menu').addEventListener('click', () => {
-    returnToMenu(game, );
+    returnToMenu(game);
   });
 
   // 暫停按鈕
@@ -200,7 +200,7 @@ export function bindEvents(game) {
     if (!confirm('確定要放棄本次任務？（將以失敗結算）')) return;
     game.ui.quitBtn.classList.add('hidden');
     game.handleGameOver(false);
-    returnToMenu(game, );
+    returnToMenu(game);
   });
 
   // 佈署戰場防禦設施 (1/2/3/4/B、HUD 按鈕)
@@ -238,7 +238,7 @@ export function bindEvents(game) {
   // 砲塔進化專精按鈕 (UI 建構子已掛 click，走 _turretUpCb；這裡不要再掛，避免一次點擊雙重觸發)
 
   // 每日挑戰入口按鈕
-  game.ui.dailyBtn?.addEventListener('click', () => startDailyChallenge(game, ));
+  game.ui.dailyBtn?.addEventListener('click', () => startDailyChallenge(game));
 
   // 超武合成圖鑑 (主選單查閱配方)
   game.ui.recipeBtn?.addEventListener('click', () => game.ui.openRecipeModal(save.data));
@@ -276,7 +276,7 @@ export function refreshModeSelect(game) {
       game.levelId = 'street';
       save.set({ lastLevel: 'street' });
     }
-    refreshLevelSelect(game, );
+    refreshLevelSelect(game);
   });
 }
 
@@ -298,7 +298,7 @@ export function tryUnlockCharacter(game, id) {
   }
   game.characterId = id;
   save.set({ character: id });
-  refreshCharSelect(game, );
+  refreshCharSelect(game);
   game.ui.updateDnaChip(save.data.dna);
   game.ui.sayStatus(`特工「${def.codename}」已就緒，隨時可以出擊！`);
   sound.playEvoFanfare();
@@ -349,9 +349,9 @@ export function returnToMenu(game) {
   game.ui.pauseBtn.textContent = '⏸️';
   game.ui.quitBtn?.classList.add('hidden');
   game.ui.updateDnaChip(save.data.dna, save.data.gold);
-  refreshModeSelect(game, );
-  refreshCharSelect(game, );
-  refreshLevelSelect(game, );
+  refreshModeSelect(game);
+  refreshCharSelect(game);
+  refreshLevelSelect(game);
   game.ui.sayStatus('');
   sound.stopBGM();
 }

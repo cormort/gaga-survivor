@@ -1,11 +1,39 @@
 // UI 介面管理器 (HUD 抬頭顯示、升級三選一卡牌彈窗、技能格槽位與戰鬥統計)
 
-import { WEAPONS, PASSIVES, GAME_CONFIG, SPECIAL_CARDS, ACHIEVEMENTS, CONSUMABLE_ITEMS, WEAPON_ASPECTS } from '../config.js';
+import {
+  WEAPONS,
+  PASSIVES,
+  GAME_CONFIG,
+  SPECIAL_CARDS,
+  ACHIEVEMENTS,
+  CONSUMABLE_ITEMS,
+  WEAPON_ASPECTS,
+} from '../config.js';
 import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
-import { RARITIES, SLOTS, SLOT_ORDER, itemName, ilvlText, affixText, itemScore, salvageValue, reforgeCost, SETS, LEGENDARY_EFFECTS, legendaryEffectText, FUSION_COST, fuseItems } from '../items.js';
+import {
+  RARITIES,
+  SLOTS,
+  SLOT_ORDER,
+  itemName,
+  ilvlText,
+  affixText,
+  itemScore,
+  salvageValue,
+  reforgeCost,
+  SETS,
+  legendaryEffectText,
+  FUSION_COST,
+  fuseItems,
+} from '../items.js';
 import { save, STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
-import { SHOP_CRATES, SHOP_BOOSTERS, STASH_EXPAND_COST, MAX_STASH_CAP, STASH_EXPANSION_STEP } from '../shop.js';
+import {
+  SHOP_CRATES,
+  SHOP_BOOSTERS,
+  STASH_EXPAND_COST,
+  MAX_STASH_CAP,
+  STASH_EXPANSION_STEP,
+} from '../shop.js';
 
 // 加成列最多顯示幾個 (只留最近取得的，其餘收成「+N」)
 const BUFF_BAR_MAX = 4;

@@ -71,7 +71,7 @@ export function buildFacility(game, type = 'turret') {
   game.particles.createShockwave(game.player.x, game.player.y, 80, fxColor);
   sound.playEvoFanfare();
   game.ui.say(`已部署【${conf.name}】！`, fxColor, 1.4);
-  updateFacilityHUD(game, );
+  updateFacilityHUD(game);
 }
 
 export function buildTurret(game) {
@@ -84,7 +84,7 @@ export function grantStarterTurret(game) {
   game.turrets.push(t);
   game.particles.createShockwave(t.x, t.y, 90, '#00e5ff');
   game.ui.say('🗼 基地已預置一座機槍砲台 — 走到空地按建造鈕可再佈署更多', '#00e5ff', 4.5);
-  updateFacilityHUD(game, );
+  updateFacilityHUD(game);
 }
 
 export function updateTurrets(game, dt) {
@@ -116,7 +116,7 @@ export function updateTurrets(game, dt) {
       sound.playExplosion();
       game.camera.shake = 8;
       game.turrets.splice(i, 1);
-      updateFacilityHUD(game, );
+      updateFacilityHUD(game);
     }
   }
 }

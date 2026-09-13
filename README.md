@@ -502,12 +502,23 @@ tools/                smoke-branches.mjs (罕見分支煙霧測試) / perf-probe
 - **🚁 撤離井搶救**：踩入戰術撤離井完成引導即可將目前所有裝備 100% 立即安全入庫。
 - **⚔️ 結算差異**：通關勝利 100% 入庫；若陣亡則隨機保留 50%（半數丟失）。戰後結算面板分三類列出：✓ 入庫、♻ 倉庫已滿自動分解換 DNA、✕ 遺失。
 
-### 4. 主邏輯模組化解耦 (🚧 進行中)
+### 4. 主邏輯模組化解耦 (✅ 已完成)
 
 - `js/main.js` 曾經膨脹到 4,880 行，狀態機、碰撞、地形機制、局內事件、結算全擠在一起。
-- **已完成**：地面繪製管線（約 860 行）抽成 `js/systems/Ground.js` —— 它是依賴最乾淨的一塊（只需要當下的相機/視窗/關卡主題與地面殘跡陣列）。`main.js` 4,880 → 4,030 行；快取（地表磚、暗角畫布、底色漸層）留在模組實例上，換局沿用。
-- **待切**：`updateHazards` 系列 → `js/systems/Hazards.js`（約 370 行）；局內進程（里程碑／祝福／事件／成就）→ `js/systems/Progression.js`；設施與經濟（砲塔／傭兵／費用）→ `js/systems/Facilities.js`；商人 → `js/systems/Merchant.js`；選單 DOM 接線 → `js/systems/Menu.js`。
-- **驗收**：搬完後遊戲行為零變化，`main.js` 只留主迴圈與狀態機。搬移手法與本次相同：整段逐字搬移，入口只補狀態綁定，並用決定性 canvas 比對（同狀態兩次 render 逐位元相同）＋兩套測試把關。
+- **已完成**：地面繪製管線（約 860 行）→ `js/systems/Ground.js`（4,880 → 4,030 行）。
+- **已完成（第二輪）**：`main.js` **4,030 → 2,666 行**，六塊全部抽出 ——
+
+  | 模組 | 內容 | 行數 |
+  |---|---|---|
+  | `js/systems/Hazards.js` | 可引爆物件、木箱、毒霧池、地雷、噴發口、縮圈 | 466 |
+  | `js/systems/Progression.js` | 擊殺里程碑、隨機祝福、局內事件、武器協同、成就 | 404 |
+  | `js/systems/Facilities.js` | 砲塔／電網／淨化裝置／拒馬、傭兵、金幣乘數 | 242 |
+  | `js/systems/Merchant.js` | 流浪商人（出現、面板、購買、離場） | 185 |
+  | `js/systems/Menu.js` | 主選單與局外養成的 DOM 接線 | 365 |
+
+- **手法**：`game` 當第一個參數（`export function updateHazards(game, dt)`），模組不持有遊戲狀態、依賴寫在簽章上。外部呼叫點（`WeaponManager` 的 `game.dropCrateLoot`、`Progression` 的 `game.goldMul` 等）保留 Game 上的同名薄包裝。
+- **守門**：`node tools/check-refactor-refs.mjs` 會抓出「透過 game 呼叫已搬走方法」與「import 了不存在的名字」——這類殘留引用不會在搬移當下報錯，只會在執行到那一行時變成 `TypeError`（實際發生過：商人的 `checkMerchantSchedule`）。
+- **驗收**：搬完後遊戲行為零變化；`main.js` 只留主迴圈、狀態機與薄包裝。
 
 ### 已知技術債
 

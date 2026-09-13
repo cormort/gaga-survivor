@@ -13,7 +13,7 @@ export function checkMerchantSchedule(game, dt) {
   if (game.merchant || !game.mode || game.mode.id !== 'survivor') return;
   game._merchantTimer -= dt;   // 原本寫死 1/60，120Hz 時商人會提早一倍出現
   if (game._merchantTimer <= 0) {
-    spawnMerchant(game, );
+    spawnMerchant(game);
     game._merchantTimer = 150; // 下次 2.5 分鐘後
   }
 }
@@ -38,7 +38,7 @@ export function updateMerchant(game, dt) {
   if (!game.merchant) return;
   game.merchant.timer -= dt;
   if (game.merchant.timer <= 0) {
-    closeMerchantPanel(game, );
+    closeMerchantPanel(game);
     game.merchant = null;
     return;
   }
@@ -47,14 +47,14 @@ export function updateMerchant(game, dt) {
   const dy = game.player.y - game.merchant.y;
   const dist = Math.hypot(dx, dy);
   if (dist < game.merchant.interactDist) {
-    if (!game.merchant.panelOpen) openMerchantPanel(game, );
+    if (!game.merchant.panelOpen) openMerchantPanel(game);
   } else if (game.merchant.panelOpen) {
-    closeMerchantPanel(game, );
+    closeMerchantPanel(game);
   }
 }
 
 export function dismissMerchant(game) {
-  closeMerchantPanel(game, );
+  closeMerchantPanel(game);
   game.merchant = null;
 }
 
@@ -135,7 +135,7 @@ export function buyMerchantItem(game, item) {
   if (game.merchant) {
     game.merchant.items = game.merchant.items.filter((i) => i.id !== item.id);
     if (game.merchant.items.length === 0) {
-      closeMerchantPanel(game, );
+      closeMerchantPanel(game);
       game.merchant = null;
     } else {
       game.ui.showMerchant(game.merchant, game.gold, (it) => buyMerchantItem(game, it));
