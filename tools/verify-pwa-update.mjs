@@ -1,4 +1,4 @@
-// 端到端驗證「更新提示」：在 /tmp 的複本上把 sw.js 改版 (gaga-v2 → gaga-v3)，
+// 端到端驗證「更新提示」：在 /tmp 的複本上把 sw.js 的 CACHE_VERSION 尾碼 +1 改版，
 // 看頁面是否跳出「有新版本可用」、按下按鈕是否 SKIP_WAITING → controllerchange → 重載，
 // 新版是否真的接手、舊版快取是否被 activate 清掉。
 //
@@ -47,7 +47,14 @@ ok('第一版 SW 已接手', await page.evaluate(() => !!navigator.serviceWorker
 
 // 改版：換 cache 名稱 (順便驗 activate 會清掉舊快取)
 const sw = await readFile(`${COPY}/sw.js`, 'utf8');
-await writeFile(`${COPY}/sw.js`, sw.replace("const CACHE_VERSION = 'gaga-v2';", "const CACHE_VERSION = 'gaga-v3';"));
+const versionDecl = sw.match(/const CACHE_VERSION = '([^']+)';/);
+if (!versionDecl) throw new Error('sw.js 找不到 CACHE_VERSION 宣告，無法模擬改版');
+const OLD_VERSION = versionDecl[1];
+// 尾碼數字 +1 當作「下一版」(gaga-v2 → gaga-v3)；沒有尾碼數字就接上 -next
+const NEW_VERSION = /\d+$/.test(OLD_VERSION)
+  ? OLD_VERSION.replace(/\d+$/, (n) => String(Number(n) + 1))
+  : `${OLD_VERSION}-next`;
+await writeFile(`${COPY}/sw.js`, sw.replace(versionDecl[0], `const CACHE_VERSION = '${NEW_VERSION}';`));
 
 // 觸發更新檢查，等橫幅出現
 const bannerText = await page.evaluate(async () => {
@@ -87,8 +94,8 @@ const after = await page.evaluate(async () => {
       .classList.contains('hidden'),
   };
 });
-ok('新版 SW 已接手且舊快取被清掉 (gaga-v2 消失、gaga-v3 出現)',
-  after.cacheNames.includes('gaga-v3') && !after.cacheNames.includes('gaga-v2'),
+ok(`新版 SW 已接手且舊快取被清掉 (${OLD_VERSION} 消失、${NEW_VERSION} 出現)`,
+  after.cacheNames.includes(NEW_VERSION) && !after.cacheNames.includes(OLD_VERSION),
   after.cacheNames.join(', '));
 ok('更新後遊戲照常啟動、橫幅已收起',
   after.hasGame && after.controller && after.activeState === 'activated' && after.bannerHidden,
