@@ -183,8 +183,8 @@ const cacheInfo = await page.evaluate(async () => {
   }
   return out;
 });
-const shellKeys = cacheInfo.entries['gaga-v1'] || [];
-ok('快取名稱為 gaga-v1 (+runtime)', cacheInfo.names.includes('gaga-v1'), cacheInfo.names.join(', '));
+const shellKeys = cacheInfo.entries['gaga-v2'] || [];
+ok('快取名稱為 gaga-v2 (+runtime)', cacheInfo.names.includes('gaga-v2'), cacheInfo.names.join(', '));
 const notCached = precache.filter((p) => !shellKeys.includes(new URL(p, `${BASE}/`).href));
 ok('預快取清單每一筆都真的進了快取', notCached.length === 0,
   notCached.length ? `漏 ${notCached.length}: ${notCached.join(', ')}` : `${shellKeys.length} 筆`);
@@ -376,7 +376,7 @@ ok('pwa.js 不在 iOS 顯示安裝按鈕、且有 Safari 加入主畫面提示',
   /isIOS\(\)/.test(pwaSrc) && /加入主畫面/.test(pwaSrc), 'ok');
 ok('sw.js 有 skipWaiting / clients.claim / 版本化快取 / message / 同源過濾',
   /skipWaiting\(\)/.test(swSrc) && /clients\.claim\(\)/.test(swSrc)
-  && /gaga-v1/.test(swSrc) && /SKIP_WAITING/.test(swSrc)
+  && /gaga-v2/.test(swSrc) && /SKIP_WAITING/.test(swSrc)
   && /url\.origin !== self\.location\.origin/.test(swSrc), 'ok');
 
 await browser.close();
