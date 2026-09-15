@@ -31,7 +31,10 @@ const results = await page.evaluate(async () => {
   g.start();
   for (let i = 0; i < 40 && !g.enemies.length; i++) await new Promise((r) => setTimeout(r, 200));
 
-  const cfg = await import('/js/config.js');
+  // 匯入路徑一律用 new URL(…, document.baseURI)：本機是 "/"、GitHub Pages 是
+  // "/gaga-survivor/"（寫死絕對路徑在線上會 404）
+  const imp = (p) => import(new URL(p, document.baseURI).href);
+  const cfg = await imp('js/config.js');
   const out = [];
   const run = (群組, 名稱, fn) => {
     try {
@@ -52,8 +55,9 @@ const results = await page.evaluate(async () => {
   }
 
   // 2. 里程碑獎勵（grantMilestone 已搬到 systems/Progression.js，直接呼叫實作）
-  const { grantMilestone, triggerMiniEvent, endMiniEvent } = await import('/js/systems/Progression.js');
-  const { buyMerchantItem } = await import('/js/systems/Merchant.js');   // 商人已搬到 systems/Merchant.js
+  const { grantMilestone, triggerMiniEvent, endMiniEvent } = await imp('js/systems/Progression.js');
+  const merchantFx = await imp('js/systems/Merchant.js');   // 商人已搬到 systems/Merchant.js
+  const { buyMerchantItem } = merchantFx;
   for (const tag of ['magnet', 'gold', 'heal', 'bomb', 'resupply']) {
     run('里程碑', tag, () => { reset(); grantMilestone(g, tag, '煙霧測試'); });
   }
@@ -74,6 +78,56 @@ const results = await page.evaluate(async () => {
   for (const item of cfg.MERCHANT_ITEMS) {
     run('商人', item.id, () => { reset(); g.gold = 99999; buyMerchantItem(g, item); });
   }
+
+  // 4b. 商人的「出現 → 靠近開面板 → 離場」整條路徑。
+  // 為什麼補這組：線上事故（2026-09-15）—— `spawnMerchant` 用了 MERCHANT_ITEMS 卻沒 import，
+  // 玩家在第 2.5 分鐘（_merchantTimer = 150）畫面直接停止更新。上面的「商人商品」只測了
+  // **買**，所以 51 個分支全綠卻攔不到：這是唯一會用到 MERCHANT_ITEMS 的地方。
+  const { spawnMerchant, updateMerchant, dismissMerchant, openMerchantPanel, closeMerchantPanel, checkMerchantSchedule } = merchantFx;
+  run('流浪商人', '出現（spawnMerchant 洗出 3 件商品）', () => {
+    reset();
+    spawnMerchant(g);
+    if (!g.merchant) throw new Error('商人沒有生成');
+    if (!Array.isArray(g.merchant.items) || g.merchant.items.length !== 3) {
+      throw new Error(`商品數不對：${g.merchant.items && g.merchant.items.length}`);
+    }
+  });
+  run('流浪商人', '排程到點就出現（checkMerchantSchedule 越過 150 秒）', () => {
+    reset();
+    g.merchant = null;
+    g._merchantTimer = 0.01;
+    checkMerchantSchedule(g, 0.05);
+    if (!g.merchant) throw new Error('排程沒有觸發商人');
+  });
+  run('流浪商人', '靠近自動開面板 / 走遠自動關', () => {
+    reset();
+    g.merchant = null;
+    spawnMerchant(g);
+    g.player.x = g.merchant.x;
+    g.player.y = g.merchant.y;
+    updateMerchant(g, 0.016);
+    if (!g.merchant.panelOpen) throw new Error('靠近沒有開面板');
+    g.player.x = g.merchant.x + 9999;
+    updateMerchant(g, 0.016);
+    if (g.merchant.panelOpen) throw new Error('走遠沒有關面板');
+  });
+  run('流浪商人', '停留倒數結束就離場（updateMerchant）', () => {
+    reset();
+    g.merchant = null;
+    spawnMerchant(g);
+    g.merchant.timer = 0.01;
+    updateMerchant(g, 0.05);
+    if (g.merchant) throw new Error('時間到沒有離場');
+  });
+  run('流浪商人', '主動離場（dismissMerchant）', () => {
+    reset();
+    g.merchant = null;
+    spawnMerchant(g);
+    openMerchantPanel(g);
+    dismissMerchant(g);
+    if (g.merchant) throw new Error('沒有清掉商人');
+    reset();
+  });
 
   // 5. 特殊升級卡
   // 注意：applySpecialCard 依 card.specialId 分派，而 SPECIAL_CARDS 的欄位叫 id。

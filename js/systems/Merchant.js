@@ -7,6 +7,7 @@
 // 呼叫端：main.js 以 checkMerchantSchedule(this, dt) 這種形式呼叫。
 
 import { sound } from '../audio.js';
+import { MERCHANT_ITEMS } from '../config.js';
 import { shuffleInPlace } from './Progression.js';
 
 export function checkMerchantSchedule(game, dt) {

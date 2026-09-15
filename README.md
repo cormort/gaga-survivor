@@ -479,7 +479,9 @@ js/systems/           Spawner (波次與 Boss 排程) / UI / ParticleSystem
                       Texture (程序化材質工具箱：可平鋪雜訊、fBm、方向光浮雕、星點)
                       Ground (地面繪製管線：材質磚烘焙、地板格線、色調 overlay、暗角、地面殘跡)
                       Decor (關卡裝飾散佈)
-tools/                smoke-branches.mjs (罕見分支煙霧測試) / perf-probe.mjs (硬體無關效能探針)
+tools/                smoke-branches.mjs (罕見分支煙霧測試，含流浪商人出現/開面板/離場)
+                      check-refactor-refs.mjs (重構殘留引用 + 用了別模組匯出的名字卻沒 import)
+                      perf-probe.mjs (硬體無關效能探針)
                       probe-targeted.mjs (敵彈/火海/粒子等熱點的效能探針)
                       worst-case.mjs (250 灼燒中毒 + 火海 + 敵彈的整合最壞情境)
                       visual-equiv.mjs (以 route 攔截舊模組做逐像素等價比對)
@@ -530,7 +532,11 @@ tools/                smoke-branches.mjs (罕見分支煙霧測試) / perf-probe
   | `js/systems/Menu.js` | 主選單與局外養成的 DOM 接線 | 365 |
 
 - **手法**：`game` 當第一個參數（`export function updateHazards(game, dt)`），模組不持有遊戲狀態、依賴寫在簽章上。外部呼叫點（`WeaponManager` 的 `game.dropCrateLoot`、`Progression` 的 `game.goldMul` 等）保留 Game 上的同名薄包裝。
-- **守門**：`node tools/check-refactor-refs.mjs` 會抓出「透過 game 呼叫已搬走方法」與「import 了不存在的名字」——這類殘留引用不會在搬移當下報錯，只會在執行到那一行時變成 `TypeError`（實際發生過：商人的 `checkMerchantSchedule`）。
+- **守門**：`node tools/check-refactor-refs.mjs` 會抓出四件事：透過 game 呼叫已搬走的方法、
+  import 了不存在的名字、`game.X(` 不是 Game 成員，以及**用了別模組匯出的名字卻沒有 import**。
+  這些殘留引用不會在搬移當下報錯，只會在執行到那一行時變成 `TypeError` / `ReferenceError`
+  （實際發生過兩次：商人的 `checkMerchantSchedule`、以及 `Merchant.js` 漏 import 的 `MERCHANT_ITEMS`
+  ——後者讓玩家在第 2.5 分鐘商人出現時整個畫面停止更新）。
 - **驗收**：搬完後遊戲行為零變化；`main.js` 只留主迴圈、狀態機與薄包裝。
 
 ### 已知技術債

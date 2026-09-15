@@ -17,7 +17,7 @@ npx http-server -p 8899 -s          # 終端機 A，專案根目錄
 node tools/smoke-branches.mjs       # 終端機 B
 ```
 
-**預期**：`✅ 51 個分支全部通過`，離開碼 0。
+**預期**：`✅ 56 個分支全部通過`，離開碼 0。
 （分支數會隨程式成長，以實際輸出為準；重點是 **0 個 FAIL**。）
 
 同時先跑這三支（各自都是秒級，任何一項紅燈就先修，不要往下測）：
@@ -38,6 +38,13 @@ node tools/verify-meta-shop.mjs      # 基因強化曲線、黑市箱子等級�
 `verify-art.mjs` 另外會把對照圖寫到 `/tmp/art/`（角色接觸印樣、投射物、手持武器）。
 它同時是**外觀的回歸網**：輪廓光、手持武器、光暈、拖尾任何一項消失都會紅燈，
 所以「畫面變好看」這件事不必再靠人眼記憶去守。
+
+`check-refactor-refs.mjs` 除了原本三項（`game.X(` 殘留、import 不存在的名字），第 4 項是
+**「用了別模組匯出的名字卻沒 import」** —— 這是線上事故（2026-09-15）的守門：
+`js/systems/Merchant.js` 從 main.js 抽出來時漏了 `MERCHANT_ITEMS` 的 import，
+玩家在第 2.5 分鐘「流浪商人出現」那一刻畫面直接停止更新（`ReferenceError`）。
+語法檢查抓不到（是自由變數）、51 個煙霧分支也全綠（當時只測了買東西，沒測商人出現）。
+現在靜態檢查會在 CI 直接指出檔名與行號，煙霧測試也補上商人的出現／開面板／離場五條分支。
 
 `verify-meta-shop.mjs` 守的是**局外養成的體感**（同樣不會拋例外、只會讓玩家覺得「沒用」）：
 天賦樹夠不夠長（全滿 2350 🧬 ≈ 10 場）、黑市箱子的裝備等級有沒有跟著最佳紀錄、
@@ -591,7 +598,7 @@ Lane C 直接用 `tools/perf-probe.mjs`，煙霧測試用 `tools/smoke-branches.
 node tools/perf-probe.mjs                    # 全部情境
 node tools/perf-probe.mjs --scenario=burn5   # 單一情境
 node tools/perf-probe.mjs --json             # 供 diff
-node tools/smoke-branches.mjs                # 51 個罕見分支
+node tools/smoke-branches.mjs                # 56 個罕見分支（含流浪商人出現/開面板/離場）
 ```
 
 環境變數：`PROBE_URL`、`CHROMIUM`、`PW_MODULE`（playwright 未裝在專案內時指向絕對路徑）。
@@ -688,4 +695,4 @@ Lane: C
 4. ~~**HUD 版面**~~ — 已處理（B18 / B19）：加成列只留最近 4 個 + 「+N」且不換行；
    建造鈕移到畫面右側。仍需真機確認拇指可觸及範圍
 5. **罕見分支的系統性風險** — 已連續出現三個「方法名筆誤」bug。煙霧測試涵蓋了
-   51 個 switch 分支，但 `if` 分支與回呼裡的罕見路徑仍未覆蓋
+   56 個 switch 分支，但 `if` 分支與回呼裡的罕見路徑仍未覆蓋
