@@ -38,6 +38,12 @@ export const WEAPON_ART = {
   lightning: { family: 'coil', len: 30, color: F.coil },
   plasma_storm: { family: 'coil', len: 34, color: '#c77dff', evoGlow: true },
   drill: { family: 'coil', len: 28, color: '#ffb703', drill: true },
+
+  // 第二輪擴充：迴力鏢走 blade 家族的「彎刃」變體，軌道炮走 launcher 的長管
+  boomerang: { family: 'blade', len: 24, color: '#ffd166', boomerang: true },
+  twin_storm: { family: 'blade', len: 30, color: '#ffe066', evoGlow: true, boomerang: true },
+  railgun: { family: 'launcher', len: 44, color: '#7df8ff' },
+  annihilation_beam: { family: 'launcher', len: 52, color: '#7df8ff', evoGlow: true },
 };
 
 // ── 四種家族 ────────────────────────────────────────────────────────────
@@ -57,6 +63,33 @@ function blade(x, a, spin) {
   x.beginPath();
   x.roundRect(1, -5, 3.4, 10, 1.4);
   x.fill();
+
+  if (a.boomerang) {
+    // 迴力鏢：兩支彎刃 + 中央握把（用兩段二次曲線做出「V 字」的辨識度）
+    const L = a.len * 0.9;
+    x.save();
+    x.translate(8, 0);
+    x.fillStyle = 'rgba(0,0,0,0.5)';
+    x.beginPath();
+    x.moveTo(0, -3.4);
+    x.quadraticCurveTo(L * 0.72, -L * 0.30, L, -L * 0.06);
+    x.quadraticCurveTo(L * 0.7, -L * 0.12, 0, 3.4);
+    x.closePath();
+    x.fill();
+    x.fillStyle = a.color;
+    x.beginPath();
+    x.moveTo(0, -2.6);
+    x.quadraticCurveTo(L * 0.70, -L * 0.26, L * 0.96, -L * 0.05);
+    x.quadraticCurveTo(L * 0.68, -L * 0.10, 0, 2.6);
+    x.closePath();
+    x.fill();
+    x.fillStyle = '#2b2f3a';
+    x.beginPath();
+    x.roundRect(-6, -2.4, 9, 4.8, 2.2);
+    x.fill();
+    x.restore();
+    return L;
+  }
 
   if (a.shuriken) {
     // 手裏劍：四片刃，緩慢自轉

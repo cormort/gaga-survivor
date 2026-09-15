@@ -20,6 +20,8 @@ const FX = {
   rocket:    { color: '#ff7b00', glow: 2.1, trail: 0.075 },
   fire_pool: { color: '#ff7b00', glow: 0, trail: 0 },
   soccer:    { color: '#00e5ff', glow: 1.7, trail: 0.045 },
+  boomerang: { color: '#ffd166', glow: 1.6, trail: 0.035 },
+  rail_beam: { color: '#7df8ff', glow: 2.2, trail: 0 },
 };
 const FX_DEFAULT = { color: '#ffffff', glow: 1.8, trail: 0.05 };
 // 拖尾只在「真的在飛」時畫：環繞刀刃與地面积火是慢速/靜止實體
@@ -133,6 +135,16 @@ export class Projectile {
     this.charge = options.charge || null; // 蓄能彈：'burn' / 'chain'
     this.seed = Math.random() * 100; // 火焰舌動畫相位，讓每灘火各燒各的
 
+    // 迴力鏢：outTime 秒去程、之後折返（回程會被玩家「接住」而消失）
+    this.outTime = options.outTime || 0;
+    this.outTimer = 0;
+    this.speed0 = options.speed0 || Math.abs(this.vx) + Math.abs(this.vy);
+    this.spin = 0;
+    this.burnOnHit = options.burnOnHit || 0;
+    this.sanctuaryResist = options.sanctuaryResist || 0;   // 雅典娜型態的領域減傷（由型態資料決定）
+    // 軌道炮的視覺光束
+    this.beamRange = options.beamRange || 0;
+
     // 火箭專屬
     this.explosionRadius = options.explosionRadius || 80;
     this.hasExploded = false;
@@ -188,6 +200,42 @@ export class Projectile {
         this.tickRehit(dt);
         break;
 
+      case 'boomerang': {
+        // 去程：等速直線；回程：朝玩家加速（有速度上限），貼近玩家就被接住
+        this.outTimer += dt;
+        this.spin += dt * 18;
+        if (this.outTimer < this.outTime) {
+          this.x += this.vx * dt;
+          this.y += this.vy * dt;
+        } else if (player) {
+          const dx = player.x - this.x;
+          const dy = player.y - this.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const acc = (this.speed0 || 520) * 2.4;
+          this.vx += (dx / d) * acc * dt;
+          this.vy += (dy / d) * acc * dt;
+          const sp = Math.hypot(this.vx, this.vy);
+          const maxSp = (this.speed0 || 520) * 1.7;
+          if (sp > maxSp) {
+            this.vx = (this.vx / sp) * maxSp;
+            this.vy = (this.vy / sp) * maxSp;
+          }
+          this.x += this.vx * dt;
+          this.y += this.vy * dt;
+          if (d < 26) this.isDead = true;
+        } else {
+          this.x += this.vx * dt;
+          this.y += this.vy * dt;
+        }
+        // 去回各能命中一次同一隻敵人（rehit 秒後清空命中清單）
+        this.tickRehit(dt);
+        break;
+      }
+
+      case 'rail_beam':
+        // 純視覺：傷害在開火當下就結算完了，這裡只讓它隨 life 淡出
+        break;
+
       case 'rocket':
         this.x += this.vx * dt;
         this.y += this.vy * dt;
@@ -199,6 +247,7 @@ export class Projectile {
         if (this.isSanctuary && player) {
           if (Math.hypot(player.x - this.x, player.y - this.y) <= this.radius) {
             player.sanctuaryTimer = 0.2;   // 站在池內每幀刷新；離開後自動失效
+            player.sanctuaryResist = this.sanctuaryResist;   // 減傷值來自型態資料，不是寫死的 0.75
             if (this.tickTimer >= this.tickInterval && this.healPerSec > 0) {
               // 治療量由型態資料決定 (healPerSec 8 ÷ 每秒跳幾次)，不是硬寫的 2
               player.heal(this.healPerSec * this.tickInterval);
@@ -320,6 +369,14 @@ export class Projectile {
 
       case 'soccer':
         this.drawSoccer(ctx);
+        break;
+
+      case 'boomerang':
+        this.drawBoomerang(ctx);
+        break;
+
+      case 'rail_beam':
+        this.drawRailBeam(ctx);
         break;
 
       default:
@@ -600,6 +657,58 @@ export class Projectile {
     ctx.globalAlpha = ga;
     ctx.setTransform(base);
     ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // 迴力鏢：三葉旋刃（吃 spin 自轉）＋外圈鋒芒
+  drawBoomerang(ctx) {
+    ctx.save();
+    ctx.rotate(this.spin);
+    const r = this.radius;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    for (let i = 0; i < 3; i++) {
+      ctx.rotate((Math.PI * 2) / 3);
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.32);
+      ctx.lineTo(r * 1.5, 0);
+      ctx.lineTo(0, r * 0.32);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = this.isEvo ? '#ffe066' : '#d9c7a3';
+    for (let i = 0; i < 3; i++) {
+      ctx.rotate((Math.PI * 2) / 3);
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.22);
+      ctx.lineTo(r * 1.34, 0);
+      ctx.lineTo(0, r * 0.22);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 軌道炮光束：沿射線方向拉長的亮帶，隨 life 淡出（不帶傷害）
+  drawRailBeam(ctx) {
+    const len = this.beamRange || 600;
+    const w = this.radius * 2;
+    const a = Math.max(0, Math.min(1, this.life / 0.18));
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = a;
+    ctx.rotate(Math.atan2(this.vy, this.vx));
+    const g = ctx.createLinearGradient(0, 0, len, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.35, 'rgba(125,248,255,0.55)');
+    g.addColorStop(1, 'rgba(125,248,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, -w / 2, len, w);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillRect(0, -w * 0.12, len * 0.6, w * 0.24);
+    ctx.restore();
   }
 
   drawSoccer(ctx) {

@@ -126,6 +126,8 @@ export const WEAPONS = {
     icon: '✨🗡️',
     description: '無需停歇！極限暴風加特林式連續全自動追蹤發射，每 6 發挾帶燃燒彈。',
     isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'kunai',
     baseDamage: 46,  // 40 時單體 DPS 反而略低於滿級苦無
     baseCooldown: 0.12, // 極致機槍射速
@@ -140,6 +142,8 @@ export const WEAPONS = {
     icon: '🌌🛡️',
     description: '守護輪盤永不收回！形成絕對防禦圈並產生擊退風暴。',
     isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'guardian',
     baseDamage: 60,  // 傷害節奏改由 rehit (0.4s) 控制，單刀要拉高才撐得起超武定位
     baseCooldown: 0, // 無 CD，永久旋轉
@@ -154,6 +158,8 @@ export const WEAPONS = {
     icon: '🦈💣',
     description: '發射全螢幕震顫核聚變魚雷，毀天滅地級大範圍爆破，每 2 發挾帶劇毒。',
     isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'rocket',
     baseDamage: 150,
     baseCooldown: 1.2,  // 1.8 時單體 DPS 反而低於滿級火箭
@@ -168,6 +174,8 @@ export const WEAPONS = {
     icon: '🔥🌊',
     description: '藍色高溫烈火將地面覆蓋成火海，擴散並迅速融化怪群。',
     isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'molotov',
     baseDamage: 40,  // 滿級燃燒瓶每跳就是 24，超武不能原地踏步
     baseCooldown: 2.0,
@@ -181,6 +189,8 @@ export const WEAPONS = {
     icon: '🌩️💥',
     description: '漫天落雷連環轟炸，落點更密、單發威力翻倍。',
     isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'lightning',
     baseDamage: 75,
     baseCooldown: 1.1,
@@ -192,6 +202,8 @@ export const WEAPONS = {
     icon: '⚛️⚽',
     description: '多顆超光速量子球體裂變，留下能量粒子殘影瘋狂彈射，每 4 顆挾帶冰凍。',
     isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'soccer',
     baseDamage: 55,
     baseCooldown: 2.2,
@@ -203,6 +215,87 @@ export const WEAPONS = {
 
   // 新增武器 (內容擴充批)：開路穿透型 ─ 相位飛刃
   // 彩鴿式雙武合成：相位飛刃滿級 + 苦無滿級 → 相位風暴 (兩把都消耗，騰出一個武器槽)
+  // ── 第二輪擴充：兩把新基礎武器 ──────────────────────────────────────
+  // 兩把都刻意做成「既有投射物類型之外的新行為」，而不是換皮：
+  //   boomerang 去程與回程都會切開路徑（同一隻敵人可以被去/回各打一次）
+  //   railgun   開火當下結算整條直線的傷害（不是飛行彈體）
+  boomerang: {
+    id: 'boomerang',
+    name: '特工迴力鏢',
+    icon: '🪃',
+    description: '擲出會折返的鋒利迴力鏢，去程與回程各切開一次路徑上的敵人。',
+    isEvo: false,
+    evoTarget: 'twin_storm',
+    pairPassive: 'guardian',     // 雙武合成：迴力鏢 + 守護輪盤 → 雙刃風暴
+    maxLevel: 5,
+    baseDamage: 26,
+    damageGrowth: 9,
+    baseCooldown: 1.15,
+    cooldownGrowth: -0.08,
+    speed: 520,
+    projType: 'boomerang',
+    // 各等級：去程時間（秒）、同時擲出數、穿透、再命中間隔
+    outTime: [0.34, 0.36, 0.38, 0.40, 0.42],
+    count: [1, 1, 2, 2, 3],
+    pierce: [2, 2, 3, 3, 4],
+    rehit: 0.45,
+  },
+  railgun: {
+    id: 'railgun',
+    name: '電磁軌道炮',
+    icon: '🔫',
+    description: '充能後掃出貫穿全場的電磁射線，直線上的敵人一次全部命中。',
+    isEvo: false,
+    evoTarget: 'annihilation_beam',
+    pairPassive: 'atk_scroll',   // 配件滿級即可合成
+    maxLevel: 5,
+    baseDamage: 58,
+    damageGrowth: 22,
+    baseCooldown: 2.6,
+    cooldownGrowth: -0.18,
+    projType: 'rail_beam',
+    range: 900,
+    width: [26, 30, 34, 38, 42],
+    laneCount: 1,
+  },
+
+  twin_storm: {
+    id: 'twin_storm',
+    name: '雙刃風暴',
+    icon: '🌪️',
+    description: '兩道反向旋轉的巨型迴力鏢持續颳掃，去回都追擊並附帶燃燒。',
+    isEvo: true,
+    evoTarget: null,
+    maxLevel: 5,
+    evoGrowth: 0.15,             // 覺醒：每級傷害 +15%（見 WeaponManager 的傷害計算）
+    baseDamage: 72,
+    baseCooldown: 0.62,
+    speed: 610,
+    projType: 'boomerang',
+    outTime: [0.55, 0.55, 0.55, 0.55, 0.55],
+    count: [2, 2, 3, 3, 4],
+    pierce: [99, 99, 99, 99, 99],
+    rehit: 0.30,
+    burnOnHit: 4,                // 命中點燃（每秒 4 點、由 molotov 的燃燒系統處理）
+  },
+  annihilation_beam: {
+    id: 'annihilation_beam',
+    name: '湮滅射線',
+    icon: '☄️',
+    description: '三道加寬的湮滅射線掃過全場，命中即點燃，冷卻大幅縮短。',
+    isEvo: true,
+    evoTarget: null,
+    maxLevel: 5,
+    evoGrowth: 0.15,
+    baseDamage: 132,
+    baseCooldown: 1.25,
+    projType: 'rail_beam',
+    range: 1200,
+    width: [64, 64, 64, 64, 64],
+    laneCount: 3,
+    burnOnHit: 6,
+  },
+
   phase_blade: {
     id: 'phase_blade',
     name: '相位飛刃',
@@ -250,6 +343,8 @@ export const WEAPONS = {
     icon: '🌀💠',
     description: '雙武合體！相位飛刃與苦無融合成不間斷的全自動相位風暴，每 8 發挾帶電弧刃。',
     isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'phase_blade',
     baseDamage: 55,
     baseCooldown: 0.15,
@@ -266,6 +361,8 @@ export const WEAPONS = {
     icon: '🌌🪚',
     description: '環鋸化為永續運轉的奇點軌道，範圍更大、轉速更快，切割一切近身之物。',
     isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'orbit_saw',
     baseDamage: 70,  // 同上：軌道更貼身、範圍更小，單刀給得比守護力場高
     baseCooldown: 0,
@@ -603,6 +700,28 @@ export const WEAPON_ASPECTS = {
     { id: 'chaos', name: '混沌型態 (電磁風暴)', icon: '🌀', tag: '引力聚怪',
       desc: '落雷點引爆電磁脈衝，將半徑 180 內的敵人強制往中心牽引。',
       stats: { pullRadius: 180, pullStrength: 80 } },
+  ],
+  boomerang: [
+    { id: 'hermes',  name: '赫米斯 (疾風迴旋)', icon: '💨', tag: '快速折返',
+      desc: '投擲冷卻 -28%、飛行速度 +28%，迴力鏢更密集地來回切場。',
+      stats: { cdMul: 0.72, speedMul: 1.28 } },
+    { id: 'ares',    name: '阿瑞斯 (血刃)', icon: '🩸', tag: '重擊連切',
+      desc: '單發傷害 ×1.35，且同一目標的再命中間隔縮短 35%（去回連段更痛）。',
+      stats: { damageMul: 1.35, rehitMul: 0.65 } },
+    { id: 'artemis', name: '阿特米斯 (月刃追獵)', icon: '🌙', tag: '多鏢齊發',
+      desc: '每次多擲 2 枚迴力鏢，且穿透 +2。',
+      stats: { extraProjectiles: 2, pierce: 2 } },
+  ],
+  railgun: [
+    { id: 'apollo',     name: '阿波羅 (烈日聚焦)', icon: '☀️', tag: '高傷慢充',
+      desc: '射線傷害 ×1.35，但冷卻 +20%。',
+      stats: { damageMul: 1.35, cdMul: 1.2 } },
+    { id: 'hermes',     name: '赫米斯 (超導加速)', icon: '💨', tag: '高速連掃',
+      desc: '冷卻 -38%、射線傷害 ×0.85，變成高頻掃射。',
+      stats: { cdMul: 0.62, damageMul: 0.85 } },
+    { id: 'prometheus', name: '普羅米修斯 (焚天)', icon: '🔥', tag: '燃燒射線',
+      desc: '命中點燃 8 秒，並額外多掃一道射線。',
+      stats: { burnOnHit: 8, laneCount: 1 } },
   ],
   guardian: [
     { id: 'zagreus', name: '札格型態 (疾速環)', icon: '🥏', tag: '高速旋轉',
