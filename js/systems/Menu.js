@@ -205,13 +205,16 @@ export function bindEvents(game) {
 
   // 佈署戰場防禦設施 (1/2/3/4/B、HUD 按鈕)
   window.addEventListener('keydown', (e) => {
-    if (e.key === '1') buildFacility(this, 'turret');
-    if (e.key === '2') buildFacility(this, 'electric_grid');
-    if (e.key === '3') buildFacility(this, 'purifier');
-    if (e.key === '4') buildFacility(this, 'barricade');
-    if (e.key === 'b' || e.key === 'B') buildFacility(this, game.selectedFacility || 'turret');
-    if (e.key === 't' || e.key === 'T') tryUpgradeNearestTurret(this);
-    if (e.key === 'g' || e.key === 'G') hireMercenary(this);
+    // 這幾個呼叫原本寫的是 buildFacility(this, …)（還在 main.js 時 this 就是 Game）。
+    // 抽成模組後 this 是 undefined，點按鈕或按快捷鍵都會 TypeError —— 外觀上就是
+    // 「按了沒反應」。模組內一律用 game。
+    if (e.key === '1') buildFacility(game, 'turret');
+    if (e.key === '2') buildFacility(game, 'electric_grid');
+    if (e.key === '3') buildFacility(game, 'purifier');
+    if (e.key === '4') buildFacility(game, 'barricade');
+    if (e.key === 'b' || e.key === 'B') buildFacility(game, game.selectedFacility || 'turret');
+    if (e.key === 't' || e.key === 'T') tryUpgradeNearestTurret(game);
+    if (e.key === 'g' || e.key === 'G') hireMercenary(game);
     if (e.key === 'e' || e.key === 'E' || e.key === 'f' || e.key === 'F') game.usePocketItem();
   });
 
@@ -223,7 +226,7 @@ export function bindEvents(game) {
     if (item && item.btn) {
       item.btn.addEventListener('click', () => {
         game.selectedFacility = type;
-        buildFacility(this, type);
+        buildFacility(game, type);
       });
     }
   }
@@ -233,7 +236,7 @@ export function bindEvents(game) {
   game.ui.dashBtn?.addEventListener('click', () => game.triggerDash());
 
   // 僱傭傭兵 (G / 行動端按鈕)
-  game.ui.hireBtn?.addEventListener('click', () => hireMercenary(this));
+  game.ui.hireBtn?.addEventListener('click', () => hireMercenary(game));
 
   // 砲塔進化專精按鈕 (UI 建構子已掛 click，走 _turretUpCb；這裡不要再掛，避免一次點擊雙重觸發)
 
