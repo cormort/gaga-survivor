@@ -191,12 +191,12 @@ export const LEVELS = {
   core: {
     id: 'core',
     name: '熔岩核心熔爐',
-    sub: '終極死鬥',
+    sub: '高溫死鬥',
     icon: '🌋',
     desc: '漂浮在熔岩湖上的鋼鐵平台，各關精英怪的狂暴版齊聚。',
     difficulty: 4,
     dnaMult: 2.4,
-    next: 'endless',
+    next: 'subway',
     theme: {
       top: '#301410', mid: '#1c0b09', bottom: '#0d0504',
       grid: 'rgba(255,180,120,0.05)', major: 'rgba(255,120,0,0.16)',
@@ -249,14 +249,200 @@ export const LEVELS = {
     ],
   },
 
+  // ── 以下三關是這次新增的：核心熔爐之後、無盡深淵之前 ──────────────────
+  // 通關核心（難度 4）之後，玩家原本只剩「無盡深淵」這一個無限模式可打，
+  // 少了三個「有終點、有自己規則」的挑戰。三關都沿用既有的地形材質/機制白名單
+  // （material: metal/void/asphalt、motif: panel/crystal/crack、macro: channels/rifts/plates、
+  // mech: mine/pool/geyser/supply/safeZone），差異來自配色、密度旋鈕、波次組成與 Boss 行為，
+  // 只有 Boss 是新的美術（boss_subway / boss_swamp / boss_storm）。
+
+  subway: {
+    id: 'subway',
+    name: '鏽蝕地下鐵',
+    sub: '窄道圍殺',
+    icon: '🚇',
+    desc: '報廢的地鐵隧道與月台，裝甲巡邏隊與獵犬在狹長通道裡前後包夾。',
+    difficulty: 5,
+    dnaMult: 2.8,
+    next: 'swamp',
+    theme: {
+      top: '#2a1e14', mid: '#19120c', bottom: '#0a0806',
+      grid: 'rgba(255,200,140,0.045)', major: 'rgba(255,150,70,0.13)',
+      gridStyle: { size: 56, major: 4 },          // 隧道：密鋼軌道格
+      bounds: 'rgba(255,150,70,0.7)',
+      grade: { c1: '255,160,70', a1: 0.05, c2: '60,28,10', a2: 0.1 },
+      vignette: 1.2,                              // 隧道裡視野本來就窄
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.018 }, { c: '255,150,70', a: 0.045 }],
+        material: 'metal',     // 鏽蝕鋼板與鉚釘
+        motif: 'panel',        // 面板接縫 + 鏽斑
+        motifColor: 'rgba(255,170,90,0.22)',
+        accent: 'rgba(255,205,130,0.4)',
+        density: { stain: 0.72, stainRadius: 0.95, motif: 2.0, grain: 1.2, accents: 1.2, base: 1.2 },
+        macro: {
+          kind: 'channels', cell: 900,
+          base: 'rgba(120,80,50,0.30)', line: 'rgba(0,0,0,0.38)', accent: 'rgba(255,190,110,0.45)',
+          landmark: ['bus', 'gear'], landmarkCell: 1050, landmarkChance: 0.6,
+          escalate: { rgb: '255,150,70', count: 22 },
+        },
+      },
+    },
+    decor: ['pipes', 'steel', 'tank', 'bin', 'hazard'],
+    decorDensity: 0.55,
+    hpScale: 2.3,
+    // 鏽蝕圍殺：通道窄、獵犬快，靠密度而不是靠單體強度施壓
+    rules: {
+      label: '鏽蝕圍殺', desc: '敵人移速 +15%、生成密度 +20%；金幣 +40%',
+      enemySpeedMul: 1.15, spawnMul: 1.2, goldMul: 1.4,
+    },
+    // 關卡機制：軌道爆破地雷 + 定期空投物資
+    mechs: [
+      { type: 'mine', interval: 24, jitter: 10, radius: 150, fuse: 1.4, dmg: 16, dmgEnemy: 1500, color: '#ffb703' },
+      { type: 'supply', interval: 50, jitter: 18 },
+    ],
+    waves: [
+      { until: 45, pool: [['walker', 0.5], ['hound', 0.5]], interval: 0.7, batch: 1 },
+      { until: 100, pool: [['hound', 0.4], ['runner', 0.3], ['walker', 0.3]], interval: 0.6, batch: 1 },
+      { until: 220, pool: [['hound', 0.3], ['runner', 0.26], ['brute', 0.2], ['bat', 0.14], ['spitter', 0.1]], interval: 0.46, batch: 2 },
+      { until: 360, pool: [['hound', 0.26], ['runner', 0.2], ['brute', 0.2], ['warden', 0.14], ['spitter', 0.12], ['bat', 0.08]], interval: 0.34, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['hound', 0.22], ['runner', 0.18], ['brute', 0.18], ['warden', 0.14], ['spitter', 0.12], ['chimera', 0.08], ['bat', 0.08]], interval: 0.26, batch: 3 },
+      { until: 9999, pool: [['hound', 0.2], ['runner', 0.18], ['brute', 0.16], ['warden', 0.12], ['spitter', 0.14], ['chimera', 0.1], ['bat', 0.1]], interval: 0.22, batch: 4 },
+    ],
+    bosses: [
+      { at: 120, hp: 12000, name: '裝甲列車長', speed: 70, damage: 34, behaviors: ['ground'], skin: 'boss_subway' },
+      { at: 300, hp: 36000, name: '軌道劊子手', speed: 96, damage: 30, behaviors: ['nova', 'barrage'], skin: 'boss_subway' },
+      { at: LEVEL_DURATION, hp: 105000, name: '鏽鐵暴君‧終末列車', speed: 74, damage: 36, final: true, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_subway' },
+    ],
+  },
+
+  swamp: {
+    id: 'swamp',
+    name: '毒霧沼澤',
+    sub: '持續消耗',
+    icon: '☣️',
+    desc: '孢子覆蓋的死水沼地，毒霧與自爆孢子囊逼你在移動中取捨安全區。',
+    difficulty: 6,
+    dnaMult: 3.3,
+    next: 'storm',
+    theme: {
+      top: '#0b2226', mid: '#061418', bottom: '#030b0d',
+      // 刻意偏「毒霧青」而不是純綠：實驗室那關已經是純綠金屬，兩張綠地圖在全域調光後
+      // 一度只差 11%（8×8 區塊平均）—— 把沼澤推到青（藍 ≥ 綠）並加密孢子結晶簇才拉開。
+      grid: 'rgba(130,245,245,0.045)', major: 'rgba(70,235,230,0.14)',
+      gridStyle: { size: 72, major: 5, dash: 8 },   // 有機質地：疏落虛線
+      bounds: 'rgba(70,235,230,0.6)',
+      grade: { c1: '50,235,235', a1: 0.055, c2: '4,45,55', a2: 0.11 },
+      vignette: 1.15,
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.015 }, { c: '70,240,235', a: 0.05 }],
+        material: 'void',      // 星塵微粒在這裡讀成漂浮孢子
+        motif: 'crystal',      // 孢子結晶簇（密度調高，跟實驗室的板縫區隔）
+        motifColor: 'rgba(110,245,240,0.34)',
+        accent: 'rgba(150,250,245,0.30)',
+        density: { stain: 0.5, stainRadius: 1.15, motif: 2.4, grain: 1.3, accents: 1.1, base: 1.05 },
+        macro: {
+          kind: 'rifts', cell: 980,
+          base: 'rgba(20,80,50,0.35)', line: 'rgba(0,0,0,0.30)', accent: 'rgba(120,255,170,0.40)',
+          landmark: ['obelisk', 'runecircle'], landmarkCell: 1150, landmarkChance: 0.58,
+          escalate: { rgb: '110,255,150', count: 26 },
+        },
+      },
+    },
+    decor: ['void_crystal', 'bin', 'hazard', 'pipes'],
+    decorDensity: 0.5,
+    hpScale: 2.6,
+    // 劇毒領域：怪更厚、變異體更多，但經驗補償
+    rules: {
+      label: '劇毒領域', desc: '敵人血量 +30%、變異體出現率 ×1.5；經驗 +20%',
+      enemyHpMul: 1.3, eliteChanceMul: 1.5, expMul: 1.2,
+    },
+    // 關卡機制：毒沼池 + 孢子噴發
+    mechs: [
+      { type: 'pool', interval: 16, jitter: 6, radius: 150, dur: 9, dmg: 11, color: '#7dff8f' },
+      { type: 'geyser', interval: 20, jitter: 8, radius: 180, fuse: 1.2, dmg: 16, dmgEnemy: 1800, color: '#7dff8f' },
+    ],
+    waves: [
+      { until: 40, pool: [['walker', 0.6], ['sporeling', 0.4]], interval: 0.7, batch: 1 },
+      { until: 90, pool: [['sporeling', 0.4], ['walker', 0.3], ['spitter', 0.3]], interval: 0.6, batch: 1 },
+      { until: 200, pool: [['spore_host', 0.3], ['spitter', 0.28], ['brute', 0.2], ['walker', 0.12], ['hatcher', 0.1]], interval: 0.44, batch: 2 },
+      { until: 340, pool: [['spore_host', 0.26], ['spitter', 0.24], ['hatcher', 0.16], ['brute', 0.18], ['warden', 0.1], ['chimera', 0.06]], interval: 0.34, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['spore_host', 0.22], ['spitter', 0.2], ['hatcher', 0.16], ['brute', 0.16], ['warden', 0.12], ['chimera', 0.08], ['hound', 0.06]], interval: 0.26, batch: 3 },
+      { until: 9999, pool: [['spore_host', 0.2], ['spitter', 0.22], ['hatcher', 0.16], ['brute', 0.14], ['warden', 0.1], ['chimera', 0.1], ['hound', 0.08]], interval: 0.22, batch: 4 },
+    ],
+    bosses: [
+      { at: 120, hp: 15000, name: '孢子主教', speed: 62, damage: 32, behaviors: ['summon'], skin: 'boss_swamp' },
+      { at: 300, hp: 42000, name: '腐沼巨口', speed: 80, damage: 36, behaviors: ['nova', 'barrage'], skin: 'boss_swamp' },
+      { at: LEVEL_DURATION, hp: 125000, name: '疫霧之母‧腐潮', speed: 66, damage: 38, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_swamp' },
+    ],
+  },
+
+  storm: {
+    id: 'storm',
+    name: '沙暴要塞',
+    sub: '視野與極速',
+    icon: '🏜️',
+    desc: '黃沙掩埋的裝甲要塞，快速部隊在沙幕裡突進，視野與反應都被壓縮。',
+    difficulty: 7,
+    dnaMult: 3.9,
+    next: 'endless',
+    theme: {
+      top: '#2b2418', mid: '#1a150d', bottom: '#0b0906',
+      grid: 'rgba(255,230,160,0.04)', major: 'rgba(255,205,90,0.12)',
+      gridStyle: { size: 60, major: 4, dash: 4 },   // 沙塵：短虛線
+      bounds: 'rgba(255,205,90,0.6)',
+      grade: { c1: '255,215,130', a1: 0.055, c2: '70,52,12', a2: 0.09 },
+      vignette: 1.3,                                // 沙暴吃掉視野邊緣
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.02 }, { c: '255,205,90', a: 0.05 }],
+        material: 'asphalt',   // 被砂礫磨過的硬地
+        motif: 'crack',        // 乾裂沙岩紋
+        motifColor: 'rgba(0,0,0,0.30)',
+        accent: 'rgba(255,225,150,0.3)',
+        density: { stain: 0.45, stainRadius: 1.1, motif: 1.7, grain: 1.5, accents: 1, base: 1.1 },
+        macro: {
+          kind: 'plates', cell: 820,
+          base: 'rgba(150,120,60,0.28)', line: 'rgba(0,0,0,0.32)', accent: 'rgba(255,220,140,0.42)',
+          landmark: ['radar', 'bus'], landmarkCell: 1000, landmarkChance: 0.6,
+          escalate: { rgb: '255,205,90', count: 28 },
+        },
+      },
+    },
+    decor: ['car', 'tank', 'hazard', 'steel', 'radar'],
+    decorDensity: 0.5,
+    hpScale: 3.0,
+    // 沙暴侵襲：又快又多，靠金幣補償（這關是無盡之前的最終裝備檢查點）
+    rules: {
+      label: '沙暴侵襲', desc: '敵人移速 +25%、生成密度 +30%；金幣 +70%',
+      enemySpeedMul: 1.25, spawnMul: 1.3, goldMul: 1.7,
+    },
+    // 關卡機制：沙暴噴發 + 掩體（站在掩體外持續受傷）
+    mechs: [
+      { type: 'geyser', interval: 18, jitter: 6, radius: 190, fuse: 1.2, dmg: 18, dmgEnemy: 2200, color: '#ffd166' },
+      { type: 'safeZone', interval: 22, jitter: 8, radius: 120, duration: 7, dmg: 8, color: '#ffb703' },
+    ],
+    waves: [
+      { until: 40, pool: [['runner', 0.6], ['walker', 0.4]], interval: 0.6, batch: 1 },
+      { until: 90, pool: [['runner', 0.45], ['hound', 0.3], ['bat', 0.25]], interval: 0.5, batch: 1 },
+      { until: 200, pool: [['runner', 0.3], ['hound', 0.24], ['boomer', 0.2], ['bat', 0.14], ['spitter', 0.12]], interval: 0.38, batch: 2 },
+      { until: 340, pool: [['runner', 0.26], ['hound', 0.2], ['boomer', 0.18], ['warden', 0.14], ['chimera', 0.1], ['hatcher', 0.12]], interval: 0.3, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['runner', 0.22], ['hound', 0.18], ['boomer', 0.16], ['warden', 0.14], ['chimera', 0.12], ['hatcher', 0.1], ['spitter', 0.08]], interval: 0.24, batch: 3 },
+      { until: 9999, pool: [['runner', 0.2], ['hound', 0.18], ['boomer', 0.16], ['warden', 0.12], ['chimera', 0.14], ['hatcher', 0.1], ['spitter', 0.1]], interval: 0.2, batch: 4 },
+    ],
+    bosses: [
+      { at: 120, hp: 18000, name: '沙暴裝甲車', speed: 92, damage: 34, behaviors: ['barrage'], skin: 'boss_storm' },
+      { at: 300, hp: 50000, name: '沙蟲女王', speed: 74, damage: 38, behaviors: ['nova', 'summon'], skin: 'boss_storm' },
+      { at: LEVEL_DURATION, hp: 150000, name: '天譴沙皇‧烈日', speed: 84, damage: 40, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_storm' },
+    ],
+  },
+
   endless: {
     id: 'endless',
     name: '深淵無盡戰',
     sub: '極限生存',
     icon: '🌀',
-    desc: '擊敗核心首腦後解鎖。無限波次、Boss 每 90 秒輪播降臨，撐得越久拿得越多。',
-    difficulty: 5,
-    dnaMult: 3,
+    desc: '擊敗沙暴要塞的沙皇後解鎖。無限波次、Boss 每 90 秒輪播降臨，撐得越久拿得越多。',
+    difficulty: 8,
+    dnaMult: 4.8,
     next: null,
     theme: {
       top: '#241637', mid: '#140b24', bottom: '#07030f',
@@ -300,11 +486,12 @@ export const LEVELS = {
   },
 };
 
-export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'endless'];
+export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'subway', 'swamp', 'storm', 'endless'];
 
 // 無盡模式輪播的 Boss 池 (四關 Boss 全收錄)
 export const ENDLESS_BOSS_CYCLE = []
-  .concat(LEVELS.street.bosses, LEVELS.lab.bosses, LEVELS.frost.bosses, LEVELS.core.bosses)
+  .concat(LEVELS.street.bosses, LEVELS.lab.bosses, LEVELS.frost.bosses, LEVELS.core.bosses,
+    LEVELS.subway.bosses, LEVELS.swamp.bosses, LEVELS.storm.bosses)
   .map((b) => ({ ...b }));
 
 export const ENDLESS_BOSS_INTERVAL = 90;
@@ -401,7 +588,9 @@ export function getDailyChallenge(dateStr = null) {
   for (let i = 0; i < d.length; i++) seed = (seed * 31 + d.charCodeAt(i)) >>> 0;
 
   const lcg = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-  const baseLevelKeys = ['street', 'lab', 'frost', 'core'];
+  // 每日挑戰從「有終點」的關卡裡抽（無盡沒有終點，不適合當每日目標）。
+  // 從 LEVEL_ORDER 推導，之後再加關卡會自動進入輪替，不必再改這裡。
+  const baseLevelKeys = LEVEL_ORDER.filter((id) => id !== 'endless');
   const levelKey = baseLevelKeys[Math.floor(lcg() * baseLevelKeys.length)];
 
   const mods = [...DAILY_MODIFIERS];
