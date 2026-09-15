@@ -449,10 +449,12 @@ const results = await page.evaluate(async () => {
 
     // C14 三隻新 Boss：兩兩不同 + 顏色層次
     {
-      const NEW_BOSSES = ['boss_subway', 'boss_swamp', 'boss_storm'];
+      // 每一批新關卡的 Boss 都加進來：C14 會兩兩比對它們的像素差異與顏色層次
+      const NEW_BOSSES = ['boss_subway', 'boss_swamp', 'boss_storm',
+        'boss_foundry', 'boss_frostvoid', 'boss_voidroad'];
       const missing = NEW_BOSSES.filter((k) => !spr.hasSprite(k));
       if (missing.length) {
-        const why = `缺 sprite：${list(missing)}（key 打錯，或三隻新 Boss 的美術還沒落地）`;
+        const why = `缺 sprite：${list(missing)}（key 打錯，或新 Boss 的美術還沒落地）`;
         ok('C14a 三隻新 Boss 兩兩像素不同（不透明像素差 > 8%）', false, why);
         ok('C14b 三隻新 Boss 各有足夠顏色層次（4bit 量化 ≥ 40 色）', false, why);
       } else {
