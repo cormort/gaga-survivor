@@ -296,7 +296,7 @@ export class WeaponManager {
       (this.player.luckPotionTimer > 0 ? 0.25 : 0);
     const critMul = 2 + (this.player.metaCritDmg || 0);
     const potionDmgMul = this.player.atkPotionTimer > 0 ? 1.4 : 1;
-    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * potionDmgMul * (crit ? critMul : 1) * (this.player.blessingBerserkerMul || 1));
+    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * (this.player.traitDmgMul || 1) * potionDmgMul * (crit ? critMul : 1) * (this.player.blessingBerserkerMul || 1));
 
     switch (id) {
       case 'kunai':

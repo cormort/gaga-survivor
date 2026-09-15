@@ -32,6 +32,9 @@ export class Player {
 
     // 被動加成倍率 (升級被動時更新)
     this.damageMultiplier = 1.0;
+    // 角色特質的即時傷害倍率（例如脈衝喵喵超載期間 +25%）。
+    // 與 damageMultiplier 分開：那個由被動重算覆寫，這個由角色的 tick 逐幀維護。
+    this.traitDmgMul = 1.0;
     this.metaDmg = 0; // 局外天賦「火力核心」的常駐傷害加成 (applyPassives 重置時要加回去)
     this.metaCdr = 0; // 局外裝備的冷卻縮減 (0~1)，在被動算完之後再乘上去
     this.metaCrit = 0;     // 局外裝備的暴擊率 (0~1)
@@ -63,6 +66,8 @@ export class Player {
     this.dashCooldown = 3.8;
     this.dashMaxTimer = this.dashCooldown; // 含 CDR 後的本輪實際冷卻 (UI 覆蓋層比例用)
     this.dashTimer = 0;
+    // 角色特質對翻滾冷卻的乘數（007 鴨鴨移動中縮短）
+    this.dashCooldownMul = 1.0;
     this.dashDuration = 0.22;
     this.dashTimeLeft = 0;
     this.dashDir = { x: 0, y: 0 };
@@ -125,8 +130,8 @@ export class Player {
     this.dashTimeLeft = this.dashDuration;
     // 局外 CDR 可微幅減免翻滾冷卻，至多 -30%；幽靈步伐祝福可進一步降低 40%
     const cdrMod = Math.max(0.4, (1 - (this.metaCdr || 0) * 0.5) * (this.blessingDashCdr || 1));
-    this.dashMaxTimer = this.dashCooldown * cdrMod;
-    this.dashTimer = this.dashCooldown * cdrMod;
+    this.dashMaxTimer = this.dashCooldown * cdrMod * (this.dashCooldownMul || 1);
+    this.dashTimer = this.dashCooldown * cdrMod * (this.dashCooldownMul || 1);
     this.invulnerableTimer = Math.max(this.invulnerableTimer, this.dashDuration + 0.1);
 
     // 武器型態：涅墨西斯裁決 (翻滾後 3.5 秒內苦無必暴)

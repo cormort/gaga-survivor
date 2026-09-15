@@ -22,17 +22,24 @@ export const SLOTS = {
 export const SLOT_ORDER = ['goggles', 'coat', 'boots'];
 
 // 詞條：stat 對應 gearBonuses 的欄位，數值範圍以「物品等級 1」為基準
+// 詞條：stat 對應 gearBonuses 的欄位，數值範圍以「物品等級 1」為基準
+//
+// 這一版的數值經過重新配比，理由是實測（tools/verify-progression.mjs）：
+// 舊值下一套傳奇裝備的火力只有 +15.3%，等於局內「點一級強力卷軸」(+15%/級)，
+// 而武器 1→5 級是 +145%、被動滿級 +75% —— 裝備等於不存在。
+// 另一併把非戰鬥詞條（財運/磁力/領悟）下修約 35%：舊值它們與戰鬥詞條一樣大，
+// 約 40% 的裝備價值跑到金幣與拾取半徑上，玩家當然感覺不到裝備的用處。
 export const AFFIXES = {
-  dmg:     { key: 'dmg',     name: '火力', stat: 'dmg',     min: 0.03,  max: 0.09,  pct: true },
-  hp:      { key: 'hp',      name: '堅韌', stat: 'hp',      min: 6,     max: 22,    pct: false },
-  speed:   { key: 'speed',   name: '疾速', stat: 'speed',   min: 0.02,  max: 0.05,  pct: true },
-  magnet:  { key: 'magnet',  name: '磁力', stat: 'magnet',  min: 0.05,  max: 0.16,  pct: true },
-  cdr:     { key: 'cdr',     name: '冷卻', stat: 'cdr',     min: 0.015, max: 0.045, pct: true },
-  gold:    { key: 'gold',    name: '財運', stat: 'gold',    min: 0.06,  max: 0.22,  pct: true },
-  crit:    { key: 'crit',    name: '要害', stat: 'crit',    min: 0.02,  max: 0.05,  pct: true },
-  critdmg: { key: 'critdmg', name: '處決', stat: 'critdmg', min: 0.08,  max: 0.16,  pct: true },
-  armor:   { key: 'armor',   name: '硬化', stat: 'armor',   min: 0.03,  max: 0.07,  pct: true },
-  exp:     { key: 'exp',     name: '領悟', stat: 'exp',     min: 0.04,  max: 0.12,  pct: true },
+  dmg:     { key: 'dmg',     name: '火力', stat: 'dmg',     min: 0.06,  max: 0.14,  pct: true },
+  hp:      { key: 'hp',      name: '堅韌', stat: 'hp',      min: 10,    max: 30,    pct: false },
+  speed:   { key: 'speed',   name: '疾速', stat: 'speed',   min: 0.035, max: 0.08,  pct: true },
+  magnet:  { key: 'magnet',  name: '磁力', stat: 'magnet',  min: 0.03,  max: 0.10,  pct: true },
+  cdr:     { key: 'cdr',     name: '冷卻', stat: 'cdr',     min: 0.03,  max: 0.08,  pct: true },
+  gold:    { key: 'gold',    name: '財運', stat: 'gold',    min: 0.04,  max: 0.13,  pct: true },
+  crit:    { key: 'crit',    name: '要害', stat: 'crit',    min: 0.04,  max: 0.09,  pct: true },
+  critdmg: { key: 'critdmg', name: '處決', stat: 'critdmg', min: 0.15,  max: 0.30,  pct: true },
+  armor:   { key: 'armor',   name: '硬化', stat: 'armor',   min: 0.05,  max: 0.11,  pct: true },
+  exp:     { key: 'exp',     name: '領悟', stat: 'exp',     min: 0.025, max: 0.07,  pct: true },
 };
 
 export const AFFIX_ORDER = ['dmg', 'hp', 'speed', 'magnet', 'cdr', 'gold', 'crit', 'critdmg', 'armor', 'exp'];
@@ -72,9 +79,19 @@ function newId() {
 }
 
 // 依部位偏好抽 n 條不重複詞條 (rollItem 與重鑄共用)
+// 非戰鬥詞條的抽選權重。10 條詞條裡有 7 條戰鬥、3 條非戰鬥，等權重下戰鬥占比只有 70%
+// —— 加上部位偏好後實測 72%，代表每四件裝備就有一件的價值跑到金幣與拾取半徑上。
+// 把非戰鬥降到 0.45 後戰鬥占比約 84%，裝備才會是「變強」而不是「變有錢」。
+const UTILITY_AFFIX_WEIGHT = 0.45;
+
 function pickAffixes(slotKey, affixCount, ilvl) {
   const slotDef = SLOTS[slotKey];
-  const pool = AFFIX_ORDER.map((k) => ({ key: k, weight: slotDef.bias.includes(k) ? 2 : 1 }));
+  const pool = AFFIX_ORDER.map((k) => {
+    const def = AFFIXES[k];
+    const combat = def && ['dmg', 'hp', 'speed', 'cdr', 'crit', 'critdmg', 'armor'].includes(def.stat);
+    const base = combat ? 1 : UTILITY_AFFIX_WEIGHT;
+    return { key: k, weight: slotDef.bias.includes(k) ? base * 2 : base };
+  });
   const affixes = [];
   for (let i = 0; i < affixCount && pool.length > 0; i++) {
     const picked = pickWeighted(pool);
@@ -92,22 +109,22 @@ export const SETS = {
     key: 'agent',
     name: '特工套裝',
     color: '#4cc9f0',
-    bonusText: '火力 +10%',
-    bonus: { dmg: 0.10 },
+    bonusText: '火力 +22%',
+    bonus: { dmg: 0.22 },
   },
   shadow: {
     key: 'shadow',
     name: '暗影套裝',
     color: '#b5179e',
-    bonusText: '要害率 +8%',
-    bonus: { crit: 0.08 },
+    bonusText: '要害率 +15%',
+    bonus: { crit: 0.15 },
   },
   core: {
     key: 'core',
     name: '熔核套裝',
     color: '#ff7700',
-    bonusText: '減傷 +12%',
-    bonus: { armor: 0.12 },
+    bonusText: '減傷 +22%',
+    bonus: { armor: 0.22 },
   },
 };
 
@@ -168,7 +185,9 @@ export const FUSION_COST = {
 
 export function rollItem({ slot = null, rarity = null, ilvl = 1, setKey = null, legendaryEffect = null } = {}) {
   const slotKey = slot || SLOT_ORDER[Math.floor(Math.random() * SLOT_ORDER.length)];
-  const rarityKey = rarity || rollRarity();
+  // 稀有度吃物品等級：原本 rollRarity() 不帶參數，打得再深也不會更容易掉傳奇/神話，
+  // 於是「深入關卡」對裝備完全沒有回報。ilvl 1 → 無加成、ilvl 2.75 → 傳奇權重 ×3.6、神話 ×8。
+  const rarityKey = rarity || rollRarity(Math.max(0, (ilvl - 1) * 0.5));
   const rarityDef = RARITIES[rarityKey];
 
   // 套裝標記 (三組隨機之一)

@@ -18,6 +18,10 @@ import {
   ilvlText,
   affixText,
   itemScore,
+  gearBonuses,
+  AFFIXES,
+  AFFIX_ORDER,
+  LEGENDARY_EFFECTS,
   salvageValue,
   reforgeCost,
   SETS,
@@ -513,6 +517,32 @@ export class UIManager {
     this.gearSlots.querySelectorAll('[data-unequip]').forEach((btn) => {
       btn.addEventListener('click', () => this._gearHandlers?.onUnequip(btn.dataset.unequip));
     });
+
+    // 裝備總和摘要：把「火力 +25.5%、要害 +15.8%、處決 +57.8%…」攤開來，並換算成
+    // 一句「等效傷害」。為什麼需要：裝備的價值分散在 6~9 條詞條上，玩家在倉庫裡只看到
+    // 一件件的細項，感覺不到總共換到什麼 —— 這是「裝備感覺不到用處」的一大半原因。
+    // 等效傷害 = (1 + 火力) × (1 + 要害 × (1 + 處決))，與 WeaponManager 的 critMul
+    // (2 + critdmg) 對齊：期望值 = (1 - crit) + crit × (2 + critdmg)。
+    const summary = document.getElementById('gear-summary');
+    if (summary) {
+      const g = gearBonuses(stash, equipped);
+      const parts = [];
+      for (const key of AFFIX_ORDER) {
+        const def = AFFIXES[key];
+        const v = g[def.stat] || 0;
+        if (v <= 0.0001) continue;
+        parts.push(def.pct ? `${def.name} +${(v * 100).toFixed(1)}%` : `${def.name} +${Math.round(v)}`);
+      }
+      const critFactor = 1 + (g.crit || 0) * (1 + (g.critdmg || 0));
+      const effective = (1 + (g.dmg || 0)) * critFactor;
+      const eff = `等效傷害 ×${effective.toFixed(2)}（+${((effective - 1) * 100).toFixed(0)}%）`;
+      const fx = (g.effects || []).map((k) => LEGENDARY_EFFECTS[k]?.name).filter(Boolean);
+      const sets = (g.activeSets || []).map((s) => `★${s.name}`).join(' ');
+      summary.innerHTML = parts.length
+        ? `<div class="gear-summary-line"><strong>裝備總和</strong>：${parts.join('、')}</div>`
+          + `<div class="gear-summary-line accent">${eff}${sets ? '　' + sets : ''}${fx.length ? '　特效：' + fx.join('、') : ''}</div>`
+        : '<div class="gear-summary-line dim">尚未裝備任何裝備</div>';
+    }
 
     // 套裝狀態列 (集齊 3 件專屬加成)
     const setStatus = document.getElementById('gear-status');

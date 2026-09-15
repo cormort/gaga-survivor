@@ -785,6 +785,10 @@ class Game {
     this.gameTime = 0;
     this.kills = 0;
     this.gold = (this.player && this.player.startBonusGold) ? this.player.startBonusGold : 0;
+    // 角色的開局加成要放在「本局狀態重置之後」：turrets 等陣列在上方才被清空，
+    // 放在 applyMetaTalents() 旁邊會被緊接著的 this.turrets = [] 清掉（實測踩過，
+    // 工兵阿鴨的開局砲台就這樣消失無蹤）。
+    this.player.character.startBonus?.(this);
     this.boss = null;
     this.hitstopTimer = 0;
     this.redFlash = 0; // Boss 大招紅閃

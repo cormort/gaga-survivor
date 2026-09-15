@@ -1,6 +1,8 @@
 // 四位特工：外觀 sprite、專屬特質、初始武器與全情境台詞腳本。
 // 特質以「鉤子」形式實作，由 Player / Game 在對應時機呼叫。
 
+import { Turret } from './entities/Turret.js';
+
 export const CHARACTERS = {
   duck: {
     id: 'duck',
@@ -12,7 +14,7 @@ export const CHARACTERS = {
     classColor: '#ffcc00',
     classTitle: '致命點殺 / 極速風箏',
     traitName: '特工風度',
-    traitDesc: '移動時 +15% 暴擊率，拾取範圍 +20%',
+    traitDesc: '移動時 +45% 暴擊率、翻滾冷卻 -45%；拾取範圍 +20%',
     startWeapon: 'kunai',
     accent: '#ffcc00',
     lines: {
@@ -25,14 +27,18 @@ export const CHARACTERS = {
       death: '咕嚕嚕……誰來幫我……把瀏覽紀錄刪了……嘎……',
     },
     init(player) {
-      player.baseMagnet = 1.2;
+      player.baseMagnet = 1.35;
       player.critChance = 0;
-      player.critMovingBonus = 0.15;
+      player.critMovingBonus = 0.45;
     },
     tick(dt, game) {
       const p = game.player;
-      // 移動中才享有暴擊加成
-      p.critChance = p.walkCycle > 0 ? p.critMovingBonus : 0;
+      const moving = p.walkCycle > 0;
+      // 移動中才享有暴擊加成。幅度從 +15% 提到 +45%：站在原地的損失必須大到
+      // 逼出「風箏」玩法，否則它只是看不見的數值。
+      p.critChance = moving ? p.critMovingBonus : 0;
+      // 同一套邏輯的第二半：跑動時翻滾冷卻 -45%，讓「一直動」同時換到暴擊與機動
+      p.dashCooldownMul = moving ? 0.55 : 1;
     },
   },
 
@@ -46,7 +52,7 @@ export const CHARACTERS = {
     classColor: '#ff6b35',
     classTitle: '極限跑速 / 範圍火海',
     traitName: '兔子快跑',
-    traitDesc: '跑速每 +10%，全傷害 +5%；奔跑時留下灼燒火痕',
+    traitDesc: '跑速每 +10%，全傷害 +5%；奔跑時留下會隨時間增強的灼燒火痕',
     startWeapon: 'molotov',
     unlockCost: 60,
     accent: '#ff6b35',
@@ -74,12 +80,18 @@ export const CHARACTERS = {
       if (p.trailTimer > 0) return;
       p.trailTimer = 0.22;
 
-      // 腳下火痕：灼燒經過的敵人
+      // 腳下火痕：灼燒經過的敵人。
+      // 傷害必須跟著成長曲線走 —— 原本是固定 6 點（只乘 damageMultiplier），
+      // 對照武器 22→54、被動滿級 +75%、以及後期敵人血量，中期之後完全看不見。
+      // 改成「基礎值隨存活時間成長 × damageMultiplier」，並附帶燃燒（吃火焰協同），
+      // 讓這條火痕真的屬於「火」的玩法而不是裝飾。
       game.particles.createHitSpark(p.x, p.y + 12, '#ff6b00');
+      const trailBase = 6 + game.gameTime * 0.55;
       for (const e of game.enemies) {
         if (e.isDead) continue;
         if (Math.hypot(e.x - p.x, e.y - p.y) < 42) {
-          game.damageEnemy(e, Math.round(6 * p.damageMultiplier), 0, p.x, p.y, 'molotov');
+          game.damageEnemy(e, Math.round(trailBase * p.damageMultiplier), 0, p.x, p.y, 'molotov');
+          e.applyBurn?.(trailBase * 0.6, 2.5, 'molotov');
         }
       }
     },
@@ -95,7 +107,7 @@ export const CHARACTERS = {
     classColor: '#9fb3c8',
     classTitle: '重裝肉盾 / 反傷力場',
     traitName: '厚脂肪裝甲',
-    traitDesc: '碰撞傷害 -20%，受擊時裝甲反震引發全場衝擊波',
+    traitDesc: '受到的傷害 -30%，受擊時裝甲反震（傷害 = 18 + 15% 最大生命）',
     startWeapon: 'guardian',
     unlockCost: 150,
     accent: '#9fb3c8',
@@ -111,17 +123,28 @@ export const CHARACTERS = {
     init(player) {
       player.maxHp = 130;
       player.hp = 130;
-      player.damageTakenMul = 0.8;
+      player.damageTakenMul = 0.7;
+      player.armorShockCd = 0;
+    },
+    tick(dt, game) {
+      const p = game.player;
+      if (p.armorShockCd > 0) p.armorShockCd -= dt;
     },
     onHit(game) {
-      // 護甲反震：全場衝擊波，擊退並輕傷周圍敵人
       const p = game.player;
+      // 兩處 onHit（敵人接觸、投射物）都會呼叫，用 0.8 秒內冷卻避免同一瞬間重複觸發
+      if (p.armorShockCd > 0) return;
+      p.armorShockCd = 0.8;
+      // 護甲反震：全場衝擊波，擊退並傷害周圍敵人。
+      // 傷害改吃「最大生命」—— 這才是「厚脂肪裝甲」該有的成長：HP 被動、裝備、
+      // 祝福都會直接放大它。原本固定 18 點在後期敵人血量數千時等於沒有。
       game.particles.createShockwave(p.x, p.y, 240, '#9fb3c8');
       game.camera.shake = 10;
+      const shockDmg = Math.round(18 + p.maxHp * 0.15);
       for (const e of game.enemies) {
         if (e.isDead) continue;
         if (Math.hypot(e.x - p.x, e.y - p.y) < 240) {
-          game.damageEnemy(e, 18, 26, p.x, p.y, 'guardian');
+          game.damageEnemy(e, shockDmg, 26, p.x, p.y, 'guardian');
         }
       }
     },
@@ -137,7 +160,7 @@ export const CHARACTERS = {
     classColor: '#00e5ff',
     classTitle: '超頻過載 / 全域天罰',
     traitName: '超頻過載',
-    traitDesc: '擊殺菁英怪 (巨漢/詞綴怪/Boss) 觸發過載，5 秒內所有冷卻減半',
+    traitDesc: '擊殺菁英怪或每累積 25 殺觸發過載：5 秒內冷卻減半、傷害 +25%',
     startWeapon: 'lightning',
     unlockCost: 300,
     accent: '#00e5ff',
@@ -154,14 +177,25 @@ export const CHARACTERS = {
       player.overloadTimer = 0;
     },
     tick(dt, game) {
-      if (game.player.overloadTimer > 0) game.player.overloadTimer -= dt;
+      const p = game.player;
+      if (p.overloadTimer > 0) p.overloadTimer -= dt;
+      // 超載期間額外 +25% 傷害：原本只有「冷卻減半」，開超載的體感只有技能變快；
+      // 補上傷害讓它是一段真正的爆發期。
+      p.traitDmgMul = p.overloadTimer > 0 ? 1.25 : 1;
     },
     onKill(enemy, game) {
+      const p = game.player;
+      p.killStreak = (p.killStreak || 0) + 1;
       // 菁英怪 = 生化巨漢 / 詞綴精英 / Boss
-      if (enemy.typeKey !== 'brute' && !enemy.isBoss && !enemy.isElite) return;
-      game.player.overloadTimer = 5;
-      game.particles.createShockwave(game.player.x, game.player.y, 150, '#00e5ff');
-      game.ui.say('超頻過載！冷卻減半 5 秒', '#00e5ff');
+      const elite = enemy.typeKey === 'brute' || enemy.isBoss || enemy.isElite;
+      // 原本只有菁英怪能觸發 —— 前期根本碰不到，等於開局沒有特質。
+      // 加入「每 25 殺累積觸發」，讓超載從第一波就有節奏。
+      const byStreak = p.killStreak >= 25;
+      if (!elite && !byStreak) return;
+      if (byStreak) p.killStreak = 0;
+      p.overloadTimer = 5;
+      game.particles.createShockwave(p.x, p.y, 150, '#00e5ff');
+      game.ui.say('超頻過載！冷卻減半、傷害 +25% 持續 5 秒', '#00e5ff');
     },
   },
 
@@ -175,7 +209,7 @@ export const CHARACTERS = {
     classTitle: '戰地工事 / 建築專精',
     role: '防禦工事專精 / 設施建造減免 / 開局戰備金',
     traitName: '工事大師',
-    traitDesc: '所有戰場防禦設施部署費用 -25%，工事耐久度 +50%，開局額外獲贈 100 🪙 工程戰備金',
+    traitDesc: '設施部署費用 -40%、工事耐久 +100%；開局贈送一座機槍砲台與 100 🪙 工程戰備金',
     startWeapon: 'rocket',
     unlockCost: 180,
     accent: '#00f59b',
@@ -189,9 +223,19 @@ export const CHARACTERS = {
       death: '我的……自動維修板手……螺絲鬆了……嘎……',
     },
     init(player) {
-      player.facilityCostMul = 0.75;
-      player.facilityHpMul = 1.5;
+      player.facilityCostMul = 0.6;
+      player.facilityHpMul = 2.0;
       player.startBonusGold = 100;
+    },
+    // 開局贈送一座機槍砲台：工事流派從第一秒就有東西可以指揮。
+    // 原本特質只有「費用折扣 + 開局金」＝純經濟，戰鬥上完全沒有差異感。
+    startBonus(game) {
+      const p = game.player;
+      const t = new Turret(p.x + 70, p.y + 20, 'turret');
+      t.hp = t.maxHp = Math.round(t.maxHp * (p.facilityHpMul || 1));
+      game.turrets.push(t);
+      game.particles.createShockwave(t.x, t.y, 90, '#00f59b');
+      game.ui.say('🔧 工事大師：開局贈送一座機槍砲台（耐久 ×2）', '#00f59b', 4);
     },
   },
 };
