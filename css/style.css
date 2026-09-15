@@ -2762,6 +2762,30 @@ body, html {
 }
 
 /* 型態列改單行橫向捲動：換行會把整排角色卡撐高一倍 */
+/* 兵器型態彈窗：每個家族一列（沿用角色卡上的 chips 樣式） */
+.aspect-family-row {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.aspect-family-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.aspect-family-icon {
+  font-size: 16px;
+}
+.aspect-family-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: #e8f1ff;
+}
+
 .aspect-chips {
   display: flex;
   gap: 4px;

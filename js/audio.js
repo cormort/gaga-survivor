@@ -93,6 +93,10 @@ const SHOOT_TIMBRES = {
   lightning: { type: 'square',   f0: 900, f1: 260, dur: 0.09, level: 0.19 },
   soccer:    { type: 'sine',     f0: 520, f1: 300, dur: 0.07, level: 0.22 },
   guardian:  { type: 'sine',     f0: 780, f1: 640, dur: 0.06, level: 0.17 },
+  // 第二輪擴充的兩把武器：迴力鏢是「呼嘯」（先升後降的掃頻），軌道炮是尖銳的電磁爆音。
+  // 沒有這兩個條目時 playShoot 會靜默退回 kunai —— 八把武器裡唯一「聽起來一模一樣」的組合。
+  boomerang: { type: 'triangle', f0: 420, f1: 980, dur: 0.18, level: 0.24 },
+  railgun:   { type: 'square',   f0: 1400, f1: 180, dur: 0.22, level: 0.30 },
 };
 
 // 前瞻排程：提前 SCHEDULE_AHEAD 秒把音符排進音訊時鐘，每 SCHEDULER_MS 補排一次。

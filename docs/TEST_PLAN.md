@@ -31,6 +31,7 @@ node tools/verify-ui-actions.mjs     # HUD 按鈕與快捷鍵（按了真的有�
 node tools/verify-art.mjs            # 外觀：角色材質層、手持武器、彈道光暈與拖尾（像素級）
 node tools/verify-meta-shop.mjs      # 基因強化曲線、黑市箱子等級、興奮劑疊加與性價比
 node tools/verify-levels.mjs         # 關卡資料完整性、主題 enum、Boss 外觀、十一關畫面差異
+node tools/verify-weapons.mjs        # 武器/超武/型態表、死欄位掃描、進化與覺醒、武器 DPS 門檻
 ```
 
 **預期**：`✅ 沒有殘留引用`、`8 passed, 0 failed`、`32 passed, 0 failed`，
@@ -46,6 +47,11 @@ node tools/verify-levels.mjs         # 關卡資料完整性、主題 enum、Bos
 玩家在第 2.5 分鐘「流浪商人出現」那一刻畫面直接停止更新（`ReferenceError`）。
 語法檢查抓不到（是自由變數）、51 個煙霧分支也全綠（當時只測了買東西，沒測商人出現）。
 現在靜態檢查會在 CI 直接指出檔名與行號，煙霧測試也補上商人的出現／開面板／離場五條分支。
+
+`verify-weapons.mjs` 守的是**武器資料與手感**：武器／超武／型態表的完整性、進化端到端、
+超武覺醒真的加傷、以及**每個型態 `stats` 欄位都必須有讀取端**（死欄位掃描 —— 這條抓到
+`molotov[athena].dmgResist` 宣告了 25% 領域減傷卻沒有任何程式讀它，實際減傷是寫死在
+`Player.takeDamage` 的 `× 0.75`）。
 
 `verify-levels.mjs` 守的是**關卡資料**：`next` 鏈、難度遞增、波次覆蓋整局、Boss 排程、
 以及「宣告的地形 enum 真的有實作」（material / motif / macro kind / landmark / mech type
