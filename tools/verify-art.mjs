@@ -380,6 +380,35 @@ try {
         bad.length === 0, bad.length ? bad.slice(0, 6).join('｜') : `${keys.size} 個 key（含 ${CHARS.length} 個角色）全部通過`);
     }
 
+    // ── 烘焙成本上限（與硬體無關的量法）────────────────────────────────
+    // 材質層（外框 + 兩層邊光 + 兩次漸層）是加在「烘焙」上的成本，不是每幀成本，
+    // 但**仍然要有天花板**：它是最容易被後手無意間放大的一塊（例如把模糊半徑調大、
+    // 或每個 frame 重建暫存畫布）。這裡刻意數「繪圖指令次數」而不是毫秒 ——
+    // 毫秒綁機器（見 perf-probe 的檔頭），指令數在任何機器上都一樣。
+    // 用帶 query 的 URL 再匯入一次 sprites.js，拿到一個空快取的新模組實例，
+    // 這樣量到的一定是真的烘焙，不會被前面已經烘過的 key 汙染。
+    {
+      const proto = CanvasRenderingContext2D.prototype;
+      const METHODS = ['drawImage', 'fillRect', 'fill', 'stroke', 'createLinearGradient',
+        'createRadialGradient', 'createPattern', 'save', 'restore', 'clearRect'];
+      const orig = {};
+      let calls = 0;
+      try {
+        for (const m of METHODS) {
+          orig[m] = proto[m];
+          proto[m] = function (...a) { calls++; return orig[m].apply(this, a); };
+        }
+        const fresh = await imp('js/sprites.js?art-probe=1');
+        for (const k of CHARS) fresh.getSprite(k);
+      } finally {
+        for (const m of METHODS) if (orig[m]) proto[m] = orig[m];
+      }
+      const per = calls / CHARS.length;
+      // 天花板抓在實測值（499）的 1.6 倍：正常重構不會撞到，明顯退化一定撞到
+      ok('[烘焙成本] 每個角色 sprite 的繪圖指令 ≤ 800（材質層沒有被無意放大）',
+        per <= 800, `實測 ${calls} 次 ÷ ${CHARS.length} 個角色 = 每個 ${per.toFixed(0)} 次`);
+    }
+
     // ── 對照圖（即使上面失敗也要盡量產出）──────────────────────────────
     const sheetBase = (w, h) => {
       const c = mkCanvas(w, h);
