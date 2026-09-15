@@ -33,6 +33,9 @@ const SCENARIOS = [
   // 三個舊情境都沒有「敵方子彈、火焰池、粒子滿載」—— 而這正是繪圖成本最集中的地方
   // （150 發會發光的酸液彈、6 灘各 6~11 束火舌的火海、900 顆粒子＋110 個傷害飄字）。
   { id: 'barrage',  敵人: 60,  burn: false, poison: 0, 額外: '彈幕火海粒子', 說明: '150 酸液彈 + 6 火海 + 粒子滿載（繪圖成本最壞）' },
+  // 碰撞成本最壞：滿場敵人 × 大量「玩家的」投射物。舊情境完全沒有這一項，
+  // 所以先前 O(投射物 × 敵人) 的最佳化完全量不到。
+  { id: 'bullets',  敵人: 250, burn: false, poison: 0, 額外: '玩家彈幕', 說明: '250 敵人 × 120 玩家投射物（碰撞成本最壞）' },
 ];
 
 async function probe(page, sc) {
@@ -64,6 +67,27 @@ async function probe(page, sc) {
       for (let i = 0; i < sc.掉落物; i++) {
         const a = Math.random() * Math.PI * 2, d = 100 + Math.random() * 500;
         g.dropItems.push(new DropItem(g.player.x + Math.cos(a) * d, g.player.y + Math.sin(a) * d, 'EXP_GREEN'));
+      }
+    }
+
+    if (sc.額外 === '玩家彈幕') {
+      const { Projectile } = await import('/js/entities/Projectile.js');
+      // 固定亂數：兩版對比時敵人與投射物的分佈必須完全一致，否則 update 時間無從比較
+      let seed = 12345;
+      const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+      for (const e of g.enemies) {
+        e.x = g.player.x + (rnd() - 0.5) * 700;
+        e.y = g.player.y + (rnd() - 0.5) * 700;
+      }
+      for (let i = 0; i < 120; i++) {
+        const a = (i / 120) * Math.PI * 2;
+        const d = 80 + (i % 5) * 60;
+        g.weaponManager.projectiles.push(new Projectile({
+          type: 'kunai', weaponId: 'kunai',
+          x: g.player.x + Math.cos(a) * d, y: g.player.y + Math.sin(a) * d,
+          vx: 0, vy: 0, damage: 1, radius: 8,
+          pierce: 9999, life: 99999, knockback: 0,
+        }));
       }
     }
 

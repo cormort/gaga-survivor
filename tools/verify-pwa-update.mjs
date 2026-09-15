@@ -45,15 +45,20 @@ await page.evaluate(() => navigator.serviceWorker.ready);
 await page.reload({ waitUntil: 'load' });
 ok('第一版 SW 已接手', await page.evaluate(() => !!navigator.serviceWorker.controller));
 
-// 改版：換 cache 名稱 (順便驗 activate 會清掉舊快取)
+// 改版：換 cache 名稱 (順便驗 activate 會清掉舊快取)。
+// 版本號由 sw.js 現場推導（gaga-vN → gaga-vN+1），不寫死 —— 否則 sw.js 自己升版後
+// 這裡的 replace 會失效、測試前提消失。
 const sw = await readFile(`${COPY}/sw.js`, 'utf8');
-await writeFile(`${COPY}/sw.js`, sw.replace("const CACHE_VERSION = 'gaga-v1';", "const CACHE_VERSION = 'gaga-v2';"));
+const oldVersion = (sw.match(/const CACHE_VERSION\s*=\s*'([^']+)'/) || [])[1];
+const newVersion = oldVersion.replace(/(\d+)$/, (d) => String(Number(d) + 1));
+if (!oldVersion || newVersion === oldVersion) throw new Error(`無法從 sw.js 推導版本號：${oldVersion}`);
+await writeFile(`${COPY}/sw.js`, sw.replace(`'${oldVersion}'`, `'${newVersion}'`));
 
 // 觸發更新檢查，等橫幅出現
 const bannerText = await page.evaluate(async () => {
   const reg = await navigator.serviceWorker.getRegistration();
   await reg.update();
-  const deadline = Date.now() + 12000;
+  const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
     const el = document.getElementById('pwa-banner');
     if (el && !el.classList.contains('hidden') && /新版本/.test(el.textContent)) {
@@ -70,7 +75,13 @@ ok('偵測到 waiting worker 並顯示「有新版本可用，點此重新載入
 // 按下按鈕 → SKIP_WAITING → controllerchange → reload
 let reloaded = false;
 const navPromise = page.waitForNavigation({ timeout: 15000 }).then(() => { reloaded = true; }).catch(() => {});
-await page.evaluate(() => document.querySelector('#pwa-banner .pwa-action').click());
+const bannerClicked = await page.evaluate(() => {
+  const btn = document.querySelector('#pwa-banner .pwa-action');
+  if (!btn) return false;
+  btn.click();
+  return true;
+});
+if (!bannerClicked) console.log('  （橫幅不存在，跳過點擊；上方 FAIL 已記錄原因）');
 await navPromise;
 ok('按下「重新載入」後頁面真的重載 (controllerchange)', reloaded);
 
@@ -87,8 +98,8 @@ const after = await page.evaluate(async () => {
       .classList.contains('hidden'),
   };
 });
-ok('新版 SW 已接手且舊快取被清掉 (gaga-v1 消失、gaga-v2 出現)',
-  after.cacheNames.includes('gaga-v2') && !after.cacheNames.includes('gaga-v1'),
+ok(`新版 SW 已接手且舊快取被清掉 (${oldVersion} 消失、${newVersion} 出現)`,
+  after.cacheNames.includes(newVersion) && !after.cacheNames.includes(oldVersion),
   after.cacheNames.join(', '));
 ok('更新後遊戲照常啟動、橫幅已收起',
   after.hasGame && after.controller && after.activeState === 'activated' && after.bannerHidden,

@@ -11,7 +11,7 @@
 //           沒命中才走網路並順手寫進 runtime 快取；查詢字串算在快取 key 裡。
 //   跨網域 / 非 GET → 完全不攔，原封不動交給瀏覽器。
 
-const CACHE_VERSION = 'gaga-v1';
+const CACHE_VERSION = 'gaga-v2';   // v2：主邏輯模組化後新增五個 systems 模組
 const SHELL_CACHE = CACHE_VERSION;                  // 預快取的 app shell
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;   // 執行期順手補快取的東西
 const CURRENT_CACHES = [SHELL_CACHE, RUNTIME_CACHE];
@@ -58,7 +58,12 @@ const PRECACHE = [
   './js/entities/Projectile.js',
   './js/entities/Turret.js',
   './js/systems/Decor.js',
+  './js/systems/Facilities.js',
   './js/systems/Ground.js',
+  './js/systems/Hazards.js',
+  './js/systems/Menu.js',
+  './js/systems/Merchant.js',
+  './js/systems/Progression.js',
   './js/systems/ParticleSystem.js',
   './js/systems/Spawner.js',
   './js/systems/Terrain.js',
