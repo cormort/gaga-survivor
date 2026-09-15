@@ -30,6 +30,7 @@ node tools/verify-progression.mjs    # 角色招牌機制與裝備價值（幅�
 node tools/verify-ui-actions.mjs     # HUD 按鈕與快捷鍵（按了真的有事發生）
 node tools/verify-art.mjs            # 外觀：角色材質層、手持武器、彈道光暈與拖尾（像素級）
 node tools/verify-meta-shop.mjs      # 基因強化曲線、黑市箱子等級、興奮劑疊加與性價比
+node tools/verify-levels.mjs         # 關卡資料完整性、主題 enum、Boss 外觀、八關畫面差異
 ```
 
 **預期**：`✅ 沒有殘留引用`、`8 passed, 0 failed`、`32 passed, 0 failed`，
@@ -45,6 +46,12 @@ node tools/verify-meta-shop.mjs      # 基因強化曲線、黑市箱子等級�
 玩家在第 2.5 分鐘「流浪商人出現」那一刻畫面直接停止更新（`ReferenceError`）。
 語法檢查抓不到（是自由變數）、51 個煙霧分支也全綠（當時只測了買東西，沒測商人出現）。
 現在靜態檢查會在 CI 直接指出檔名與行號，煙霧測試也補上商人的出現／開面板／離場五條分支。
+
+`verify-levels.mjs` 守的是**關卡資料**：`next` 鏈、難度遞增、波次覆蓋整局、Boss 排程、
+以及「宣告的地形 enum 真的有實作」（material / motif / macro kind / landmark / mech type
+全部從 `Ground.js`、`Terrain.js`、`Hazards.js` 原始碼掃出來比對，不是另外抄一份白名單）。
+它還會實際開局跑每一關，並確認八關的地面畫面兩兩不同 —— 新增關卡時最常見的錯就是
+「抄一關改名字」，這條會直接抓到。
 
 `verify-meta-shop.mjs` 守的是**局外養成的體感**（同樣不會拋例外、只會讓玩家覺得「沒用」）：
 天賦樹夠不夠長（全滿 2350 🧬 ≈ 10 場）、黑市箱子的裝備等級有沒有跟著最佳紀錄、
