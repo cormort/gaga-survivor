@@ -755,9 +755,11 @@ const results = await page.evaluate(async () => {
     {
       const bad = [];
       const detail = [];
+      let gated = 0;
       for (const id of evos) {
         const def = WEAPONS[id];
         if (!def.evoGrowth) continue;
+        gated++;
         beginRun();
         const W = g.weaponManager;
         for (const b of bases) {
@@ -794,8 +796,10 @@ const results = await page.evaluate(async () => {
       }
       ok('C12d 有 evoGrowth 的超武會出現在升級卡裡（type:"weapon_upgrade"、id 是超武自己）',
         bad.length === 0 && detail.length > 0,
-        detail.length === 0 ? '沒有任何超武有 evoGrowth（覺醒系統等於不存在）'
-          : (bad.length ? list(bad) : detail.join('、')));
+        bad.length ? list(bad)
+          : (detail.length === 0
+            ? `沒有任何超武有 evoGrowth（evos=${evos.length}、通過閘門=${gated}）`
+            : detail.join('、')));
     }
 
     // C13：dmgResist 真的接到玩家減傷上（雅典娜聖光領域：站在火海裡受傷 -25%）。
