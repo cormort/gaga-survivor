@@ -748,14 +748,26 @@ const results = await page.evaluate(async () => {
       ok('E17 通關只解鎖下一關（未通關不解鎖、最後一關不再解鎖）',
         bad.length === 0, bad.length ? bad.join('；') : log.join(' '));
 
-      // 新三關真的掛在鏈上
-      const links = [['subway', 'core'], ['swamp', 'subway'], ['storm', 'swamp'], ['endless', 'storm']];
-      const linkBad = links.filter(([child, parent]) => !LEVELS[parent] || LEVELS[parent].next !== child)
-        .map(([child, parent]) => `${parent}.next ≠ ${child}（${LEVELS[parent] ? JSON.stringify(LEVELS[parent].next) : '沒有這一關'}）`);
-      ok('E17b subway 需 core 通關、endless 需 storm 通關（新三關都在解鎖鏈上）',
-        linkBad.length === 0,
-        linkBad.length ? linkBad.join('；')
-          : links.map(([c, p]) => `${p}→${c}`).join('、'));
+      // 沒有孤島關卡：從第一關沿著 next 走必須能抵達每一關（順序 = LEVEL_ORDER），
+      // 而且只有鏈尾可以 next === null。
+      // 這條原本寫死「subway 需 core、endless 需 storm」—— 但關卡會一直加，
+      // 寫死鏈上的某一節等於每次加關卡都要回來改（這次加了第二批就直接過期）。
+      const reachable = [];
+      let cursor = ORDER[0];
+      const guard = new Set();
+      while (cursor && !guard.has(cursor)) {
+        guard.add(cursor);
+        reachable.push(cursor);
+        cursor = LEVELS[cursor] ? LEVELS[cursor].next : null;
+      }
+      const unreachable = ORDER.filter((id) => !reachable.includes(id));
+      const orderBad = reachable.join('>') !== ORDER.join('>');
+      const nulls = ORDER.filter((id) => LEVELS[id].next === null);
+      ok('E17b 沒有孤島關卡：從第一關沿 next 能走到每一關（順序 = LEVEL_ORDER，只有鏈尾為 null）',
+        unreachable.length === 0 && !orderBad && nulls.length === 1 && nulls[0] === ORDER[ORDER.length - 1],
+        unreachable.length || orderBad
+          ? `走到的順序 ${reachable.join('>')}｜無法抵達：${unreachable.join('、') || '無'}`
+          : `${ORDER.length} 關全部可達，鏈尾 ${nulls[0]}`);
     }
 
     // 額外：選單真的畫得出這些關卡（解鎖鏈要接得上 UI）
