@@ -23,6 +23,8 @@ await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction(() => window.game);
 
 const results = await page.evaluate(async () => {
+  // 匯入路徑一律用 new URL(…, document.baseURI)：本機是 "/"、GitHub Pages 是
+  // "/gaga-survivor/"，寫死絕對路徑在線上會 404（實測踩過）。
   const out = [];
   const ok = (name, pass, detail) => out.push({ name, pass: !!pass, detail: String(detail) });
   const g = window.game;
@@ -30,7 +32,7 @@ const results = await page.evaluate(async () => {
   // 用「同時開放砲塔與傭兵」的模式（守塔）。注意：生存者模式也開放砲塔，
   // 所以不能只用 turrets 找 —— 要連 mercs 一起看，否則僱傭測試會拿到正確的拒絕
   // 而被誤判成失敗（實測踩過）。
-  const { MODES } = await import('/js/modes.js');
+  const { MODES } = await import(new URL('js/modes.js', document.baseURI).href);
   const defenseId = Object.keys(MODES).find((k) => MODES[k].turrets && MODES[k].mercs)
     || Object.keys(MODES).find((k) => MODES[k].turrets) || 'defense';
   g.modeId = defenseId;
@@ -41,7 +43,7 @@ const results = await page.evaluate(async () => {
   // 每次子測試前把場上設施清空、玩家放到固定點：守塔模式開局有預置砲台，
   // 而各設施的 minSpacing（40~85）會讓「隨機放玩家」偶爾撞到間距限制 ——
   // 那是正確行為，但會讓測試誤判成失敗（實測踩過）。
-  const { updateFacilityHUD } = await import('/js/systems/Facilities.js');
+  const { updateFacilityHUD } = await import(new URL('js/systems/Facilities.js', document.baseURI).href);
   const reset = (gold = 99999) => {
     g.turrets = [];
     g.mercenaries = [];
