@@ -153,8 +153,11 @@ const results = await page.evaluate(async () => {
   ok('[黑市] 三個箱子的 roll 都吃 ilvl（不再是永遠 ilvl 1）',
     rollBad.length === 0, rollBad.length ? `沒吃 ilvl：${rollBad.join('、')}` : '精良/史詩/傳奇 都正確');
 
-  // 詞條期望值要用平均（單次擲骰的變異很大：詞條有 0.06 的小數型也有 10~30 的固定型）
-  const avgAffix = (ilvl, n = 300) => {
+  // 詞條期望值要用平均，而且取樣數要夠：詞條有小數型（0.06~0.30）也有 10~30 的固定型，
+  // 單次擲骰可以差 170 倍；實測 ilvl 2.75 的詞條總和是「平均 20.4、標準差 28.2」——
+  // n=300 時兩組平均差的標準誤約 2.14，對上 21.6% 的餘裕只有 1.8 個標準誤（≈3.6% 會誤紅）。
+  // n=1500 把標準誤壓到 0.96（22 個標準誤），擲骰本身很便宜，不需要省這個。
+  const avgAffix = (ilvl, n = 1500) => {
     let s = 0;
     for (let i = 0; i < n; i++) {
       const it = shop.SHOP_CRATES.legendary_crate.roll(ilvl);
