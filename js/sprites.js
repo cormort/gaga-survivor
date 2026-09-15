@@ -83,6 +83,11 @@ const BOSS_ACCENT = [
   ['boss_subway', '#ff9f45'],
   ['boss_swamp', '#7dff8f'],
   ['boss_storm', '#ffd166'],
+  // 第二批三關（熔毀鑄造廠／霜封虛空／虛空裂道）：同樣必須排在泛用 ['boss', …] 之前，
+  // 否則這三隻會全部吃到粉紅邊光，跟關卡主題色（橙紅／紫藍／青綠）對不起來。
+  ['boss_foundry', '#ff9a3c'],
+  ['boss_frostvoid', '#9d8cff'],
+  ['boss_voidroad', '#7dffe8'],
   ['boss', '#ff4d6d'],
 ];
 
@@ -2709,6 +2714,1143 @@ function drawBossStorm(x, t, r, charging, final) {
   }
 }
 
+/* ==================== 第二批新關卡 Boss（熔毀鑄造廠／霜封虛空／虛空裂道） ====================
+   為什麼還要再換一次剪影：前七隻雖然各自換過身體，但「橫向的寬度」多半來自左右對稱的
+   附肢，縮到遊戲內尺寸時很容易一起糊成「一團肉 + 兩隻手」。這一批改從**重心位置與
+   上下緣的形狀**下手，三隻各認領一個別的剪影都不具備的特徵：
+     foundry   寬肩重底盤（實心 bbox 最寬也最扁；上緣是水平的硬肩線、下緣是兩條分離的履帶）
+     frostvoid 直立窄長冰晶（最窄，上下都收成尖 —— 全場唯一的「細高」剪影）
+     voidroad  披風狀不規則裂體（上窄下寬，而且是唯一「下襬被撕裂成鋸齒」的）
+   三隻一律照「陰影 → 地面光 → 背後的部件 → 主體 → 前景部件 → 發光細節」的順序畫，
+   後面畫的會蓋在前面，部件的前後關係才不會打架（煙囪要在肩線後面、爐口要在胸甲前面）。
+   charging 一律用「內部增亮 + 外型伸縮」而**不改配色**：8 幀循環裡換色會像壞掉，
+   增亮與收縮才讀得出「正在蓄力」。
+   尺寸紀律：一般版畫布 172（半寬 86）、最終版 208（半寬 104），但材質層的外框與兩層
+   輪廓光還會往外吃約 5px，所以任何剪影都必須留在 ±(半寬 − 8) 之內，否則邊光會被切平、
+   看起來像破圖而不是發光。下面每一隻的註解都寫了自己守住的那條界限。 */
+
+// ── 熔毀鑄造廠：重型工業機甲 ───────────────────────────────────────────────
+// 為什麼是「寬肩 + 履帶底盤」而不是又一隻人形：這關的關鍵字是熔爐與鐵水，最直覺的形體
+// 就是「一座會走路的工廠」。辨識點放在四個分離的塊體：兩個肩甲、兩條履帶，塊體之間
+// 刻意留出腰身凹陷 —— 玩家在遊戲內尺寸下仍然數得出零件。列車是一整塊連續長方體、
+// 沙蟲是一根分節柱，都沒有「分離的塊體」這個特徵。
+// 動畫節拍分給三個部位：履帶咬合、爐口呼吸、排渣火星，全部寫成 t 的相位函式，
+// 8 幀循環才接得回第 0 幀。
+function drawBossFoundry(x, t, r, charging, final) {
+  const p = t * Math.PI * 2;
+  const breathe = 0.5 + 0.5 * Math.sin(p);          // 0~1：爐火呼吸
+  const shiver = Math.sin(p * 2) * r * 0.012;       // 引擎怠速震動；雙倍頻才像機械而不是呼吸
+  const tread = (t * 7) % 1;                        // 履帶相位：7 齒，一週期剛好走完一齒
+
+  // 貼地陰影要寬（重底盤），再補一層爐渣的暖色反光：純黑陰影會讓履帶看起來浮在空中，
+  // 而這關的材質是「地縫鐵水」，底部的暖反光順便把機甲跟關卡地板綁在一起。
+  shadow(x, r * 1.6, r * 1.16);
+  const pool = x.createRadialGradient(0, r * 1.06, 0, 0, r * 1.06, r * 1.5);
+  pool.addColorStop(0, charging ? 'rgba(255,186,96,0.5)' : 'rgba(255,154,60,0.26)');
+  pool.addColorStop(1, 'rgba(255,154,60,0)');
+  x.fillStyle = pool;
+  x.beginPath();
+  x.ellipse(0, r * 1.06, r * 1.5, r * 0.46, 0, 0, Math.PI * 2);
+  x.fill();
+
+  const aura = r + (final ? 30 : 20);
+  const ag = x.createRadialGradient(0, 0, r * 0.6, 0, 0, aura);
+  ag.addColorStop(0, charging ? 'rgba(255,196,110,0.6)' : final ? 'rgba(255,154,60,0.34)' : 'rgba(255,154,60,0.2)');
+  ag.addColorStop(1, 'rgba(255,154,60,0)');
+  x.fillStyle = ag;
+  x.beginPath();
+  x.arc(0, 0, aura, 0, Math.PI * 2);
+  x.fill();
+
+  // 排氣煙囪：畫在主體之前（它們長在肩線後面）。管口只放「一顆會呼吸的熱光」而不畫煙 ——
+  // 煙團在 8 幀裡一定變成閃爍雜訊，一顆亮度固定的光點反而穩定讀成「正在排熱」。
+  // 高度與光暈半徑一起受限：光暈半徑抓 1.8×管口半徑（一開始用 3×，結果 final_charging
+  // 的光暈頂端直接撞到畫布上緣被切平，量到 bbox margin-top = 0）。
+  // 現在最高一根的管口在 -1.53r（=76.5px）、光暈再往上吃 16.6px → 離上緣還有 11px。
+  const stackH = final ? r * 0.6 : r * 0.62;
+  const stacks = final
+    ? [[-r * 0.54, 0.95], [r * 0.54, 0.95], [0, 1.15]]
+    : [[-r * 0.5, 0.9], [r * 0.5, 1.0]];
+  for (let i = 0; i < stacks.length; i++) {
+    const sx0 = stacks[i][0];
+    const top = -r * 0.84 - stackH * stacks[i][1];
+    x.fillStyle = '#2b2521';
+    x.strokeStyle = '#14100d';
+    x.lineWidth = 2.4;
+    x.beginPath();
+    x.moveTo(sx0 - r * 0.15, -r * 0.8);
+    x.lineTo(sx0 - r * 0.12, top);
+    x.lineTo(sx0 + r * 0.12, top);
+    x.lineTo(sx0 + r * 0.15, -r * 0.8);
+    x.closePath();
+    x.fill();
+    x.stroke();
+    // 管口的加強環 + 左側高光：沒有這兩筆，煙囪在深色關卡裡只是一根沒有輪廓的暗管。
+    x.fillStyle = '#3d3630';
+    x.strokeStyle = '#100d0b';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.rect(sx0 - r * 0.17, top - r * 0.05, r * 0.34, r * 0.11);
+    x.fill();
+    x.stroke();
+    x.strokeStyle = 'rgba(226,214,192,0.3)';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(sx0 - r * 0.11, top + r * 0.04);
+    x.lineTo(sx0 - r * 0.13, -r * 0.82);
+    x.stroke();
+    const hr = r * (charging ? 0.16 : 0.11) * (0.85 + 0.3 * Math.sin(p + i));
+    const hg = x.createRadialGradient(sx0, top, 0, sx0, top, hr * 1.8);
+    hg.addColorStop(0, charging ? 'rgba(255,252,232,0.95)' : 'rgba(255,190,110,0.8)');
+    hg.addColorStop(1, 'rgba(255,154,60,0)');
+    x.fillStyle = hg;
+    x.beginPath();
+    x.arc(sx0, top, hr * 1.8, 0, Math.PI * 2);
+    x.fill();
+    // charging：管口往上噴一小段火舌。長度吃 t，所以它是「正在噴」而不是貼圖。
+    if (charging) {
+      x.fillStyle = 'rgba(255,224,150,0.75)';
+      x.beginPath();
+      x.moveTo(sx0 - r * 0.1, top);
+      x.lineTo(sx0, top - r * (0.2 + 0.07 * Math.sin(p * 2 + i)));
+      x.lineTo(sx0 + r * 0.1, top);
+      x.closePath();
+      x.fill();
+    }
+  }
+
+  // 履帶底盤（左右各一條、彼此分離）：這是整隻最寬的部分，也是「重」的來源。
+  // 外緣抓在 ±1.68r（final =84px，半寬 104 → 留 20px），寬度是這隻最需要守住的界限。
+  // 履帶齒是 7 顆等距短豎線、整排一起位移，位移量剛好一個齒距 → 循環時接得回原點；
+  // 若讓齒「個別」動，8 幀看起來會像在抖而不是在跑。
+  const podX = r * 1.26;
+  const podHW = r * 0.42;
+  const tTop = r * 0.44;
+  const tBot = r * 1.12;
+  for (const s of [-1, 1]) {
+    const cx = s * podX;
+    const L = cx - podHW;
+    const R = cx + podHW;
+    const tg = x.createLinearGradient(0, tTop, 0, tBot);
+    tg.addColorStop(0, '#4a423a');
+    tg.addColorStop(0.45, '#282320');
+    tg.addColorStop(1, '#151210');
+    x.fillStyle = tg;
+    x.strokeStyle = '#0d0a08';
+    x.lineWidth = 2.6;
+    // 圓角履帶外型：四個角用二次曲線收，比純矩形更像橡膠帶。
+    x.beginPath();
+    x.moveTo(L + r * 0.12, tTop);
+    x.lineTo(R - r * 0.12, tTop);
+    x.quadraticCurveTo(R, tTop, R, tTop + r * 0.12);
+    x.lineTo(R, tBot - r * 0.12);
+    x.quadraticCurveTo(R, tBot, R - r * 0.12, tBot);
+    x.lineTo(L + r * 0.12, tBot);
+    x.quadraticCurveTo(L, tBot, L, tBot - r * 0.12);
+    x.lineTo(L, tTop + r * 0.12);
+    x.quadraticCurveTo(L, tTop, L + r * 0.12, tTop);
+    x.closePath();
+    x.fill();
+    x.stroke();
+    // 履帶齒
+    x.strokeStyle = 'rgba(196,186,168,0.5)';
+    x.lineWidth = 2;
+    const teeth = 7;
+    const span = podHW * 2 - r * 0.2;
+    for (let k = 0; k < teeth; k++) {
+      const tx = L + r * 0.1 + ((k / teeth + tread) % 1) * span;
+      x.beginPath();
+      x.moveTo(tx, tBot - r * 0.02);
+      x.lineTo(tx, tBot - r * 0.16);
+      x.stroke();
+    }
+    // 承載輪：四顆，輻條吃 t 旋轉。輪子是旋轉件，8 幀循環看不出接縫。
+    for (let k = 0; k < 4; k++) {
+      const wx = L + r * 0.2 + (k / 3) * (podHW * 2 - r * 0.4);
+      const wy = tBot - r * 0.05;
+      x.fillStyle = '#191512';
+      x.beginPath();
+      x.arc(wx, wy, r * 0.13, 0, Math.PI * 2);
+      x.fill();
+      x.strokeStyle = '#5a5048';
+      x.lineWidth = 1.6;
+      x.stroke();
+      x.strokeStyle = 'rgba(214,196,160,0.6)';
+      x.lineWidth = 1.6;
+      const wa = p * 1.6 + k * 0.9;
+      x.beginPath();
+      x.moveTo(wx - Math.cos(wa) * r * 0.09, wy - Math.sin(wa) * r * 0.09);
+      x.lineTo(wx + Math.cos(wa) * r * 0.09, wy + Math.sin(wa) * r * 0.09);
+      x.stroke();
+    }
+    // 履帶護板的高光：左上光源 → 只在上緣畫一條亮邊，履帶的厚度就出來了。
+    x.strokeStyle = 'rgba(230,214,186,0.32)';
+    x.lineWidth = 2.2;
+    x.beginPath();
+    x.moveTo(L + r * 0.16, tTop + r * 0.06);
+    x.lineTo(R - r * 0.16, tTop + r * 0.06);
+    x.stroke();
+    // charging：履帶接縫漏出暖光 —— 內部鐵水正在加壓，光從機械縫裡透出來最好讀。
+    if (charging) {
+      x.fillStyle = 'rgba(255,170,80,0.5)';
+      x.beginPath();
+      x.rect(L + r * 0.04, tTop + r * 0.02, podHW * 2 - r * 0.08, r * 0.06);
+      x.fill();
+    }
+  }
+
+  // 底盤中央塊 + 前方的排渣斜板：把兩條履帶連起來，並給底部一個方向性的楔形。
+  x.fillStyle = '#241f1b';
+  x.strokeStyle = '#100d0b';
+  x.lineWidth = 2.4;
+  x.beginPath();
+  x.rect(-r * 1.0, r * 0.42, r * 2.0, r * 0.62);
+  x.fill();
+  x.stroke();
+  x.fillStyle = '#312a24';
+  x.beginPath();
+  x.moveTo(-r * 0.9, r * 1.06);
+  x.lineTo(r * 1.0, r * 1.06);
+  x.lineTo(r * 0.86, r * 0.8);
+  x.lineTo(-r * 0.78, r * 0.8);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 危險斜紋：工業機具的視覺語彙，一眼就知道「這是機器不是生物」。
+  // 只畫中央一小塊 —— 斜紋鋪滿整片會把金屬的明暗層次吃掉。
+  x.save();
+  x.beginPath();
+  x.rect(-r * 0.34, r * 0.7, r * 0.68, r * 0.24);
+  x.clip();
+  x.fillStyle = '#191411';
+  x.fillRect(-r * 0.34, r * 0.7, r * 0.68, r * 0.24);
+  x.fillStyle = '#ff9a3c';
+  for (let i = -1; i < 4; i++) {
+    x.save();
+    x.translate(-r * 0.3 + i * r * 0.22, r * 0.82);
+    x.rotate(-0.6);
+    x.fillRect(-r * 0.05, -r * 0.22, r * 0.1, r * 0.44);
+    x.restore();
+  }
+  x.restore();
+
+  x.save();
+  x.translate(0, shiver);
+
+  // 軀幹：上寬下窄的梯形 + 腰身凹陷。用線性漸層（上亮下暗）而不是 sphere()：
+  // 這是一塊裝甲板不是球，球面漸層會在胸口中央留一顆亮斑，像吹漲的氣球。
+  const bodyG = x.createLinearGradient(-r * 0.7, -r * 0.95, r * 0.5, r * 0.6);
+  bodyG.addColorStop(0, final ? '#6d6055' : '#5c5148');
+  bodyG.addColorStop(0.45, '#3a332d');
+  bodyG.addColorStop(1, '#1d1916');
+  x.fillStyle = bodyG;
+  x.strokeStyle = '#100d0b';
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(-r * 1.02, -r * 0.92);
+  x.lineTo(r * 1.02, -r * 0.92);
+  x.lineTo(r * 1.08, -r * 0.42);
+  x.lineTo(r * 0.74, r * 0.2);
+  x.lineTo(r * 0.88, r * 0.56);
+  x.lineTo(-r * 0.88, r * 0.56);
+  x.lineTo(-r * 0.74, r * 0.2);
+  x.lineTo(-r * 1.08, -r * 0.42);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 裝甲接縫：只留三條（肩線一條、腰兩條）。長方形軀幹如果沒有這些線，縮小後會變成一塊磚。
+  x.strokeStyle = 'rgba(14,11,9,0.72)';
+  x.lineWidth = 2.2;
+  x.beginPath();
+  x.moveTo(-r * 0.98, -r * 0.62);
+  x.lineTo(r * 0.98, -r * 0.62);
+  x.stroke();
+  for (const s of [-1, 1]) {
+    x.beginPath();
+    x.moveTo(s * r * 0.5, -r * 0.62);
+    x.lineTo(s * r * 0.62, r * 0.16);
+    x.stroke();
+  }
+  // 鉚釘：沿肩線打一排，final 多打一排。更多鉚釘比更多顏色更像「同一台機器的加強版」。
+  x.fillStyle = '#c9a468';
+  for (const [ry0, cnt] of [[-r * 0.78, 9], final ? [r * 0.3, 7] : null].filter(Boolean)) {
+    for (let i = 0; i < cnt; i++) {
+      x.beginPath();
+      x.arc(-r * 0.86 + (i / (cnt - 1)) * r * 1.72, ry0, 1.7, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+  // 側面散熱柵：暗底 + 亮柵條（暗線在深色金屬上讀不出來），final 多一格。
+  for (let g = 0; g < (final ? 2 : 1); g++) {
+    const gx = -r * 0.62 + g * r * 0.5;
+    const gy = -r * 0.24;
+    const gw = r * 0.38;
+    const gh = r * 0.3;
+    x.fillStyle = '#120e0b';
+    x.strokeStyle = '#0a0705';
+    x.lineWidth = 1.8;
+    x.beginPath();
+    x.rect(gx - gw / 2, gy - gh / 2, gw, gh);
+    x.fill();
+    x.stroke();
+    for (let i = 0; i < 3; i++) {
+      x.strokeStyle = `rgba(255,154,60,${(charging ? 0.95 : 0.55) - i * 0.08})`;
+      x.lineWidth = 2.2;
+      const yy = gy - gh / 2 + 2.5 + i * (gh / 3.2);
+      x.beginPath();
+      x.moveTo(gx - gw / 2 + 1.5, yy);
+      x.lineTo(gx + gw / 2 - 1.5, yy);
+      x.stroke();
+    }
+  }
+
+  // 胸口爐口：整隻的視覺中心，也是唯一讀得出「蓄力」的部件。
+  // 呼吸同時推半徑與亮度（只有亮度會像壞掉的燈、只有半徑會像在縮放），兩者一起吃 t
+  // 才像真的在燃燒。口徑抓 0.36~0.40r，比頭還大 —— 爐口是牠的「臉」。
+  const mcy = -r * 0.3;
+  const mouthR = r * (final ? 0.4 : 0.36) * (1 + breathe * 0.07);
+  x.fillStyle = '#211c18';
+  x.strokeStyle = '#0e0b09';
+  x.lineWidth = 3;
+  x.beginPath();
+  x.arc(0, mcy, mouthR * 1.42, 0, Math.PI * 2);
+  x.fill();
+  x.stroke();
+  const mg = x.createRadialGradient(0, mcy, mouthR * 0.1, 0, mcy, mouthR);
+  mg.addColorStop(0, charging ? 'rgba(255,255,238,0.98)' : `rgba(255,${Math.round(196 + breathe * 48)},${Math.round(96 + breathe * 66)},0.95)`);
+  mg.addColorStop(0.45, 'rgba(255,140,50,0.92)');
+  mg.addColorStop(1, 'rgba(120,40,10,0.95)');
+  x.fillStyle = mg;
+  x.beginPath();
+  x.arc(0, mcy, mouthR, 0, Math.PI * 2);
+  x.fill();
+  // 爐柵三根橫條：有柵條才讀得出「這是爐門不是眼睛」。一顆亮圓掛在怪物胸口很容易被
+  // 看成瞳孔，加上橫條就瞬間變成人造物。弦長取 0.86R 才不會凸出圓外。
+  x.strokeStyle = '#171310';
+  x.lineWidth = r * 0.055;
+  for (let i = -1; i <= 1; i++) {
+    const yy = mcy + i * mouthR * 0.42;
+    const half = mouthR * 0.86 * Math.sqrt(Math.max(0, 1 - (i * 0.42) * (i * 0.42)));
+    x.beginPath();
+    x.moveTo(-half, yy);
+    x.lineTo(half, yy);
+    x.stroke();
+  }
+  // 爐口的溢出光：蓄力時整片胸口被照亮，這是「牠正在加熱」最直覺的讀法。
+  const spill = x.createRadialGradient(0, mcy, mouthR * 0.5, 0, mcy, mouthR * (charging ? 2.6 : 1.8));
+  spill.addColorStop(0, charging ? 'rgba(255,236,190,0.5)' : 'rgba(255,154,60,0.22)');
+  spill.addColorStop(1, 'rgba(255,154,60,0)');
+  x.fillStyle = spill;
+  x.beginPath();
+  x.arc(0, mcy, mouthR * (charging ? 2.6 : 1.8), 0, Math.PI * 2);
+  x.fill();
+
+  // 兩側導管：把爐口接到肩甲，順便給胸口一條斜線（純水平/垂直的裝甲會很呆）。
+  for (const s of [-1, 1]) {
+    x.strokeStyle = '#2a2420';
+    x.lineWidth = r * 0.15;
+    x.lineCap = 'round';
+    x.beginPath();
+    x.moveTo(s * mouthR * 0.92, mcy - mouthR * 0.24);
+    x.lineTo(s * r * 0.84, -r * 0.7);
+    x.stroke();
+    x.strokeStyle = charging ? 'rgba(255,240,200,0.95)' : 'rgba(255,154,60,0.55)';
+    x.lineWidth = r * 0.045;
+    x.beginPath();
+    x.moveTo(s * mouthR * 0.92, mcy - mouthR * 0.24);
+    x.lineTo(s * r * 0.84, -r * 0.7);
+    x.stroke();
+  }
+
+  // 肩甲：兩個獨立的塊體，是「寬肩」的來源。比軀幹亮一階（朝上的面吃得到頂光），
+  // 而且外緣切角 —— 方塊肩會像貨櫃，切角才像機甲。外緣 ±1.55r，安全。
+  for (const s of [-1, 1]) {
+    const px0 = s * r * 1.02;
+    const pw = s * r * 0.46;
+    x.fillStyle = final ? '#5f5347' : '#4b423a';
+    x.strokeStyle = '#0e0b09';
+    x.lineWidth = 2.8;
+    x.beginPath();
+    x.moveTo(px0, -r * 0.96);
+    x.lineTo(px0 + pw, -r * 0.84);
+    x.lineTo(px0 + pw * 1.04, -r * 0.28);
+    x.lineTo(px0 + pw * 0.46, -r * 0.16);
+    x.lineTo(px0, -r * 0.34);
+    x.closePath();
+    x.fill();
+    x.stroke();
+    x.fillStyle = '#c9a468';
+    for (let i = 0; i < 3; i++) {
+      x.beginPath();
+      x.arc(px0 + pw * (0.3 + i * 0.28), -r * 0.66, 1.6, 0, Math.PI * 2);
+      x.fill();
+    }
+    // final：肩甲上加開熔爐口。肩甲的寬度已經到頂，所以 final 的增量只能往上/往內長。
+    if (final) {
+      const fx = px0 + pw * 0.62;
+      const fy = -r * 0.62;
+      const fg = x.createRadialGradient(fx, fy, 0, fx, fy, r * 0.26);
+      fg.addColorStop(0, charging ? 'rgba(255,255,240,0.95)' : 'rgba(255,200,120,0.85)');
+      fg.addColorStop(1, 'rgba(255,154,60,0)');
+      x.fillStyle = fg;
+      x.beginPath();
+      x.arc(fx, fy, r * 0.26, 0, Math.PI * 2);
+      x.fill();
+      x.fillStyle = '#171310';
+      x.beginPath();
+      x.arc(fx, fy, r * 0.12, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+
+  // 液壓臂 + 工具：左邊鐵鎚、右邊夾爪。不對稱的兩隻手讓剪影一眼分得出左右，
+  // 也避免整體變成完全鏡像的圖示。手臂隨 t 微幅升降（液壓在找壓力平衡），
+  // 幅度刻意小於鎚頭半徑，否則看起來像在揮而不是在站。
+  const armLift = Math.sin(p) * r * 0.05;
+  const bot = r * 0.3 + armLift;
+  const grip = charging ? 0.5 : 1;      // 夾爪開合：蓄力時收緊，比伸手更好讀
+  for (const s of [-1, 1]) {
+    const ax = s * r * 1.24;
+    x.strokeStyle = '#241f1b';
+    x.lineWidth = r * 0.24;
+    x.beginPath();
+    x.moveTo(ax, -r * 0.4);
+    x.lineTo(ax + s * r * 0.03, bot);
+    x.stroke();
+    // 活塞桿（亮色細線）貼在液壓缸外側，給手臂一條高光
+    x.strokeStyle = '#8d8172';
+    x.lineWidth = r * 0.07;
+    x.beginPath();
+    x.moveTo(ax + s * r * 0.11, -r * 0.32);
+    x.lineTo(ax + s * r * 0.07, bot - r * 0.02);
+    x.stroke();
+    if (s < 0) {
+      // 鐵鎚頭：方塊 + 左上亮面
+      x.save();
+      x.translate(ax - r * 0.02, bot + r * 0.3);
+      x.fillStyle = '#3a332d';
+      x.strokeStyle = '#0d0a08';
+      x.lineWidth = 2.6;
+      x.beginPath();
+      x.rect(-r * 0.34, -r * 0.2, r * 0.68, r * 0.4);
+      x.fill();
+      x.stroke();
+      x.fillStyle = 'rgba(226,214,192,0.22)';
+      x.fillRect(-r * 0.32, -r * 0.18, r * 0.66, r * 0.1);
+      if (charging) {
+        const hgl = x.createRadialGradient(0, r * 0.22, 0, 0, r * 0.22, r * 0.42);
+        hgl.addColorStop(0, 'rgba(255,214,150,0.8)');
+        hgl.addColorStop(1, 'rgba(255,154,60,0)');
+        x.fillStyle = hgl;
+        x.beginPath();
+        x.arc(0, r * 0.22, r * 0.42, 0, Math.PI * 2);
+        x.fill();
+      }
+      x.restore();
+    } else {
+      // 夾爪：兩片顎往內收。爪尖 x 最遠約 1.6r，仍在 1.68r 的履帶範圍內。
+      for (const gdir of [-1, 1]) {
+        x.save();
+        x.translate(ax + r * 0.02, bot + r * 0.26);
+        x.rotate(gdir * 0.42 * grip);
+        x.fillStyle = '#3f3830';
+        x.strokeStyle = '#0d0a08';
+        x.lineWidth = 2.4;
+        x.beginPath();
+        x.moveTo(-r * 0.1, 0);
+        x.lineTo(r * 0.11, 0);
+        x.lineTo(r * 0.05, r * 0.46);
+        x.lineTo(-r * 0.02, r * 0.4);
+        x.closePath();
+        x.fill();
+        x.stroke();
+        x.restore();
+      }
+    }
+  }
+
+  // final：背上的鍋爐艙（兩片側板 + 一排壓力鉚釘）。它必須畫在駕駛艙**之前** ——
+  // 鍋爐的範圍是 ±0.72r、-1.5r~-0.98r，而駕駛艙正好坐在 -0.94r~-1.3r，先畫鍋爐才不會
+  // 把整顆頭蓋掉（先前畫在後面，final 版直接變成沒有頭的方塊）。
+  if (final) {
+    x.fillStyle = '#3d3630';
+    x.strokeStyle = '#0f0c0a';
+    x.lineWidth = 2.4;
+    x.beginPath();
+    x.moveTo(-r * 0.72, -r * 1.5);
+    x.lineTo(r * 0.72, -r * 1.5);
+    x.lineTo(r * 0.84, -r * 0.98);
+    x.lineTo(-r * 0.84, -r * 0.98);
+    x.closePath();
+    x.fill();
+    x.stroke();
+    x.strokeStyle = '#191411';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(-r * 0.74, -r * 1.24);
+    x.lineTo(r * 0.74, -r * 1.24);
+    x.stroke();
+    x.fillStyle = '#c9a468';
+    for (let i = 0; i < 5; i++) {
+      x.beginPath();
+      x.arc(-r * 0.56 + i * r * 0.28, -r * 1.37, 1.6, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+
+  // 駕駛艙（頭）：刻意做小。重機甲的頭一大就變成人形機器人；頭小才顯得軀幹厚重。
+  // 面罩是一條橫向的暖光縫，跟胸口的圓爐口形成「圓 vs 線」的對比。頂點 -1.3r（=-65px）。
+  x.fillStyle = '#332d28';
+  x.strokeStyle = '#0d0a08';
+  x.lineWidth = 2.6;
+  x.beginPath();
+  x.moveTo(-r * 0.42, -r * 0.94);
+  x.lineTo(r * 0.42, -r * 0.94);
+  x.lineTo(r * 0.34, -r * 1.3);
+  x.lineTo(-r * 0.34, -r * 1.3);
+  x.closePath();
+  x.fill();
+  x.stroke();
+  const vg = x.createLinearGradient(-r * 0.3, 0, r * 0.3, 0);
+  vg.addColorStop(0, charging ? 'rgba(255,255,240,0.98)' : 'rgba(255,196,120,0.92)');
+  vg.addColorStop(1, 'rgba(255,140,50,0.7)');
+  x.fillStyle = vg;
+  x.fillRect(-r * 0.3, -r * 1.2, r * 0.6, r * 0.09);
+  const visor = x.createRadialGradient(0, -r * 1.16, 0, 0, -r * 1.16, r * 0.5);
+  visor.addColorStop(0, 'rgba(255,190,110,0.34)');
+  visor.addColorStop(1, 'rgba(255,154,60,0)');
+  x.fillStyle = visor;
+  x.beginPath();
+  x.arc(0, -r * 1.16, r * 0.5, 0, Math.PI * 2);
+  x.fill();
+
+  // 排渣管：腰際往外下方的短管，管口在蓄力時噴火星。火星位置用 (i/n + t) % 1 算，
+  // 一週期剛好走完一圈 → 8 幀接回第 0 幀時不會有粒子憑空消失。
+  for (const s of [-1, 1]) {
+    const sx0 = s * r * 0.92;
+    const sy0 = r * 0.46;
+    const tipX = sx0 + s * r * 0.36;
+    const tipY = sy0 + r * 0.24;
+    x.strokeStyle = '#2b2521';
+    x.lineWidth = r * 0.14;
+    x.beginPath();
+    x.moveTo(sx0, sy0 - r * 0.1);
+    x.lineTo(tipX, tipY);
+    x.stroke();
+    const tg2 = x.createRadialGradient(tipX, tipY, 0, tipX, tipY, r * (charging ? 0.34 : 0.2));
+    tg2.addColorStop(0, charging ? 'rgba(255,248,220,0.95)' : 'rgba(255,170,80,0.7)');
+    tg2.addColorStop(1, 'rgba(255,154,60,0)');
+    x.fillStyle = tg2;
+    x.beginPath();
+    x.arc(tipX, tipY, r * (charging ? 0.34 : 0.2), 0, Math.PI * 2);
+    x.fill();
+    const n = charging ? 5 : 2;
+    for (let i = 0; i < n; i++) {
+      const k = (i / n + t * (charging ? 2 : 1)) % 1;
+      x.fillStyle = `rgba(255,${Math.round(220 - 60 * k)},${Math.round(150 - 90 * k)},${0.85 * (1 - k)})`;
+      x.beginPath();
+      x.arc(tipX + s * k * r * 0.3, tipY + k * r * 0.36 - Math.sin(k * Math.PI) * r * 0.1,
+        r * 0.035 * (1 - k * 0.4), 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+
+  // charging：肩甲蒸氣 + 爐渣池冒泡。粒子/氣團數量刻意少（兩道蒸氣、三顆氣泡）——
+  // 8 幀循環下粒子一多就會被看成閃爍雜訊，少才讀得出「壓力正在上升」。
+  if (charging) {
+    for (const s of [-1, 1]) {
+      const jx = s * r * 1.28;
+      const jy = -r * 0.9;
+      const jg = x.createRadialGradient(jx, jy, 0, jx, jy, r * 0.34);
+      jg.addColorStop(0, 'rgba(255,244,214,0.55)');
+      jg.addColorStop(1, 'rgba(255,200,120,0)');
+      x.fillStyle = jg;
+      x.beginPath();
+      x.arc(jx, jy - Math.abs(Math.sin(p + (s > 0 ? 0.4 : 0))) * r * 0.16, r * 0.34, 0, Math.PI * 2);
+      x.fill();
+    }
+    for (let i = 0; i < 3; i++) {
+      const bx = -r * 0.9 + i * r * 0.9;
+      const k = (t * 1.5 + i / 3) % 1;
+      x.fillStyle = `rgba(255,210,140,${0.5 * (1 - k)})`;
+      x.beginPath();
+      x.arc(bx, r * 1.06 - k * r * 0.5, r * 0.05 * (1 - k * 0.5), 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+  x.restore();
+}
+
+// ── 霜封虛空：冰封巨像 ─────────────────────────────────────────────────────
+// 為什麼是「直立窄長」而不是又一顆冰球：霜的主題很容易畫成「白色的圓」，那會直接撞上
+// 街頭/lab 的球體剪影。這裡改賭**長寬比**：實心 bbox 只有約 1.5r 寬、2.8r 高，是全場
+// 唯一的「細高」形狀；軀幹做成上下都收尖的六角冰柱，重心垂直，看起來像一根插在地上的
+// 冰錐而不是一團東西。
+// 可動的部分刻意全部交給「符文環」：冰是剛體、不該蠕動，讓環吃 t 旋轉與收縮，既有動畫
+// 又不會讓冰看起來像果凍。符文環同時是蓄力指示器 —— 環往內收＝正在聚能。
+function drawBossFrostvoid(x, t, r, charging, final) {
+  const p = t * Math.PI * 2;
+  const spin = p;
+  const pulse = 0.5 + 0.5 * Math.sin(p * 1.5);      // 核心明滅（1.5 倍頻：跟環的轉速錯開才不呆板）
+  const shrink = charging ? 0.66 : 1;              // 蓄力：符文環往內收（聚能）
+  const shiver = Math.sin(p * 3) * r * 0.006;      // 極輕的震動：冰巨像仍然在「活著」
+
+  // 貼地：冰是插在地上的，陰影要窄（寬陰影會讓細高的冰錐看起來在飄），
+  // 再加一圈貼地的霜霧交代「這裡的溫度不一樣」。
+  shadow(x, r * 0.68, r * 1.14);
+  const mist = x.createRadialGradient(0, r * 1.0, 0, 0, r * 1.0, r * 1.15);
+  mist.addColorStop(0, charging ? 'rgba(190,170,255,0.44)' : 'rgba(157,140,255,0.26)');
+  mist.addColorStop(1, 'rgba(157,140,255,0)');
+  x.fillStyle = mist;
+  x.beginPath();
+  x.ellipse(0, r * 1.0, r * 1.15, r * 0.4, 0, 0, Math.PI * 2);
+  x.fill();
+
+  const aura = r + (final ? 30 : 20);
+  const ag = x.createRadialGradient(0, -r * 0.2, r * 0.5, 0, -r * 0.2, aura);
+  ag.addColorStop(0, charging ? 'rgba(200,180,255,0.58)' : final ? 'rgba(157,140,255,0.32)' : 'rgba(157,140,255,0.2)');
+  ag.addColorStop(1, 'rgba(157,140,255,0)');
+  x.fillStyle = ag;
+  x.beginPath();
+  x.arc(0, -r * 0.2, aura, 0, Math.PI * 2);
+  x.fill();
+
+  // 符文：每個字是「三筆」的小刻痕。想在 8~14px 內畫出可辨識的字型是不可能的，
+  // 但三筆的節奏縮小之後仍然讀成「有一圈東西在轉」—— 這就夠了。
+  const rune = (rx0, ry0, s, a, scale, alpha) => {
+    x.save();
+    x.translate(rx0, ry0);
+    x.rotate(a);
+    x.scale(scale, scale);
+    const rg = x.createRadialGradient(0, 0, 0, 0, 0, s * 2.8);
+    rg.addColorStop(0, `rgba(157,140,255,${0.5 * alpha})`);
+    rg.addColorStop(1, 'rgba(157,140,255,0)');
+    x.fillStyle = rg;
+    x.beginPath();
+    x.arc(0, 0, s * 2.8, 0, Math.PI * 2);
+    x.fill();
+    x.strokeStyle = `rgba(236,230,255,${alpha})`;
+    x.lineWidth = r * 0.042;
+    x.beginPath();
+    x.moveTo(-s, -s * 0.9);
+    x.lineTo(s * 0.9, s * 0.2);
+    x.moveTo(-s * 0.7, s);
+    x.lineTo(s * 0.8, -s * 0.6);
+    x.moveTo(0, -s * 1.2);
+    x.lineTo(0, s * 1.2);
+    x.stroke();
+    x.restore();
+  };
+  // 環的後半（橢圓上半）先畫、前半後畫 —— 環才會「穿過」身體而不是貼在前面。
+  // 前後的尺寸差（1 ± 0.22 sin a）是唯一能在 2D 做出一圈東西在繞的方法。
+  const ring = (cy0, rx, ry, n, phase, front) => {
+    for (let i = 0; i < n; i++) {
+      const a = phase + (i / n) * Math.PI * 2;
+      const sn = Math.sin(a);
+      if ((sn < 0) === front) continue;
+      const scale = (1 + 0.24 * sn) * (charging ? 0.84 : 1);
+      rune(Math.cos(a) * rx, cy0 + sn * ry, r * 0.1, a + Math.PI / 2, scale, sn < 0 ? 0.45 : 0.92);
+    }
+  };
+  const rx1 = r * 1.08 * shrink;
+  const ry1 = r * 0.3 * shrink;
+  const ringY = -r * 0.06 + Math.sin(p) * r * 0.05;   // 環會上下浮：蓄力時收縮、平時上下漂
+  ring(ringY, rx1, ry1, final ? 9 : 7, spin, true);
+
+  // 折斷的側刺：三根往外斜插，其中一根刻意「斷平」（尖端是一個平截面）。
+  // 完整的尖刺只是裝飾，平整的斷口才是「這裡受過傷」唯一的視覺證據。
+  const shard = (bx, by, tx, ty, broken) => {
+    x.fillStyle = '#8fa0d8';
+    x.strokeStyle = '#2b3160';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(bx, by - r * 0.09);
+    if (broken) {
+      x.lineTo(tx, ty - r * 0.14);
+      x.lineTo(tx, ty + r * 0.14);
+    } else {
+      x.lineTo(tx, ty);
+    }
+    x.lineTo(bx, by + r * 0.09);
+    x.closePath();
+    x.fill();
+    x.stroke();
+    x.fillStyle = 'rgba(240,248,255,0.4)';
+    x.beginPath();
+    x.moveTo(bx, by - r * 0.07);
+    if (broken) { x.lineTo(tx, ty - r * 0.1); x.lineTo(tx, ty - r * 0.02); }
+    else { x.lineTo(tx, ty); }
+    x.closePath();
+    x.fill();
+  };
+  shard(-r * 0.48, -r * 0.6, -r * 0.92, -r * 0.86, false);
+  shard(r * 0.5, -r * 0.24, r * 0.96, -r * 0.4, false);
+  shard(r * 0.42, r * 0.44, r * 0.74, r * 0.6, true);      // 斷平的那根
+
+  x.save();
+  x.translate(0, shiver);
+
+  // 軀幹：六角冰柱，上下都收尖。輪廓刻意不是平滑的橢圓而是**一段段有稜的折線** ——
+  // 平滑的長橢圓在這個比例下會被讀成火箭或子彈，加了三段折角才讀成「晶體」。
+  // 左半（受光面）與正面分開上色：單一漸層會讓冰柱變成一塊塑膠。
+  const B = [
+    [0, -1.55], [-0.22, -1.3], [-0.34, -1.12], [-0.42, -0.86], [-0.56, -0.48], [-0.6, -0.02],
+    [-0.52, 0.34], [-0.44, 0.6], [-0.34, 0.86], [-0.3, 1.02],
+    [0, 1.08], [0.3, 1.02], [0.34, 0.86], [0.44, 0.6], [0.52, 0.34], [0.6, -0.02],
+    [0.56, -0.48], [0.42, -0.86], [0.34, -1.12], [0.22, -1.3],
+  ].map(([bx, by]) => [bx * r, by * r]);
+  const path = () => {
+    x.beginPath();
+    x.moveTo(B[0][0], B[0][1]);
+    for (let i = 1; i < B.length; i++) x.lineTo(B[i][0], B[i][1]);
+    x.closePath();
+  };
+  path();
+  const iceG = x.createLinearGradient(-r * 0.5, -r * 1.2, r * 0.5, r * 0.9);
+  iceG.addColorStop(0, '#cdd8ff');
+  iceG.addColorStop(0.4, '#7c8ac8');
+  iceG.addColorStop(1, '#2b3160');
+  x.fillStyle = iceG;
+  x.fill();
+  // 正面的一個小平面（中央那一格）：比兩側亮，做出稜線
+  x.fillStyle = 'rgba(226,236,255,0.3)';
+  x.beginPath();
+  x.moveTo(-r * 0.12, -r * 1.34);
+  x.lineTo(r * 0.12, -r * 1.34);
+  x.lineTo(r * 0.2, r * 0.9);
+  x.lineTo(-r * 0.2, r * 0.9);
+  x.closePath();
+  x.fill();
+  // 內部的裂痕：兩條折線。冰的「透明感」來自內部的不連續面，不是來自更亮的表面。
+  x.strokeStyle = 'rgba(255,255,255,0.5)';
+  x.lineWidth = 1.8;
+  x.beginPath();
+  x.moveTo(-r * 0.3, -r * 0.9);
+  x.lineTo(-r * 0.05, -r * 0.5);
+  x.lineTo(-r * 0.22, -r * 0.1);
+  x.lineTo(r * 0.06, r * 0.34);
+  x.stroke();
+  x.strokeStyle = 'rgba(190,200,255,0.42)';
+  x.beginPath();
+  x.moveTo(r * 0.34, -r * 0.72);
+  x.lineTo(r * 0.12, -r * 0.36);
+  x.lineTo(r * 0.3, r * 0.1);
+  x.stroke();
+
+  // 虛空核心：隔著冰看進去的一顆紫色內核。做法是核心畫在冰之上、但只給 0.85 的不透明度，
+  // 再補一層薄霜蓋回去 —— 這樣它讀成「被包在裡面」，而不是貼在胸口的一顆球。
+  const coreY = -r * 0.26;
+  const coreR = r * (charging ? 0.52 : 0.4) * (1 + pulse * 0.26);
+  const cg = x.createRadialGradient(0, coreY, 0, 0, coreY, coreR * 1.9);
+  cg.addColorStop(0, charging ? 'rgba(246,238,255,0.98)' : 'rgba(214,196,255,0.95)');
+  cg.addColorStop(0.35, 'rgba(157,140,255,0.78)');
+  cg.addColorStop(1, 'rgba(157,140,255,0)');
+  x.globalAlpha = 0.88;
+  x.fillStyle = cg;
+  x.beginPath();
+  x.arc(0, coreY, coreR * 1.9, 0, Math.PI * 2);
+  x.fill();
+  x.globalAlpha = 1;
+  x.fillStyle = charging ? '#ffffff' : '#efe8ff';
+  x.beginPath();
+  x.arc(0, coreY, coreR * 0.4, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = 'rgba(226,236,255,0.22)';
+  x.beginPath();
+  x.arc(-r * 0.1, coreY - r * 0.06, coreR * 1.15, 0, Math.PI * 2);
+  x.fill();
+
+  // 冰面的外框：最後畫，讓所有內部細節都收在同一條邊界裡（沒有它，冰會糊在背景上）。
+  path();
+  x.strokeStyle = '#1d2246';
+  x.lineWidth = 3;
+  x.stroke();
+  // 左上的晶面高光：一條長斜線，光源固定在左上。
+  x.strokeStyle = 'rgba(255,255,255,0.55)';
+  x.lineWidth = 2.4;
+  x.beginPath();
+  x.moveTo(-r * 0.36, -r * 0.96);
+  x.lineTo(-r * 0.5, r * 0.1);
+  x.stroke();
+
+  // final：冠狀冰柱。從軀幹上段的晶面往上長，尖端最高 -1.78r（=89px，半寬 104 → 留 15px）。
+  // 冠一定要比軀幹的尖端更高，否則 final 的剪影反而比一般版矮。
+  if (final) {
+    const crown = [[-r * 0.26, -r * 1.16, -r * 0.34, -r * 1.62], [-r * 0.1, -r * 1.3, -r * 0.14, -r * 1.78],
+      [r * 0.06, -r * 1.34, r * 0.1, -r * 1.74], [r * 0.22, -r * 1.2, r * 0.32, -r * 1.6]];
+    for (const [bx0, by0, tx0, ty0] of crown) {
+      x.fillStyle = '#b9c6f5';
+      x.strokeStyle = '#242a55';
+      x.lineWidth = 2;
+      x.beginPath();
+      x.moveTo(bx0 - r * 0.09, by0);
+      x.lineTo(tx0, ty0);
+      x.lineTo(bx0 + r * 0.09, by0);
+      x.closePath();
+      x.fill();
+      x.stroke();
+      x.fillStyle = 'rgba(255,255,255,0.45)';
+      x.beginPath();
+      x.moveTo(bx0 - r * 0.06, by0);
+      x.lineTo(tx0, ty0);
+      x.lineTo(bx0 - r * 0.01, by0);
+      x.closePath();
+      x.fill();
+    }
+  }
+
+  // 發光的符文環（前半）：畫在軀幹與核心之上，環才是「浮在冰外面的」。
+  ring(ringY, rx1, ry1, final ? 9 : 7, spin, false);
+  // final：第二層符文環，位置更高、半徑更小、反向旋轉。兩層反向轉的環讓「巨像的靜」
+  // 與「符文的動」對比更強，也把剪影的上半部撐寬一點。
+  if (final) {
+    const rx2 = r * 0.66 * shrink;
+    const ry2 = r * 0.19 * shrink;
+    for (let i = 0; i < 5; i++) {
+      const a = -spin * 1.3 + (i / 5) * Math.PI * 2;
+      const sn = Math.sin(a);
+      const scale = (1 + 0.24 * sn) * (charging ? 0.84 : 1);
+      rune(Math.cos(a) * rx2, -r * 0.92 + sn * ry2, r * 0.085, a + Math.PI / 2, scale, sn < 0 ? 0.4 : 0.85);
+    }
+  }
+
+  x.restore();
+
+  // 底部的碎冰座：把細高的冰錐「插」在地上，而不是讓尖端懸空。畫在軀幹之後（在它前面），
+  // 順便給底部一個比陰影更硬的落地點。
+  for (const [bx0, bw, bh] of [[-r * 0.44, r * 0.16, r * 0.34], [r * 0.46, r * 0.19, r * 0.42], [-r * 0.12, r * 0.13, r * 0.24]]) {
+    x.fillStyle = '#93a4dd';
+    x.strokeStyle = '#242a55';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(bx0 - bw, r * 1.06);
+    x.lineTo(bx0, r * 1.06 - bh);
+    x.lineTo(bx0 + bw, r * 1.06);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  }
+
+  // 漂浮的霜雪：五顆小點繞著軀幹緩緩上升。位置用 (i/5 + t) % 1 → 循環無縫。
+  for (let i = 0; i < 5; i++) {
+    const k = (i / 5 + t) % 1;
+    const mx = Math.sin(p + i * 2.1) * r * 0.7;
+    const my = r * 1.0 - k * r * 2.3;
+    x.fillStyle = `rgba(226,236,255,${0.5 * (1 - Math.abs(k - 0.5) * 1.6)})`;
+    x.beginPath();
+    x.arc(mx, my, r * 0.035, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // charging：符文環收縮時，能量從環上往核心收束（聚能的方向性），外加核心外一圈衝擊環。
+  // 「向內」是蓄力最不會被誤讀的方向，所以這裡刻意不畫任何往外的特效。
+  if (charging) {
+    for (let i = 0; i < 6; i++) {
+      const a = spin + (i / 6) * Math.PI * 2;
+      const sn = Math.sin(a);
+      const f = (0.35 + 0.6 * ((t * 2 + i / 6) % 1));
+      const x0 = Math.cos(a) * rx1;
+      const y0 = -r * 0.06 + sn * ry1;
+      const x1 = x0 * (1 - f) + 0 * f;
+      const y1 = y0 + (coreY - y0) * f;
+      x.strokeStyle = `rgba(226,214,255,${0.6 * (1 - f)})`;
+      x.lineWidth = 1.8;
+      x.beginPath();
+      x.moveTo(x0, y0);
+      x.lineTo(x1, y1);
+      x.stroke();
+    }
+    x.strokeStyle = `rgba(214,196,255,${0.35 + 0.3 * pulse})`;
+    x.lineWidth = 2;
+    x.beginPath();
+    x.ellipse(0, coreY, coreR * 1.5, coreR * 1.2, 0, 0, Math.PI * 2);
+    x.stroke();
+  }
+}
+
+// ── 虛空裂道：裂道行者（虛空幽影騎士） ─────────────────────────────────────
+// 為什麼是「披風」而不是人形或球：這關的材質是「虛空星盤」——背景本身就是滿版光點，
+// 任何實心大色塊都會被背景吃平。因此本體刻意做成**下襬被撕裂的斗篷**：上半是布的剪影
+// （好讀），下半化成不規則鋸齒與漂浮破片（跟滿版星點混在一起，看起來像正在溶解）。
+// 前六隻的下緣全是完整的（球底、車底、囊底、甲殼底），「碎掉的下襬」是牠獨有的特徵；
+// 而已有的沼澤是上寬下窄、牠是上窄下寬，兩者的重心方向相反。
+// 動畫分三處：破片繞著身體轉、斗篷下襬與刀刃的裂縫吃 t 呼吸、單眼光點的脈動。
+function drawBossVoidroad(x, t, r, charging, final) {
+  const p = t * Math.PI * 2;
+  const drift = Math.sin(p) * r * 0.035;           // 整體漂浮：幽影不該貼在地上
+  const spin = p * 0.75;
+  const rift = 0.5 + 0.5 * Math.sin(p * 2);        // 裂縫的呼吸（雙倍頻，比漂浮急）
+  const reach = charging ? 1.06 : 1;               // 蓄力：裂縫刃伸長（幅度受畫布留邊限制）
+  const flare = final ? 1.06 : 1;                  // final：斗篷下襬更外張
+
+  // 貼地陰影要壓得比本體窄：斗篷的下襬是「散開」的，影子太寬會讓牠看起來只是站在地上，
+  // 而不是浮著。
+  shadow(x, r * 1.05, r * 1.24);
+  const aura = r + (final ? 30 : 20);
+  const ag = x.createRadialGradient(0, -r * 0.1, r * 0.5, 0, -r * 0.1, aura);
+  ag.addColorStop(0, charging ? 'rgba(125,255,232,0.55)' : final ? 'rgba(125,255,232,0.3)' : 'rgba(125,255,232,0.18)');
+  ag.addColorStop(1, 'rgba(125,255,232,0)');
+  x.fillStyle = ag;
+  x.beginPath();
+  x.arc(0, -r * 0.1, aura, 0, Math.PI * 2);
+  x.fill();
+
+  // 漂浮破片環：破片沿橢圓軌道環繞，後半先畫、前半後畫 → 破片會「穿過」身體而不是全貼在
+  // 前面。大小隨軌道角變化（近大遠小），這是 2D 裡做出「繞著轉」最省也最有效的方法。
+  const orbitR = r * 1.32;
+  const orbit = (front) => {
+    const n = final ? 9 : 7;
+    for (let i = 0; i < n; i++) {
+      const a = spin + (i / n) * Math.PI * 2;
+      const sn = Math.sin(a);
+      if ((sn < 0) === front) continue;
+      const ox = Math.cos(a) * orbitR;
+      const oy = -r * 0.08 + sn * r * 0.52 + drift;
+      const sz = r * (0.09 + 0.045 * (1 + sn));
+      x.save();
+      x.translate(ox, oy);
+      x.rotate(a * 1.6);
+      x.fillStyle = '#08171b';
+      x.strokeStyle = charging ? 'rgba(180,255,240,0.9)' : 'rgba(125,255,232,0.55)';
+      x.lineWidth = 1.8;
+      x.beginPath();
+      x.moveTo(-sz, -sz * 0.5);
+      x.lineTo(sz * 0.9, -sz);
+      x.lineTo(sz * 0.5, sz * 0.8);
+      x.lineTo(-sz * 0.7, sz * 0.4);
+      x.closePath();
+      x.fill();
+      x.stroke();
+      x.restore();
+    }
+  };
+  orbit(true);
+
+  x.save();
+  x.translate(0, drift);
+
+  // 裂縫刃（手臂）：把手臂畫成一條裂開的縫而不是實心劍 —— 內側是純黑（虛空的入口）、
+  // 外側是一道青色亮邊。charging 時刃尖往外伸長，黑縫也一起拉長，看起來像把空間撕開。
+  // 刃尖：final_charging 是這隻最寬的狀態（1.60r × 1.06 = 84.8px），加上外框與左上的
+  // 輪廓光約 5px 之後離畫布邊還有 13px。先前用 1.72r 會讓 final_charging 的 bbox 量到
+  // 左邊只剩 7 device px（=3.5px），輪廓光已經被切掉一角。
+  for (const s of [-1, 1]) {
+    const rootX = s * r * 0.8;
+    const rootY = -r * 0.52;
+    const midX = s * r * 1.16;
+    const midY = r * 0.02;
+    const tipX = s * r * (final ? 1.6 : 1.5) * reach;
+    const tipY = r * (0.62 + 0.16 * reach) + Math.sin(p + (s > 0 ? 1.2 : 0)) * r * 0.05;
+    x.beginPath();
+    x.moveTo(rootX, rootY);
+    x.lineTo(midX * 0.96, midY - r * 0.2);
+    x.lineTo(tipX, tipY);
+    x.lineTo(midX * 0.66, midY + r * 0.26);
+    x.lineTo(rootX * 0.74, rootY + r * 0.54);
+    x.closePath();
+    x.fillStyle = '#040b0d';
+    x.fill();
+    x.strokeStyle = charging ? 'rgba(190,255,242,0.95)' : 'rgba(125,255,232,0.6)';
+    x.lineWidth = 2.4;
+    x.stroke();
+    // 刃上的光核：一條比外緣更亮的細線，位置吃 rift → 刃會呼吸。
+    x.strokeStyle = charging ? 'rgba(255,255,255,0.95)' : `rgba(125,255,232,${0.5 + rift * 0.35})`;
+    x.lineWidth = 1.8;
+    x.beginPath();
+    x.moveTo(rootX * 0.9, rootY + r * 0.12);
+    x.lineTo(midX * 0.9, midY - r * 0.02);
+    x.lineTo(tipX * 0.97, tipY - r * 0.03);
+    x.stroke();
+    // 肩甲碎片：兩塊斜的硬邊板。整隻都是柔軟的布與裂縫時，需要一點「騎士」的硬東西
+    // 讓眼睛有地方停（也讓剪影的肩線像肩膀而不是布篷）。
+    x.fillStyle = '#0d2024';
+    x.strokeStyle = 'rgba(125,255,232,0.7)';
+    x.lineWidth = 2.2;
+    x.beginPath();
+    x.moveTo(s * r * 0.7, -r * 0.66);
+    x.lineTo(s * r * 1.12, -r * 0.44);
+    x.lineTo(s * r * 1.0, -r * 0.06);
+    x.lineTo(s * r * 0.62, -r * 0.24);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  }
+
+  // 斗篷本體：上窄（兜帽）下寬（下襬），下緣是一排交錯深淺的鋸齒。
+  // 鋸齒的深度刻意做成 0.66r / 1.22r 兩階而不是隨機 —— 隨機在只有 8 幀的循環裡
+  // 會變成抖動，兩階的節奏才讀成「被撕開的布」。
+  const N = 7;
+  const hemY = r * 0.86;
+  const hemPts = [];
+  for (let i = 0; i <= N; i++) {
+    const u = i / N;
+    const hx0 = -r * 1.4 * flare + u * r * 2.8 * flare;
+    const deep = (i % 2) ? r * 1.22 : r * 0.66;
+    hemPts.push([hx0, deep + Math.sin(p * 2 + i * 1.3) * r * 0.07]);
+  }
+  x.beginPath();
+  x.moveTo(0, -r * 1.58);
+  x.quadraticCurveTo(-r * 0.5, -r * 1.24, -r * 0.6, -r * 0.9);
+  x.quadraticCurveTo(-r * 1.02, -r * 0.7, -r * 1.06 * flare, -r * 0.34);
+  x.quadraticCurveTo(-r * 0.94, r * 0.22, -r * 1.4 * flare, hemY);
+  for (const [hx0, hy0] of hemPts) x.lineTo(hx0, hy0);
+  x.quadraticCurveTo(r * 0.94, r * 0.22, r * 1.06 * flare, -r * 0.34);
+  x.quadraticCurveTo(r * 1.02, -r * 0.7, r * 0.6, -r * 0.9);
+  x.quadraticCurveTo(r * 0.5, -r * 1.24, 0, -r * 1.58);
+  x.closePath();
+  const cloakG = x.createLinearGradient(-r * 0.6, -r * 1.4, r * 0.4, r * 1.1);
+  cloakG.addColorStop(0, '#1d3b42');
+  cloakG.addColorStop(0.42, '#0e2229');
+  cloakG.addColorStop(0.78, '#081a20');
+  // 下襬不能壓到全黑：這關的背景是深色星盤，純黑的下襬會讓「被撕開的鋸齒」整個消失，
+  // 那正是這隻唯一的剪影特徵。留一點亮度，並在下面補一條青色描邊把齒型勾出來。
+  cloakG.addColorStop(1, 'rgba(10,32,38,0.96)');
+  x.fillStyle = cloakG;
+  x.fill();
+  x.strokeStyle = '#04100f';
+  x.lineWidth = 3;
+  x.stroke();
+  // 撕開的下襬：沿著齒型描一條青色亮線，齒尖再點一顆小光點。
+  // 只有填色沒有這條線的話，8 幀裡的齒深變化根本看不出來（實測：整排齒會糊成一條邊）。
+  x.strokeStyle = `rgba(125,255,232,${0.34 + rift * 0.24})`;
+  x.lineWidth = 2.2;
+  x.beginPath();
+  x.moveTo(-r * 1.4 * flare, hemY);
+  for (const [hx0, hy0] of hemPts) x.lineTo(hx0, hy0);
+  x.stroke();
+  for (let i = 0; i < hemPts.length; i++) {
+    if (i % 2 === 0) continue;                      // 只點齒尖（奇數索引＝最深的那些點）
+    x.fillStyle = `rgba(190,255,244,${0.4 + rift * 0.3})`;
+    x.beginPath();
+    x.arc(hemPts[i][0], hemPts[i][1], r * 0.035, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 布面的摺痕：三條從肩往下的弧線。斗篷如果沒有摺痕，縮小後會變成一塊黑色的鐘形。
+  x.strokeStyle = 'rgba(125,255,232,0.22)';
+  x.lineWidth = 2.2;
+  for (const s of [-1, 0, 1]) {
+    x.beginPath();
+    x.moveTo(s * r * 0.42, -r * 0.8);
+    x.quadraticCurveTo(s * r * 0.86, r * 0.1, s * r * 1.1, r * 0.86);
+    x.stroke();
+  }
+  // 布上的星點：這關的背景是星盤，斗篷上留幾顆亮點，牠才像「用虛空做的」而不是黑布。
+  for (let i = 0; i < 7; i++) {
+    const sx0 = Math.sin(i * 2.7) * r * 0.86;
+    const sy0 = -r * 0.7 + ((i * 37) % 100) / 100 * r * 1.7;
+    x.fillStyle = `rgba(190,255,244,${0.2 + 0.25 * rift})`;
+    x.beginPath();
+    x.arc(sx0, sy0, r * 0.026, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 兜帽：兩條曲線收成一個尖。尖點 -1.58r（=79px，半寬 104 → 留 25px）。
+  x.beginPath();
+  x.moveTo(0, -r * 1.58);
+  x.quadraticCurveTo(-r * 0.44, -r * 1.3, -r * 0.52, -r * 0.86);
+  x.quadraticCurveTo(-r * 0.3, -r * 0.96, 0, -r * 0.92);
+  x.quadraticCurveTo(r * 0.3, -r * 0.96, r * 0.52, -r * 0.86);
+  x.quadraticCurveTo(r * 0.44, -r * 1.3, 0, -r * 1.58);
+  x.closePath();
+  const hoodG = x.createLinearGradient(-r * 0.4, -r * 1.5, r * 0.3, -r * 0.9);
+  hoodG.addColorStop(0, '#2b525c');
+  hoodG.addColorStop(1, '#0a1a1f');
+  x.fillStyle = hoodG;
+  x.fill();
+  x.strokeStyle = '#04100f';
+  x.lineWidth = 2.8;
+  x.stroke();
+
+  // 空無的面孔：不畫五官，只留一個純黑洞 + 一顆青色光點。
+  // 「空的」比任何扭曲的臉都可怕，而且在遊戲內尺寸下，扭曲的臉只會變成一團髒點。
+  x.fillStyle = '#02090b';
+  x.beginPath();
+  x.ellipse(0, -r * 1.14, r * 0.26, r * 0.28, 0, 0, Math.PI * 2);
+  x.fill();
+  const eyeG = x.createRadialGradient(0, -r * 1.12, 0, 0, -r * 1.12, r * (charging ? 0.42 : 0.28));
+  eyeG.addColorStop(0, charging ? 'rgba(255,255,255,0.98)' : 'rgba(190,255,244,0.92)');
+  eyeG.addColorStop(0.4, 'rgba(125,255,232,0.5)');
+  eyeG.addColorStop(1, 'rgba(125,255,232,0)');
+  x.fillStyle = eyeG;
+  x.beginPath();
+  x.arc(0, -r * 1.12, r * (charging ? 0.42 : 0.28), 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = charging ? '#ffffff' : '#d8fff8';
+  x.beginPath();
+  x.arc(0, -r * 1.12, r * 0.075 * (1 + rift * 0.25), 0, Math.PI * 2);
+  x.fill();
+
+  // 中央裂縫：從兜帽一路撕到下襬的一條鋸齒光縫。它是「這件斗篷不是布、是裂縫」的關鍵，
+  // 也是畫面唯一貫穿全身的線，縮到最小尺寸時仍然看得見。
+  const seg = 7;
+  x.beginPath();
+  x.moveTo(0, -r * 0.86);
+  for (let i = 1; i <= seg; i++) {
+    const u = i / seg;
+    x.lineTo((i % 2 ? 1 : -1) * r * 0.05 * (0.6 + rift * 0.7), -r * 0.86 + u * r * 1.9);
+  }
+  x.strokeStyle = charging ? 'rgba(255,255,255,0.95)' : `rgba(125,255,232,${0.55 + rift * 0.35})`;
+  x.lineWidth = charging ? 3.4 : 2.4;
+  x.stroke();
+  x.strokeStyle = 'rgba(125,255,232,0.22)';
+  x.lineWidth = 7;
+  x.stroke();
+
+  // final：浮游護盾碎塊。它同時做兩件事 —— 把剪影往左撐寬（final 的體型差異），
+  // 以及提供一塊「實心硬邊」的對比：整隻都是半透明的裂體時，眼睛需要一個停下來的地方。
+  if (final) {
+    x.save();
+    x.translate(-r * 1.22, r * 0.02);
+    x.rotate(-0.22 + Math.sin(p) * 0.05);
+    x.fillStyle = '#0b2229';
+    x.strokeStyle = 'rgba(125,255,232,0.8)';
+    x.lineWidth = 2.6;
+    x.beginPath();
+    x.moveTo(-r * 0.3, -r * 0.38);
+    x.lineTo(r * 0.24, -r * 0.44);
+    x.lineTo(r * 0.32, r * 0.12);
+    x.lineTo(-r * 0.06, r * 0.44);
+    x.lineTo(-r * 0.32, r * 0.14);
+    x.closePath();
+    x.fill();
+    x.stroke();
+    x.strokeStyle = charging ? 'rgba(255,255,255,0.9)' : 'rgba(125,255,232,0.55)';
+    x.lineWidth = 2.2;
+    x.beginPath();
+    x.moveTo(-r * 0.16, -r * 0.24);
+    x.lineTo(r * 0.16, r * 0.02);
+    x.moveTo(r * 0.14, -r * 0.26);
+    x.lineTo(-r * 0.12, r * 0.12);
+    x.stroke();
+    x.restore();
+  }
+
+  x.restore();
+
+  // 破片環的前半：畫在最上層，破片才會從斗篷前面經過。
+  orbit(false);
+
+  // charging：能量往中央裂縫收束 + 下襬被往上吸起。往內、往上是「蓄力」最不會被誤讀的
+  // 方向；向外炸開的特效留給命中，蓄力階段不該看起來已經打出去了。
+  if (charging) {
+    for (let i = 0; i < 6; i++) {
+      const a = spin * 1.6 + (i / 6) * Math.PI * 2;
+      const f = (t * 2 + i / 6) % 1;
+      const x0 = Math.cos(a) * orbitR * 0.9;
+      const y0 = -r * 0.08 + Math.sin(a) * r * 0.5 + drift;
+      x.strokeStyle = `rgba(190,255,242,${0.55 * (1 - f)})`;
+      x.lineWidth = 1.8;
+      x.beginPath();
+      x.moveTo(x0, y0);
+      x.lineTo(x0 * (1 - f * 0.9), y0 + (r * 0.1 - y0) * f * 0.9);
+      x.stroke();
+    }
+  }
+}
+
 /* ==================== 防禦砲塔 ==================== */
 
 function drawTurret(x) {
@@ -3839,10 +4981,11 @@ const BUILDERS = {
   void_obelisk: { w: 40, h: 52, static: true, fn: drawVoidObelisk },
 };
 
-// 關卡主題 Boss：7 主題 × (一般/最終) × (待機/衝鋒)，尺寸與半徑照最終形放大
+// 關卡主題 Boss：10 主題 × (一般/最終) × (待機/衝鋒)，尺寸與半徑照最終形放大
 for (const [theme, fn] of Object.entries({
   street: drawBossStreet, lab: drawBossLab, frost: drawBossFrost, core: drawBossCore,
   subway: drawBossSubway, swamp: drawBossSwamp, storm: drawBossStorm,
+  foundry: drawBossFoundry, frostvoid: drawBossFrostvoid, voidroad: drawBossVoidroad,
 })) {
   for (const [suffix, size, r, final] of [['', 172, 40, false], ['_final', 208, 50, true]]) {
     for (const charging of [false, true]) {
