@@ -24,11 +24,13 @@ await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction(() => window.game);
 
 const results = await page.evaluate(async () => {
+  // 匯入路徑一律用 new URL(…, document.baseURI)：本機是 "/"、GitHub Pages 是
+  // "/gaga-survivor/"，寫死絕對路徑在線上會 404（實測踩過）。
   const out = [];
   const ok = (name, pass, detail) => out.push({ name, pass: !!pass, detail: String(detail) });
 
   // ── 1) 裝備：等效傷害、戰鬥占比、稀有度隨 ilvl ─────────────────────────
-  const { rollItem, gearBonuses, AFFIXES, SLOT_ORDER } = await import('/js/items.js');
+  const { rollItem, gearBonuses, AFFIXES, SLOT_ORDER } = await import(new URL('js/items.js', document.baseURI).href);
   const COMBAT = new Set(['dmg', 'crit', 'critdmg', 'cdr', 'armor', 'hp', 'speed']);
 
   const N = 1500;
@@ -76,13 +78,13 @@ const results = await page.evaluate(async () => {
     `ilvl 1：${(r1 * 100).toFixed(1)}% → ilvl 2.75：${(r2 * 100).toFixed(1)}%`);
 
   // ── 2) 角色招牌機制（在真的遊戲物件上跑一次）──────────────────────────
-  const { CHARACTERS } = await import('/js/characters.js');
-  const { Enemy } = await import('/js/entities/Enemy.js');
+  const { CHARACTERS } = await import(new URL('js/characters.js', document.baseURI).href);
+  const { Enemy } = await import(new URL('js/entities/Enemy.js', document.baseURI).href);
   const g = window.game;
-  const savedCharacter = (await import('/js/save.js')).save.data.character;
+  const savedCharacter = (await import(new URL('js/save.js', document.baseURI).href)).save.data.character;
 
   const startAs = async (id) => {
-    const { save } = await import('/js/save.js');
+    const { save } = await import(new URL('js/save.js', document.baseURI).href);
     // g.characterId 在建構子就固定了（main.js 讀 save 一次），只改存檔不會換人 ——
     // 兩個都要設，否則測試會拿著上一個角色的 player 繼續跑（實測踩過）。
     save.data.character = id;
@@ -183,8 +185,8 @@ const results = await page.evaluate(async () => {
 
   // ── 3) 倉庫的「裝備總和」摘要要真的渲染出來（這是「感覺不到」的一半原因）──
   {
-    const { save } = await import('/js/save.js');
-    const { rollItem, SLOT_ORDER } = await import('/js/items.js');
+    const { save } = await import(new URL('js/save.js', document.baseURI).href);
+    const { rollItem, SLOT_ORDER } = await import(new URL('js/items.js', document.baseURI).href);
     const stash = SLOT_ORDER.map((slot) => rollItem({ slot, rarity: 'legendary', ilvl: 2.75 }));
     save.data.stash = stash;
     save.data.equipped = Object.fromEntries(stash.map((it) => [it.slot, it.id]));
@@ -197,7 +199,7 @@ const results = await page.evaluate(async () => {
 
   // 還原存檔中的角色選擇，避免污染後續測試
   {
-    const { save } = await import('/js/save.js');
+    const { save } = await import(new URL('js/save.js', document.baseURI).href);
     save.data.character = savedCharacter;
   }
 
