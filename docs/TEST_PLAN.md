@@ -29,6 +29,7 @@ node tools/verify-audio.mjs          # 音訊（OfflineAudioContext 實際算圖
 node tools/verify-progression.mjs    # 角色招牌機制與裝備價值（幅度有沒有退回無感區間）
 node tools/verify-ui-actions.mjs     # HUD 按鈕與快捷鍵（按了真的有事發生）
 node tools/verify-art.mjs            # 外觀：角色材質層、手持武器、彈道光暈與拖尾（像素級）
+node tools/verify-meta-shop.mjs      # 基因強化曲線、黑市箱子等級、興奮劑疊加與性價比
 ```
 
 **預期**：`✅ 沒有殘留引用`、`8 passed, 0 failed`、`32 passed, 0 failed`，
@@ -37,6 +38,12 @@ node tools/verify-art.mjs            # 外觀：角色材質層、手持武器�
 `verify-art.mjs` 另外會把對照圖寫到 `/tmp/art/`（角色接觸印樣、投射物、手持武器）。
 它同時是**外觀的回歸網**：輪廓光、手持武器、光暈、拖尾任何一項消失都會紅燈，
 所以「畫面變好看」這件事不必再靠人眼記憶去守。
+
+`verify-meta-shop.mjs` 守的是**局外養成的體感**（同樣不會拋例外、只會讓玩家覺得「沒用」）：
+天賦樹夠不夠長（全滿 2350 🧬 ≈ 10 場）、黑市箱子的裝備等級有沒有跟著最佳紀錄、
+興奮劑疊加是否真的進遊戲、以及每一項興奮劑的「單局效果 / DNA」是否 ≥ 同項目永久天賦的 3 倍
+（消耗品不能被永久天賦支配）。備註：這支是**改動後才有意義**的工具 —— 舊版會缺
+`shopItemLevel` / `boosterCount` / `effect` 等 API，工具會把它們列為 FAIL 而不是丟例外。
 
 **若已經 FAIL**：立刻回報，**不要往下測** —— 表示 checkout 的版本有問題，
 後面所有結論都不可信。
