@@ -1439,6 +1439,34 @@ body, html {
   font-size: 12px;
   color: var(--text-muted);
 }
+.talent-next {
+  color: #7fd8ff;
+  font-weight: 700;
+}
+/* 基因強化總進度：讓「這棵樹還有多長」一眼看得出來 */
+.talent-progress {
+  margin-bottom: 10px;
+}
+.talent-progress-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.talent-progress-text strong {
+  color: #b388ff;
+}
+.talent-progress-bar {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.talent-progress-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #7b2cbf, #c77dff);
+  transition: width 0.25s ease;
+}
 .talent-up {
   font-family: var(--font-display);
   font-weight: 800;
@@ -2144,6 +2172,16 @@ body, html {
   margin-bottom: 12px;
   line-height: 1.4;
   flex-grow: 1;
+}
+
+/* 箱子的裝備等級：黑市貨會跟著最佳紀錄變好，這件事要看得見 */
+.shop-card-ilvl {
+  font-size: 11px;
+  color: #7fd8ff;
+  margin: -6px 0 10px;
+}
+.shop-card-ilvl strong {
+  color: #ffffff;
 }
 
 .shop-card-tag {
