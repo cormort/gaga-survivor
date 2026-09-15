@@ -147,7 +147,7 @@ export function offerBlessingChoice(game, title) {
 
 export function applyBlessing(game, blessing) {
   game.blessings.push({ id: blessing.id, name: blessing.name, icon: blessing.icon });
-  blessing.apply(game.player, this);
+  blessing.apply(game.player, game);
   game.weaponManager.applyPassives(); // 重算被動 (部分祝福改了乘數)
   game.particles.createShockwave(game.player.x, game.player.y, 200, '#b388ff');
   sound.playEvoFanfare();
@@ -184,7 +184,7 @@ export function tickBlessingEffects(game, dt) {
     const b = game._tempBuffs[i];
     b.timer -= dt;
     if (b.timer <= 0) {
-      b.revert(p, this);
+      b.revert(p, game);
       game._tempBuffs.splice(i, 1);
       game.weaponManager.applyPassives();
     }

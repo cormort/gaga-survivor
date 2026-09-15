@@ -94,7 +94,7 @@ export function updateTurrets(game, dt) {
     t.update(dt, game.enemies, (target, dmg) => {
       game.damageEnemy(target, dmg, 1, t.x, t.y, t.facilityType || 'turret');
       sound.playShoot();
-    }, game.player, this);
+    }, game.player, game);
 
     // 敵人被設施擋住：推開並持續啃食 (反傷拒馬自動反射傷害)
     for (const e of game.enemies) {
