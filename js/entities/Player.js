@@ -350,9 +350,20 @@ export class Player {
     }
 
     const sprite = getSprite(this.character.sprite);
-    const frame = this.walkCycle > 0
+    const moving = this.walkCycle > 0;
+    const frame = moving
       ? Math.floor(this.walkCycle / (Math.PI * 2) * FRAMES) % FRAMES
       : 0;
+
+    // 走路壓縮伸展 + 上下起伏：先前角色是「整張圖平移」，看起來像貼紙在滑動。
+    // 抬腿那半拍拉長、落地那半拍壓扁，並讓身體跟著步伐上下 1.8px —— 碰撞半徑
+    // 完全不變，只有繪製時的縮放（純視覺）。
+    const stride = moving ? Math.sin(this.walkCycle) : 0;
+    const bob = moving ? Math.abs(Math.cos(this.walkCycle)) : 0;
+    // 站著不動時給一點極慢的呼吸，避免角色像被暫停
+    const breath = moving ? 0 : Math.sin(now * 1.6) * 0.012;
+    const scaleY = 1 + stride * 0.045 + breath;
+    const scaleX = 1 - stride * 0.035 - breath;
 
     // 繪製翻滾殘影 (白色電光幻影)
     for (const g of this.dashGhosts) {
@@ -365,8 +376,9 @@ export class Player {
     }
 
     ctx.save();
-    ctx.translate(screenX, screenY);
+    ctx.translate(screenX, screenY - bob * 1.8);
     if (this.facing < 0) ctx.scale(-1, 1);
+    ctx.scale(scaleX, scaleY);
     blit(ctx, sprite, frame, 0, 0);
     ctx.restore();
 

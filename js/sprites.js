@@ -49,6 +49,147 @@ function shadow(x, rx, y) {
   x.fill();
 }
 
+/* ==================== 材質層 (material pass) ==================== */
+// 為什麼要有這一層：五個角色原本是「各自畫完就交件」，光向、邊光、體積感全看各函式
+// 記不記得畫 —— 結果是角色在深色柏油地上像一張貼紙，缺厚度、也不好從背景裡辨識。
+// 這一層在烘焙完成後統一補三件事（只跑一次，每幀仍然只有 drawImage）：
+//   1. 輪廓光：把剪影往左上偏移後減掉本體，得到「左上外緣」的新月；外圈一層寬而淡、
+//      內圈一層窄而亮，並且再用 source-atop 疊一層落在本體內側的 accent 邊光。
+//      等於全遊戲固定從左上方打一盞側光 —— 敵人與角色因此都有立體邊緣。
+//   2. 頂光：剪影內上半部疊極淡的白。
+//   3. 底部環境光遮蔽：剪影內下半部疊暗，讓角色「坐」在地上而不是飄著。
+// accent 是各角色／敵種的主色，讓輪廓光跟角色配色一致（鴨鴨琥珀、喵喵洋紅…）。
+const DEFAULT_ACCENT = '#cfe3ff';   // 敵人預設：冷白邊光
+const FIXED_ACCENT = {
+  duck: '#ffd166',
+  rabbit: '#b98cff',
+  penguin: '#7fd8ff',
+  cat: '#ff5fd2',
+  mechanic: '#ff9f45',
+  turret: '#ffb703',
+  gem_green: '#00f59b',
+  gem_blue: '#00b4d8',
+  gem_purple: '#b5179e',
+  gem_gold: '#ffb703',
+};
+// Boss 的 key 是動態組出來的 (boss_<theme>[_final][_charging])，用前綴比對
+const BOSS_ACCENT = [
+  ['boss_street', '#ff7b00'],
+  ['boss_lab', '#7dff8f'],
+  ['boss_frost', '#7fd8ff'],
+  ['boss_core', '#c77dff'],
+  ['boss', '#ff4d6d'],
+];
+
+function accentFor(key, b) {
+  if (b.static) return null;         // 場景裝飾維持平面：它們本來就是貼在地上的圖
+  const m = key.match(/^([^:]+)/);
+  const base = m ? m[1] : key;
+  if (FIXED_ACCENT[base]) return FIXED_ACCENT[base];
+  for (const [prefix, color] of BOSS_ACCENT) {
+    if (base.startsWith(prefix)) return color;
+  }
+  return DEFAULT_ACCENT;
+}
+
+// 邊光兩層都往左上偏移，而且**偏移量大於模糊半徑 + 外框厚度**：
+// 這樣亮部只會出現在左上，不會繞成一圈均勻光暈（均勻光暈會把「左上比右下亮」的
+// 對比吃掉，看起來像發光貼紙而不是被打光）。
+const RIM_LAYERS = [
+  { off: 3.0, blur: 1.1, alpha: 0.42 },   // 外圈：柔，負責把左上角推出去
+  { off: 1.6, blur: 0.45, alpha: 0.82 },  // 內圈：窄而亮，負責讀出邊緣
+];
+// 深色外框的厚度（device px）。它同時是可讀性（任何底色都有邊界）與對比來源。
+const OUTLINE_BLUR = 2.2;
+const OUTLINE_ALPHA = 0.5;
+
+function scratchCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  return c;
+}
+
+// canvas 為 make() 烘好的成品；sil / rim 是同一顆 sprite 內重複使用的暫存畫布
+function materialize(canvas, accent, sil, rim) {
+  const W = canvas.width;
+  const H = canvas.height;
+  const cx = canvas.getContext('2d');
+  const sx = sil.getContext('2d');
+  const rx = rim.getContext('2d');
+
+  // 1) 邊光剪影：邊光要比主色亮 —— 它代表的是「光」，不是角色配色。
+  // 直接用主色會有一半的角色失效：兔子的薰衣草紫 (#b98cff) 與牠自己的白身體幾乎同亮度、
+  // 喵喵的洋紅比牠頭上的青色光暈還暗 → 這兩隻的邊光等於沒畫（實測 Δ3 / Δ14）。
+  const rimColor = mix(accent, '#ffffff', 0.5);
+
+  // 0) 深色外框：canvas 的 shadow 畫在本體之下，所以只會露在外側。
+  //    角色因此在任何底色上都有邊界，而且右下角被壓暗之後，左上的邊光才有對比
+  //    （只加均勻亮光暈會讓整圈一樣亮，反而看不出光從哪來）。
+  cx.save();
+  cx.setTransform(1, 0, 0, 1, 0, 0);
+  cx.globalCompositeOperation = 'source-over';
+  cx.shadowColor = `rgba(0,0,0,${OUTLINE_ALPHA})`;
+  cx.shadowBlur = OUTLINE_BLUR * SS;
+  cx.drawImage(canvas, 0, 0);
+  cx.restore();
+
+  sx.setTransform(1, 0, 0, 1, 0, 0);
+  sx.globalCompositeOperation = 'source-over';
+  sx.globalAlpha = 1;
+  sx.clearRect(0, 0, W, H);
+  sx.drawImage(canvas, 0, 0);
+  sx.globalCompositeOperation = 'source-in';
+  sx.fillStyle = rimColor;
+  sx.fillRect(0, 0, W, H);
+  sx.globalCompositeOperation = 'source-over';
+
+  const offsetSil = (off) => {
+    rx.setTransform(1, 0, 0, 1, 0, 0);
+    rx.globalCompositeOperation = 'source-over';
+    rx.globalAlpha = 1;
+    rx.clearRect(0, 0, W, H);
+    rx.drawImage(sil, -off * SS, -off * SS);
+  };
+
+  // 2) 外側輪廓光：偏移剪影 − 本體 = 只有本體外的新月
+  cx.save();
+  cx.setTransform(1, 0, 0, 1, 0, 0);
+  cx.globalCompositeOperation = 'source-over';
+  for (const layer of RIM_LAYERS) {
+    // 模糊讓外圈變成柔光而不是一圈硬邊（瀏覽器不支援 filter 時退回硬邊，不會壞）；
+    // 要在把偏移剪影「畫進 rim」之前設，濾鏡才會作用在那一次繪製上
+    rx.filter = `blur(${(layer.blur * SS).toFixed(2)}px)`;
+    offsetSil(layer.off);
+    rx.filter = 'none';
+    rx.globalCompositeOperation = 'destination-out';
+    rx.drawImage(canvas, 0, 0);
+    rx.globalCompositeOperation = 'source-over';
+    cx.globalAlpha = layer.alpha;
+    cx.drawImage(rim, 0, 0);
+  }
+
+  // 3) 內側邊光：偏移剪影 ∩ 本體，再用 source-atop 疊回去，保證不超出外型
+  offsetSil(1.4);
+  rx.globalCompositeOperation = 'destination-in';
+  rx.drawImage(canvas, 0, 0);
+  rx.globalCompositeOperation = 'source-over';
+  cx.globalCompositeOperation = 'source-atop';
+  cx.globalAlpha = 0.34;
+  cx.drawImage(rim, 0, 0);
+
+  // 4) 頂光 + 底部環境光遮蔽：source-atop 讓漸層只落在剪影內
+  const g = cx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, 'rgba(255,255,255,0.11)');
+  g.addColorStop(0.40, 'rgba(255,255,255,0)');
+  g.addColorStop(0.66, 'rgba(0,0,0,0.04)');
+  g.addColorStop(1, 'rgba(0,0,0,0.28)');
+  cx.globalAlpha = 1;
+  cx.fillStyle = g;
+  cx.fillRect(0, 0, W, H);
+  cx.restore();
+}
+
 /* ==================== 特工鴨 ==================== */
 
 function drawDuck(x, t) {
@@ -2889,12 +3030,20 @@ export function getSprite(key) {
   const w = b.w * scale;
   const h = b.h * scale;
   const frames = [];
+  // 材質層的 accent 與暫存畫布：同一顆 sprite 的所有 frame 共用（只配置一次）
+  const accent = accentFor(key, b);
+  const cw = Math.round(w * SS);
+  const ch = Math.round(h * SS);
+  const sil = accent ? scratchCanvas(cw, ch) : null;
+  const rim = accent ? scratchCanvas(cw, ch) : null;
   for (let i = 0; i < count; i++) {
     // 畫布跟著一起放大，否則放大變體的四肢會被裁掉
-    frames.push(make(w, h, (x) => {
+    const frame = make(w, h, (x) => {
       if (scale !== 1) x.scale(scale, scale);
       b.fn(x, i / FRAMES);
-    }));
+    });
+    if (accent) materialize(frame, accent, sil, rim);
+    frames.push(frame);
   }
   s = { frames, flash: b.static ? frames : frames.map(whiten), w, h };
   cache.set(key, s);
