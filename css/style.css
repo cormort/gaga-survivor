@@ -2900,3 +2900,8 @@ body, html {
   .pwa-banner { top: calc(env(safe-area-inset-top) + 86px); }
   .pwa-desc { display: none; }
 }
+/* 裝備總和摘要：把分散在 6~9 條詞條的價值收成一句「等效傷害」 */
+.gear-summary { margin: 8px 0 4px; font-size: 13px; line-height: 1.6; }
+.gear-summary-line { color: #cbd5e1; }
+.gear-summary-line.accent { color: #00f59b; font-weight: 600; margin-top: 2px; }
+.gear-summary-line.dim { color: #64748b; }
