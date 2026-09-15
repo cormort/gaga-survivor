@@ -187,14 +187,22 @@ const results = await page.evaluate(async () => {
   {
     const { save } = await import(new URL('js/save.js', document.baseURI).href);
     const { rollItem, SLOT_ORDER } = await import(new URL('js/items.js', document.baseURI).href);
-    const stash = SLOT_ORDER.map((slot) => rollItem({ slot, rarity: 'legendary', ilvl: 2.75 }));
+    // 取樣到「有火力詞條」的一套為止。單次擲骰本來就會有約 1/5 的機率整套沒有傷害詞條
+    // （實測跑 8 次紅 1 次），而這一條要驗的是「摘要畫得出來」，不該被運氣決定紅綠。
+    let stash = null;
+    let tries = 0;
+    while (!stash && tries < 40) {
+      tries++;
+      const s = SLOT_ORDER.map((slot) => rollItem({ slot, rarity: 'legendary', ilvl: 2.75 }));
+      if (s.some((it) => it.affixes.some((a) => a.key === 'dmg'))) stash = s;
+    }
     save.data.stash = stash;
     save.data.equipped = Object.fromEntries(stash.map((it) => [it.slot, it.id]));
     g.ui.rebuildGearView(save);
     const el = document.getElementById('gear-summary');
     const text = el ? el.textContent : '';
     ok('倉庫會顯示裝備總和與等效傷害', /等效傷害/.test(text) && /火力/.test(text),
-      text.replace(/\s+/g, ' ').slice(0, 90) || '（空的）');
+      `取樣 ${tries} 套｜` + (text.replace(/\s+/g, ' ').slice(0, 80) || '（空的）'));
   }
 
   // 還原存檔中的角色選擇，避免污染後續測試
