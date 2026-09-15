@@ -171,10 +171,16 @@ try {
     // isEvo/totalDamage）—— 這是它自己的最小武器物件，不必真的開一局遊戲。
     // 量測區：玩家中心右側的手部 x∈[6,34]、y∈[-14,12]（facing=1 時手在 +x 側）。
     const HELD = {
-      bases: ['kunai', 'rocket', 'guardian', 'molotov', 'soccer', 'lightning'],
+      // 從 WEAPONS 推導（只取基礎武器），新增武器時不必回來改這裡
+      bases: [],
       x0: 6, x1: 34, y0: -14, y1: 12,
       minPixels: 20, alpha: 40,
     };
+    // 基礎武器清單由 config 推導（含之後新增的迴力鏢/軌道炮），避免清單與資料脫節
+    {
+      const { WEAPONS: W } = await imp('js/config.js');
+      HELD.bases = Object.values(W).filter((w) => !w.isEvo).map((w) => w.id);
+    }
     const wm = window.game && window.game.weaponManager;
     const player = window.game && window.game.player;
     const heldFail = (detail) => {
