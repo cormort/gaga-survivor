@@ -247,6 +247,10 @@ export function bindEvents(game) {
 
   // 超武合成圖鑑 (主選單查閱配方)
   game.ui.recipeBtn?.addEventListener('click', () => game.ui.openRecipeModal(save.data));
+  game.ui.aspectBtn?.addEventListener('click', () => game.ui.openAspectModal(save, (family, aspectId) => {
+    // 與角色卡上的型態 chips 共用同一個存檔 API（鍵是家族 id，所以任何武器都設得到）
+    save.setWeaponAspect(family, aspectId);
+  }));
 
   // 音效切換按鈕
   game.ui.soundBtn.addEventListener('click', () => {

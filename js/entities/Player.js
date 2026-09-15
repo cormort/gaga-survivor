@@ -246,9 +246,11 @@ export class Player {
     if (this.shieldPotionTimer > 0) {
       dmg = Math.round(dmg * 0.5);
     }
-    // 雅典娜聖光結界：領域減傷 25%
+    // 雅典娜聖光結界：領域減傷。值由型態資料 (WEAPON_ASPECTS.molotov[athena].dmgResist) 帶進火海，
+    // 站在領域內時寫到 player.sanctuaryResist —— 先前這裡寫死 0.75，型態欄位改了完全不會生效
+    // （實測 dmgResist 在 js/ 的讀取次數是 0）。保留 0.25 當退路，讓沒有帶欄位的舊火海維持原行為。
     if (this.sanctuaryTimer > 0) {
-      dmg = Math.round(dmg * 0.75);
+      dmg = Math.round(dmg * (1 - (this.sanctuaryResist || 0.25)));
     }
     if (this.shield && this.shield > 0) {
       if (this.shield >= dmg) {

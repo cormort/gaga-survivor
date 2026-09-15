@@ -220,6 +220,18 @@
     </div>
 
     <!-- 超武合成圖鑑 (邪惡秘典精神：查閱武器→配件→超武配方) -->
+    <!-- 兵器型態：8 個武器家族 × 3 種神話型態，全部都能在這裡選 -->
+    <div id="aspect-modal" class="overlay hidden">
+      <div class="modal-content recipe-content">
+        <div class="modal-header">
+          <h2 class="glow-text">⚔️ 兵器型態</h2>
+          <p class="subtitle">每個武器家族各有 3 種神話型態，出擊後永久生效</p>
+        </div>
+        <div id="aspect-list" class="recipe-list"></div>
+        <button id="btn-close-aspects" class="game-btn secondary-btn">關閉</button>
+      </div>
+    </div>
+
     <div id="recipe-modal" class="overlay hidden">
       <div class="modal-content recipe-content">
         <div class="modal-header">
@@ -328,6 +340,7 @@
           <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
           <button id="btn-achievements" class="game-btn talent-btn">🎯 特工成就</button>
           <button id="btn-recipe" class="game-btn talent-btn">✨ 超武配方</button>
+          <button id="btn-aspects" class="game-btn talent-btn">⚔️ 兵器型態</button>
           <button id="btn-daily" class="game-btn talent-btn">📅 每日挑戰</button>
         </div>
         <div class="audio-row">

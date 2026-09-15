@@ -145,6 +145,11 @@ export class UIManager {
     this.recipeBtn = document.getElementById('btn-recipe');
     this.recipeModal = document.getElementById('recipe-modal');
     this.recipeList = document.getElementById('recipe-list');
+    // 兵器型態彈窗：型態選擇原本只掛在「角色卡的起始武器」上，導致 8 個家族裡有 3 個
+    // （足球／迴力鏢／軌道炮）在 UI 上完全選不到、永遠只能用預設型態。這個彈窗把全部家族列出來。
+    this.aspectBtn = document.getElementById('btn-aspects');
+    this.aspectModal = document.getElementById('aspect-modal');
+    this.aspectList = document.getElementById('aspect-list');
 
     this.charSelect = document.getElementById('character-select');
     this.levelSelect = document.getElementById('level-select');
@@ -170,6 +175,9 @@ export class UIManager {
     });
     document.getElementById('btn-close-recipe')?.addEventListener('click', () => {
       this.recipeModal?.classList.add('hidden');
+    });
+    document.getElementById('btn-close-aspects')?.addEventListener('click', () => {
+      this.aspectModal?.classList.add('hidden');
     });
 
     // 局內隨機事件橫幅
@@ -942,6 +950,48 @@ export class UIManager {
     }
   }
 
+  // 兵器型態：列出所有家族 × 3 型態，點了立刻寫進存檔（與角色卡上的 chips 共用同一個 API）
+  openAspectModal(save, onChange) {
+    if (!this.aspectModal) return;
+    this.buildAspectList(save, onChange);
+    this.aspectModal.classList.remove('hidden');
+  }
+
+  buildAspectList(save, onChange) {
+    if (!this.aspectList) return;
+    this.aspectList.innerHTML = '';
+    for (const [family, aspects] of Object.entries(WEAPON_ASPECTS)) {
+      const current = save.getWeaponAspect(family) || (aspects[0] && aspects[0].id);
+      const row = document.createElement('div');
+      row.className = 'aspect-family-row';
+      row.innerHTML = `
+        <div class="aspect-family-head">
+          <span class="aspect-family-icon">${WEAPONS[family] ? WEAPONS[family].icon : '⚔️'}</span>
+          <span class="aspect-family-name">${WEAPONS[family] ? WEAPONS[family].name : family}</span>
+        </div>
+        <div class="aspect-chips" data-weapon="${family}">
+          ${aspects.map((a) => `
+            <span class="aspect-chip ${a.id === current ? 'active' : ''}" data-aspect="${a.id}" title="${a.name}: ${a.desc}">
+              ${a.icon} ${a.name.split(' ')[0]}
+            </span>`).join('')}
+        </div>
+        <div class="aspect-desc-tooltip">${(aspects.find((a) => a.id === current) || {}).desc || ''}</div>
+      `;
+      row.querySelectorAll('.aspect-chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const aId = chip.dataset.aspect;
+          if (onChange) onChange(family, aId);
+          row.querySelectorAll('.aspect-chip').forEach((el) => el.classList.toggle('active', el.dataset.aspect === aId));
+          const desc = (aspects.find((a) => a.id === aId) || {}).desc || '';
+          const tip = row.querySelector('.aspect-desc-tooltip');
+          if (tip) tip.textContent = desc;
+          sound.playGem();
+        });
+      });
+      this.aspectList.appendChild(row);
+    }
+  }
+
   openRecipeModal(saveData) {
     if (!this.recipeModal) return;
     this.buildRecipeList(saveData);
@@ -1373,6 +1423,26 @@ export class UIManager {
           maxLevel: def.maxLevel,
         });
       }
+    }
+
+    // 2b. 超武覺醒：進化後的超武仍可升級（每級 +evoGrowth × 基礎傷害）。
+    // 為什麼要這段：超武先前 `level` 永遠停在 1、也不會出現在升級卡裡，四把武器都進化完之後
+    // 升級卡就只剩「補血包」那條退路 —— 這一段讓後期升級仍然有意義。
+    for (const [id, item] of weaponManager.weapons.entries()) {
+      const def = WEAPONS[id];
+      if (!item.isEvo || !def.evoGrowth || item.level >= def.maxLevel) continue;
+      const gain = Math.round(def.evoGrowth * 100);
+      const total = Math.round(def.evoGrowth * item.level * 100);
+      candidates.push({
+        type: 'weapon_upgrade',
+        id,
+        name: def.name,
+        icon: def.icon,
+        description: `超武覺醒：傷害 +${gain}%（累積 +${total}%）。`,
+        tag: `超武覺醒 ${item.level} → ${item.level + 1}`,
+        nextLevel: item.level + 1,
+        maxLevel: def.maxLevel,
+      });
     }
 
     // 3. 現有被動升級 (若正是某把滿級武器的缺件，特別標註)

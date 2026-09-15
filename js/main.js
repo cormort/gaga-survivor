@@ -1764,6 +1764,10 @@ class Game {
         if (this.player._fireEnchant) {
           enemy.applyBurn(CHARGE.burn.dps, CHARGE.burn.duration, p.weaponId);
         }
+        // 武器自帶的點燃（雙刃風暴 / 湮滅射線）
+        if (p.burnOnHit > 0) {
+          enemy.applyBurn(p.burnOnHit, 2.5, p.weaponId);
+        }
         // 協同：導電刀鋒 (苦無 20% 機率觸發落雷)
         if (this.player.synergies?.kunaiThunderChance &&
             (p.weaponId === 'kunai' || p.weaponId === 'ghost_shuriken') &&

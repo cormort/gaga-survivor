@@ -20,6 +20,8 @@ const ASPECT_FAMILY = {
   molotov: 'molotov', napalm_sea: 'molotov',
   lightning: 'lightning', plasma_storm: 'lightning',
   soccer: 'soccer', quantum_sphere: 'soccer',
+  boomerang: 'boomerang', twin_storm: 'boomerang',
+  railgun: 'railgun', annihilation_beam: 'railgun',
 };
 
 export class WeaponManager {
@@ -301,7 +303,12 @@ export class WeaponManager {
     if (enemies.length === 0 && id !== 'guardian' && id !== 'eternal_domain' &&
         id !== 'orbit_saw' && id !== 'singularity_ring') return;
 
-    const baseDmg = def.baseDamage + (def.damageGrowth ? def.damageGrowth * (item.level - 1) : 0);
+    // 覺醒：超武進化後仍可繼續升級（每級 +evoGrowth × 基礎傷害）。
+    // 為什麼要這個：超武先前 `level` 永遠停在 1、也不會出現在升級卡裡 ——
+    // 四把武器都進化完之後，升級卡就只剩「補血包」這個退路。
+    const baseDmg = def.baseDamage
+      + (def.damageGrowth ? def.damageGrowth * (item.level - 1) : 0)
+      + (def.evoGrowth ? Math.round(def.baseDamage * def.evoGrowth * (item.level - 1)) : 0);
     // 幸運藥劑 (+25% 暴擊率) 與力量藥劑 (+40% 傷害) 在這裡讀計時器。
     // 兩者原本都只被倒數與畫光環，沒有任何傷害路徑讀取 —— 撿到等於沒撿。
     const crit = Math.random() < (this.player.critChance || 0) + (this.player.metaCrit || 0) +
@@ -346,6 +353,16 @@ export class WeaponManager {
       case 'lightning':
       case 'plasma_storm':
         this.fireLightning(def, item, finalDamage, enemies, particleSystem, crit);
+        break;
+
+      case 'boomerang':
+      case 'twin_storm':
+        this.fireBoomerang(def, item, finalDamage, enemies, crit);
+        break;
+
+      case 'railgun':
+      case 'annihilation_beam':
+        this.fireRailgun(def, item, finalDamage, enemies, particleSystem, crit);
         break;
 
       case 'soccer':
@@ -578,6 +595,9 @@ export class WeaponManager {
           isEvo: def.isEvo,
           knockback: 0.2,
           isSanctuary: !!stats.sanctuary,
+          // 雅典娜型態的 dmgResist 先前**全 repo 沒有讀取端**（宣告了 25% 減傷但完全沒生效），
+          // 這裡把值傳進火海實體，站在領域內時由 Player.takeDamage 套用
+          sanctuaryResist: stats.dmgResist || 0,
           // 札格型態：火海跳頻 +30% (tickRateMul 0.70) —— 這個欄位先前沒有讀者
           tickInterval: 0.25 * (stats.tickRateMul || 1),
           healPerSec: stats.healPerSec || 0,
@@ -636,6 +656,106 @@ export class WeaponManager {
   }
 
   // 6. 量子足球 / 量子星雲球
+  // 迴力鏢：去程 outTime 秒後折返，去回都會切開路徑（靠 rehit 讓同一隻敵人被兩次命中）
+  fireBoomerang(def, item, damage, enemies, crit = false) {
+    const target = this.getClosestEnemy(enemies);
+    if (!target) return;
+
+    const { stats } = this.aspectOf(def.id);
+    const lvl = Math.min(item.level, def.maxLevel) - 1;
+    const outTime = (def.outTime && def.outTime[lvl]) || 0.38;
+    const count = ((def.count && def.count[lvl]) || 1) + (stats.extraProjectiles || 0);
+    const pierce = ((def.pierce && def.pierce[lvl]) || 2) + (stats.pierce || 0);
+    const speed = def.speed * (stats.speedMul || 1);
+    const dmg = Math.round(damage * (stats.damageMul || 1));
+    const rehit = (def.rehit || 0.4) * (stats.rehitMul || 1);
+    const baseAngle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
+
+    for (let i = 0; i < count; i++) {
+      const a = baseAngle + (i - (count - 1) / 2) * 0.22;
+      this.projectiles.push(
+        this.mkProjectile({
+          type: 'boomerang',
+          weaponId: def.id,
+          x: this.player.x,
+          y: this.player.y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          damage: dmg,
+          radius: 12,
+          pierce,
+          life: outTime * 2 + 1.4,   // 保險：就算沒接到也會自己消失
+          isEvo: def.isEvo,
+          knockback: 2,
+          outTime,
+          speed0: speed,
+          rehit,
+          burnOnHit: def.burnOnHit || 0,
+        }, crit)
+      );
+    }
+    sound.playShoot('boomerang');
+  }
+
+  // 軌道炮：開火當下就結算整條直線的傷害（不是飛行彈體），再補一個純視覺的光束實體
+  fireRailgun(def, item, damage, enemies, particleSystem, crit = false) {
+    const target = this.getClosestEnemy(enemies);
+    if (!target) return;
+
+    const { stats } = this.aspectOf(def.id);
+    const lvl = Math.min(item.level, def.maxLevel) - 1;
+    const width = ((def.width && def.width[lvl]) || 30) * (stats.widthMul || 1);
+    const range = def.range * (stats.rangeMul || 1) * this.player.rangeMultiplier;
+    const lanes = (def.laneCount || 1) + (stats.laneCount || 0);
+    const dmg = Math.round(damage * (stats.damageMul || 1));
+    const baseAngle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
+    const hit = new Set();
+
+    for (let i = 0; i < lanes; i++) {
+      const a = baseAngle + (i - (lanes - 1) / 2) * 0.16;
+      const ox = Math.cos(a);
+      const oy = Math.sin(a);
+      // 直線命中：把敵人投影到射線上，長度在射程內、垂直距離在線寬內就算命中
+      for (const enemy of enemies) {
+        if (enemy.isDead || hit.has(enemy)) continue;
+        const rx = enemy.x - this.player.x;
+        const ry = enemy.y - this.player.y;
+        const along = rx * ox + ry * oy;
+        if (along < 0 || along > range) continue;
+        const perp = Math.abs(rx * oy - ry * ox);
+        if (perp > width / 2 + enemy.radius) continue;
+
+        hit.add(enemy);
+        enemy.takeDamage(dmg, 3, this.player.x, this.player.y);
+        this.recordDamage(def.id, dmg);
+        if (def.burnOnHit || stats.burnOnHit) {
+          enemy.applyBurn(def.burnOnHit || stats.burnOnHit, 2.5, def.id);
+        }
+        if (particleSystem) particleSystem.createDamageText(enemy.x, enemy.y, dmg, true);
+      }
+
+      // 視覺光束：不帶傷害，只負責畫出這條射線並淡出
+      this.projectiles.push(
+        this.mkProjectile({
+          type: 'rail_beam',
+          weaponId: def.id,
+          x: this.player.x,
+          y: this.player.y,
+          vx: Math.cos(a),
+          vy: Math.sin(a),
+          damage: 0,
+          radius: width / 2,
+          beamRange: range,
+          pierce: 9999,
+          life: 0.18,
+          isEvo: def.isEvo,
+          knockback: 0,
+        }, crit)
+      );
+    }
+    sound.playShoot('railgun');
+  }
+
   fireSoccer(def, item, damage, enemies, crit = false) {
     const { id: aspect, stats } = this.aspectOf(def.id);
     const count = def.isEvo ? def.count : def.count[item.level - 1];
