@@ -459,11 +459,12 @@ js/modes.js           兩種作戰模式的規則差異 (生存者 / 守塔)
 js/shop.js            特工黑市商品表 (軍備箱 / 戰術興奮劑 / 設施擴建)
 js/save.js            局外存檔層 (DNA、解鎖、依模式分離的最佳紀錄)
 js/characters.js      五位特工的特質鉤子與台詞
-js/sprites.js         sprite 烘焙 (角色/怪物/砲塔美術)
+js/sprites.js         sprite 烘焙 (角色/怪物/砲塔美術 + 共用材質層：輪廓光/頂光/AO)
 js/audio.js           Web Audio 程序化音效與 BGM
 js/input.js           鍵盤與虛擬搖桿
 js/entities/          Player / Enemy / Projectile / EnemyProjectile / DropItem / Turret / Mercenary / Core
-js/weapons/           WeaponManager (索敵、冷卻、暴擊、超武進化)
+js/weapons/           WeaponManager (索敵、冷卻、暴擊、超武進化) / WeaponArt (手持武器外觀)
+                      ProjectileFX (彈道光暈與拖尾貼圖快取)
 js/systems/           Spawner (波次與 Boss 排程) / UI / ParticleSystem
                       Terrain (宏觀地形層：道路/板塊/冰原/渠道/裂縫 + 地標 + 時間劣化)
                       Texture (程序化材質工具箱：可平鋪雜訊、fBm、方向光浮雕、星點)
@@ -475,6 +476,7 @@ tools/                smoke-branches.mjs (罕見分支煙霧測試) / perf-probe
                       visual-equiv.mjs (以 route 攔截舊模組做逐像素等價比對)
                       verify-review-fixes.mjs (內容與修復的回歸驗證)
                       verify-pwa.mjs / verify-pwa-update.mjs / bannerbox.mjs (PWA 離線、更新與版面)
+                      verify-art.mjs (角色材質/手持武器/彈光暈拖尾的像素級驗證 + 對照圖)
 ```
 
 ---

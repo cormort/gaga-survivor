@@ -11,7 +11,7 @@
 //           沒命中才走網路並順手寫進 runtime 快取；查詢字串算在快取 key 裡。
 //   跨網域 / 非 GET → 完全不攔，原封不動交給瀏覽器。
 
-const CACHE_VERSION = 'gaga-v2';   // v2：主邏輯模組化後新增五個 systems 模組
+const CACHE_VERSION = 'gaga-v3';   // v3：材質層與武器外觀新增兩支 weapons 模組
 const SHELL_CACHE = CACHE_VERSION;                  // 預快取的 app shell
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;   // 執行期順手補快取的東西
 const CURRENT_CACHES = [SHELL_CACHE, RUNTIME_CACHE];
@@ -70,6 +70,8 @@ const PRECACHE = [
   './js/systems/Texture.js',
   './js/systems/UI.js',
   './js/weapons/WeaponManager.js',
+  './js/weapons/WeaponArt.js',
+  './js/weapons/ProjectileFX.js',
 ];
 
 // ── install：預快取後立刻接手 ──
