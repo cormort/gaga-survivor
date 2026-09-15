@@ -2,6 +2,7 @@
 
 import { WEAPONS, PASSIVES, CHARGE, WEAPON_ASPECTS } from '../config.js';
 import { Projectile } from '../entities/Projectile.js';
+import { drawHeldWeapon } from './WeaponArt.js';
 import { sound } from '../audio.js';
 
 // 同一隻敵人被同一個投射物再次命中的間隔 (秒)
@@ -63,6 +64,10 @@ export class WeaponManager {
       cooldownTimer: 0,
       isEvo: !!def.isEvo,
       totalDamage: 0,
+      // 手持外觀用：最後一次開火方向、後座與槍口火光的剩餘量 (0~1)
+      aim: this.player.facing < 0 ? Math.PI : 0,
+      recoil: 0,
+      muzzle: 0,
     });
   }
 
@@ -102,6 +107,9 @@ export class WeaponManager {
       cooldownTimer: 0,
       isEvo: true,
       totalDamage: old.totalDamage + partnerDmg,
+      aim: old.aim != null ? old.aim : (this.player.facing < 0 ? Math.PI : 0),
+      recoil: 0,
+      muzzle: 1,   // 進化瞬間讓槍口亮一下，作為「換手了」的視覺提示
     });
 
     sound.playEvoFanfare();
@@ -243,6 +251,10 @@ export class WeaponManager {
 
       item.cooldownTimer -= dt;
 
+      // 手持外觀的後座與槍口火光衰減（純視覺，不影響任何傷害路徑）
+      if (item.recoil > 0) item.recoil = Math.max(0, item.recoil - dt * 5.5);
+      if (item.muzzle > 0) item.muzzle = Math.max(0, item.muzzle - dt * 8);
+
       // 檢查冷卻完畢
       if (item.cooldownTimer <= 0) {
         this.fireWeapon(id, item, def, enemies, particleSystem);
@@ -297,6 +309,14 @@ export class WeaponManager {
     const critMul = 2 + (this.player.metaCritDmg || 0);
     const potionDmgMul = this.player.atkPotionTimer > 0 ? 1.4 : 1;
     const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * (this.player.traitDmgMul || 1) * potionDmgMul * (crit ? critMul : 1) * (this.player.blessingBerserkerMul || 1));
+
+    // 手持武器外觀：記下這一發瞄準的方向，並補上後座與槍口火光。
+    // 方向以「最近的敵人」為準 —— 與各武器實際鎖定的目標一致，玩家看到的槍口
+    // 永遠指著它正在打的東西（沒有敵人時維持上一個方向，不會亂轉）。
+    const aimTarget = this.getClosestEnemy(enemies);
+    if (aimTarget) item.aim = Math.atan2(aimTarget.y - this.player.y, aimTarget.x - this.player.x);
+    item.recoil = 1;
+    item.muzzle = 1;
 
     switch (id) {
       case 'kunai':
@@ -768,6 +788,30 @@ export class WeaponManager {
   draw(ctx, camera) {
     for (const p of this.projectiles) {
       p.draw(ctx, camera);
+    }
+  }
+
+  // 手持武器：畫在角色身上（main.js 在 player.draw 之後呼叫）。
+  // 武器欄上限 4，所以這裡最多 4 把；依插入順序排成扇形，第一把（初始武器）在最前。
+  drawHeldWeapons(ctx, camera) {
+    const p = this.player;
+    if (!p || p.isDead) return;
+    const sx = p.x - camera.x;
+    const sy = p.y - camera.y;
+    const now = performance.now() * 0.001;
+    let slot = 0;
+    for (const [id, item] of this.weapons.entries()) {
+      drawHeldWeapon(ctx, id, {
+        x: sx,
+        y: sy,
+        aim: item.aim,
+        recoil: item.recoil || 0,
+        muzzle: item.muzzle || 0,
+        level: item.level,
+        slot: slot++,
+        facing: p.facing,
+        time: now,
+      });
     }
   }
 }

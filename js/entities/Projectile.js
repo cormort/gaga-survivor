@@ -1,6 +1,30 @@
 // 武器投射物與攻擊實體 (苦無、旋轉輪盤、火箭爆破、地面积火、落雷、彈跳足球)
 
 import { GAME_CONFIG, CHARGE } from '../config.js';
+import { drawGlow, drawStreak } from '../weapons/ProjectileFX.js';
+
+// ── 飛行光暈與拖尾 ─────────────────────────────────────────────────
+// 為什麼要這張表：投射物先前只有「本體」，高速彈體在深色場景裡是一顆顆小點，
+// 看不出速度、也看不出屬性。這裡給每個 type 一組外觀參數：
+//   color  光暈主色（跟武器配色一致，讓玩家用顏色分辨這是誰的子彈）
+//   glow   光暈半徑倍率（× radius，0 = 不畫；加色混合的成本與「面積」成正比，
+//          所以大體積的東西（火海）不給光暈 —— 它自己的火焰漸層就是光源）
+//   trail  拖尾長度係數（× 速度，0 = 這型不畫拖尾）
+// 貼圖由 ProjectileFX 快取，每發每幀只多兩次 drawImage。
+const FX = {
+  kunai:     { color: '#cfe8ff', glow: 1.9, trail: 0.072 },
+  merc:      { color: '#b5e48c', glow: 1.6, trail: 0.05 },
+  guardian:  { color: '#4cc9f0', glow: 1.6, trail: 0 },
+  saw:       { color: '#ffd166', glow: 1.4, trail: 0.04 },
+  drill:     { color: '#ffb703', glow: 1.5, trail: 0.045 },
+  rocket:    { color: '#ff7b00', glow: 2.1, trail: 0.075 },
+  fire_pool: { color: '#ff7b00', glow: 0, trail: 0 },
+  soccer:    { color: '#00e5ff', glow: 1.7, trail: 0.045 },
+};
+const FX_DEFAULT = { color: '#ffffff', glow: 1.8, trail: 0.05 };
+// 拖尾只在「真的在飛」時畫：環繞刀刃與地面积火是慢速/靜止實體
+const TRAIL_MIN_SPEED = 140;
+const TRAIL_MAX_LEN = 78;   // 上限，避免超高速彈體拉出一條貫穿畫面的長條
 
 // '#rrggbb' → 'r,g,b' (給 rgba() 字串用)
 function hexToRgbStr(hex) {
@@ -238,6 +262,17 @@ export class Projectile {
 
     ctx.save();
     ctx.translate(screenX, screenY);
+
+    // 飛行光暈與速度拖尾：先畫，讓本體疊在最上層（光暈/拖尾都在本體之下）
+    const fx = FX[this.type] || FX_DEFAULT;
+    const speed = Math.abs(this.vx) + Math.abs(this.vy);
+    if (fx.trail > 0 && speed > TRAIL_MIN_SPEED) {
+      const len = Math.min(TRAIL_MAX_LEN, speed * fx.trail);
+      drawStreak(ctx, this.isEvo ? '#ffffff' : fx.color, len,
+        Math.max(3, this.radius * 1.5), Math.atan2(this.vy, this.vx),
+        this.isEvo ? 0.72 : 0.5);
+    }
+    if (fx.glow > 0) drawGlow(ctx, fx.color, this.radius * fx.glow, this.isEvo ? 0.5 : 0.34);
 
     // 蓄能彈：外圈套一層元素光暈，讓玩家看得出這發不一樣
     if (this.charge) {

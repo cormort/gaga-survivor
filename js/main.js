@@ -2530,6 +2530,9 @@ class Game {
     // 繪製主角特工鴨
     this.player.draw(this.ctx, renderCam);
 
+    // 手上的武器畫在角色之上：這是「帶了什麼武器」最直接的視覺答案
+    this.weaponManager.drawHeldWeapons(this.ctx, renderCam);
+
     // 繪製流浪黑市商人
     if (this.merchant) {
       drawMerchant(this, renderCam);
