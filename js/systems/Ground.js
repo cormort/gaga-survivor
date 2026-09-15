@@ -798,9 +798,12 @@ export class GroundRenderer {
         ctx.fill();
         break;
       }
+      case 'crack':
       default: {
         // 商業街柏油裂紋 + 偶發霓虹微光裂縫
         // 三種模板：單折線 / 分岔 / 雙折線，避免每格都是同一條裂縫
+        // （`crack` 是 levels.js 實際會宣告的值；`default` 讓未知值也退回這個模板，
+        //  兩者共用同一段程式碼，所以標籤要一起寫，否則讀資料的人會以為 crack 沒實作）
         const tmpl = Math.floor(r3 * 3) % 3;
         ctx.strokeStyle = g.motifColor;
         ctx.lineWidth = 1.4;
