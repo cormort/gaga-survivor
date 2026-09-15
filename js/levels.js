@@ -384,7 +384,7 @@ export const LEVELS = {
     desc: '黃沙掩埋的裝甲要塞，快速部隊在沙幕裡突進，視野與反應都被壓縮。',
     difficulty: 7,
     dnaMult: 3.9,
-    next: 'endless',
+    next: 'foundry',
     theme: {
       top: '#2b2418', mid: '#1a150d', bottom: '#0b0906',
       grid: 'rgba(255,230,160,0.04)', major: 'rgba(255,205,90,0.12)',
@@ -435,14 +435,198 @@ export const LEVELS = {
     ],
   },
 
+  // ── 第二批量身訂做：這三關都用了「既有渲染分支、但組合沒出現過」的地形 ──
+  // 前八關用掉的組合是 (asphalt,crack,road) (metal,panel,plates) (snow,crystal,icefield)
+  // (lava,lava,channels) (metal,panel,channels) (void,crystal,rifts) (asphalt,crack,plates) (void,void,rifts)，
+  // 這裡刻意選三組全新的：(metal,lava,plates)、(snow,void,channels)、(void,crack,road) ——
+  // 既有渲染管線、沒有新分支，但畫面與前八關都不會撞。
+
+  foundry: {
+    id: 'foundry',
+    name: '熔毀鑄造廠',
+    sub: '鐵水與重甲',
+    icon: '🏭',
+    desc: '冷卻中的鑄造產線，鐵水從地縫湧出，重甲守衛在輸送帶之間巡邏。',
+    difficulty: 8,
+    dnaMult: 4.4,
+    next: 'frostvoid',
+    theme: {
+      top: '#1b1a19', mid: '#111010', bottom: '#070607',
+      // 夜間工廠的深灰鐵：底色幾乎無彩度，橘色只出現在地縫（沙暴要塞是亮沙色，
+      // 兩者原本都是暖色底 → 8×8 區塊平均只差 7.2%，壓暗底色並拉高裂縫亮度後才分開）
+      grid: 'rgba(255,170,120,0.035)', major: 'rgba(255,110,50,0.11)',
+      gridStyle: { size: 52, major: 5 },            // 產線：密格柵
+      bounds: 'rgba(255,120,60,0.65)',
+      grade: { c1: '255,110,40', a1: 0.03, c2: '25,12,6', a2: 0.12 },
+      vignette: 1.22,
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.012 }, { c: '255,110,40', a: 0.035 }],
+        material: 'metal',     // 金屬地板（與地鐵同材質、不同配色與花紋）
+        motif: 'lava',         // 地縫裡的鐵水：既有的熔岩裂縫模板，換成冷卻中的橘紅
+        motifColor: 'rgba(255,110,40,0.34)',
+        accent: 'rgba(255,160,90,0.40)',
+        density: { stain: 0.76, stainRadius: 0.9, motif: 1.8, grain: 0.95, accents: 1.3, base: 1.15 },
+        macro: {
+          kind: 'plates', cell: 760,
+          base: 'rgba(70,60,55,0.28)', line: 'rgba(0,0,0,0.40)', accent: 'rgba(255,150,80,0.40)',
+          landmark: ['gear', 'lavafall'], landmarkCell: 950, landmarkChance: 0.62,
+          escalate: { rgb: '255,120,60', count: 26 },
+        },
+      },
+    },
+    decor: ['pipes', 'steel', 'gear', 'tank', 'lava_crack'],
+    decorDensity: 0.55,
+    hpScale: 3.4,
+    // 重甲產線：怪更厚、我方更脆，但金幣回報高（換裝備的關）
+    rules: {
+      label: '鐵水產線', desc: '敵人血量 +40%、我方受到傷害 +25%；金幣 +80%',
+      enemyHpMul: 1.4, damageTakenMul: 1.25, goldMul: 1.8,
+    },
+    mechs: [
+      { type: 'geyser', interval: 16, jitter: 6, radius: 200, fuse: 1.1, dmg: 20, dmgEnemy: 2600, color: '#ff7700' },
+      { type: 'mine', interval: 20, jitter: 8, radius: 160, fuse: 1.3, dmg: 18, dmgEnemy: 2200, color: '#ffb703' },
+    ],
+    waves: [
+      { until: 40, pool: [['walker', 0.45], ['brute', 0.35], ['boomer', 0.2]], interval: 0.66, batch: 1 },
+      { until: 95, pool: [['brute', 0.4], ['boomer', 0.3], ['warden', 0.2], ['walker', 0.1]], interval: 0.56, batch: 2 },
+      { until: 210, pool: [['brute', 0.3], ['warden', 0.24], ['boomer', 0.2], ['hatcher', 0.14], ['spitter', 0.12]], interval: 0.42, batch: 2 },
+      { until: 350, pool: [['brute', 0.26], ['warden', 0.22], ['hatcher', 0.16], ['chimera', 0.12], ['boomer', 0.14], ['spitter', 0.1]], interval: 0.32, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['brute', 0.22], ['warden', 0.18], ['hatcher', 0.16], ['chimera', 0.14], ['boomer', 0.14], ['spitter', 0.1], ['hound', 0.06]], interval: 0.26, batch: 3 },
+      { until: 9999, pool: [['brute', 0.2], ['warden', 0.16], ['hatcher', 0.16], ['chimera', 0.16], ['boomer', 0.14], ['spitter', 0.1], ['hound', 0.08]], interval: 0.22, batch: 4 },
+    ],
+    bosses: [
+      { at: 120, hp: 24000, name: '鑄造監督官', speed: 66, damage: 36, behaviors: ['ground'], skin: 'boss_foundry' },
+      { at: 300, hp: 62000, name: '鐵水巨兵', speed: 54, damage: 42, behaviors: ['nova', 'summon'], skin: 'boss_foundry' },
+      { at: LEVEL_DURATION, hp: 180000, name: '熔毀泰坦‧爐心', speed: 70, damage: 44, final: true, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_foundry' },
+    ],
+  },
+
+  frostvoid: {
+    id: 'frostvoid',
+    name: '霜封虛空',
+    sub: '冰面與符文',
+    icon: '🧊',
+    desc: '被虛空符文凍結的冰河渠道，冰面滑行、符文池腐蝕，走位決定生死。',
+    difficulty: 9,
+    dnaMult: 5.0,
+    next: 'voidroad',
+    theme: {
+      top: '#1a1430', mid: '#100b20', bottom: '#06040f',
+      // 紫羅蘭冰原：極寒基地是「亮白藍」，這裡壓暗底色、把符文拉成紫色，
+      // 否則兩張冰地圖在全域調光後幾乎同色（8×8 區塊平均只差一位數）
+      grid: 'rgba(200,180,255,0.04)', major: 'rgba(170,130,255,0.15)',
+      gridStyle: { size: 68, major: 5, dash: 9 },   // 冰河渠道：疏落虛線
+      bounds: 'rgba(170,130,255,0.6)',
+      grade: { c1: '150,110,255', a1: 0.06, c2: '40,20,90', a2: 0.11 },
+      vignette: 1.2,
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.012 }, { c: '160,120,255', a: 0.05 }],
+        material: 'snow',      // 霜雪顆粒
+        motif: 'void',         // 但刻的是虛空符文（不是冰晶）
+        motifColor: 'rgba(180,150,255,0.36)',
+        accent: 'rgba(210,190,255,0.32)',
+        density: { stain: 0.34, stainRadius: 1.2, motif: 1.7, grain: 1.1, accents: 1.1, base: 0.8 },
+        macro: {
+          kind: 'channels', cell: 900,
+          base: 'rgba(90,110,190,0.26)', line: 'rgba(0,0,0,0.28)', accent: 'rgba(190,220,255,0.45)',
+          landmark: ['icespire', 'runecircle'], landmarkCell: 1100, landmarkChance: 0.6,
+          escalate: { rgb: '150,140,255', count: 24 },
+        },
+      },
+    },
+    decor: ['ice_spike', 'snow', 'void_crystal', 'radar'],
+    decorDensity: 0.45,
+    hpScale: 3.8,
+    // 冰面 + 符文池：慢怪厚血，靠滑行與走位
+    rules: {
+      label: '霜封法則', desc: '敵人移速 -10%、血量 +55%；經驗 +35%',
+      enemySpeedMul: 0.9, enemyHpMul: 1.55, expMul: 1.35,
+    },
+    mechs: [
+      { type: 'ice', friction: 0.90 },
+      { type: 'pool', interval: 15, jitter: 6, radius: 165, dur: 8, dmg: 13, color: '#9d8cff' },
+    ],
+    waves: [
+      { until: 45, pool: [['walker', 0.5], ['brute', 0.3], ['bat', 0.2]], interval: 0.66, batch: 1 },
+      { until: 100, pool: [['brute', 0.4], ['bat', 0.24], ['warden', 0.2], ['walker', 0.16]], interval: 0.56, batch: 2 },
+      { until: 215, pool: [['brute', 0.3], ['warden', 0.24], ['chimera', 0.14], ['spitter', 0.16], ['bat', 0.16]], interval: 0.42, batch: 2 },
+      { until: 350, pool: [['brute', 0.24], ['warden', 0.2], ['chimera', 0.18], ['spore_host', 0.14], ['spitter', 0.14], ['hound', 0.1]], interval: 0.32, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['brute', 0.2], ['warden', 0.18], ['chimera', 0.18], ['spore_host', 0.14], ['spitter', 0.14], ['hound', 0.08], ['hatcher', 0.08]], interval: 0.26, batch: 3 },
+      { until: 9999, pool: [['brute', 0.18], ['warden', 0.16], ['chimera', 0.2], ['spore_host', 0.14], ['spitter', 0.14], ['hound', 0.1], ['hatcher', 0.08]], interval: 0.22, batch: 4 },
+    ],
+    bosses: [
+      { at: 120, hp: 30000, name: '霜封守望者', speed: 58, damage: 38, behaviors: ['nova'], skin: 'boss_frostvoid' },
+      { at: 300, hp: 72000, name: '虛空冰像', speed: 92, damage: 36, behaviors: ['barrage', 'summon'], skin: 'boss_frostvoid' },
+      { at: LEVEL_DURATION, hp: 210000, name: '霜封巨像‧永凍', speed: 62, damage: 46, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_frostvoid' },
+    ],
+  },
+
+  voidroad: {
+    id: 'voidroad',
+    name: '虛空裂道',
+    sub: '無盡之前',
+    icon: '🕳️',
+    desc: '無盡深淵前的最後一段裂道，虛空腐蝕沿著裂縫蔓延，密度與速度同時拉滿。',
+    difficulty: 10,
+    dnaMult: 5.6,
+    next: 'endless',
+    theme: {
+      top: '#1a1030', mid: '#0e0820', bottom: '#05030c',
+      grid: 'rgba(160,220,255,0.04)', major: 'rgba(120,255,235,0.13)',
+      gridStyle: { size: 74, major: 6, dash: 14 },  // 裂道：長虛線
+      bounds: 'rgba(120,255,235,0.6)',
+      grade: { c1: '80,255,225', a1: 0.06, c2: '35,8,55', a2: 0.10 },
+      vignette: 1.28,
+      ground: {
+        patches: [{ c: '255,255,255', a: 0.012 }, { c: '110,255,235', a: 0.05 }],
+        material: 'void',      // 虛空星盤
+        motif: 'crack',        // 但裂的是實心裂縫（不是符文）
+        motifColor: 'rgba(0,0,0,0.38)',
+        accent: 'rgba(120,255,235,0.42)',
+        density: { stain: 0.32, stainRadius: 1.35, motif: 2.3, grain: 1.15, accents: 1.25, base: 0.95 },
+        macro: {
+          kind: 'road', cell: 820,
+          base: 'rgba(60,30,110,0.32)', line: 'rgba(0,0,0,0.34)', accent: 'rgba(120,255,235,0.42)',
+          landmark: ['obelisk', 'containment', 'billboard'], landmarkCell: 1000, landmarkChance: 0.62,
+          escalate: { rgb: '120,255,235', count: 30 },
+        },
+      },
+    },
+    decor: ['void_crystal', 'void_obelisk', 'neon', 'hazard'],
+    decorDensity: 0.48,
+    hpScale: 4.2,
+    // 無盡之前的最終檢查點：又快又多，金幣爆量
+    rules: {
+      label: '裂道法則', desc: '敵人移速 +30%、生成 +40%；金幣 +220%',
+      enemySpeedMul: 1.3, spawnMul: 1.4, goldMul: 3.2,
+    },
+    mechs: [
+      { type: 'pool', interval: 14, jitter: 5, radius: 170, dur: 9, dmg: 15, color: '#7dffe8' },
+      { type: 'supply', interval: 42, jitter: 14 },
+    ],
+    waves: [
+      { until: 40, pool: [['runner', 0.4], ['hound', 0.35], ['walker', 0.25]], interval: 0.56, batch: 1 },
+      { until: 95, pool: [['runner', 0.34], ['hound', 0.3], ['boomer', 0.2], ['bat', 0.16]], interval: 0.48, batch: 2 },
+      { until: 210, pool: [['runner', 0.26], ['hound', 0.22], ['boomer', 0.2], ['chimera', 0.14], ['spitter', 0.18]], interval: 0.36, batch: 2 },
+      { until: 350, pool: [['runner', 0.22], ['hound', 0.2], ['chimera', 0.18], ['boomer', 0.16], ['warden', 0.12], ['hatcher', 0.12]], interval: 0.28, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['runner', 0.2], ['hound', 0.18], ['chimera', 0.18], ['boomer', 0.14], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.08]], interval: 0.22, batch: 4 },
+      { until: 9999, pool: [['runner', 0.18], ['hound', 0.16], ['chimera', 0.2], ['boomer', 0.14], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.1]], interval: 0.18, batch: 5 },
+    ],
+    bosses: [
+      { at: 120, hp: 36000, name: '裂道遊魂', speed: 104, damage: 38, behaviors: ['barrage'], skin: 'boss_voidroad' },
+      { at: 300, hp: 82000, name: '虛空騎士', speed: 86, damage: 42, behaviors: ['nova', 'vortex'], skin: 'boss_voidroad' },
+      { at: LEVEL_DURATION, hp: 250000, name: '裂道行者‧終焉', speed: 88, damage: 48, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_voidroad' },
+    ],
+  },
+
   endless: {
     id: 'endless',
     name: '深淵無盡戰',
     sub: '極限生存',
     icon: '🌀',
-    desc: '擊敗沙暴要塞的沙皇後解鎖。無限波次、Boss 每 90 秒輪播降臨，撐得越久拿得越多。',
-    difficulty: 8,
-    dnaMult: 4.8,
+    desc: '擊敗虛空裂道的終焉行者後解鎖。無限波次、Boss 每 90 秒輪播降臨，撐得越久拿得越多。',
+    difficulty: 11,
+    dnaMult: 6.4,
     next: null,
     theme: {
       top: '#241637', mid: '#140b24', bottom: '#07030f',
@@ -486,12 +670,14 @@ export const LEVELS = {
   },
 };
 
-export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'subway', 'swamp', 'storm', 'endless'];
+export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'subway', 'swamp', 'storm',
+  'foundry', 'frostvoid', 'voidroad', 'endless'];
 
 // 無盡模式輪播的 Boss 池 (四關 Boss 全收錄)
 export const ENDLESS_BOSS_CYCLE = []
   .concat(LEVELS.street.bosses, LEVELS.lab.bosses, LEVELS.frost.bosses, LEVELS.core.bosses,
-    LEVELS.subway.bosses, LEVELS.swamp.bosses, LEVELS.storm.bosses)
+    LEVELS.subway.bosses, LEVELS.swamp.bosses, LEVELS.storm.bosses,
+    LEVELS.foundry.bosses, LEVELS.frostvoid.bosses, LEVELS.voidroad.bosses)
   .map((b) => ({ ...b }));
 
 export const ENDLESS_BOSS_INTERVAL = 90;
