@@ -72,6 +72,7 @@ import {
 } from './systems/Merchant.js';
 import { bindEvents, returnToMenu } from './systems/Menu.js';
 import { metaBonuses, upgradeKeyOf } from './meta.js';
+import { SHOP_BOOSTERS } from './shop.js';
 import {
   rollItem,
   rollRarity,
@@ -719,25 +720,34 @@ class Game {
     // 只讀不消耗：真正扣除留到 handleGameOver，開局秒退/放棄才不會白白吃掉戰備
     const activeBoosters = [...(save.data.boosters || [])];
     if (activeBoosters.length > 0) {
+      // 一律照 SHOP_BOOSTERS[id].effect 套用：先前這裡把 0.15 / 1.3 / 0.10 / 100 等數字
+      // 各寫一份，黑市說明改了程式沒改就會變成「說明與實際不符」。
+      // 同一種多劑時清單裡就有多筆，逐筆套用即為疊加（護盾也因此改成累加，不是覆寫）。
+      const names = new Map();
       for (const bId of activeBoosters) {
-        if (bId === 'speed_stim') {
-          this.player.speedMultiplier += 0.15;
-          this.player.baseSpeedMul += 0.15;
-        } else if (bId === 'pierce_ammo') {
-          this.player.bonusPierce = (this.player.bonusPierce || 0) + 1;
-        } else if (bId === 'fortune_magnet') {
-          this.player.magnetMultiplier += 0.5;
-          this.player.baseMagnet += 0.5;
-          this.metaGoldMul = (this.metaGoldMul || 1) * 1.3;
-        } else if (bId === 'frenzy_core') {
-          this.player.metaCrit = (this.player.metaCrit || 0) + 0.10;
-          this.player.metaCritDmg = (this.player.metaCritDmg || 0) + 0.25;
-        } else if (bId === 'vitality_shield') {
-          this.player.shield = 100;
-          this.player.maxShield = 100;
+        const booster = SHOP_BOOSTERS[bId];
+        const eff = booster && booster.effect;
+        if (!eff) continue;
+        if (eff.speed) {
+          this.player.speedMultiplier += eff.speed;
+          this.player.baseSpeedMul += eff.speed;
         }
+        if (eff.pierce) this.player.bonusPierce = (this.player.bonusPierce || 0) + eff.pierce;
+        if (eff.magnet) {
+          this.player.magnetMultiplier += eff.magnet;
+          this.player.baseMagnet += eff.magnet;
+        }
+        if (eff.gold) this.metaGoldMul = (this.metaGoldMul || 1) * eff.gold;
+        if (eff.crit) this.player.metaCrit = (this.player.metaCrit || 0) + eff.crit;
+        if (eff.critDmg) this.player.metaCritDmg = (this.player.metaCritDmg || 0) + eff.critDmg;
+        if (eff.shield) {
+          this.player.shield = (this.player.shield || 0) + eff.shield;
+          this.player.maxShield = Math.max(this.player.maxShield || 0, this.player.shield);
+        }
+        names.set(booster.name, (names.get(booster.name) || 0) + 1);
       }
-      this.ui.sayStatus(`💉 戰術興奮劑已生效！(${activeBoosters.length} 項戰備)`);
+      const list = [...names].map(([n, c]) => (c > 1 ? `${n}×${c}` : n)).join('、');
+      this.ui.sayStatus(`💉 戰術興奮劑已生效！${list}`);
     }
 
     // 每日挑戰中規則層處理不了的兩項 (玩家速度與血量上限是加法/覆寫語意)

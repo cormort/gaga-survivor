@@ -10,7 +10,7 @@
 import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
 import { LEVELS, LEVEL_ORDER, getDailyChallenge } from '../levels.js';
 import { MODES, MODE_ORDER, getMode } from '../modes.js';
-import { MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXPAND_COST, STASH_EXPANSION_STEP } from '../shop.js';
+import { MAX_BOOSTER_STACK, MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXPAND_COST, STASH_EXPANSION_STEP, shopItemLevel } from '../shop.js';
 import { itemName } from '../items.js';
 import { save } from '../save.js';
 import { sound } from '../audio.js';
@@ -49,21 +49,23 @@ export function bindEvents(game) {
           return;
         }
         buy(currency, crate.costGold, crate.costDna, () => {
-          const item = crate.roll();
+          // 箱子的裝備等級跟著玩家的最佳紀錄（shopItemLevel），不再是永遠 ilvl 1
+          const item = crate.roll(shopItemLevel(save));
           save.addItem(item);
-          game.ui.sayStatus(`成功開啟 ${crate.name}！獲得【${item.rarity.toUpperCase()}】特工裝備！`);
+          game.ui.sayStatus(`成功開啟 ${crate.name}！獲得【${item.rarity.toUpperCase()}】Lv.${(item.ilvl || 1).toFixed(2)} 特工裝備！`);
         });
       },
       onBuyBooster: (boosterKey, currency) => {
         const booster = SHOP_BOOSTERS[boosterKey];
         if (!booster) return;
-        if (save.hasBooster(boosterKey)) {
-          game.ui.sayStatus('該戰術興奮劑已就緒，將於下局自動生效！', true);
+        if (save.boosterCount(boosterKey) >= MAX_BOOSTER_STACK) {
+          game.ui.sayStatus(`${booster.name}已帶滿 ${MAX_BOOSTER_STACK} 劑（同一種的上限）`, true);
           return;
         }
         buy(currency, booster.costGold, booster.costDna, () => {
-          save.addBooster(boosterKey);
-          game.ui.sayStatus(`戰備完成：${booster.name} 已裝備，將於下局生效！`);
+          const res = save.addBooster(boosterKey);
+          const n = res && res.count ? res.count : save.boosterCount(boosterKey);
+          game.ui.sayStatus(`戰備完成：${booster.name} ×${n} 已裝備，將於下局疊加生效！`);
         });
       },
       onExpandStash: (currency) => {

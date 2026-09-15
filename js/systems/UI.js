@@ -9,7 +9,7 @@ import {
   CONSUMABLE_ITEMS,
   WEAPON_ASPECTS,
 } from '../config.js';
-import { TALENTS, TALENT_ORDER, talentCost, upgradeKeyOf } from '../meta.js';
+import { TALENTS, TALENT_ORDER, talentCost, talentInvested, talentTreeCost, talentValueAt, upgradeKeyOf } from '../meta.js';
 import {
   RARITIES,
   SLOTS,
@@ -32,11 +32,13 @@ import {
 import { save, STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 import {
+  MAX_BOOSTER_STACK,
   SHOP_CRATES,
   SHOP_BOOSTERS,
   STASH_EXPAND_COST,
   MAX_STASH_CAP,
   STASH_EXPANSION_STEP,
+  shopItemLevel,
 } from '../shop.js';
 
 // 加成列最多顯示幾個 (只留最近取得的，其餘收成「+N」)
@@ -385,6 +387,9 @@ export class UIManager {
     </div>`;
 
     if (this._currentShopTab === 'crates') {
+      // 箱子的裝備等級跟著玩家的最佳紀錄（shopItemLevel）：把它顯示出來，
+      // 玩家才看得出「打得深 → 黑市貨也跟著變好」這條線
+      const lvl = shopItemLevel(save);
       for (const [key, crate] of Object.entries(SHOP_CRATES)) {
         const card = document.createElement('div');
         card.className = 'shop-card';
@@ -395,6 +400,7 @@ export class UIManager {
           <div class="shop-card-icon">${crate.icon}</div>
           <div class="shop-card-title" style="color: ${crate.color}">${crate.name}</div>
           <div class="shop-card-desc">${crate.desc}</div>
+          <div class="shop-card-ilvl">裝備等級 <strong>Lv.${lvl.toFixed(2)}</strong>（隨你的最佳紀錄提升）</div>
           ${stashFull ? '<div style="color: #ff0055; font-size: 11px; margin-bottom: 6px; font-weight: bold;">⚠️ 裝備倉庫已滿</div>' : ''}
           ${group('buy-crate', key, crate, stashFull)}
         `;
@@ -404,13 +410,15 @@ export class UIManager {
       for (const [key, booster] of Object.entries(SHOP_BOOSTERS)) {
         const card = document.createElement('div');
         card.className = 'shop-card';
-        const has = save.hasBooster(key);
+        const owned = save.boosterCount(key);
+        const full = owned >= MAX_BOOSTER_STACK;
 
         card.innerHTML = `
           <div class="shop-card-icon">${booster.icon}</div>
           <div class="shop-card-title" style="color: ${booster.color}">${booster.name}</div>
           <div class="shop-card-desc">${booster.desc}</div>
-          ${has ? '<div class="booster-equipped-badge">✓ 已就緒 (下局生效)</div>' : group('buy-booster', key, booster, has)}
+          ${owned > 0 ? `<div class="booster-equipped-badge">✓ 已就緒 ×${owned} / ${MAX_BOOSTER_STACK} (下局疊加生效)</div>` : ''}
+          ${full ? '<div class="booster-equipped-badge">已帶滿上限</div>' : group('buy-booster', key, booster, false)}
         `;
         grid.appendChild(card);
       }
@@ -456,20 +464,35 @@ export class UIManager {
     if (!this.talentList) return;
     this.talentList.innerHTML = '';
 
+    // 總進度：讓「基因強化還有多長」看得見（先前只有 5 個 LV x/5，看不出全樹規模）
+    const invested = talentInvested(save.data.talents || {});
+    const total = talentTreeCost();
+    const head = document.createElement('div');
+    head.className = 'talent-progress';
+    head.innerHTML = `
+      <div class="talent-progress-text">基因強化進度 <strong>${invested}</strong> / ${total} 🧬（${Math.round(invested / total * 100)}%）</div>
+      <div class="talent-progress-bar"><span style="width:${Math.min(100, invested / total * 100).toFixed(1)}%"></span></div>
+    `;
+    this.talentList.appendChild(head);
+
     TALENT_ORDER.forEach((id) => {
       const def = TALENTS[id];
       const lvl = save.talentLevel(id);
       const maxed = lvl >= def.maxLevel;
       const cost = maxed ? 0 : talentCost(def, lvl);
+      const now = talentValueAt(def, lvl);
+      const next = talentValueAt(def, lvl + 1);
 
       const row = document.createElement('div');
       row.className = 'talent-row' + (maxed ? ' maxed' : '');
       const affordable = !maxed && dna >= cost;
+      const nowTxt = def.valuePerLevel < 1 ? `${Math.round(now * 100)}%` : `${Math.round(now)}`;
+      const nextTxt = def.valuePerLevel < 1 ? `${Math.round(next * 100)}%` : `${Math.round(next)}`;
       row.innerHTML = `
         <span class="talent-icon">${def.icon}</span>
         <div class="talent-info">
           <div class="talent-name">${def.name}<span class="talent-lv">LV ${lvl}/${def.maxLevel}</span></div>
-          <div class="talent-desc">${def.desc}</div>
+          <div class="talent-desc">${def.desc}${maxed ? `（已滿：+${nextTxt}）` : `　<span class="talent-next">下一級 ${nowTxt} → ${nextTxt}</span>`}</div>
         </div>
         <button class="talent-up${affordable ? ' affordable' : ''}"${maxed ? ' disabled' : ''}>${maxed ? 'MAX' : `升級 ${cost} 🧬`}</button>
       `;

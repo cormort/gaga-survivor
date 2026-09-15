@@ -2,6 +2,8 @@
 
 import { TALENTS, talentCost } from './meta.js';
 import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes, FUSION_COST, fuseItems } from './items.js';
+// 疊加上限住在黑市商品表旁邊（那裡才是「可以帶幾劑」的定義），存檔只負責執行
+import { MAX_BOOSTER_STACK } from './shop.js';
 
 export const STASH_CAP = 30;
 
@@ -237,16 +239,25 @@ export const save = {
   },
 
   hasBooster(id) {
-    return Array.isArray(this.data.boosters) && this.data.boosters.includes(id);
+    return this.boosterCount(id) > 0;
+  },
+
+  // 同一種興奮劑可以帶多劑（上限 MAX_BOOSTER_STACK）：這是黑市在永久天賦之外的 DNA 出口，
+  // 也讓「這一局要梭多少」變成選擇。清單裡的重複項就是劑數，main.js 逐項套用即為疊加。
+  boosterCount(id) {
+    if (!Array.isArray(this.data.boosters)) return 0;
+    return this.data.boosters.filter((b) => b === id).length;
   },
 
   addBooster(id) {
     if (!Array.isArray(this.data.boosters)) this.data.boosters = [];
-    if (!this.data.boosters.includes(id)) {
-      this.data.boosters.push(id);
-      this.flush();
+    const count = this.boosterCount(id);
+    if (count >= MAX_BOOSTER_STACK) {
+      return { ok: false, reason: `已帶滿 ${MAX_BOOSTER_STACK} 劑`, count };
     }
-    return true;
+    this.data.boosters.push(id);
+    this.flush();
+    return { ok: true, count: count + 1 };
   },
 
   consumeBoosters() {
