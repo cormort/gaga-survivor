@@ -7,7 +7,7 @@
 //   - 力量/幸運藥劑真的有傷害與暴擊效果
 //   - 淘金狂潮是 ×2 且不會殘留、聖光結界會到期
 //   - 盾衛正面減傷 vs 背後完整傷害、基隆印記 +25%
-//   - 13 種敵人都有各自 ai.kind、五關巨觀地形與格線樣式互不相同
+//   - 13 種敵人都有各自 ai.kind、每關都有巨觀地形、格線樣式互不相同
 //   - 倉庫容量、結算不會重複入帳、型態效果是否真的由 stats 驅動
 //
 // 用法：
@@ -184,12 +184,18 @@ const results = await page.evaluate(async () => {
     ENEMY_TYPES.hound.ai.kind + ' vs ' + ENEMY_TYPES.runner.ai.kind);
   ok('沒有舊的 dash 欄位', !ENEMY_TYPES.runner.dash && !ENEMY_TYPES.hound.dash);
 
-  // 11) 地形：五關各有不同的宏觀結構
-  const kinds5 = LEVEL_ORDER.map((id) => LEVELS[id].theme.ground.macro && LEVELS[id].theme.ground.macro.kind);
-  ok('五關巨觀結構互不相同', new Set(kinds5).size === 5, kinds5.join('/'));
+  // 11) 地形：每關都有自己的宏觀結構（種類可以重複，但要有分化），格線樣式則必須兩兩不同
+  // 註：關卡數從 5 長到 8 之後，巨觀結構是**刻意重用**的（subway 用 channels、storm 用 plates），
+  // 所以這條從「8 種都不同」改成「每關都有、且至少 4 種不同」；格線樣式仍然要求全部互異。
+  const macroKinds = LEVEL_ORDER.map((id) => LEVELS[id].theme.ground.macro && LEVELS[id].theme.ground.macro.kind);
+  ok('每關都有巨觀結構，且至少 4 種不同',
+    macroKinds.every(Boolean) && new Set(macroKinds).size >= 4,
+    `${LEVEL_ORDER.length} 關｜${new Set(macroKinds).size} 種：${macroKinds.join('/')}`);
   const dens5 = LEVEL_ORDER.map((id) => LEVELS[id].theme.ground.density && LEVELS[id].theme.ground.density.stain);
-  ok('五關汙漬密度不再寫死', new Set(dens5).size >= 4, dens5.join('/'));
-  ok('五關格線樣式不同', new Set(LEVEL_ORDER.map((id) => JSON.stringify(LEVELS[id].theme.gridStyle))).size === 5);
+  ok('每關汙漬密度不再寫死', new Set(dens5).size >= 4, dens5.join('/'));
+  const gridStyles = LEVEL_ORDER.map((id) => JSON.stringify(LEVELS[id].theme.gridStyle));
+  ok('每關格線樣式互不相同', new Set(gridStyles).size === LEVEL_ORDER.length,
+    `${LEVEL_ORDER.length} 關｜${new Set(gridStyles).size} 種`);
 
   // 13) 倉庫容量
   ok('save.getStashCap 存在', typeof save.getStashCap === 'function');

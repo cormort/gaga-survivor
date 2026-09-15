@@ -44,7 +44,9 @@ export const AFFIXES = {
 
 export const AFFIX_ORDER = ['dmg', 'hp', 'speed', 'magnet', 'cdr', 'gold', 'crit', 'critdmg', 'armor', 'exp'];
 
-// 物品等級：關卡難度 + 存活時間，數值隨之線性成長 (最高約 2 倍)
+// 物品等級：關卡難度 + 存活時間，數值隨之線性成長。
+// 上限由「最難關卡的難度」決定：難度 11（深淵無盡戰）撐滿 480 秒 → 1 + 2.5 + 0.75 = 4.25。
+// 所以每次新增更深的關卡，裝備的成長天花板會跟著往上，不需要改這裡。
 export function itemLevelFor(difficulty, gameTime) {
   return 1 + (difficulty - 1) * 0.25 + Math.min(0.75, gameTime / 640);
 }
@@ -186,7 +188,7 @@ export const FUSION_COST = {
 export function rollItem({ slot = null, rarity = null, ilvl = 1, setKey = null, legendaryEffect = null } = {}) {
   const slotKey = slot || SLOT_ORDER[Math.floor(Math.random() * SLOT_ORDER.length)];
   // 稀有度吃物品等級：原本 rollRarity() 不帶參數，打得再深也不會更容易掉傳奇/神話，
-  // 於是「深入關卡」對裝備完全沒有回報。ilvl 1 → 無加成、ilvl 2.75 → 傳奇權重 ×3.6、神話 ×8。
+  // 於是「深入關卡」對裝備完全沒有回報。ilvl 1 → 無加成、ilvl 4.25（最難關撐滿）→ 權重大幅提高。
   const rarityKey = rarity || rollRarity(Math.max(0, (ilvl - 1) * 0.5));
   const rarityDef = RARITIES[rarityKey];
 

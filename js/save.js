@@ -4,6 +4,8 @@ import { TALENTS, talentCost } from './meta.js';
 import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes, FUSION_COST, fuseItems } from './items.js';
 // 疊加上限住在黑市商品表旁邊（那裡才是「可以帶幾劑」的定義），存檔只負責執行
 import { MAX_BOOSTER_STACK } from './shop.js';
+// 舊存檔的解鎖鏈修補需要關卡表（levels.js 是純資料、不 import 任何模組，不會循環）
+import { LEVELS } from './levels.js';
 
 export const STASH_CAP = 30;
 
@@ -79,6 +81,18 @@ function ensureDefaults(d) {
   }
   if (!MODE_IDS.includes(d.mode)) d.mode = 'survivor';
 
+  // 新增關卡後修補解鎖鏈：**已經通關過的關卡，它的下一關必須是解鎖的**。
+  // 為什麼需要：core 的 next 從 'endless' 改成 'subway'（這次新增三關）之後，
+  // 「改版前就通關 core」的玩家不會再觸發一次 unlock，新關卡會永遠鎖著 ——
+  // 玩家只會覺得「更新後什麼都沒多」，而畫面上完全沒有線索。
+  for (const m of MODE_IDS) {
+    for (const [levelId, rec] of Object.entries(d.best[m] || {})) {
+      if (!rec || !rec.cleared) continue;
+      const nxt = LEVELS[levelId] && LEVELS[levelId].next;
+      if (nxt && !d.unlocked[m].includes(nxt)) d.unlocked[m].push(nxt);
+    }
+  }
+
   if (!Array.isArray(d.unlockedChars)) d.unlockedChars = ['duck'];
   if (!d.unlockedChars.includes('duck')) d.unlockedChars.unshift('duck');
   // 舊存檔已選了某特工 → 視為已擁有，避免改版後被鎖住
@@ -98,8 +112,7 @@ function ensureDefaults(d) {
   if (!d.settings || typeof d.settings !== 'object') d.settings = {};
   d.settings = { sfx: 1, bgm: 0.8, ...d.settings };
 
-  if (!d.weaponAspects || typeof d.weaponAspects !== 'object') {
-    d.weaponAspects = {
+  if (!d.weaponAspects || typeof d.weaponAspects !== 'object') {    d.weaponAspects = {
       kunai: 'zagreus',
       rocket: 'hestia',
       molotov: 'zagreus',

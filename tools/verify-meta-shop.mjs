@@ -37,7 +37,7 @@ const results = await page.evaluate(async () => {
   const shop = await imp('js/shop.js');
   const items = await imp('js/items.js');
   const { save } = await imp('js/save.js');
-  const { LEVELS } = await imp('js/levels.js');
+  const { LEVELS, LEVEL_ORDER } = await imp('js/levels.js');
   const g = window.game;
 
   // 這幾支是本次新增的 API。舊版沒有它們 —— 缺了要明確 FAIL，而不是讓整支工具
@@ -134,12 +134,17 @@ const results = await page.evaluate(async () => {
       noProgress === 1, `ilvl ${noProgress}`);
     const vet = { data: { best: { survivor: { core: { time: 420, kills: 900, cleared: false } }, defense: {} } } };
     const vetLvl = shop.shopItemLevel(vet);
-    const deepLvl = shop.shopItemLevel({ data: { best: { survivor: { endless: { time: 480, kills: 2000, cleared: true } } } } });
+    const deepestId = LEVEL_ORDER.reduce((best, id) => (LEVELS[id].difficulty > LEVELS[best].difficulty ? id : best), LEVEL_ORDER[0]);
+    const deepestDiff = LEVELS[deepestId].difficulty;
+    const deepExpect = items.itemLevelFor(deepestDiff, 480);
+    const deepLvl = shop.shopItemLevel({ data: { best: { survivor: { [deepestId]: { time: 480, kills: 2000, cleared: true } } } } });
     ok('[黑市] 打過難度 4 並撐 420 秒 → 箱子 ilvl > 2（跟著最佳紀錄走）',
       vetLvl > 2 && Math.abs(vetLvl - items.itemLevelFor(4, 420)) < 0.01,
       `ilvl ${vetLvl.toFixed(2)}（公式 ${items.itemLevelFor(4, 420).toFixed(2)}）`);
-    ok('[黑市] 打到最難關卡並撐滿 → 箱子 ilvl 到上限 2.75（與局內掉落同一條公式）',
-      Math.abs(deepLvl - 2.75) < 0.01, `ilvl ${deepLvl.toFixed(2)}`);
+    // 上限從關卡表推導（不寫死）：新增更深的關卡時裝備天花板會跟著上去，
+    // 這條檢查會自動跟著移動，不會變成一顆每次加關卡都要改的定時炸彈。
+    ok(`[黑市] 打到最難關卡（${deepestId} 難度 ${deepestDiff}）並撐滿 → 箱子 ilvl 到上限 ${deepExpect.toFixed(2)}`,
+      Math.abs(deepLvl - deepExpect) < 0.01, `ilvl ${deepLvl.toFixed(2)}（期望 ${deepExpect.toFixed(2)}）`);
   } else {
     ok('[黑市] 沒有紀錄的新玩家 → 箱子是 ilvl 1（不會一開始就送後期裝）', false, MISSING);
     ok('[黑市] 打過難度 4 並撐 420 秒 → 箱子 ilvl > 2（跟著最佳紀錄走）', false, MISSING);
