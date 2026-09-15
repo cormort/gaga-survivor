@@ -78,6 +78,11 @@ const BOSS_ACCENT = [
   ['boss_lab', '#7dff8f'],
   ['boss_frost', '#7fd8ff'],
   ['boss_core', '#c77dff'],
+  // 新三關的主色必須排在泛用規則 ['boss', …] 之前：accentFor 是前綴比對、取第一個命中，
+  // 放到後面就永遠輪不到它們，三隻會全部吃到泛用粉紅邊光。
+  ['boss_subway', '#ff9f45'],
+  ['boss_swamp', '#7dff8f'],
+  ['boss_storm', '#ffd166'],
   ['boss', '#ff4d6d'],
 ];
 
@@ -1865,6 +1870,845 @@ function drawBossCore(x, t, r, charging, final) {
   }
 }
 
+/* ==================== 三隻新增關卡 Boss ====================
+   為什麼要偏離「圓形身體 + 兩隻手」：street/lab/frost/core 四隻骨子裡都是同一個模板
+   （一顆球 + 四肢 + 一顆頭），擺在一起只看剪影會認不出誰是誰。辨識度來自**外輪廓的
+   長寬比與重心**，不是內部的細節，所以新三隻各自認領一種輪廓：
+     subway 橫向長條（實心剪影 223×209 → 寬:高 ≈ 1.07。舊的 street/lab 數字更寬，
+       但牠們的「寬」是揮出去的兩隻手，subway 的寬是一整條連續車體，讀起來完全不同）、
+     swamp 上寬下窄（186×203，重心在上、底下收成細柄 + 垂根）、
+     storm 縱向分節圓柱（167×204，最窄最高，由 4~5 節甲殼堆疊而成）。
+   三隻都吃 t（0~1 相位）讓動畫循環，且都以「陰影 → 氣場 → 附肢 → 主體 → 發光細節」的
+   順序畫，這樣後面的東西才會蓋在前面（列車的砲塔要壓在車頂上、沙蟲的口器要在身體前面）。
+   另外三隻的半徑都抓在 0.9r 附近：r 是碰撞半徑，畫超過 1r 會讓「看起來打到卻沒傷害」，
+   但 final 版沿用同一顆 r=50，所以體型差異要靠長度/節數而不是無腦放大。 */
+
+// ── 鏽蝕地下鐵：裝甲列車頭 ───────────────────────────────────────────────
+// 為什麼是「火車」而不是人形：這關的主題字是「地下鐵」，橫向長條的剪影同時解決兩件事 ——
+// 跟其他四隻不會撞衫，而且車頭燈(前方暖光) + 排障器(下方楔形)天然給了「朝右衝過來」的
+// 方向感。動畫選擇讓**輪子轉**而不是讓車身上下跳：輪子是旋轉運動，8 幀循環看不出接縫，
+// 而整台車上下跳會讓人以為它在飄。
+function drawBossSubway(x, t, r, charging, final) {
+  const p = t * Math.PI * 2;
+  // 車體長度刻意只跟 final 有關：final 更長 → 剪影直接變「更橫」，比重畫細節更有感。
+  const half = r * (final ? 1.52 : 1.3);
+  const cy = r * 0.16;                       // 車體中心；下面留 r*0.85 給輪組與地面陰影
+  const sway = Math.sin(p) * 1.4;            // 懸吊微晃；幅度刻意小於輪徑，否則是船不是車
+  const chug = Math.abs(Math.sin(p));        // 0~1，煙囪噴煙的節拍
+
+  // 貼地陰影用長橢圓而不是 shadow()：shadow() 畫的是圓，套在長條形車體上會
+  // 在車頭車尾各露出一角，看起來像車子浮在兩個點上。
+  x.fillStyle = 'rgba(0,0,0,0.4)';
+  x.beginPath();
+  x.ellipse(0, r * 1.02, half * 0.95, r * 0.24, 0, 0, Math.PI * 2);
+  x.fill();
+
+  const aura = r + (final ? 34 : 22);
+  const ag = x.createRadialGradient(0, 0, r * 0.5, 0, 0, aura * (1 + Math.sin(p) * 0.05));
+  ag.addColorStop(0, charging ? 'rgba(255,190,70,0.6)' : final ? 'rgba(255,159,69,0.35)' : 'rgba(255,159,69,0.22)');
+  ag.addColorStop(1, 'rgba(255,159,69,0)');
+  x.fillStyle = ag;
+  x.beginPath();
+  x.arc(0, 0, aura * (1 + Math.sin(p) * 0.05), 0, Math.PI * 2);
+  x.fill();
+
+  x.save();
+  x.translate(0, sway);
+
+  // 轉向架 (兩組車輪)：輪輻轉動 = 行進感。輻條角度加 i 才會「輪子各轉各的」，
+  // 全部同相位看起來像整台車在震動而不是在跑。
+  const wheelR = r * 0.3;
+  const axles = [-half * 0.58, half * 0.52];
+  for (let wi = 0; wi < axles.length; wi++) {
+    const wx = axles[wi];
+    for (const side of [-1, 1]) {           // 兩側輪：遠側先畫且壓暗，給出一點縱深
+      const wy = cy + r * 0.6;
+      x.fillStyle = side > 0 ? '#241a12' : '#140f0a';
+      x.beginPath();
+      x.arc(wx, wy, wheelR, 0, Math.PI * 2);
+      x.fill();
+      x.strokeStyle = '#5a422a';
+      x.lineWidth = 2;
+      x.stroke();
+      const spin = p * 2 + wi * 1.3 + (side > 0 ? 0.4 : 0);
+      x.strokeStyle = side > 0 ? 'rgba(220,190,150,0.55)' : 'rgba(160,140,110,0.35)';
+      x.lineWidth = 2.2;
+      for (let k = 0; k < 6; k++) {
+        const a = spin + (k / 6) * Math.PI * 2;
+        x.beginPath();
+        x.moveTo(wx + Math.cos(a) * wheelR * 0.2, wy + Math.sin(a) * wheelR * 0.2);
+        x.lineTo(wx + Math.cos(a) * wheelR * 0.88, wy + Math.sin(a) * wheelR * 0.88);
+        x.stroke();
+      }
+      x.fillStyle = '#6b563a';
+      x.beginPath();
+      x.arc(wx, wy, wheelR * 0.2, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+
+  // 車體下方裝甲裙板：把底盤「收邊」。少了它，車體跟輪子之間會露出一條底色縫。
+  x.fillStyle = '#241812';
+  x.strokeStyle = '#0f0a06';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.moveTo(-half * 0.76, cy + r * 0.52);
+  x.lineTo(half * 0.7, cy + r * 0.52);
+  x.lineTo(half * 0.72, cy + r * 0.74);
+  x.lineTo(-half * 0.76, cy + r * 0.74);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 車體：用線性漸層（上亮下暗）而不是 sphere()。球面漸層套在長方形上會出現
+  // 中央一顆亮斑，金屬板看起來像吹漲的氣球。
+  const bg = x.createLinearGradient(0, cy - r * 0.66, 0, cy + r * 0.62);
+  bg.addColorStop(0, final ? '#8a5a30' : '#76502c');
+  bg.addColorStop(0.42, final ? '#5e3d1f' : '#4c321b');
+  bg.addColorStop(1, '#26180d');
+  x.fillStyle = bg;
+  x.strokeStyle = '#150e07';
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(-half, cy - r * 0.66);                     // 車頂後緣
+  x.lineTo(half * 0.68, cy - r * 0.66);               // 車頂前緣
+  x.lineTo(half, cy - r * 0.26);                      // 車頭斜切
+  x.lineTo(half * 0.92, cy + r * 0.62);               // 車頭下緣
+  x.lineTo(-half * 0.94, cy + r * 0.62);              // 車底
+  x.lineTo(-half, cy + r * 0.16);                     // 車尾斜切
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 車側三條鋼板接縫：長條剪影如果沒有這些橫線，縮到遊戲內尺寸會變成一塊純色磚。
+  x.strokeStyle = 'rgba(16,10,6,0.75)';
+  x.lineWidth = 2;
+  for (let k = 0; k < 3; k++) {
+    const yy = cy - r * 0.42 + k * r * 0.36;
+    x.beginPath();
+    x.moveTo(-half * 0.98, yy);
+    x.lineTo(half * 0.96 - k * r * 0.1, yy);
+    x.stroke();
+  }
+  // 車頂高光：一條就好。多畫幾條會把「上亮下暗」的金屬感洗掉。
+  x.strokeStyle = 'rgba(255,200,140,0.34)';
+  x.lineWidth = 2.6;
+  x.beginPath();
+  x.moveTo(-half * 0.94, cy - r * 0.6);
+  x.lineTo(half * 0.62, cy - r * 0.6);
+  x.stroke();
+
+  // 鉚釘：沿接縫打。final 多打一排 —— 「更多鉚釘」比「更多顏色」更像同一台車的加強版。
+  x.fillStyle = '#c9a468';
+  const rivetRows = final ? [-0.52, -0.16, 0.2, 0.52] : [-0.5, 0.2];
+  for (let k = 0; k < rivetRows.length; k++) {
+    const yy = cy + rivetRows[k] * r;
+    for (let i = 0; i < (final ? 11 : 8); i++) {
+      const rx = -half * 0.9 + (i / ((final ? 11 : 8) - 1)) * half * 1.75;
+      x.beginPath();
+      x.arc(rx, yy, 1.7, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+
+  // 側面通風柵：故意做成「暗底 + 亮柵條」而不是亮底暗條 —— 3px 的暗線在深色柏油上
+  // 完全讀不出來，暗底才讓琥珀色的柵條自己發亮。
+  for (let g = 0; g < (final ? 2 : 1); g++) {
+    const gx = -half * 0.5 + g * r * 0.72;
+    const gy = cy - r * 0.02;
+    const gw = r * 0.52;
+    const gh = r * 0.42;
+    x.fillStyle = '#120b06';
+    x.beginPath();
+    x.rect(gx - gw / 2, gy - gh / 2, gw, gh);
+    x.fill();
+    x.strokeStyle = '#0a0603';
+    x.lineWidth = 2;
+    x.stroke();
+    const heat = charging ? 0.92 : 0.5;
+    for (let i = 0; i < 4; i++) {
+      x.strokeStyle = `rgba(255,159,69,${heat - i * 0.07})`;
+      x.lineWidth = 2.2;
+      const yy = gy - gh / 2 + 2 + i * (gh / 4);
+      x.beginPath();
+      x.moveTo(gx - gw / 2 + 1.5, yy);
+      x.lineTo(gx + gw / 2 - 1.5, yy);
+      x.stroke();
+    }
+    // charging：柵縫漏出強光。這是「蓄力」最好讀的訊號 —— 光從機器內部透出來。
+    if (charging) {
+      const gg = x.createRadialGradient(gx, gy, 0, gx, gy, gw * 0.9);
+      gg.addColorStop(0, 'rgba(255,220,130,0.55)');
+      gg.addColorStop(1, 'rgba(255,159,69,0)');
+      x.fillStyle = gg;
+      x.beginPath();
+      x.arc(gx, gy, gw * 0.9, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+
+  // 車頭燈：整台車唯一的「往右」指標。蓄力時燈泡由琥珀轉白，並且在燈前加一道光束。
+  const lx = half * 0.84;
+  const ly = cy - r * 0.3;
+  const lr = r * 0.2;
+  if (charging) {
+    const beam = x.createLinearGradient(lx, ly, lx + r * 1.05, ly);
+    beam.addColorStop(0, 'rgba(255,235,170,0.6)');
+    beam.addColorStop(1, 'rgba(255,200,90,0)');
+    x.fillStyle = beam;
+    x.beginPath();
+    x.moveTo(lx, ly - lr);
+    x.lineTo(lx + r * 1.05, ly - lr * 1.9);
+    x.lineTo(lx + r * 1.05, ly + lr * 1.9);
+    x.lineTo(lx, ly + lr);
+    x.closePath();
+    x.fill();
+  }
+  x.fillStyle = '#33200e';
+  x.beginPath();
+  x.arc(lx, ly, lr * 1.28, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#140d05';
+  x.lineWidth = 2;
+  x.stroke();
+  const hg = x.createRadialGradient(lx, ly, 0, lx, ly, lr * 1.5);
+  hg.addColorStop(0, charging ? 'rgba(255,255,255,0.95)' : 'rgba(255,232,160,0.9)');
+  hg.addColorStop(1, 'rgba(255,159,69,0)');
+  x.fillStyle = hg;
+  x.beginPath();
+  x.arc(lx, ly, lr * 1.5, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = charging ? '#fffbe8' : '#ffcf72';
+  x.beginPath();
+  x.arc(lx, ly, lr * 0.68, 0, Math.PI * 2);
+  x.fill();
+
+  // 排障器（楔形柵）：畫在車頭最前面並超出車體輪廓，剪影右端因此有「尖」，
+  // 一眼就能判斷車頭朝哪 —— 純圓角矩形做不到這件事。
+  x.strokeStyle = '#3f2a14';
+  x.lineWidth = 3.4;
+  for (let i = -2; i <= 2; i++) {
+    x.beginPath();
+    x.moveTo(half * 0.55, cy + r * 0.5 + Math.abs(i) * r * 0.03);
+    x.lineTo(half * 1.08, cy + r * 0.06 + i * r * 0.15);
+    x.stroke();
+  }
+  x.strokeStyle = '#6b4a22';
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(half * 0.8, cy + r * 0.02);
+  x.lineTo(half * 0.98, cy + r * 0.02);
+  x.stroke();
+
+  // 車尾聯結器 + 拖曳臂：final 多掛一節車廂，聯結器負責「交代」那節車廂是被拉的。
+  // 起點刻意往內縮到車尾斜切面上（不是 -half）：從斜切面伸出去才像真的有掛勾，
+  // 而且整段都在畫布內，不會有半截線條被切掉。
+  if (final) {
+    x.strokeStyle = '#3a3a42';
+    x.lineWidth = 5;
+    x.beginPath();
+    x.moveTo(-half * 0.86, cy + r * 0.2);
+    x.lineTo(-half * 0.96, cy + r * 0.4 + Math.sin(p + 1) * 1.2);
+    x.stroke();
+    x.strokeStyle = '#5a5a66';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(-half * 0.86, cy + r * 0.2);
+    x.lineTo(-half * 0.96, cy + r * 0.4 + Math.sin(p + 1) * 1.2);
+    x.stroke();
+  }
+
+  // 排煙：三顆固定位置的煙團用不同相位漲縮。用「圓的漲縮」而不是真實流體，
+  // 是因為烘焙只有 8 幀、又要能無縫循環，任何有方向性的位移在接回第 0 幀時都會跳。
+  const sx = -half * 0.5;
+  const sy = cy - r * 0.62;
+  x.fillStyle = '#12100e';
+  x.fillRect(sx - r * 0.09, sy - r * 0.3, r * 0.18, r * 0.34);
+  x.fillStyle = '#2a241c';
+  x.fillRect(sx - r * 0.13, sy - r * 0.34, r * 0.26, r * 0.09);
+  for (let i = 0; i < 3; i++) {
+    const k = (chug + i * 0.33) % 1;
+    x.fillStyle = `rgba(90,80,70,${(0.42 - i * 0.1) * (0.4 + k)})`;
+    x.beginPath();
+    x.arc(sx + Math.sin(p + i * 1.7) * r * 0.14, sy - r * 0.42 - i * r * 0.3, r * (0.1 + i * 0.075) * (1 + k * 0.5), 0, Math.PI * 2);
+    x.fill();
+  }
+
+  x.restore();   // 懸吊晃動結束
+  x.save();
+  x.translate(0, final ? -r * 0.62 : 0);   // 後面的車頂裝備不再跟著晃（車頂是剛性的）
+
+  // final：多一節車廂 + 車頂砲塔。兩者都畫在車體之上，剪影因此「更長上更厚」。
+  // 車廂左緣抓在 -half*1.22 ≈ -83px（畫布半寬 104px）：留 20px 給左上的輪廓光與外框。
+  // 原本用 1.52 的版本會讓車廂左緣撞到畫布邊（實測 device bbox x=0），邊光被切平、
+  // 車廂還少一角，看起來像破圖而不是「後面還掛著一節」。
+  if (final) {
+    const carR = -half * 1.0;    // 車廂右緣：躲在車尾斜切後面，接縫不外露
+    const carL = -half * 1.22;   // 車廂左緣
+    const ch2 = r * 0.4;
+    x.fillStyle = '#422c17';
+    x.strokeStyle = '#150e07';
+    x.lineWidth = 2.6;
+    x.beginPath();
+    x.rect(carL, cy - ch2, carR - carL, r * 0.96);
+    x.fill();
+    x.stroke();
+    x.strokeStyle = 'rgba(16,10,6,0.7)';
+    x.lineWidth = 2;
+    for (let k = 0; k < 2; k++) {
+      const yy = cy - ch2 + r * 0.32 + k * r * 0.34;
+      x.beginPath();
+      x.moveTo(carL + 2, yy);
+      x.lineTo(carR - 2, yy);
+      x.stroke();
+    }
+    x.fillStyle = '#c9a468';
+    for (let i = 0; i < 4; i++) {
+      x.beginPath();
+      x.arc(carL + 5 + (i % 2) * Math.max(3, carR - carL - 10), cy - ch2 + 7 + Math.floor(i / 2) * r * 0.72, 1.6, 0, Math.PI * 2);
+      x.fill();
+    }
+    // 尾燈：車頭燈是暖白、尾燈是鏽紅，讓長條剪影的兩端不對稱。
+    const tl = x.createRadialGradient(carL + 3, cy - r * 0.24, 0, carL + 3, cy - r * 0.24, r * 0.22);
+    tl.addColorStop(0, 'rgba(255,90,70,0.95)');
+    tl.addColorStop(1, 'rgba(255,60,50,0)');
+    x.fillStyle = tl;
+    x.beginPath();
+    x.arc(carL + 3, cy - r * 0.24, r * 0.22, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  const tx = half * 0.34;
+  const ty = cy - r * 0.62;
+  if (final) {
+    // 砲塔基座
+    x.fillStyle = '#3a2612';
+    x.strokeStyle = '#140d05';
+    x.lineWidth = 2.4;
+    x.beginPath();
+    x.ellipse(tx, ty + r * 0.16, r * 0.42, r * 0.14, 0, 0, Math.PI * 2);
+    x.fill();
+    x.stroke();
+    // 砲塔本體
+    // 砲塔本體：用垂直漸層（上亮下暗）而不是 sphere()，因為砲塔是圓頂 + 垂直側壁，
+    // 球面漸層會在側壁中央留一圈亮斑，看起來像一顆貼在車頂的球。
+    const tg = x.createLinearGradient(tx, ty - r * 0.3, tx, ty + r * 0.18);
+    tg.addColorStop(0, '#7a5426');
+    tg.addColorStop(1, '#3d2812');
+    x.fillStyle = tg;
+    x.beginPath();
+    x.arc(tx, ty, r * 0.3, Math.PI, Math.PI * 2);
+    x.closePath();
+    x.fill();
+    x.strokeStyle = '#140d05';
+    x.lineWidth = 2.2;
+    x.stroke();
+    // 砲管：charging 時往後縮（後座），並在管口聚一顆愈來愈大的光球。
+    const recoil = charging ? -r * 0.16 + Math.sin(p * 2) * r * 0.02 : 0;
+    x.fillStyle = '#2e2013';
+    x.strokeStyle = '#100a05';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.rect(tx + r * 0.12 + recoil, ty - r * 0.11, r * 0.52, r * 0.13);
+    x.fill();
+    x.stroke();
+    const mg = x.createRadialGradient(tx + r * 0.66 + recoil, ty - r * 0.045, 0, tx + r * 0.66 + recoil, ty - r * 0.045, r * (charging ? 0.3 : 0.16));
+    mg.addColorStop(0, charging ? 'rgba(255,255,235,0.95)' : 'rgba(255,190,90,0.7)');
+    mg.addColorStop(1, 'rgba(255,159,69,0)');
+    x.fillStyle = mg;
+    x.beginPath();
+    x.arc(tx + r * 0.66 + recoil, ty - r * 0.045, r * (charging ? 0.3 : 0.16), 0, Math.PI * 2);
+    x.fill();
+    // 天線
+    x.strokeStyle = '#6b4a22';
+    x.lineWidth = 1.8;
+    x.beginPath();
+    x.moveTo(tx - r * 0.22, ty - r * 0.14);
+    x.lineTo(tx - r * 0.34, ty - r * 0.74 + Math.sin(p) * 2);
+    x.stroke();
+  }
+
+  // charging：車頂裝甲板浮起、底盤下方積蓄電弧。
+  // 浮起的板子讀成「內部壓力正在上升」，比單純加亮更符合機械主題。
+  if (charging) {
+    const lift = 2 + Math.sin(p * 2) * 1.6;
+    x.fillStyle = '#3f4a2e';
+    x.strokeStyle = '#12160c';
+    x.lineWidth = 2;
+    for (const off of [-half * 0.62, half * 0.04]) {
+      x.beginPath();
+      x.rect(off, cy - r * 0.78 - lift, r * 0.46, r * 0.14);
+      x.fill();
+      x.stroke();
+    }
+    x.strokeStyle = 'rgba(255,230,150,0.8)';
+    x.lineWidth = 1.8;
+    for (let i = 0; i < 3; i++) {
+      const ax = -half * 0.7 + i * half * 0.7;
+      x.beginPath();
+      x.moveTo(ax, cy + r * 0.72);
+      x.lineTo(ax + r * 0.1, cy + r * 0.9 - Math.sin(p * 3 + i) * r * 0.06);
+      x.lineTo(ax - r * 0.05, cy + r * 1.06);
+      x.stroke();
+    }
+  }
+  x.restore();
+}
+
+// ── 毒霧沼澤：孢子巨獸 ───────────────────────────────────────────────────
+// 為什麼是倒水滴而不是球：主題是「孢子囊」，生物學上孢子囊就是上寬下窄掛在柄上。
+// 剪影一旦選了倒水滴，跟其他六隻的球形身體就再也分不開 —— 而且重心在上，視覺上
+// 會有「隨時要倒下來壓你」的壓迫感。垂落的根鬚順便提供了下半部的剪影，讓它不會
+// 只是「一顆飄在空中的球」。
+function drawBossSwamp(x, t, r, charging, final) {
+  const p = t * Math.PI * 2;
+  const breathe = Math.sin(p);
+  const pulse2 = 1 + breathe * 0.09;     // 孢子囊的呼吸；幅度比 street 的 0.05 大，因為它是軟的
+  const cy = -r * 0.34;                  // 囊心抬高，底下才有空間掛根鬚
+
+  shadow(x, r * 1.02, r * 1.08);   // 陰影要跟變寬的囊體一起變寬，否則囊會「凸出」自己的影子
+
+  const ag = x.createRadialGradient(0, cy, 0, 0, cy, (r + (final ? 34 : 22)) * pulse2);
+  ag.addColorStop(0, charging ? 'rgba(160,255,150,0.6)' : final ? 'rgba(125,255,143,0.36)' : 'rgba(125,255,143,0.22)');
+  ag.addColorStop(1, 'rgba(125,255,143,0)');
+  x.fillStyle = ag;
+  x.beginPath();
+  x.arc(0, cy, (r + (final ? 34 : 22)) * pulse2, 0, Math.PI * 2);
+  x.fill();
+
+  // 垂落的根鬚：先畫，讓囊體壓在上面（根是從囊底長出來的，接縫不該露出來）。
+  // 每條用不同頻率擺動，群體才不會像一整排節拍器。
+  const roots = final ? 7 : 5;
+  for (let i = 0; i < roots; i++) {
+    const u = roots === 1 ? 0 : (i / (roots - 1)) * 2 - 1;
+    const bend = Math.sin(p + i * 0.8) * r * 0.06;
+    const len = r * (0.5 + 0.16 * Math.cos(u * 2.2)) * (final ? 1.12 : 1);
+    const ex = u * r * 0.8 + bend;
+    const ey = cy + r * 0.72 + len;
+    x.strokeStyle = i % 2 ? '#33591f' : '#27491a';
+    x.lineWidth = r * (0.055 - Math.abs(u) * 0.016);
+    x.beginPath();
+    x.moveTo(u * r * 0.72, cy + r * 0.5);
+    x.quadraticCurveTo(u * r * 0.92 + bend * 1.6, cy + r * 0.5 + len * 0.55, ex, ey);
+    x.stroke();
+    // 根尖的孢子珠：一顆亮點就能讓「下垂的線」讀成「有機的觸鬚」。
+    x.fillStyle = charging ? '#d8ffd0' : '#8fe87a';
+    x.beginPath();
+    x.arc(ex, ey, r * 0.045, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 主囊體：上寬下窄的倒水滴（兩段二次曲線 + 底部收成柄）。
+  // 寬高比刻意做到 0.72 左右（寬 > 高的一半很多）：一開始畫成 0.96 寬的版本時，
+  // 它跟沙蟲的剪影重疊度（IoU）高達 73% —— 兩隻都是「直立橢圓」就等於沒分開。
+  // 把囊體壓扁、加寬之後，沼澤是「一團橫向的囊」，沙蟲是「一根窄高的分節柱」。
+  const bw = r * (final ? 1.2 : 1.12);
+  const bh = r * (final ? 0.8 : 0.72) * pulse2;
+  const bodyG = x.createRadialGradient(-bw * 0.32, cy - bh * 0.42, bw * 0.06, 0, cy, bw * 1.16);
+  bodyG.addColorStop(0, final ? 'rgba(190,255,150,0.95)' : 'rgba(170,240,140,0.9)');
+  bodyG.addColorStop(0.42, final ? 'rgba(78,140,52,0.95)' : 'rgba(62,118,44,0.95)');
+  bodyG.addColorStop(1, 'rgba(24,54,24,0.98)');
+  x.fillStyle = bodyG;
+  x.beginPath();
+  x.moveTo(-bw, cy - bh * 0.1);
+  x.quadraticCurveTo(-bw * 1.04, cy + bh * 0.62, -bw * 0.24, cy + bh * 1.02);   // 左下腹
+  x.quadraticCurveTo(0, cy + bh * 1.18, bw * 0.24, cy + bh * 1.02);              // 囊頸
+  x.quadraticCurveTo(bw * 1.04, cy + bh * 0.62, bw, cy - bh * 0.1);
+  x.quadraticCurveTo(bw * 0.82, cy - bh * 1.08, 0, cy - bh * 1.12);              // 圓頂
+  x.quadraticCurveTo(-bw * 0.82, cy - bh * 1.08, -bw, cy - bh * 0.1);
+  x.closePath();
+  x.fill();
+  x.strokeStyle = '#0d240f';
+  x.lineWidth = 3;
+  x.stroke();
+
+  // 潰爛表皮：只畫在左半與下半（光源固定在左上），畫滿一圈會變成豹紋。
+  x.fillStyle = 'rgba(30,66,26,0.55)';
+  for (let i = 0; i < (final ? 7 : 4); i++) {
+    const a = 0.5 + (i / (final ? 7 : 4)) * Math.PI * 1.35;
+    const rr = bw * (0.5 + 0.28 * Math.cos(i * 1.7));
+    x.beginPath();
+    x.ellipse(Math.cos(a) * rr * 0.86, cy + Math.sin(a) * bh * 0.78, bw * 0.15, bw * 0.1, a, 0, Math.PI * 2);
+    x.fill();
+  }
+  // 膿皰：亮綠小突起。它是「毒」的視覺證據，顏色刻意比囊體亮一階。
+  for (let i = 0; i < (final ? 6 : 3); i++) {
+    const a = -0.6 + i * 1.1;
+    const px2 = Math.cos(a) * bw * 0.66;
+    const py2 = cy + Math.sin(a) * bh * 0.66;
+    x.fillStyle = charging ? '#e6ffd8' : '#a8ff8a';
+    x.beginPath();
+    x.arc(px2, py2, r * (0.055 + 0.012 * Math.sin(p + i)), 0, Math.PI * 2);
+    x.fill();
+    x.strokeStyle = 'rgba(20,50,18,0.8)';
+    x.lineWidth = 1.6;
+    x.stroke();
+  }
+
+  // 孢子核心：囊體中央的脈動光。亮度與半徑都吃 t，charging 時變成主光源
+  // （連囊體都被照亮），這是「牠正在蓄力」最直覺的讀法。
+  const corePulse = 0.5 + 0.5 * Math.sin(p);
+  const coreR = r * 0.3 * (charging ? 1.5 : 1) * (1 + corePulse * 0.22);
+  const cg = x.createRadialGradient(0, cy + r * 0.06, 0, 0, cy + r * 0.06, coreR * 2.1);
+  cg.addColorStop(0, charging ? 'rgba(240,255,220,0.95)' : 'rgba(180,255,160,0.85)');
+  cg.addColorStop(0.42, 'rgba(125,255,143,0.5)');
+  cg.addColorStop(1, 'rgba(125,255,143,0)');
+  x.fillStyle = cg;
+  x.beginPath();
+  x.arc(0, cy + r * 0.06, coreR * 2.1, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = charging ? '#f4ffe8' : '#c8ffb0';
+  x.beginPath();
+  x.arc(0, cy + r * 0.06, coreR * 0.44, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = 'rgba(30,70,25,0.75)';
+  x.lineWidth = 2;
+  x.stroke();
+  // 核心周圍的孢子環：讓核心「在囊裡面」而不是貼在正面。
+  for (let i = 0; i < 4; i++) {
+    const a = p + i * (Math.PI / 2);
+    x.fillStyle = 'rgba(220,255,190,0.7)';
+    x.beginPath();
+    x.arc(Math.cos(a) * coreR * 1.35, cy + r * 0.06 + Math.sin(a) * coreR * 0.6, r * 0.038, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 底部裙襬觸手：一圈短粗的根盤，負責把囊體「坐」在地上。
+  // charging 時往外撐開（擴張感），比單純放大整體更能讀出「要爆了」。
+  const spread = charging ? 1.28 : 1;
+  for (let i = -2; i <= 2; i++) {
+    const a = i * 0.36;
+    const tl = r * (0.42 + 0.1 * Math.cos(i * 1.2)) * spread;
+    x.strokeStyle = i === 0 ? '#2b5220' : '#22421a';
+    x.lineWidth = r * 0.135;
+    x.beginPath();
+    x.moveTo(0, cy + r * 0.42);
+    x.lineTo(Math.sin(a) * tl * 1.5 * spread, cy + r * 0.42 + Math.cos(a) * tl);
+    x.stroke();
+    x.strokeStyle = 'rgba(150,240,120,0.4)';
+    x.lineWidth = r * 0.045;
+    x.beginPath();
+    x.moveTo(0, cy + r * 0.42);
+    x.lineTo(Math.sin(a) * tl * 1.5 * spread, cy + r * 0.42 + Math.cos(a) * tl);
+    x.stroke();
+  }
+
+  // 巨大的兩顆眼：不對稱（一大一小）讓它像生物而不是圖示。
+  for (const [ex, ey, er] of [[-r * 0.26, cy - r * 0.18, r * 0.17], [r * 0.3, cy - r * 0.1, r * 0.12]]) {
+    x.fillStyle = '#0c1c0c';
+    x.beginPath();
+    x.arc(ex, ey, er * 1.16, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = charging ? '#f2ffcf' : '#d8ff9a';
+    x.beginPath();
+    x.arc(ex, ey, er, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#0a2610';
+    x.beginPath();
+    x.ellipse(ex + er * 0.24, ey, er * 0.2, er * 0.64, 0, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 裂口 + 黏牙
+  x.fillStyle = '#132a12';
+  x.beginPath();
+  x.ellipse(0, cy + r * 0.44, r * 0.36, r * 0.15, 0, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = 'rgba(180,255,150,0.45)';
+  x.lineWidth = 1.8;
+  x.stroke();
+  x.fillStyle = '#dbffcf';
+  for (let i = -2; i <= 2; i++) {
+    x.beginPath();
+    x.moveTo(i * r * 0.14 - r * 0.045, cy + r * 0.33);
+    x.lineTo(i * r * 0.14, cy + r * 0.5);
+    x.lineTo(i * r * 0.14 + r * 0.045, cy + r * 0.33);
+    x.closePath();
+    x.fill();
+  }
+
+  // final：囊頂孢子冠（往上長，讓剪影更高更兇）。
+  // 冠頂刻意只到 y ≈ -93px（畫布半高 104px）：再高就會被畫布切平，而外框 + 輪廓光
+  // 需要最上面那幾 px 才長得出來 —— 冠被切掉的話 final 反而比一般版更扁。
+  if (final) {
+    for (let i = -2; i <= 2; i++) {
+      const bx = i * bw * 0.34;
+      const top = cy - bh * 1.12;
+      x.strokeStyle = '#3f7a2a';
+      x.lineWidth = r * 0.09;
+      x.beginPath();
+      x.moveTo(bx, top + r * 0.08);
+      x.quadraticCurveTo(bx + i * r * 0.06, top - r * 0.2, bx + i * r * 0.12, top - r * 0.34 + Math.sin(p + i) * r * 0.05);
+      x.stroke();
+      x.fillStyle = i % 2 ? '#c8ff8a' : '#8ff0a0';
+      x.beginPath();
+      x.arc(bx + i * r * 0.12, top - r * 0.4 + Math.sin(p + i) * r * 0.05, r * 0.1, 0, Math.PI * 2);
+      x.fill();
+      x.strokeStyle = 'rgba(24,54,24,0.85)';
+      x.lineWidth = 1.8;
+      x.stroke();
+    }
+  }
+
+  // charging：外圈孢子雲。粒子數量刻意少（6 顆）—— 8 幀循環下粒子一多就會
+  // 被看成閃爍雜訊，6 顆才讀得出「孢子正在被吸進囊裡」。
+  if (charging) {
+    for (let i = 0; i < 6; i++) {
+      const a = p * 1.5 + (i / 6) * Math.PI * 2;
+      const rr = r * (0.92 + 0.18 * Math.sin(p * 2 + i));
+      x.fillStyle = `rgba(180,255,150,${0.4 + 0.3 * Math.sin(p * 2 + i)})`;
+      x.beginPath();
+      x.arc(Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.82, r * 0.055, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+}
+
+// ── 沙暴要塞：裝甲沙蟲 ───────────────────────────────────────────────────
+// 為什麼是縱向分節圓柱：沙蟲的可辨識特徵是「一節一節往地底延伸」，剪影的資訊量集中在
+// 縱軸 —— 跟列車（橫軸）、孢子囊（上重下輕）剛好三分天下。分節用「固定間距的堆疊」
+// 而不是隨機位置，這樣 t 造成的身體擺動會讓每一節的位移有連續性，看起來像蠕動而不是抖動。
+function drawBossStorm(x, t, r, charging, final) {
+  const p = t * Math.PI * 2;
+  const wave = Math.sin(p);
+  const segs = final ? 5 : 4;
+
+  // 沙塵暴底座：好幾層橢圓疊出「揚起的沙」。不畫成向量的沙粒是因為
+  // 沙粒在 8 幀裡會閃，橢圓的邊緣抖動反而更像被風吹的沙幕。
+  for (let i = 0; i < 3; i++) {
+    x.fillStyle = `rgba(214,178,104,${0.12 + i * 0.07})`;
+    x.beginPath();
+    x.ellipse(Math.sin(p + i) * r * 0.1, r * (0.92 + i * 0.08), r * (1.06 - i * 0.16), r * (0.2 - i * 0.045), 0, 0, Math.PI * 2);
+    x.fill();
+  }
+  shadow(x, r * 0.5, r * 1.12);
+
+  const aura = r + (final ? 34 : 22);
+  const ag = x.createRadialGradient(0, -r * 0.2, r * 0.4, 0, -r * 0.2, aura * (1 + wave * 0.05));
+  ag.addColorStop(0, charging ? 'rgba(255,214,102,0.6)' : final ? 'rgba(255,209,102,0.34)' : 'rgba(255,209,102,0.22)');
+  ag.addColorStop(1, 'rgba(255,209,102,0)');
+  x.fillStyle = ag;
+  x.beginPath();
+  x.arc(0, -r * 0.2, aura * (1 + wave * 0.05), 0, Math.PI * 2);
+  x.fill();
+
+  // 尖端朝右下、上緣帶沙：尾部要往外甩才像從地底鑽出來。
+  x.fillStyle = '#6b552f';
+  x.strokeStyle = '#2a2114';
+  x.lineWidth = 2.4;
+  x.beginPath();
+  x.moveTo(-r * 0.62, r * 1.0);
+  x.lineTo(r * 0.24, r * 1.04);
+  x.lineTo(r * 0.44, r * 1.2 + wave * 2);
+  x.lineTo(-r * 0.2, r * 1.16);
+  x.closePath();
+  x.fill();
+  x.stroke();
+  // 尾部往上噴的沙
+  for (let i = 0; i < 4; i++) {
+    const k = (i / 4 + (wave + 1) * 0.25) % 1;
+    x.fillStyle = `rgba(232,204,140,${0.5 - k * 0.42})`;
+    x.beginPath();
+    x.arc(-r * 0.1 + Math.sin(i * 2.1) * r * 0.2, r * 1.04 - k * r * 0.42, r * 0.075 * (1 - k * 0.4), 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 分節甲殼：從最後一節畫到第一節（由後往前），前面自然壓在後面之上，
+  // 堆疊感就出來了 —— 反過來畫會讓每一節都像浮在別人身上。
+  const segH = final ? r * 0.36 : r * 0.34;
+  for (let i = segs - 1; i >= 0; i--) {
+    const yy = r * 0.76 - i * segH * 0.86;
+    const sw = r * (0.86 - i * 0.055) * (1 + wave * 0.015 * i);   // 每節擺幅不同 → 蠕動
+    const sxs = wave * i * r * 0.045;
+    const sg = x.createRadialGradient(sxs - sw * 0.34, yy - sw * 0.3, sw * 0.08, sxs, yy, sw * 1.1);
+    sg.addColorStop(0, final ? 'rgba(255,238,190,0.95)' : 'rgba(246,220,160,0.9)');
+    sg.addColorStop(0.4, final ? 'rgba(214,170,86,0.96)' : 'rgba(196,158,84,0.95)');
+    sg.addColorStop(1, 'rgba(104,76,32,0.98)');
+    x.fillStyle = sg;
+    x.beginPath();
+    x.ellipse(sxs, yy, sw, segH * 0.74, 0, 0, Math.PI * 2);
+    x.fill();
+    x.strokeStyle = '#2a2012';
+    x.lineWidth = 2.6;
+    x.stroke();
+    // 甲片分界：每節下緣一道暗弧。少了它，堆疊會糊成一根香腸。
+    x.strokeStyle = 'rgba(38,28,14,0.7)';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.ellipse(sxs, yy + segH * 0.3, sw * 0.78, segH * 0.34, 0, Math.PI * 0.12, Math.PI * 0.88);
+    x.stroke();
+    // 背甲尖刺：長在右側（光來自左上，尖刺放右側才不會被自己的邊光吃掉）
+    const spikes = final ? 3 : 2;
+    for (let k = 0; k < spikes; k++) {
+      const a = -0.5 + k * 0.42;
+      const bx = sxs + Math.cos(a) * sw * 0.9;
+      const by = yy + Math.sin(a) * segH * 0.6;
+      x.fillStyle = '#e6cc96';
+      x.strokeStyle = '#3a2c16';
+      x.lineWidth = 2;
+      x.beginPath();
+      x.moveTo(bx, by);
+      x.lineTo(bx + Math.cos(a) * sw * 0.46, by + Math.sin(a) * segH * 0.5);
+      x.lineTo(bx + Math.cos(a + 1.2) * sw * 0.16, by + Math.sin(a + 1.2) * segH * 0.22);
+      x.closePath();
+      x.fill();
+      x.stroke();
+    }
+    // 腹側盾板 + 一圈小鉚釘：把「很多節」的資訊量補在暗部。
+    x.fillStyle = '#7c5f30';
+    x.beginPath();
+    x.ellipse(sxs, yy + segH * 0.14, sw * 0.92, segH * 0.34, 0, 0, Math.PI);
+    x.fill();
+    x.fillStyle = '#c9a468';
+    for (let k = -1; k <= 1; k++) {
+      x.beginPath();
+      x.arc(sxs + k * sw * 0.5, yy + segH * 0.24, 1.5, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+
+  // 頸環：頭與第一節之間的收束，讓頭看起來是「連接」而不是「擺著」。
+  x.fillStyle = '#7a5f2c';
+  x.strokeStyle = '#2a2012';
+  x.lineWidth = 2.4;
+  x.beginPath();
+  x.ellipse(wave * r * 0.03, -r * 0.52, r * 0.4, r * 0.16, 0, 0, Math.PI * 2);
+  x.fill();
+  x.stroke();
+
+  // 頭部：往前傾（rotate 一點點）才像正在撲咬。傾角吃 t，所以牠會左右啄。
+  const hx = wave * r * 0.08;
+  const hy = -r * 0.76;
+  x.save();
+  x.translate(hx, hy);
+  x.rotate(Math.sin(p) * 0.06);
+  const hg = x.createRadialGradient(-r * 0.24, -r * 0.24, r * 0.06, 0, 0, r * 0.74);
+  hg.addColorStop(0, final ? '#ffeec0' : '#f3dba4');
+  hg.addColorStop(0.45, '#c9a35c');
+  hg.addColorStop(1, '#6b4f24');
+  x.fillStyle = hg;
+  x.beginPath();
+  x.ellipse(0, 0, r * 0.62, r * 0.48, 0, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#2a2012';
+  x.lineWidth = 3;
+  x.stroke();
+  // 頭部裝甲板
+  x.fillStyle = 'rgba(255,238,190,0.28)';
+  x.beginPath();
+  x.ellipse(-r * 0.06, -r * 0.16, r * 0.44, r * 0.2, -0.2, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = 'rgba(50,38,18,0.7)';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.moveTo(-r * 0.5, -r * 0.06);
+  x.lineTo(r * 0.5, -r * 0.06);
+  x.stroke();
+  // 環狀口器：由外向內三層同心環 + 放射排列的牙。同心環是「圓形口器」的核心符號，
+  // 缺了它就會被讀成一顆普通的頭。
+  for (let k = 0; k < 3; k++) {
+    x.strokeStyle = k === 0 ? '#3a2c14' : k === 1 ? '#7a5f2c' : '#3a2c14';
+    x.lineWidth = k === 1 ? 3.4 : 2.2;
+    x.beginPath();
+    x.ellipse(0, r * 0.08, r * (0.3 - k * 0.085), r * (0.24 - k * 0.068), 0, 0, Math.PI * 2);
+    x.stroke();
+  }
+  const throat = x.createRadialGradient(0, r * 0.08, 0, 0, r * 0.08, r * 0.16);
+  throat.addColorStop(0, charging ? 'rgba(255,250,220,0.95)' : 'rgba(60,26,8,0.95)');
+  throat.addColorStop(1, 'rgba(20,10,4,0.95)');
+  x.fillStyle = throat;
+  x.beginPath();
+  x.ellipse(0, r * 0.08, r * 0.14, r * 0.11, 0, 0, Math.PI * 2);
+  x.fill();
+  // 放射狀尖牙：charging 時往喉嚨縮（準備咬合），靜止時張開。
+  const bite = charging ? 0.6 : 1;
+  x.fillStyle = '#f0e2bc';
+  x.strokeStyle = '#3a2c14';
+  x.lineWidth = 1.6;
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * Math.PI * 2 + p * 0.15;
+    const r0 = r * 0.17 * bite;
+    const r1 = r * 0.3 * bite;
+    x.beginPath();
+    x.moveTo(Math.cos(a) * r0, r * 0.08 + Math.sin(a) * r0 * 0.82);
+    x.lineTo(Math.cos(a) * r1, r * 0.08 + Math.sin(a) * r1 * 0.82);
+    x.lineTo(Math.cos(a + 0.3) * r0, r * 0.08 + Math.sin(a + 0.3) * r0 * 0.82);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  }
+  // 側面覆眼（沙蟲沒有眼睛，但遊戲需要「注視感」）：兩顆發光裂縫。
+  for (const s of [-1, 1]) {
+    const eg = x.createRadialGradient(s * r * 0.4, -r * 0.16, 0, s * r * 0.4, -r * 0.16, r * 0.22);
+    eg.addColorStop(0, charging ? 'rgba(255,255,225,0.95)' : 'rgba(255,214,102,0.7)');
+    eg.addColorStop(1, 'rgba(255,214,102,0)');
+    x.fillStyle = eg;
+    x.beginPath();
+    x.arc(s * r * 0.4, -r * 0.16, r * 0.22, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = charging ? '#fffce8' : '#ffd166';
+    x.beginPath();
+    x.ellipse(s * r * 0.42, -r * 0.16, r * 0.11, r * 0.04, s * 0.3, 0, Math.PI * 2);
+    x.fill();
+  }
+  x.restore();
+
+  // final：兩側巨型脛刺 + 額外甲板。刻意不對稱高度（左短右長），
+  // 對稱的尖刺看起來像裝飾，不對稱才像「長出來的」。
+  if (final) {
+    for (const s of [-1, 1]) {
+      const len = r * (s < 0 ? 0.34 : 0.46);
+      x.fillStyle = '#e0c48c';
+      x.strokeStyle = '#3a2c16';
+      x.lineWidth = 2.2;
+      x.beginPath();
+      x.moveTo(s * r * 0.72, -r * 0.66);
+      x.lineTo(s * (r * 0.72 + len), -r * 1.06 - (s > 0 ? r * 0.14 : 0) + wave * 1.5);
+      x.lineTo(s * r * 0.6, -r * 0.42);
+      x.closePath();
+      x.fill();
+      x.stroke();
+    }
+    x.fillStyle = '#8a6c34';
+    x.strokeStyle = '#2a2012';
+    x.lineWidth = 2;
+    for (const yy of [-r * 0.28, r * 0.02]) {
+      x.beginPath();
+      x.rect(-r * 0.94, yy, r * 0.34, r * 0.16);
+      x.fill();
+      x.stroke();
+    }
+  }
+
+  // charging：口器聚能 + 集氣圈 + 飛沙。
+  // 集氣圈往內收（半徑隨 t 變小）是蓄力最容易被看懂的方向性動畫。
+  if (charging) {
+    for (let i = 0; i < 3; i++) {
+      const k = (i / 3 + p / (Math.PI * 2)) % 1;
+      x.strokeStyle = `rgba(255,236,170,${0.6 - k * 0.45})`;
+      x.lineWidth = 2.4;
+      x.beginPath();
+      x.arc(hx, hy, r * (1.05 - k * 0.6), 0, Math.PI * 2);
+      x.stroke();
+    }
+    x.fillStyle = 'rgba(255,244,200,0.9)';
+    for (let i = 0; i < 6; i++) {
+      const a = p * 2 + i * (Math.PI / 3);
+      const rr = r * 0.7;
+      x.beginPath();
+      x.arc(hx + Math.cos(a) * rr * 0.8, hy + Math.sin(a) * rr * 0.6, r * 0.045, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+  for (let i = 0; i < 5; i++) {
+    const k = (i / 5 + p * 0.5) % 1;
+    x.fillStyle = `rgba(255,222,150,${0.42 * (1 - k)})`;
+    x.beginPath();
+    x.arc(-r * 0.98 - k * r * 0.34, -r * 0.3 + i * r * 0.26 + wave * 3, r * 0.05, 0, Math.PI * 2);
+    x.fill();
+  }
+}
+
 /* ==================== 防禦砲塔 ==================== */
 
 function drawTurret(x) {
@@ -2995,9 +3839,10 @@ const BUILDERS = {
   void_obelisk: { w: 40, h: 52, static: true, fn: drawVoidObelisk },
 };
 
-// 關卡主題 Boss：4 主題 × (一般/最終) × (待機/衝鋒)，尺寸與半徑照最終形放大
+// 關卡主題 Boss：7 主題 × (一般/最終) × (待機/衝鋒)，尺寸與半徑照最終形放大
 for (const [theme, fn] of Object.entries({
   street: drawBossStreet, lab: drawBossLab, frost: drawBossFrost, core: drawBossCore,
+  subway: drawBossSubway, swamp: drawBossSwamp, storm: drawBossStorm,
 })) {
   for (const [suffix, size, r, final] of [['', 172, 40, false], ['_final', 208, 50, true]]) {
     for (const charging of [false, true]) {
