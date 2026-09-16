@@ -2541,11 +2541,15 @@ class Game {
       m.draw(this.ctx, renderCam);
     }
 
+    // 武器掛載：斜背/後腰的武器畫在角色「之下」（才會被身體擋住一部分，像真的背在身上），
+    // 主手與腰前的武器畫在角色之上。分兩層是為了讓四把武器不互相疊在一起。
+    this.weaponManager.drawHeldWeapons(this.ctx, renderCam, 'back');
+
     // 繪製主角特工鴨
     this.player.draw(this.ctx, renderCam);
 
     // 手上的武器畫在角色之上：這是「帶了什麼武器」最直接的視覺答案
-    this.weaponManager.drawHeldWeapons(this.ctx, renderCam);
+    this.weaponManager.drawHeldWeapons(this.ctx, renderCam, 'front');
 
     // 繪製流浪黑市商人
     if (this.merchant) {

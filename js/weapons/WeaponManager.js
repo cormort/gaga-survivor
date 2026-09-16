@@ -2,7 +2,7 @@
 
 import { WEAPONS, PASSIVES, CHARGE, WEAPON_ASPECTS } from '../config.js';
 import { Projectile } from '../entities/Projectile.js';
-import { drawHeldWeapon } from './WeaponArt.js';
+import { drawHeldWeapon, HELD_MOUNTS } from './WeaponArt.js';
 import { sound } from '../audio.js';
 
 // 同一隻敵人被同一個投射物再次命中的間隔 (秒)
@@ -911,9 +911,10 @@ export class WeaponManager {
     }
   }
 
-  // 手持武器：畫在角色身上（main.js 在 player.draw 之後呼叫）。
-  // 武器欄上限 4，所以這裡最多 4 把；依插入順序排成扇形，第一把（初始武器）在最前。
-  drawHeldWeapons(ctx, camera) {
+  // 手持武器：依 `HELD_MOUNTS` 的掛載點畫在角色身上。
+  // main.js 會呼叫兩次（'back' 在 player.draw 之前、'front' 之後），讓背在身上的武器
+  // 被角色擋住一部分，四把同時出現時也讀得出各自是什麼。武器欄上限 4。
+  drawHeldWeapons(ctx, camera, layer = 'front') {
     const p = this.player;
     if (!p || p.isDead) return;
     const sx = p.x - camera.x;
@@ -921,6 +922,10 @@ export class WeaponManager {
     const now = performance.now() * 0.001;
     let slot = 0;
     for (const [id, item] of this.weapons.entries()) {
+      // slot 一定要跟著所有武器遞增（不能只算這一層），否則前後兩層會被塞到同一個掛載點
+      const mount = HELD_MOUNTS[slot] || HELD_MOUNTS[HELD_MOUNTS.length - 1];
+      slot++;
+      if (mount.layer !== layer) continue;
       drawHeldWeapon(ctx, id, {
         x: sx,
         y: sy,
@@ -928,7 +933,7 @@ export class WeaponManager {
         recoil: item.recoil || 0,
         muzzle: item.muzzle || 0,
         level: item.level,
-        slot: slot++,
+        mount,
         facing: p.facing,
         time: now,
       });
