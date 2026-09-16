@@ -294,30 +294,45 @@ function coil(x, a, spin) {
 // 把一把武器畫在手上。
 // opts: { x, y, aim, recoil(0~1), muzzle(0~1), level, slot, facing, time }
 // 回傳值：槍口在畫面座標的位置（給粒子系統或測試使用）
+// ── 武器掛載點 ──────────────────────────────────────────────────────────
+// 為什麼不是「四把都拿在手上」：實測四把武器共用同一個手部原點時，兩兩重疊率高達 54~99%
+// （kunai/rocket 87%、rocket/molotov 99%），而且火箭/軌道炮這種長管武器會直接橫在角色臉上。
+// 改成「一手追瞄 + 背/腰掛載」：主手那一把會轉向敵人，其餘以固定角度背在身上，
+// 位置也刻意留在角色輪廓之外（dx 13~-13、dy -7~16），四把同時出現時仍看得出各自是什麼。
+//   dx 往面向方向為正、dy 往螢幕下方為正、angle 是「面向右」時的角度、layer 決定畫在角色前或後
+export const HELD_MOUNTS = [
+  { dx: 13, dy: 7, scale: 1.00, aim: true, layer: 'front' },       // 主手：追瞄敵人
+  { dx: -7, dy: -11, angle: -2.05, scale: 0.80, layer: 'back' },   // 斜背在肩後（露出上半，不壓到頭頂）
+  { dx: 11, dy: 15, angle: 0.70, scale: 0.60, layer: 'front' },    // 腰前：斜插在髖部前外側
+  { dx: -16, dy: 18, angle: 1.50, scale: 0.55, layer: 'back' },    // 後腰：垂在身後下方
+];
+const DEFAULT_MOUNT = HELD_MOUNTS[0];
+
 export function drawHeldWeapon(ctx, id, opts) {
   const a = WEAPON_ART[id];
   if (!a) return null;
-  const aim = opts.aim != null ? opts.aim : (opts.facing < 0 ? Math.PI : 0);
+  const facing = opts.facing < 0 ? -1 : 1;      // -1 = 面向左
+  const mount = opts.mount || DEFAULT_MOUNT;
+  const aim = opts.aim != null ? opts.aim : (facing < 0 ? Math.PI : 0);
   const recoil = opts.recoil || 0;
   const muzzle = opts.muzzle || 0;
-  const slot = opts.slot || 0;
   const time = opts.time || 0;
 
-  // 手：從角色中心往面向方向偏出去，並且略低於胸口 —— 偏太靠中心武器會蓋住臉
-  const handX = opts.x + (opts.facing < 0 ? -11 : 11);
-  const handY = opts.y + 7;
+  // 掛載點：dx 是「往面向方向」的偏移、dy 是螢幕下方，兩者都會隨面向鏡射。
+  // 只有 `aim: true` 的主手會追瞄敵人；其餘以固定角度背/掛在身上。
+  // 掛在身上的武器角度用「方向向量鏡射」換算（θ → π−θ），所以面向左時整組會左右對調。
+  const baseAngle = mount.aim ? aim : (facing > 0 ? mount.angle : Math.PI - mount.angle);
+  const handX = opts.x + facing * mount.dx;
+  const handY = opts.y + mount.dy;
+  // 掛在身上的武器不會整把跟著開火往後彈，只留一點震動
+  const kick = mount.aim ? recoil : recoil * 0.25;
 
   ctx.save();
   ctx.translate(handX, handY);
-  ctx.rotate(aim);
-
-  // 後座：往後退一點、槍口上抬一點 (視覺上的踢力)
-  ctx.translate(-recoil * 3.2, -recoil * 1.2);
-  ctx.rotate(-recoil * 0.10);
-  // 四把武器各自小角度散開，避免疊成一團
-  const fan = (slot - 1.5) * 0.22;
-  ctx.rotate(fan);
-  ctx.translate(0, slot * 2.2);
+  ctx.rotate(baseAngle);
+  if (mount.scale && mount.scale !== 1) ctx.scale(mount.scale, mount.scale);
+  ctx.translate(-kick * 3.2, -kick * 1.2);
+  ctx.rotate(-kick * 0.10);
   // 等級越高手感越重：每級放大 3%（Lv5 = +12%），換武器或升級都看得出來
   const lv = Math.max(1, Math.min(5, opts.level || 1));
   if (lv > 1) ctx.scale(1 + (lv - 1) * 0.03, 1 + (lv - 1) * 0.03);
@@ -360,13 +375,14 @@ export function drawHeldWeapon(ctx, id, opts) {
 
   ctx.restore();
 
-  // 回傳世界座標的槍口位置
-  const ang = aim + fan - recoil * 0.10;
-  const ox = -recoil * 3.2;
-  const oy = -recoil * 1.2 + slot * 2.2;
+  // 回傳世界座標的槍口位置（大致值，供粒子/測試參考）
+  const ang = baseAngle - kick * 0.10;
+  const k = mount.scale || 1;
+  const ox = -kick * 3.2;
+  const oy = -kick * 1.2;
   return {
-    x: handX + Math.cos(ang) * (tip + ox) - Math.sin(ang) * oy,
-    y: handY + Math.sin(ang) * (tip + ox) + Math.cos(ang) * oy,
+    x: handX + (Math.cos(ang) * (tip + ox) - Math.sin(ang) * oy) * k,
+    y: handY + (Math.sin(ang) * (tip + ox) + Math.cos(ang) * oy) * k,
   };
 }
 
