@@ -239,6 +239,17 @@ Boss 血量依實測玩家 DPS 曲線（2 分約 200、5 分約 700、8 分約 1
 
 十把超武的單體 DPS 目前落在 **150~420**，且**每一把都強於自己滿級的基礎型態**。
 
+### 🎒 四把武器怎麼「帶」在身上
+
+主手那一把會**追瞄最近的敵人**；其餘三把以固定角度**背／掛在身上**（`HELD_MOUNTS` 掛載點表），
+而且分兩層畫：斜背與後腰的武器畫在**角色之下**（會被身體擋住一部分，像真的背著），
+主手與腰前的畫在角色之上。
+
+這不是純粹的美術選擇 —— 四把武器原本共用同一個手部原點，實測兩兩重疊率高達 **54~99%**
+（kunai/rocket 87%、rocket/molotov 99%），而且火箭/軌道炮這種長管武器會直接橫在角色臉上。
+改成掛載點之後，`tools/verify-art.mjs` 量到 **兩兩重疊 0%**、每個掛載點的可見比例 **59~94%**
+（可見比例 = 武器本體像素扣掉被角色剪影遮住的部分；掛在背上的武器本來就會被遮掉一些）。
+
 ### 🌟 超武覺醒（進化後還能繼續升級）
 
 超武進化後 `level` 不再停在 1：**每升一級傷害 +15%**（`WEAPONS[evoId].evoGrowth`，上限 5 級），
@@ -532,7 +543,7 @@ js/sprites.js         sprite 烘焙 (角色/怪物/砲塔美術 + 共用材質�
 js/audio.js           Web Audio 程序化音效與 BGM
 js/input.js           鍵盤與虛擬搖桿
 js/entities/          Player / Enemy / Projectile / EnemyProjectile / DropItem / Turret / Mercenary / Core
-js/weapons/           WeaponManager (索敵、冷卻、暴擊、超武進化) / WeaponArt (手持武器外觀)
+js/weapons/           WeaponManager (索敵、冷卻、暴擊、超武進化) / WeaponArt (手持武器外觀與 HELD_MOUNTS 掛載點)
                       ProjectileFX (彈道光暈與拖尾貼圖快取)
 js/systems/           Spawner (波次與 Boss 排程) / UI / ParticleSystem
                       Terrain (宏觀地形層：道路/板塊/冰原/渠道/裂縫 + 地標 + 時間劣化)
@@ -547,7 +558,7 @@ tools/                smoke-branches.mjs (罕見分支煙霧測試，含流浪�
                       visual-equiv.mjs (以 route 攔截舊模組做逐像素等價比對)
                       verify-review-fixes.mjs (內容與修復的回歸驗證)
                       verify-pwa.mjs / verify-pwa-update.mjs / bannerbox.mjs (PWA 離線、更新與版面)
-                      verify-art.mjs (角色材質/手持武器/彈光暈拖尾的像素級驗證 + 對照圖)
+                      verify-art.mjs (角色材質/手持武器掛載/彈光暈拖尾的像素級驗證 + 對照圖)
                       verify-meta-shop.mjs (基因強化曲線/黑市箱子等級/興奮劑疊加與性價比)
                       verify-levels.mjs (關卡資料完整性、主題 enum 白名單、Boss 外觀、十一關畫面差異)
                       verify-weapons.mjs (武器/超武/型態表、死欄位掃描、進化與覺醒、武器 DPS 門檻)

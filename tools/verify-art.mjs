@@ -249,6 +249,125 @@ try {
       }
     }
 
+    // ── 手持武器的「掛載配置」────────────────────────────────────────────
+    // 為什麼要這組：四把武器原本共用同一個手部原點，實測兩兩重疊率高達 54~99%
+    // （kunai/rocket 87%、rocket/molotov 99%），而且火箭/軌道炮這種長管武器會直接橫在角色臉上。
+    // 現在改成「一手追瞄 + 背/腰掛載」，這三條守住它不再退化回疊在一起。
+    {
+      const art = await imp('js/weapons/WeaponArt.js');
+      const spr = await imp('js/sprites.js');
+      const MOUNTS = art.HELD_MOUNTS;
+      const GATE = { minVisible: 0.45, maxOverlap: 0.20 };
+      if (!MOUNTS || !MOUNTS.length) {
+        ok('[手持武器] 掛載點表存在（HELD_MOUNTS）', false, '舊版沒有 HELD_MOUNTS（手持武器是共用一個手部原點）');
+        ok('[手持武器] 每個掛載點的可見比例 ≥ 45%', false, '同上');
+        ok('[手持武器] 四把同時裝備時兩兩不重疊（≤ 20%）', false, '同上');
+      } else if (!wm || !player) {
+        ok('[手持武器] 掛載點表存在（HELD_MOUNTS）', false, '拿不到 weaponManager / player');
+      } else {
+        const SIZE = 170; const SP = 2;
+        const reps = ['kunai', 'rocket', 'guardian', 'molotov'];
+        const mk = (fill) => {
+          const c = mkCanvas(SIZE * SP, SIZE * SP);
+          const x = c.getContext('2d');
+          x.setTransform(SP, 0, 0, SP, 0, 0);
+          if (fill) { x.fillStyle = '#14161c'; x.fillRect(0, 0, SIZE, SIZE); }
+          return x;
+        };
+        const origin = { x: player.x - SIZE / 2, y: player.y - SIZE / 2 };
+        const px = (x) => x.getImageData(0, 0, SIZE * SP, SIZE * SP).data;
+        const diffSet = (a, b, thr) => {
+          const set = new Set();
+          for (let i = 0; i < a.length; i += 4) {
+            const d = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
+            if (d > thr) set.add(i / 4);
+          }
+          return set;
+        };
+        const bg = px(mk(true));
+        // 角色剪影：用 sprite 自己的不透明像素（不能用整張角色渲染 —— 那含 130px 拾取圈與腳下光暈）
+        const sil = (() => {
+          const x = mk(false);
+          spr.blit(x, spr.getSprite(player.character.sprite), 0, SIZE / 2, SIZE / 2);
+          const d = px(x); const set = new Set();
+          for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 60) set.add(i / 4);
+          return set;
+        })();
+        const drawAt = (slot, id, facing) => {
+          const x = mk(true);
+          art.drawHeldWeapon(x, id, { x: SIZE / 2, y: SIZE / 2, aim: facing > 0 ? 0 : Math.PI, level: 1, facing, time: 0, mount: MOUNTS[slot] });
+          return diffSet(px(x), bg, 90);      // 門檻高 → 只算武器本體，不含淡淡的光暈
+        };
+
+        // 1) 每個掛載點的可見比例（武器本體 − 被角色剪影遮住的部分）
+        const visRows = MOUNTS.map((m, slot) => {
+          let total = 0, hidden = 0;
+          for (const id of reps) {
+            const set = drawAt(slot, id, 1);
+            let h = 0; for (const v of set) if (sil.has(v)) h++;
+            total += set.size; hidden += h;
+          }
+          return { slot, layer: m.layer, ratio: total ? 1 - hidden / total : 0, total };
+        });
+        const visBad = visRows.filter((r) => r.ratio < GATE.minVisible);
+        ok(`[手持武器] 每個掛載點的可見比例 ≥ ${Math.round(GATE.minVisible * 100)}%（不會整把被身體吃掉）`,
+          visBad.length === 0,
+          visRows.map((r) => `slot${r.slot}(${r.layer}) ${Math.round(r.ratio * 100)}%`).join('、'));
+
+        // 2) 兩兩不重疊（同一組四把武器的配置下，任兩把的本體像素交集）
+        const masks = MOUNTS.slice(0, 4).map((m, slot) => drawAt(slot, reps[slot] || reps[0], 1));
+        const pairs = [];
+        for (let i = 0; i < masks.length; i++) {
+          for (let j = i + 1; j < masks.length; j++) {
+            let inter = 0;
+            for (const v of masks[i]) if (masks[j].has(v)) inter++;
+            const denom = Math.min(masks[i].size, masks[j].size) || 1;
+            pairs.push({ pair: `slot${i}/slot${j}`, ratio: inter / denom });
+          }
+        }
+        const worst = pairs.reduce((a, b) => (b.ratio > a.ratio ? b : a), pairs[0] || { ratio: 0 });
+        ok(`[手持武器] 四把同時裝備時兩兩不重疊（最差 ≤ ${Math.round(GATE.maxOverlap * 100)}%）`,
+          worst.ratio <= GATE.maxOverlap,
+          pairs.map((p) => `${p.pair} ${Math.round(p.ratio * 100)}%`).join('、'));
+
+        // 3) 面向左要鏡射（掛載點是區域座標，必須隨 facing 翻面）
+        const centroidX = (slot, facing) => {
+          const set = drawAt(slot, 'rocket', facing);
+          let sum = 0;
+          for (const v of set) sum += (v % (SIZE * SP));
+          return set.size ? sum / set.size : 0;
+        };
+        const rightX = centroidX(0, 1); const leftX = centroidX(0, -1);
+        ok('[手持武器] 面向左時掛載點鏡射（主手質心由右側換到左側）',
+          rightX > SIZE * SP / 2 && leftX < SIZE * SP / 2,
+          `面向右質心 x=${Math.round(rightX)}、面向左 x=${Math.round(leftX)}（畫面中線 ${SIZE * SP / 2}）`);
+
+        // 4) 分層契約：back/front 兩層各自畫到的武器不重複（同一把不能被畫兩次）
+        const layerMasks = {};
+        for (const layer of ['back', 'front']) {
+          const x = mk(true);
+          const backupW = [...wm.weapons.entries()];
+          try {
+            wm.weapons.clear();
+            MOUNTS.slice(0, 4).forEach((m, slot) => {
+              const id = reps[slot] || reps[0];
+              wm.weapons.set(id, { id, level: 1, cooldownTimer: 0, isEvo: false, totalDamage: 0 });
+            });
+            wm.drawHeldWeapons(x, origin, layer);
+          } finally {
+            wm.weapons.clear();
+            for (const [k, v] of backupW) wm.weapons.set(k, v);
+          }
+          layerMasks[layer] = diffSet(px(x), bg, 90);
+        }
+        let shared = 0;
+        for (const v of layerMasks.back) if (layerMasks.front.has(v)) shared++;
+        ok('[手持武器] 分層繪製：back/front 兩層各自畫到不同的掛載點（沒有武器被畫兩次）',
+          layerMasks.back.size > 0 && layerMasks.front.size > 0 && shared === 0,
+          `back ${layerMasks.back.size} px、front ${layerMasks.front.size} px、重複 ${shared} px`);
+      }
+    }
+
     // ── 5) 彈道光暈與拖尾 ──────────────────────────────────────────────
     // 光暈：核心外 ≥ gap 的像素中，alpha∈[lo,hi] 的數量（半透明 = 不是本體）。
     // 拖尾：貼著速度軸 ±band 的量測帶裡，往「速度反向」的最遠可見距離減去核心半徑。
