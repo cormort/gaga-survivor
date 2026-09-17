@@ -562,7 +562,22 @@ tools/                smoke-branches.mjs (罕見分支煙霧測試，含流浪�
                       verify-meta-shop.mjs (基因強化曲線/黑市箱子等級/興奮劑疊加與性價比)
                       verify-levels.mjs (關卡資料完整性、主題 enum 白名單、Boss 外觀、十一關畫面差異)
                       verify-weapons.mjs (武器/超武/型態表、死欄位掃描、進化與覺醒、武器 DPS 門檻)
+                      verify-difficulty-ui.mjs (難度選單首屏可見、選項齊全、切換存檔、難度真的進入 game.rules)
 ```
+
+### 難度選擇的可見性（`tools/verify-difficulty-ui.mjs`）
+
+全域難度選擇（輕鬆／標準／困難／惡夢）上線後放在關卡清單後面，而 11 張關卡卡＋特工卡
+讓開始面板內容高達約 2000px（可見區只有 ~770px），難度選單實際落在 y≈1534 —— 玩家必須
+在面板內捲動才看得到，回報「我看不到難度選擇」。
+
+修法：把難度選單與出擊鈕收進**黏在面板底部的操作列**（`position: sticky`），並把原生
+`<select>` 改成主題樣式（深底、青框、≥44px 點擊高度），下方即時顯示該難度實際乘上的
+規則倍率（讀 `DIFFICULTIES`，不與平衡脫節）。
+
+`node tools/verify-difficulty-ui.mjs` 會在 1280×720、1280×800、390×844 三種視窗各驗 7 項：
+選單與出擊鈕必須在**首屏可見**、四個選項齊全且標 DNA 倍率、切換後存檔與說明同步、
+以及**實際進入遊戲後 `game.rules.enemyHpMul` 真的等於 1.4**（困難）。
 
 ---
 
