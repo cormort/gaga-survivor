@@ -4954,6 +4954,10 @@ const BUILDERS = {
   hound:      { w: 68, h: 52, fn: (x, t) => drawHound(x, t, 13) },
   hatcher:    { w: 72, h: 66, fn: (x, t) => drawHatcher(x, t, 24) },
   chimera:    { w: 98, h: 88, fn: (x, t) => drawChimera(x, t, 30) },
+  // 新怪沿用既有畫法換色 (canvas filter 只在烘焙時跑一次)
+  sniper:  { w: 68, h: 58, fn: (x, t) => { x.filter = 'hue-rotate(150deg)'; drawSpitter(x, t, 15); } },
+  medic:   { w: 56, h: 52, fn: (x, t) => { x.filter = 'hue-rotate(200deg) saturate(1.4)'; drawWalker(x, t, 14); } },
+  blinker: { w: 60, h: 48, fn: (x, t) => { x.filter = 'hue-rotate(110deg) brightness(1.2)'; drawBat(x, t, 11); } },
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },

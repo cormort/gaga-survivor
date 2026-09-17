@@ -138,6 +138,10 @@ export class Enemy {
     this.hatchInterval = config.hatchInterval || 0;
     this.hatchCount = config.hatchCount || 1;
     this.hatchTimer = this.hatchMinion ? this.hatchInterval * (0.6 + Math.random() * 0.4) : 0;
+    this.healAura = config.healAura || null; // 屍群巫醫：群體回血
+    this.healTimer = this.healAura ? this.healAura.every : 0;
+    this.blink = config.blink || null;       // 虛空潛行者：瞬移貼近
+    this.blinkTimer = this.blink ? Math.random() * this.blink.every : 0;
 
     // 精英詞綴 (由 Spawner 隨機賦予；Boss 不會有)
     this.isElite = false;
@@ -206,7 +210,7 @@ export class Enemy {
   }
 
   // target 是要追擊的對象：生存者模式為玩家，守塔模式的雜兵為基地核心 (兩者都有 x/y)
-  // cb: { onExplode, onBossSkill, onShoot, onHatch }，缺的就當作沒有
+  // cb: { onExplode, onBossSkill, onShoot, onHatch, onHeal, onBlink }，缺的就當作沒有
   update(dt, target, cb = {}) {
     if (this.isDead) return;
 
@@ -316,6 +320,26 @@ export class Enemy {
       if (this.hatchTimer <= 0) {
         this.hatchTimer = this.hatchInterval;
         cb.onHatch?.(this);
+      }
+    }
+
+    const disabled = this.freezeTimer > 0 || this.stunTimer > 0;
+    if (this.healAura && !disabled) {
+      this.healTimer -= dt;
+      if (this.healTimer <= 0) {
+        this.healTimer = this.healAura.every;
+        cb.onHeal?.(this);
+      }
+    }
+    if (this.blink && !disabled) {
+      this.blinkTimer += dt;
+      if (this.blinkTimer >= this.blink.every && dist > this.blink.min) {
+        this.blinkTimer = 0;
+        const a = Math.random() * Math.PI * 2;
+        cb.onBlink?.(this); // 起點特效
+        this.x = target.x + Math.cos(a) * this.blink.dist;
+        this.y = target.y + Math.sin(a) * this.blink.dist;
+        cb.onBlink?.(this); // 落點特效
       }
     }
 

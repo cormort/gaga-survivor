@@ -596,6 +596,39 @@ export const ENEMY_TYPES = {
     splitInto: 'brute', // 爆開時掉出兩隻生化巨漢
     splitCount: 2,
   },
+  sniper: {
+    name: '酸蝕狙擊蟲',
+    ai: { kind: 'kite', windup: 0.6, animSpeed: 5, sepMul: 0.9 }, // 長預警，閃得掉但不能站樁
+    hp: 38,
+    speed: 60,
+    damage: 8,
+    color: '#4895ef',
+    radius: 15,
+    exp: 3,
+    ranged: { range: 460, cd: 3.6, speed: 520, damage: 20, radius: 5, color: '#4cc9f0' },
+  },
+  medic: {
+    name: '屍群巫醫',
+    ai: { kind: 'shamble', wander: 0.2, animSpeed: 7, sepMul: 1.0 },
+    hp: 55,
+    speed: 70,
+    damage: 8,
+    color: '#9d4edd',
+    radius: 14,
+    exp: 4,
+    healAura: { radius: 160, every: 2.5, pct: 0.15 }, // 定時替周圍雜兵回血，優先擊殺目標
+  },
+  blinker: {
+    name: '虛空潛行者',
+    ai: { kind: 'weave', weaveAmp: 30, weaveFreq: 4, hoverAmp: 0.3, hoverFreq: 2.4, animSpeed: 13, sepMul: 0.5 },
+    hp: 24,
+    speed: 110,
+    damage: 12,
+    color: '#2ec4b6',
+    radius: 11,
+    exp: 2,
+    blink: { every: 4, min: 260, dist: 110 }, // 離目標太遠時瞬移到身邊
+  },
   boss: {
     name: '毀滅巨神‧暴君',
     ai: { kind: 'boss', animSpeed: 5, sepMul: 0 },

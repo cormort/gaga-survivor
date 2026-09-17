@@ -8,7 +8,7 @@
 // 呼叫端：Game 建構子以 bindEvents(this) 接線；選單內部互呼直接走模組函式。
 
 import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
-import { LEVELS, LEVEL_ORDER, getDailyChallenge } from '../levels.js';
+import { DIFFICULTIES, LEVELS, LEVEL_ORDER, getDailyChallenge } from '../levels.js';
 import { MODES, MODE_ORDER, getMode } from '../modes.js';
 import { MAX_BOOSTER_STACK, MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXPAND_COST, STASH_EXPANSION_STEP, shopItemLevel } from '../shop.js';
 import { itemName } from '../items.js';
@@ -294,6 +294,14 @@ export function refreshLevelSelect(game) {
     game.levelId = id;
     save.set({ lastLevel: id });
   }, game.levelId);
+  // 難度下拉 (原生 select)，選項標出 DNA 倍率
+  const sel = document.getElementById('difficulty-select');
+  if (sel && !sel.options.length) {
+    sel.innerHTML = Object.entries(DIFFICULTIES)
+      .map(([k, d]) => `<option value="${k}">${d.name} (DNA ×${d.dnaMult || 1})</option>`).join('');
+    sel.value = DIFFICULTIES[save.data.difficulty] ? save.data.difficulty : 'normal';
+    sel.addEventListener('change', () => save.set({ difficulty: sel.value }));
+  }
 }
 
 export function tryUnlockCharacter(game, id) {

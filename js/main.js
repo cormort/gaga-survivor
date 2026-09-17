@@ -31,6 +31,7 @@ import {
   enemyScale,
   mergeRules,
   getDailyChallenge,
+  DIFFICULTIES,
 } from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
@@ -696,7 +697,9 @@ class Game {
 
     this.level = LEVELS[activeLevelId] || LEVELS.street;
     // 關卡常駐規則 × 每日挑戰詞綴 → 合併成單一份係數，Spawner 與各注入點共用
-    this.rules = mergeRules(this.level.rules, ...(this.isDaily ? this.dailyConfig.modifiers : []));
+    // 全域難度疊在關卡規則上；每日挑戰固定標準難度，成績才可比
+    this.difficulty = (!this.isDaily && DIFFICULTIES[save.data.difficulty]) || DIFFICULTIES.normal;
+    this.rules = mergeRules(this.level.rules, this.difficulty, ...(this.isDaily ? this.dailyConfig.modifiers : []));
     this.spawner.setLevel(activeLevelId, this.rules);
     this._eliteHeal = 0; // 每日「吸血盛宴」用，開局先清掉上一局的殘留
 
@@ -1210,6 +1213,17 @@ class Game {
         onBossSkill: (boss, act) => this.handleBossSkill(boss, act),
         onShoot: (shooter, projData) => this.spawnEnemyProjectile(shooter, projData),
         onHatch: (e) => this.spawnHatchling(e),
+        onHeal: (e) => {
+          // ponytail: O(n) 掃全場，巫醫數量少可接受；變多再改用碰撞網格
+          const r2 = e.healAura.radius ** 2;
+          for (const o of this.enemies) {
+            if (o.isDead || o.isBoss || o.hp >= o.maxHp) continue;
+            if ((o.x - e.x) ** 2 + (o.y - e.y) ** 2 > r2) continue;
+            o.hp = Math.min(o.maxHp, o.hp + o.maxHp * e.healAura.pct);
+          }
+          this.particles.createDeathParticles(e.x, e.y, '#9d4edd', 10);
+        },
+        onBlink: (e) => this.particles.createDeathParticles(e.x, e.y, '#2ec4b6', 8),
         onSlam: (e, slam) => {
           // 攻城巨像踏地：範圍震波對特工造成傷害，也把周圍雜兵震開
           // (原本巨像只有「走得慢、血很厚」，沒有任何自己的節奏)
@@ -2390,7 +2404,7 @@ class Game {
       kills: this.kills,
       level: this.player.level,
       cleared: isVictory,
-      dnaMult: this.level.dnaMult,
+      dnaMult: this.level.dnaMult * (this.difficulty.dnaMult || 1),
       nextLevel: this.level.next,
       // 每日挑戰成績獨立 (daily 欄位)：不寫入該關 best、不解鎖下一關，但 DNA 照發
       skipProgress: this.isDaily,
