@@ -1,8 +1,16 @@
-// 端到端驗證「更新提示」：在 /tmp 的複本上把 sw.js 改版 (gaga-v1 → gaga-v2)，
-// 看頁面是否跳出「有新版本可用」、按下按鈕是否 SKIP_WAITING → controllerchange → 重載，
-// 新版是否真的接手、舊版快取是否被 activate 清掉。
+// 端到端驗證「已安裝的 PWA 改版後會拿到新版」。
 //
-//   PW_MODULE=... node /tmp/verify-pwa-update.mjs
+// 起因（真實回報）：難度選擇上線後 **網頁版看得到、PWA 版看不到**。
+// 原因是 sw.js 對導覽請求採「快取優先」，改版後已安裝的 App 第一次開啟仍是舊版
+// HTML/CSS（背景才偷偷換快取），而 sw.js 位元組沒變 → 沒有 updatefound → 也沒有提示。
+//
+// 這支在 /tmp 的複本上模擬一次發版（version.json 4 → 5，並在 HTML 塞一個 marker），
+// 依序驗證：
+//   1. 改版後「下一次開啟」就拿到新 HTML（導覽網路優先，不必等第二次）
+//   2. 註冊網址帶版本 → SW 換版、舊快取被清掉、新版接手
+//   3. 換版過程會提示「有新版本可用」，按下去會重載
+//
+//   PW_MODULE=... node tools/verify-pwa-update.mjs
 import { spawn } from 'node:child_process';
 import { cp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
 
@@ -20,7 +28,7 @@ const ok = (name, pass, detail = '') => {
 
 await rm(COPY, { recursive: true, force: true });
 await mkdir(COPY, { recursive: true });
-for (const item of ['index.html', 'css', 'js', 'icons', 'manifest.webmanifest', 'sw.js']) {
+for (const item of ['index.html', 'css', 'js', 'icons', 'manifest.webmanifest', 'sw.js', 'version.json']) {
   await cp(`${SRC}/${item}`, `${COPY}/${item}`, { recursive: true });
 }
 
@@ -45,65 +53,95 @@ await page.evaluate(() => navigator.serviceWorker.ready);
 await page.reload({ waitUntil: 'load' });
 ok('第一版 SW 已接手', await page.evaluate(() => !!navigator.serviceWorker.controller));
 
-// 改版：換 cache 名稱 (順便驗 activate 會清掉舊快取)。
-// 版本號由 sw.js 現場推導（gaga-vN → gaga-vN+1），不寫死 —— 否則 sw.js 自己升版後
-// 這裡的 replace 會失效、測試前提消失。
-const sw = await readFile(`${COPY}/sw.js`, 'utf8');
-const oldVersion = (sw.match(/const CACHE_VERSION\s*=\s*'([^']+)'/) || [])[1];
-const newVersion = oldVersion.replace(/(\d+)$/, (d) => String(Number(d) + 1));
-if (!oldVersion || newVersion === oldVersion) throw new Error(`無法從 sw.js 推導版本號：${oldVersion}`);
-await writeFile(`${COPY}/sw.js`, sw.replace(`'${oldVersion}'`, `'${newVersion}'`));
+const before = await page.evaluate(async () => ({
+  cacheNames: (await caches.keys()),
+  version: (await fetch('version.json', { cache: 'no-store' })).json ? await (await fetch('version.json', { cache: 'no-store' })).json().then((j) => j.version) : null,
+  marker: !!document.querySelector('meta[name="shell-marker"]'),
+  difficultyVisible: (() => {
+    const sel = document.getElementById('difficulty-select');
+    if (!sel) return false;
+    const r = sel.getBoundingClientRect();
+    return r.width > 0 && r.bottom <= window.innerHeight;
+  })(),
+}));
+ok('改版前：版本與快取名一致、且難度選擇可見（現行介面）',
+  before.cacheNames.includes(`gaga-v${before.version}`) && before.difficultyVisible,
+  `cache=${before.cacheNames.join(',')} version=${before.version} 難度可見=${before.difficultyVisible}`);
 
-// 觸發更新檢查，等橫幅出現
+// ── 模擬發版：version.json 4 → 5，並在 HTML 塞 marker（代表「新介面」）──
+const newVersion = String(Number(before.version) + 1);
+await writeFile(`${COPY}/version.json`, JSON.stringify({
+  version: newVersion,
+  releasedAt: new Date().toISOString().slice(0, 10),
+  note: 'verify-pwa-update 的模擬發版',
+}, null, 2) + '\n');
+const html = await readFile(`${COPY}/index.html`, 'utf8');
+await writeFile(`${COPY}/index.html`,
+  html.replace('</head>', `  <meta name="shell-marker" content="v${newVersion}">\n</head>`));
+
+// ── 1) 已安裝的 App 下一次開啟就該拿到新版 HTML ──
+await page.reload({ waitUntil: 'load' });
+const afterReload = await page.evaluate(() => ({
+  marker: document.querySelector('meta[name="shell-marker"]')?.content || null,
+  controlled: !!navigator.serviceWorker.controller,
+}));
+ok(`改版後「下一次開啟」就拿到新版 HTML（不等第二次）`,
+  afterReload.marker === `v${newVersion}` && afterReload.controlled,
+  `marker=${afterReload.marker} ctrl=${afterReload.controlled}`);
+
+// ── 2) 註冊網址帶版本 → SW 換版、舊快取清掉 ──
+let updated = null;
+for (let i = 0; i < 60; i++) {
+  updated = await page.evaluate(async () => {
+    const names = await caches.keys();
+    const reg = await navigator.serviceWorker.getRegistration();
+    return { names, active: reg?.active?.scriptURL || null, state: reg?.active?.state || null };
+  });
+  if (updated.names.includes(`gaga-v${newVersion}`) && !updated.names.includes(`gaga-v${before.version}`)) break;
+  await page.waitForTimeout(500);
+}
+ok(`新版 SW 接手且舊快取被清掉（gaga-v${before.version} 消失、gaga-v${newVersion} 出現）`,
+  updated.names.includes(`gaga-v${newVersion}`) && !updated.names.includes(`gaga-v${before.version}`),
+  updated.names.join(', '));
+
+// ── 3) 更新提示與重新載入 ──
 const bannerText = await page.evaluate(async () => {
-  const reg = await navigator.serviceWorker.getRegistration();
-  await reg.update();
-  const deadline = Date.now() + 20000;
+  const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
     const el = document.getElementById('pwa-banner');
     if (el && !el.classList.contains('hidden') && /新版本/.test(el.textContent)) {
-      return { text: el.textContent.replace(/\s+/g, ' ').trim(), action: el.querySelector('.pwa-action').textContent };
+      return { text: el.textContent.replace(/\s+/g, ' ').trim(), action: el.querySelector('.pwa-action')?.textContent || '' };
     }
     await new Promise((r) => setTimeout(r, 150));
   }
   return null;
 });
-ok('偵測到 waiting worker 並顯示「有新版本可用，點此重新載入」',
+ok('換版過程有提示「有新版本可用」（updatefound 或 SW_UPDATED 廣播）',
   !!bannerText && /有新版本可用/.test(bannerText.text) && bannerText.action === '重新載入',
   bannerText ? `"${bannerText.text}" / 按鈕=${bannerText.action}` : '橫幅沒出現');
 
-// 按下按鈕 → SKIP_WAITING → controllerchange → reload
-let reloaded = false;
-const navPromise = page.waitForNavigation({ timeout: 15000 }).then(() => { reloaded = true; }).catch(() => {});
-const bannerClicked = await page.evaluate(() => {
-  const btn = document.querySelector('#pwa-banner .pwa-action');
-  if (!btn) return false;
-  btn.click();
-  return true;
-});
-if (!bannerClicked) console.log('  （橫幅不存在，跳過點擊；上方 FAIL 已記錄原因）');
-await navPromise;
-ok('按下「重新載入」後頁面真的重載 (controllerchange)', reloaded);
+if (bannerText) {
+  let reloaded = false;
+  const nav = page.waitForNavigation({ timeout: 15000 }).then(() => { reloaded = true; }).catch(() => {});
+  await page.evaluate(() => { document.querySelector('#pwa-banner .pwa-action')?.click(); });
+  await nav;
+  ok('按下「重新載入」後頁面真的重載', reloaded);
+}
 
-await page.waitForFunction(() => window.game, null, { timeout: 12000 }).catch(() => {});
-const after = await page.evaluate(async () => {
-  const reg = await navigator.serviceWorker.getRegistration();
-  const names = await caches.keys();
-  return {
-    cacheNames: names,
-    hasGame: typeof window.game === 'object',
-    controller: !!navigator.serviceWorker.controller,
-    activeState: reg.active && reg.active.state,
-    bannerHidden: (document.getElementById('pwa-banner') || { classList: { contains: () => true } })
-      .classList.contains('hidden'),
-  };
-});
-ok(`新版 SW 已接手且舊快取被清掉 (${oldVersion} 消失、${newVersion} 出現)`,
-  after.cacheNames.includes(newVersion) && !after.cacheNames.includes(oldVersion),
-  after.cacheNames.join(', '));
-ok('更新後遊戲照常啟動、橫幅已收起',
-  after.hasGame && after.controller && after.activeState === 'activated' && after.bannerHidden,
-  `game=${after.hasGame} ctrl=${after.controller} state=${after.activeState} hidden=${after.bannerHidden}`);
+await page.waitForFunction(() => window.game, null, { timeout: 15000 }).catch(() => {});
+const final = await page.evaluate(() => ({
+  hasGame: typeof window.game === 'object',
+  marker: document.querySelector('meta[name="shell-marker"]')?.content || null,
+  difficultyVisible: (() => {
+    const sel = document.getElementById('difficulty-select');
+    if (!sel) return false;
+    const r = sel.getBoundingClientRect();
+    return r.width > 0 && r.bottom <= window.innerHeight;
+  })(),
+}));
+ok('更新後遊戲照常啟動、新版介面（含難度選擇）在畫面上',
+  final.hasGame && final.marker === `v${newVersion}` && final.difficultyVisible,
+  JSON.stringify(final));
 
 await browser.close();
 server.kill('SIGKILL');

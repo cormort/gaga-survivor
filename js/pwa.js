@@ -160,6 +160,24 @@ function offerUpdate(worker) {
   });
 }
 
+// SW 廣播換版：只有在「這個分頁是被舊版 SW 控制」時才提示，
+// 首次安裝（還沒有 controller）不該跳「有新版本」。
+function offerReloadFromMessage(version) {
+  if (!navigator.serviceWorker.controller) return;
+  if (bannerVisible() || refreshing) return;
+  showBanner({
+    icon: '🚀',
+    title: '有新版本可用',
+    desc: `已更新到 ${version || '最新版本'}，點此重新載入`,
+    actionLabel: '重新載入',
+    tone: 'update',
+    onAction: () => {
+      refreshing = true;
+      window.location.reload();
+    },
+  });
+}
+
 function watchRegistration(reg) {
   // 已經有新版在等待 (例如上一個分頁按過重新載入)
   if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
@@ -227,17 +245,42 @@ function showIosHint() {
 
 /* ── Service Worker 註冊 ── */
 
-function registerServiceWorker() {
+// 讀 version.json 決定 SW 的註冊網址。帶版本查詢字串有兩個作用：
+//   1. 發版後 URL 改變 → 瀏覽器一定會做更新檢查（不必等別人改 sw.js 的位元組）
+//   2. 讓「網頁版已更新、安裝版還停在舊快取」這種事不再發生
+async function readVersionTag() {
+  try {
+    // 帶時間戳查詢字串：連 SW 的快取 key 都不會命中，保證拿到伺服器上的版本
+    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (res && res.ok) {
+      const data = await res.json();
+      if (data && data.version) return String(data.version);
+    }
+  } catch (err) {
+    /* 離線或檔案不存在：退回不帶查詢字串的註冊，SW 本身仍可用 */
+  }
+  return '';
+}
+
+async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   // file:// 開的頁面沒有 SW 可言；純 HTTP 的區域網路 IP 會註冊失敗 (非安全來源)，
   // 那也是預期行為 —— 下方 catch 會安靜吞掉。
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
 
   try {
-    navigator.serviceWorker.register('sw.js').then((reg) => {
+    const tag = await readVersionTag();
+    const url = tag ? `sw.js?v=${encodeURIComponent(tag)}` : 'sw.js';
+    navigator.serviceWorker.register(url).then((reg) => {
       watchRegistration(reg);
     }).catch((err) => {
       console.info('[pwa] Service Worker 未註冊 (遊戲不受影響)：', err && err.message);
+    });
+
+    // 新版 SW 接管後會主動廣播；已安裝的 PWA 不一定會經歷 updatefound，
+    // 收到這個訊息就提示玩家重新載入（否則他們會一直看到舊介面）。
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'SW_UPDATED') offerReloadFromMessage(event.data.version);
     });
 
     // 新 SW 接手後重載一次，讓整頁都吃到新版資源

@@ -565,6 +565,29 @@ tools/                smoke-branches.mjs (罕見分支煙霧測試，含流浪�
                       verify-difficulty-ui.mjs (難度選單首屏可見、選項齊全、切換存檔、難度真的進入 game.rules)
 ```
 
+### PWA 換版（`version.json` 是唯一版本來源）
+
+**症狀**：難度選擇上線後「**網頁版看得到、PWA 版看不到**」。
+
+**原因**：`sw.js` 對導覽請求採「快取優先 + 背景更新」，所以已安裝的 App 改版後
+**第一次開啟仍是舊版 HTML/CSS**（背景才偷偷換快取）；又因為 `sw.js` 位元組沒變，
+瀏覽器不會 `updatefound`，也就沒有「有新版本」提示 —— 玩家會一直停在舊介面。
+
+**修法**：
+- 版本來源改為根目錄 **`version.json`**（發版只改這一個檔案的 `version`）。
+  `sw.js` 於 install 時讀它決定快取名稱（`gaga-vN`）；`js/pwa.js` 以
+  `sw.js?v=<version>` 註冊，版本一變就觸發更新檢查。
+- **導覽請求與 `version.json` 改為網路優先**（離線才退回快取），因此「下一次開啟」
+  就是新版介面，不必等第二次。其餘資源維持快取優先 + 背景更新。
+- `activate` 除了清舊快取、`clients.claim()`，還會**廣播 `SW_UPDATED`**；
+  `js/pwa.js` 收到就顯示「有新版本可用／重新載入」橫幅（涵蓋沒有 `updatefound` 的情境）。
+- `version.json` 必須在預快取清單內（離線也要能讀到版本）。
+
+`node tools/verify-pwa.mjs`（42 項）與 `node tools/verify-pwa-update.mjs`（7 項）把關：
+後者會在 `/tmp` 複本上模擬一次發版（version.json 4→5＋HTML 塞 marker），驗證
+**改版後下一次開啟就拿到新 HTML**、**SW 換版且舊快取被清掉**、**更新橫幅可重載**、
+以及**更新後難度選擇在畫面上**。
+
 ### 難度選擇的可見性（`tools/verify-difficulty-ui.mjs`）
 
 全域難度選擇（輕鬆／標準／困難／惡夢）上線後放在關卡清單後面，而 11 張關卡卡＋特工卡

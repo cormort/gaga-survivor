@@ -47,7 +47,11 @@ const killServer = () => {
 
 /* ── 0) 靜態：sw.js 的預快取清單 vs 磁碟實際檔案 ── */
 const swSrc = await readFile(path.join(ROOT, 'sw.js'), 'utf8');
-const cacheVersion = (swSrc.match(/const CACHE_VERSION\s*=\s*'([^']+)'/) || [])[1] || '';
+// 版本來源是根目錄 version.json（發版只改這一個檔案）；sw.js 內的 FALLBACK_VERSION
+// 只在離線安裝時用，兩者必須一致，這裡直接把關。
+const versionJson = JSON.parse(await readFile(path.join(ROOT, 'version.json'), 'utf8'));
+const cacheVersion = `gaga-v${String(versionJson.version).replace(/^v/, '')}`;
+const fallbackVersion = (swSrc.match(/const FALLBACK_VERSION\s*=\s*'([^']+)'/) || [])[1] || '';
 const listBlock = swSrc.match(/const PRECACHE = \[([\s\S]*?)\];/);
 const precache = listBlock ? [...listBlock[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
 ok('sw.js 找得到 PRECACHE 清單', !!listBlock && precache.length > 0, `${precache.length} 筆`);
@@ -71,6 +75,21 @@ for (const p of precache) {
   if (p === './') continue;
   try { statSync(path.join(ROOT, p)); } catch { ghost.push(p); }
 }
+ok('預快取清單包含 version.json（版本來源本身也要能離線取得）',
+  precache.includes('./version.json'), precache.filter((u) => /version\.json/.test(u)).join(', ') || '缺少');
+
+ok(`sw.js 的 FALLBACK_VERSION 與 version.json 一致（${cacheVersion}）`,
+  fallbackVersion === cacheVersion,
+  `FALLBACK_VERSION=${fallbackVersion || '(找不到)'}、version.json=${cacheVersion}`);
+
+ok('導覽請求與 version.json 都是「網路優先」（已安裝的 PWA 才不會停在舊版介面）',
+  /if \(isNavigation[^)]*\) \{[\s\S]{0,240}revalidate\(shell, request\)/.test(swSrc)
+    && /isVersionFile/.test(swSrc),
+  'sw.js 的 fetch 分支應先 revalidate 再退回快取，且 version.json 不可被快取優先擋住');
+
+ok('activate 會主動廣播 SW_UPDATED 給所有分頁',
+  /SW_UPDATED/.test(swSrc) && /postMessage\(\{ type: 'SW_UPDATED'/.test(swSrc));
+
 ok('預快取清單沒有列出不存在的檔案', ghost.length === 0, ghost.join(', ') || `${precache.length} 筆都存在`);
 
 /* ── 1) 圖示 PNG：檔頭尺寸 ── */
