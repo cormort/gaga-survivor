@@ -327,7 +327,6 @@
 
         <div class="select-label">選擇作戰關卡</div>
         <div id="level-select" class="level-select"></div>
-        <div class="select-label">難度 <select id="difficulty-select"></select></div>
         <div class="controls-guide">
           <div class="guide-item"><span class="key-badge">W A S D</span> 或 <span class="key-badge">方向鍵</span> 移動走位</div>
           <div class="guide-item">行動端/滑鼠可直接拖曳 <span class="key-badge">虛擬搖桿</span></div>
@@ -348,8 +347,15 @@
           <label class="vol-item">🔊<input id="sfx-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音效音量"></label>
           <label class="vol-item">🎵<input id="bgm-vol" class="vol-slider" type="range" min="0" max="100" value="80" aria-label="音樂音量"></label>
         </div>
-        <div id="start-status" class="menu-status"></div>
-        <button id="btn-start-game" class="game-btn primary-btn pulse">立即出擊 🚀</button>
+        <div class="start-actions">
+          <div class="difficulty-row">
+            <label class="difficulty-label" for="difficulty-select">作戰難度</label>
+            <select id="difficulty-select" aria-describedby="difficulty-desc"></select>
+            <span id="difficulty-desc" class="difficulty-desc"></span>
+          </div>
+          <div id="start-status" class="menu-status"></div>
+          <button id="btn-start-game" class="game-btn primary-btn pulse">立即出擊 🚀</button>
+        </div>
       </div>
     </div>
 

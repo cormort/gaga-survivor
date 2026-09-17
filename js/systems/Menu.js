@@ -294,14 +294,42 @@ export function refreshLevelSelect(game) {
     game.levelId = id;
     save.set({ lastLevel: id });
   }, game.levelId);
-  // 難度下拉 (原生 select)，選項標出 DNA 倍率
+  // 難度下拉 (原生 select)：選項標出 DNA 倍率，下方即時說明實際影響的規則倍率。
   const sel = document.getElementById('difficulty-select');
-  if (sel && !sel.options.length) {
-    sel.innerHTML = Object.entries(DIFFICULTIES)
-      .map(([k, d]) => `<option value="${k}">${d.name} (DNA ×${d.dnaMult || 1})</option>`).join('');
-    sel.value = DIFFICULTIES[save.data.difficulty] ? save.data.difficulty : 'normal';
-    sel.addEventListener('change', () => save.set({ difficulty: sel.value }));
+  if (sel) {
+    if (!sel.options.length) {
+      sel.innerHTML = Object.entries(DIFFICULTIES)
+        .map(([k, d]) => `<option value="${k}">${d.name} (DNA ×${d.dnaMult || 1})</option>`).join('');
+      sel.value = DIFFICULTIES[save.data.difficulty] ? save.data.difficulty : 'normal';
+      sel.addEventListener('change', () => {
+        save.set({ difficulty: sel.value });
+        sound.playGem();
+        renderDifficultyDesc(sel.value);
+      });
+    }
+    renderDifficultyDesc(sel.value);
   }
+}
+
+// 難度選單下方的效果說明：只寫「DNA ×1.4」看不出敵人變多強，
+// 這裡把該難度實際乘上的規則列出來（資料直接取自 DIFFICULTIES，不會與平衡脫節）。
+export function renderDifficultyDesc(key) {
+  const el = document.getElementById('difficulty-desc');
+  const d = DIFFICULTIES[key];
+  if (!el || !d) return;
+  const LABELS = [
+    ['enemyHpMul', '敵人血量'],
+    ['damageTakenMul', '玩家受傷'],
+    ['spawnMul', '生成密度'],
+    ['eliteChanceMul', '菁英機率'],
+    ['enemySpeedMul', '敵人速度'],
+    ['goldMul', '金幣收益'],
+  ];
+  const parts = LABELS.filter(([k]) => d[k]).map(([k, label]) => `${label} ×${d[k]}`);
+  parts.push(`DNA ×${d.dnaMult || 1}`);
+  el.textContent = key === 'normal'
+    ? `基準難度：${parts.join(' ‧ ')}`
+    : `${parts.join(' ‧ ')}`;
 }
 
 export function tryUnlockCharacter(game, id) {

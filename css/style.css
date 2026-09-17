@@ -2967,3 +2967,79 @@ body, html {
 .gear-summary-line { color: #cbd5e1; }
 .gear-summary-line.accent { color: #00f59b; font-weight: 600; margin-top: 2px; }
 .gear-summary-line.dim { color: #64748b; }
+
+/* ==================== 起始畫面：黏底操作列與難度選擇 ====================
+   難度選單原本夾在關卡清單後面（11 張關卡卡＋特工卡讓面板內容高達 1900px），
+   小螢幕與筆電都要在面板內捲動才看得到，等於「沒有難度可以選」。
+   這裡把難度與出擊鈕收進黏在面板底部的操作列，任何視窗高度都看得到、點得到。 */
+.start-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: 6px -24px -32px;
+  padding: 14px 24px 20px;
+  background: linear-gradient(180deg, rgba(12, 18, 32, 0) 0%, rgba(12, 18, 32, 0.92) 26%, #0c1220 62%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.difficulty-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.difficulty-label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--text-muted);
+}
+
+/* 原生 select 在深色底上是「白底黑字」的突兀控制項，這裡改成一致的主題樣式 */
+#difficulty-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 40px;
+  padding: 8px 34px 8px 14px;
+  background-color: rgba(10, 16, 30, 0.9);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2300e5ff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 11px 8px;
+  border: 2px solid rgba(0, 229, 255, 0.35);
+  border-radius: 12px;
+  color: var(--text-main);
+  font-family: var(--font-text);
+  font-size: 13px;
+  letter-spacing: normal;   /* 不要繼承 .select-label 的 3px 字距 */
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#difficulty-select:hover { border-color: rgba(0, 229, 255, 0.6); }
+#difficulty-select:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.35); }
+
+.difficulty-desc {
+  flex-basis: 100%;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* 面板很長時讓使用者知道可以捲動（11 張關卡卡＋特工卡） */
+.start-box { scrollbar-width: thin; scrollbar-color: rgba(0, 229, 255, 0.35) transparent; }
+.start-box::-webkit-scrollbar { width: 8px; }
+.start-box::-webkit-scrollbar-track { background: transparent; }
+.start-box::-webkit-scrollbar-thumb { background: rgba(0, 229, 255, 0.28); border-radius: 4px; }
+
+@media (max-width: 640px) {
+  .start-actions { margin: 6px -14px -14px; padding: 12px 14px 16px; }
+  #difficulty-select { min-height: 44px; font-size: 14px; }
+  .difficulty-label { letter-spacing: 2px; }
+}
