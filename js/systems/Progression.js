@@ -8,7 +8,7 @@
 // 呼叫端：main.js 以 checkMilestones(this, dt) 這種形式呼叫。
 // shuffleInPlace 另外被主檔（升級／結算）與 Merchant 模組共用，因此一併 export。
 
-import { WEAPONS, BLESSINGS, MINI_EVENTS, SYNERGIES, ACHIEVEMENTS, ELITE_AFFIXES } from '../config.js';
+import { WEAPONS, BLESSINGS, blessingPool, MINI_EVENTS, SYNERGIES, ACHIEVEMENTS, ELITE_AFFIXES } from '../config.js';
 import { Enemy } from '../entities/Enemy.js';
 import { DropItem } from '../entities/DropItem.js';
 import { enemyScale } from '../levels.js';
@@ -126,8 +126,9 @@ export function offerBlessingChoice(game, title) {
     game._pendingBlessings.push(title);
     return;
   }
+  // 已擁有的不能再抽；有 minLevel 的祝福（引力異常 = 21 級）在達到等級前不進池子。
   const owned = new Set(game.blessings.map((b) => b.id));
-  const pool = BLESSINGS.filter((b) => !owned.has(b.id));
+  const pool = blessingPool(owned, game.player ? game.player.level : 1);
   if (pool.length === 0) {
     // 祝福池用完，給舊獎勵
     grantMilestone(game, 'gold', title);

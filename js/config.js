@@ -780,6 +780,17 @@ export const WEAPON_ASPECTS = {
   ],
 };
 
+/**
+ * 依「已擁有」與「玩家等級」過濾出可抽的祝福池。
+ * 抽出來放在 config.js 是為了能在 Node 直接測（config.js 沒有任何 import）：
+ * 有 minLevel 的祝福（例如引力異常 21 級）在門檻前不該出現。
+ */
+export function blessingPool(ownedIds, playerLevel, pool = BLESSINGS) {
+  const owned = ownedIds instanceof Set ? ownedIds : new Set(ownedIds || []);
+  const lv = Number(playerLevel) || 1;
+  return pool.filter((b) => !owned.has(b.id) && (!b.minLevel || lv >= b.minLevel));
+}
+
 // ── 局內隨機祝福 (Blessings)：里程碑二選一，本局限定的被動效果 ──
 // apply(player, game) 在獲得時呼叫一次注入加成，tick(dt, game) 每幀呼叫（需要的話）。
 // 部分祝福有 risk 標記（高收益但有代價），UI 會特別標示。
@@ -794,7 +805,9 @@ export const BLESSINGS = [
     apply(p) { p.metaExp = (p.metaExp || 0) + 0.50; } },
   { id: 'phase_shield',    name: '相位護盾',      icon: '🛡️', desc: '每 25 秒自動觸發 2.5 秒無敵',
     apply(p) { p.blessingShieldCD = 25; p.blessingShieldTimer = 0; p.blessingShieldDur = 2.5; } },
-  { id: 'gravity_well',    name: '引力異常',      icon: '🧲', desc: '拾取範圍翻倍',
+  // minLevel：要玩家等級（局內 LV）達到才會進入祝福池。拾取範圍翻倍在前期就拿到
+  // 會讓「撿東西」這件事完全消失，因此排到 21 級之後（Progression.pickBlessingPool 會過濾）。
+  { id: 'gravity_well',    name: '引力異常',      icon: '🧲', desc: '拾取範圍翻倍', minLevel: 21,
     apply(p) { p.blessingMagnetMul = (p.blessingMagnetMul || 1) * 2; } },
   { id: 'crit_storm',      name: '暴擊風暴',      icon: '🗡️', desc: '暴擊率 +15%',
     apply(p) { p.metaCrit = (p.metaCrit || 0) + 0.15; } },

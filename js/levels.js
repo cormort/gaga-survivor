@@ -705,11 +705,19 @@ export const RULE_DEFAULTS = {
 };
 
 // 全域難度：與關卡規則相乘，同一套關卡就能調鬆或調硬；dnaMult 讓收益跟著難度走
+//
+// 平衡備註（玩家回報「難度提升不夠」後上調）：
+//   舊版困難只有血 ×1.4／生成 ×1.4、惡夢 ×2.0／×1.8，而且兩者都沒有碰到
+//   「玩家受到的傷害」以外的節奏軸 —— 實際上只是「同一場打久一點」，不是更難。
+//   現在每一階都同時加壓五個軸（敵人血量／玩家受傷／生成密度／菁英機率／敵人移速），
+//   收益（金幣、DNA）再按風險等比上調；惡夢的 spawnMul 2.3 疊上深淵關的 1.4
+//   會逼近 MAX_ENEMIES(250) 的硬上限，這是刻意設計（用數量壓迫走位），
+//   效能預算仍由 MAX_ENEMIES 與 worst-case 工具守住。
 export const DIFFICULTIES = {
-  easy:      { name: '🐣 輕鬆', enemyHpMul: 0.7, damageTakenMul: 0.6, spawnMul: 0.9, goldMul: 0.8, dnaMult: 0.7 },
+  easy:      { name: '🐣 輕鬆', enemyHpMul: 0.65, damageTakenMul: 0.5, spawnMul: 0.85, goldMul: 0.75, dnaMult: 0.6 },
   normal:    { name: '🦆 標準' },
-  hard:      { name: '🔥 困難', enemyHpMul: 1.4, damageTakenMul: 1.3, spawnMul: 1.4, eliteChanceMul: 1.3, goldMul: 1.25, dnaMult: 1.4 },
-  nightmare: { name: '💀 惡夢', enemyHpMul: 2.0, damageTakenMul: 1.7, spawnMul: 1.8, eliteChanceMul: 1.7, enemySpeedMul: 1.1, goldMul: 1.6, dnaMult: 2 },
+  hard:      { name: '🔥 困難', enemyHpMul: 1.8, damageTakenMul: 1.5, spawnMul: 1.7, eliteChanceMul: 1.5, enemySpeedMul: 1.05, goldMul: 1.35, dnaMult: 1.6 },
+  nightmare: { name: '💀 惡夢', enemyHpMul: 2.8, damageTakenMul: 2.0, spawnMul: 2.3, eliteChanceMul: 2.0, enemySpeedMul: 1.15, goldMul: 1.8, dnaMult: 2.4 },
 };
 
 // 把關卡規則與每日詞綴相乘合併 (缺的欄位一律當 1)
