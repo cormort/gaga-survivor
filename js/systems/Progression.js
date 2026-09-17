@@ -8,7 +8,7 @@
 // 呼叫端：main.js 以 checkMilestones(this, dt) 這種形式呼叫。
 // shuffleInPlace 另外被主檔（升級／結算）與 Merchant 模組共用，因此一併 export。
 
-import { WEAPONS, BLESSINGS, blessingPool, MINI_EVENTS, SYNERGIES, ACHIEVEMENTS, ELITE_AFFIXES } from '../config.js';
+import { WEAPONS, BLESSINGS, blessingPool, BOMB_TUNING, MINI_EVENTS, SYNERGIES, ACHIEVEMENTS, ELITE_AFFIXES } from '../config.js';
 import { Enemy } from '../entities/Enemy.js';
 import { DropItem } from '../entities/DropItem.js';
 import { enemyScale } from '../levels.js';
@@ -104,9 +104,13 @@ export function grantMilestone(game, tag, title) {
     case 'bomb':
       game.camera.shake = Math.max(game.camera.shake, 14);
       sound.playExplosion();
+      // 同樣走 BOMB_TUNING：非 Boss 吃「當前生命 × 比例」而不是一擊抹除
       for (const e of game.enemies) {
-        if (e.isBoss) e.takeDamage(300, 5, game.player.x, game.player.y);
-        else e.takeDamage(9999, 10, game.player.x, game.player.y);
+        if (e.isBoss) e.takeDamage(BOMB_TUNING.bossDamage, BOMB_TUNING.knockback, game.player.x, game.player.y);
+        else {
+          const dmg = Math.max(BOMB_TUNING.fieldDamageMin, e.hp * BOMB_TUNING.fieldDamageRatio);
+          e.takeDamage(dmg, BOMB_TUNING.knockback, game.player.x, game.player.y);
+        }
       }
       game.particles.createExplosion(game.player.x, game.player.y, 170);
       game.ui.say(`${title}！震撼彈支援：全場敵人重創`, '#ff0055', 2.4);

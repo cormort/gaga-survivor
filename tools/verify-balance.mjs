@@ -11,10 +11,11 @@
 // 用法：node tools/verify-balance.mjs
 import { readFileSync } from 'node:fs';
 import { DIFFICULTIES, RULE_DEFAULTS } from '../js/levels.js';
-import { BLESSINGS, blessingPool } from '../js/config.js';
+import { BLESSINGS, blessingPool, BOMB_TUNING } from '../js/config.js';
 
 // 原始碼層級：確認實際抽祝福的路徑真的走 blessingPool（而不是各自再寫一次 filter）
 const progressionSrc = readFileSync(new URL('../js/systems/Progression.js', import.meta.url), 'utf8');
+const mainSrc = readFileSync(new URL('../js/main.js', import.meta.url), 'utf8');
 
 let passed = 0, failed = 0;
 const ok = (name, cond, detail = '') => {
@@ -104,6 +105,34 @@ console.log('\n=== B. 引力異常的等級門檻 ===');
   const gated = BLESSINGS.filter((b) => b.minLevel);
   ok('所有有 minLevel 的祝福門檻都是正整數', gated.every((b) => Number.isInteger(b.minLevel) && b.minLevel > 0),
     gated.map((b) => `${b.name}=${b.minLevel}`).join('、') || '（目前只有引力異常）');
+}
+
+console.log('\n=== C. 全面引爆類炸彈（回報：威力太大） ===');
+{
+  // 這類炸彈原本都是 takeDamage(9999)：一鍵抹除全場，清場沒有代價。
+  // 現在共用 BOMB_TUNING，對非 Boss 打「當前生命比例」、對 Boss 只吃固定傷害。
+  ok('非 Boss 的比例傷害 < 1（不再是必殺）', BOMB_TUNING.fieldDamageRatio < 1,
+    `${BOMB_TUNING.fieldDamageRatio} × 當前生命`);
+  ok('比例傷害有下限（前期雜兵仍有感）', BOMB_TUNING.fieldDamageMin >= 50, `${BOMB_TUNING.fieldDamageMin}`);
+  ok('Boss 只吃固定傷害，且遠低於任何 Boss 血量',
+    BOMB_TUNING.bossDamage > 0 && BOMB_TUNING.bossDamage <= 300, `${BOMB_TUNING.bossDamage}`);
+  ok('掉落率 ≤ 1.2%（原 1.5%）', BOMB_TUNING.dropChance <= 0.012, `${(BOMB_TUNING.dropChance * 100).toFixed(1)}%`);
+
+  // 原始碼層級：炸彈路徑不得再出現 9999；且三個路徑都要吃 BOMB_TUNING
+  const field9999 = [...mainSrc.matchAll(/takeDamage\(9999/g)].length;
+  ok('main.js 的炸彈路徑不再有一擊 9999（撤離獎勵的範圍清場不在此列）',
+    field9999 <= 1, `remaining=${field9999}（僅戰術撤離的半徑清場保留）`);
+  ok('掉落物炸彈與軌道核彈都使用 BOMB_TUNING',
+    (mainSrc.match(/BOMB_TUNING\.fieldDamageRatio/g) || []).length >= 2
+    && /BOMB_TUNING\.dropChance/.test(mainSrc),
+    `引用 ${(mainSrc.match(/BOMB_TUNING\./g) || []).length} 次`);
+  ok('里程碑震撼彈也使用同一份 BOMB_TUNING（三處行為一致）',
+    /BOMB_TUNING\.fieldDamageRatio/.test(progressionSrc) && /BOMB_TUNING\.bossDamage/.test(progressionSrc));
+
+  const card = (src) => (src.match(/id: 'nuke_strike'[\s\S]{0,160}?desc: '([^']+)'/) || [])[1] || '';
+  ok('軌道核彈的文案不再宣稱「全螢幕清怪」',
+    /重創/.test(card(readFileSync(new URL('../js/config.js', import.meta.url), 'utf8'))) && !/全螢幕清怪/.test(card(readFileSync(new URL('../js/config.js', import.meta.url), 'utf8'))),
+    card(readFileSync(new URL('../js/config.js', import.meta.url), 'utf8')));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

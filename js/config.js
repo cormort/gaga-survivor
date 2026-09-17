@@ -868,10 +868,26 @@ export const SYNERGIES = [
     effect: { chargeReduction: 1 } },
 ];
 
+// ── 炸彈類效果調校（單一真相）──
+// 回報：「全面引爆的炸彈威力太大」。三個地方都有「全場清怪」的炸彈：
+//   1. 掉落物 BOMB（原本 1.5% 掉落，撿到即全場 9999）
+//   2. 特殊卡「軌道核彈」（升級三選一，全場 9999 + 3 秒無敵）
+//   3. 里程碑「震撼彈支援」（每 4 次里程碑輪到一次，全場 9999）
+// 9999 等於「一鍵抹除」，清場沒有代價、也讓後期難度設計失去意義。現在改成
+// 對非 Boss 造成「當前生命比例」傷害（保留清場感，但殘血精英不會被一擊帶走），
+// Boss 只吃固定傷害，並把掉落率下修 —— 強力但不無腦。
+export const BOMB_TUNING = {
+  fieldDamageRatio: 0.6,   // 非 Boss：對當前生命的比例（0.6 = 六成）
+  fieldDamageMin: 90,      // 比例傷害的下限，避免前期雜兵血量太低時完全無感
+  bossDamage: 180,         // Boss 固定傷害（原 300／600）
+  dropChance: 0.010,       // 掉落物 BOMB 的掉落率（原 0.015）
+  knockback: 10,           // 擊退距離（原 10／12／5 各自不同，現在一致）
+};
+
 // ── 特殊升級卡 (Special Cards)：升級三選一中低機率出現 ──
 export const SPECIAL_CARDS = [
   { id: 'nuke_strike',     name: '軌道核彈',     icon: '💣', tag: '特殊',
-    desc: '立即全螢幕清怪 + 3 秒無敵！', color: '#ff0055' },
+    desc: '全場敵人重創（非首領 60% 當前生命）+ 3 秒無敵！', color: '#ff0055' },
   { id: 'gene_mutate',     name: '基因突變',     icon: '🧬', tag: '特殊',
     desc: '隨機一把武器直接 +2 級（可能超過正常上限）！', color: '#00f59b' },
   { id: 'lucky_wheel',     name: '幸運大轉盤',   icon: '🎰', tag: '特殊',
@@ -893,7 +909,7 @@ export const MERCHANT_ITEMS = [
   { id: 'hyper_magnet',    name: '超級磁力場',   icon: '🧲', cost: 50,
     desc: '15 秒拾取範圍 ×3', color: '#b5179e', duration: 15 },
   { id: 'orbital_strike',  name: '軌道轟炸',     icon: '💣', cost: 100,
-    desc: '延遲 3 秒全場 500 傷害', color: '#ff0055' },
+    desc: '延遲 3 秒全場固定 500 傷害（首領減半）', color: '#ff0055' },
   { id: 'fire_enchant',    name: '元素附魔',     icon: '🔥', cost: 70,
     desc: '30 秒所有攻擊附帶燃燒', color: '#ff7b00', duration: 30 },
 ];
