@@ -8,6 +8,7 @@ import {
   CHARGE,
   CONSUMABLE_ITEMS,
   WEAPON_ASPECTS,
+  BOMB_TUNING,
 } from './config.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
@@ -596,10 +597,15 @@ class Game {
       { name: '急救補給包', desc: '+45 HP 治療', icon: '🩹', apply: () => { this.player.heal(45); } },
       { name: '超導磁石', desc: '瞬間吸收全圖寶石', icon: '🧲', apply: () => { for (const d of this.dropItems) d.isAttracted = true; } },
       { name: '基因碎片', desc: '+35 🧬 密鑰', icon: '🧬', apply: () => { save.data.dna += 35; save.flush(); } },
-      { name: '全頻震盪波', desc: '消滅全螢幕雜兵', icon: '💣', apply: () => {
+      { name: '全頻震盪波', desc: '全螢幕重創（非首領 60% 當前生命）', icon: '💣', apply: () => {
+        // 與掉落物／核彈卡／里程碑共用 BOMB_TUNING，不再是一擊抹除
         for (const e of this.enemies) {
-          if (!e.isBoss) e.takeDamage(9999, 10, this.player.x, this.player.y);
-          else e.takeDamage(300, 5, this.player.x, this.player.y);
+          if (!e.isBoss) {
+            const dmg = Math.max(BOMB_TUNING.fieldDamageMin, e.hp * BOMB_TUNING.fieldDamageRatio);
+            e.takeDamage(dmg, BOMB_TUNING.knockback, this.player.x, this.player.y);
+          } else {
+            e.takeDamage(BOMB_TUNING.bossDamage, BOMB_TUNING.knockback, this.player.x, this.player.y);
+          }
         }
       }},
     ];
@@ -2034,8 +2040,9 @@ class Game {
       kind = 'EXP_PURPLE';
     } else if (rand < 0.015) {
       kind = 'MAGNET'; // 1.5% 磁鐵
-    } else if (rand < 0.03) {
-      kind = 'BOMB'; // 1.5% 全屏清怪炸彈
+    } else if (rand < 0.015 + BOMB_TUNING.dropChance) {
+      // 全場重創炸彈：掉落率由 BOMB_TUNING 控制（原 1.5%，現 1.0%）
+      kind = 'BOMB';
     } else if (rand < 0.05) {
       kind = 'ROAST_CHICKEN'; // 2% 烤雞回血
     } else if (rand < 0.12) {
@@ -2177,12 +2184,14 @@ class Game {
     } else if (item.type === 'bomb') {
       sound.playExplosion();
       this.camera.shake = 20;
-      // 炸毀當前畫面上所有非 Boss 怪物
+      // 全場重創（不是一鍵抹除）：非 Boss 吃「當前生命 × 比例」，Boss 吃固定傷害。
+      // 9999 會讓清場沒有代價，也讓後期難度設計失去意義（見 BOMB_TUNING 的說明）。
       for (const e of this.enemies) {
         if (!e.isBoss) {
-          e.takeDamage(9999, 10, this.player.x, this.player.y);
+          const dmg = Math.max(BOMB_TUNING.fieldDamageMin, e.hp * BOMB_TUNING.fieldDamageRatio);
+          e.takeDamage(dmg, BOMB_TUNING.knockback, this.player.x, this.player.y);
         } else {
-          e.takeDamage(300, 5, this.player.x, this.player.y);
+          e.takeDamage(BOMB_TUNING.bossDamage, BOMB_TUNING.knockback, this.player.x, this.player.y);
         }
       }
     } else if (item.type === 'heal') {
@@ -2324,8 +2333,11 @@ class Game {
         this.camera.shake = Math.max(this.camera.shake, 20);
         sound.playExplosion();
         for (const e of this.enemies) {
-          if (e.isBoss) e.takeDamage(600, 8, this.player.x, this.player.y);
-          else e.takeDamage(9999, 12, this.player.x, this.player.y);
+          if (e.isBoss) e.takeDamage(BOMB_TUNING.bossDamage, BOMB_TUNING.knockback, this.player.x, this.player.y);
+          else {
+            const dmg = Math.max(BOMB_TUNING.fieldDamageMin, e.hp * BOMB_TUNING.fieldDamageRatio);
+            e.takeDamage(dmg, BOMB_TUNING.knockback, this.player.x, this.player.y);
+          }
         }
         this.particles.createExplosion(this.player.x, this.player.y, 250);
         // Player 用的是 invulnerableTimer，沒有 invincible 這個欄位 ——
