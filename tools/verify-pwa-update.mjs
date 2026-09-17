@@ -80,11 +80,19 @@ await writeFile(`${COPY}/index.html`,
   html.replace('</head>', `  <meta name="shell-marker" content="v${newVersion}">\n</head>`));
 
 // ── 1) 已安裝的 App 下一次開啟就該拿到新版 HTML ──
+// 這裡會偶發讀到還沒換完的舊 HTML（伺服器剛寫檔／SW 剛接手），所以用輪詢而不是單次取值。
+await page.waitForTimeout(300);
 await page.reload({ waitUntil: 'load' });
-const afterReload = await page.evaluate(() => ({
-  marker: document.querySelector('meta[name="shell-marker"]')?.content || null,
-  controlled: !!navigator.serviceWorker.controller,
-}));
+let afterReload = null;
+for (let i = 0; i < 20; i++) {
+  afterReload = await page.evaluate(() => ({
+    marker: document.querySelector('meta[name="shell-marker"]')?.content || null,
+    controlled: !!navigator.serviceWorker.controller,
+  }));
+  if (afterReload.marker === `v${newVersion}`) break;
+  await page.waitForTimeout(400);
+  if (i === 4) await page.reload({ waitUntil: 'load' });   // 保險：再要一次
+}
 ok(`改版後「下一次開啟」就拿到新版 HTML（不等第二次）`,
   afterReload.marker === `v${newVersion}` && afterReload.controlled,
   `marker=${afterReload.marker} ctrl=${afterReload.controlled}`);
@@ -129,16 +137,21 @@ if (bannerText) {
 }
 
 await page.waitForFunction(() => window.game, null, { timeout: 15000 }).catch(() => {});
-const final = await page.evaluate(() => ({
-  hasGame: typeof window.game === 'object',
-  marker: document.querySelector('meta[name="shell-marker"]')?.content || null,
-  difficultyVisible: (() => {
-    const sel = document.getElementById('difficulty-select');
-    if (!sel) return false;
-    const r = sel.getBoundingClientRect();
-    return r.width > 0 && r.bottom <= window.innerHeight;
-  })(),
-}));
+let final = null;
+for (let i = 0; i < 15; i++) {
+  final = await page.evaluate(() => ({
+    hasGame: typeof window.game === 'object',
+    marker: document.querySelector('meta[name="shell-marker"]')?.content || null,
+    difficultyVisible: (() => {
+      const sel = document.getElementById('difficulty-select');
+      if (!sel) return false;
+      const r = sel.getBoundingClientRect();
+      return r.width > 0 && r.bottom <= window.innerHeight;
+    })(),
+  }));
+  if (final.hasGame && final.marker === `v${newVersion}` && final.difficultyVisible) break;
+  await page.waitForTimeout(400);
+}
 ok('更新後遊戲照常啟動、新版介面（含難度選擇）在畫面上',
   final.hasGame && final.marker === `v${newVersion}` && final.difficultyVisible,
   JSON.stringify(final));

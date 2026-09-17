@@ -76,8 +76,10 @@ async function probe(width, height, mobile, label) {
   });
   ok(`${label}：切換難度會寫入存檔`, afterSwitch.saved === 'hard' && afterSwitch.value === 'hard',
     `saved=${afterSwitch.saved}`);
-  ok(`${label}：說明文字列出實際倍率`, /敵人血量 ×1\.4/.test(afterSwitch.desc) && /DNA ×1\.4/.test(afterSwitch.desc),
-    afterSwitch.desc);
+  const descHp = Number((afterSwitch.desc.match(/敵人血量 ×([\d.]+)/) || [])[1]);
+  const descDna = Number((afterSwitch.desc.match(/DNA ×([\d.]+)/) || [])[1]);
+  ok(`${label}：說明文字列出實際倍率（且與 DIFFICULTIES 同源）`,
+    descHp > 1 && descDna > 1, afterSwitch.desc);
 
   // 真的開始遊戲，確認難度進入 game.rules
   await page.click('#btn-start-game');
@@ -88,11 +90,26 @@ async function probe(width, height, mobile, label) {
     difficultyId: window.game.difficultyId || window.game.difficulty?.name || null,
     enemyHpMul: window.game.rules?.enemyHpMul,
     spawnMul: window.game.rules?.spawnMul,
+    damageTakenMul: window.game.rules?.damageTakenMul,
     dnaMult: window.game.difficulty?.dnaMult,
+    // 期望值直接取自遊戲資料，不在測試裡寫死數字（平衡調整不該讓測試紅）
+    fromConfig: {
+      enemyHpMul: window.game.difficulty?.enemyHpMul,
+      spawnMul: window.game.difficulty?.spawnMul,
+      damageTakenMul: window.game.difficulty?.damageTakenMul,
+    },
   }));
-  ok(`${label}：選擇的難度真的進入 game.rules（困難 → 敵人血量 ×1.4）`,
-    Math.abs((rules.enemyHpMul || 0) - 1.4) < 1e-6,
+  ok(`${label}：選擇的難度真的進入 game.rules（與 DIFFICULTIES 一致）`,
+    Math.abs((rules.enemyHpMul || 0) - (rules.fromConfig.enemyHpMul || 0)) < 1e-6
+    && Math.abs((rules.spawnMul || 0) - (rules.fromConfig.spawnMul || 0)) < 1e-6,
     JSON.stringify(rules));
+  // 「難度提升不夠」的回報：困難必須是真的加壓，不是只調一點點
+  ok(`${label}：困難是實質加壓（血量 ≥1.6、受傷 ≥1.4、生成 ≥1.6）`,
+    rules.enemyHpMul >= 1.6 && rules.damageTakenMul >= 1.4 && rules.spawnMul >= 1.6,
+    `hp=${rules.enemyHpMul} 受傷=${rules.damageTakenMul} 生成=${rules.spawnMul} DNA=${rules.dnaMult}`);
+  ok(`${label}：選單說明文字的倍率與實際進入遊戲的規則一致`,
+    Math.abs(descHp - rules.enemyHpMul) < 1e-6 && Math.abs(descDna - rules.dnaMult) < 1e-6,
+    `說明 hp=${descHp}/DNA=${descDna} vs 實戰 hp=${rules.enemyHpMul}/DNA=${rules.dnaMult}`);
 
   await page.close();
 }
