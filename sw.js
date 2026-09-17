@@ -5,16 +5,51 @@
 // 這支 sw.js 所在的目錄 (也就是站台子路徑根)，寫死開頭斜線會直接 404。
 //
 // 策略：
-//   安裝  → 預快取 app shell (含 js/ 底下每一個模組) 後 skipWaiting()
-//   啟用  → 清掉舊版快取 + clients.claim()
-//   取用  → 同源 GET 一律「快取優先 + 背景更新」(stale-while-revalidate)，
+//   安裝  → 讀 version.json 決定版本 → 預快取 app shell (含 js/ 底下每一個模組)
+//           → skipWaiting()
+//   啟用  → 清掉舊版快取 + clients.claim() + 通知所有分頁「新版已接手」
+//   取用  → 導覽請求 (HTML)「網路優先，離線才退回快取」；
+//           其餘同源 GET「快取優先 + 背景更新」(stale-while-revalidate)；
 //           沒命中才走網路並順手寫進 runtime 快取；查詢字串算在快取 key 裡。
 //   跨網域 / 非 GET → 完全不攔，原封不動交給瀏覽器。
+//
+// 為什麼導覽請求要「網路優先」：原本全部是快取優先，於是**已安裝的 PWA** 在改版後
+// 第一次開啟仍然是舊版 HTML（背景才偷偷把新檔換進快取），玩家看到的是舊介面 ——
+// 「難度選擇在 PWA 裡不見了、網頁版卻正常」就是這個原因。HTML 只有幾十 KB，
+// 網路優先的代價可忽略，離線時仍由快取接手。
+//
+// 發版流程：改版時只更新根目錄 `version.json` 的 version（必要時同步這裡的
+// FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
-const CACHE_VERSION = 'gaga-v3';   // v3：材質層與武器外觀新增兩支 weapons 模組
-const SHELL_CACHE = CACHE_VERSION;                  // 預快取的 app shell
-const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;   // 執行期順手補快取的東西
-const CURRENT_CACHES = [SHELL_CACHE, RUNTIME_CACHE];
+// 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
+const FALLBACK_VERSION = 'gaga-v5';
+const VERSION_URL = './version.json';
+
+async function resolveCacheVersion() {
+  try {
+    const res = await fetch(VERSION_URL, { cache: 'no-store' });
+    if (res && res.ok) {
+      const data = await res.json();
+      if (data && data.version) return `gaga-v${String(data.version).replace(/^v/, '')}`;
+    }
+  } catch (err) {
+    // 離線或檔案不存在：退回常數，離線安裝仍然可用
+  }
+  return FALLBACK_VERSION;
+}
+
+// 同一次 SW 生命週期內只解析一次；install 與 activate 會拿到同一組名稱。
+let cacheNamePromise = null;
+function currentCaches() {
+  if (!cacheNamePromise) {
+    cacheNamePromise = resolveCacheVersion().then((version) => ({
+      version,
+      shell: version,
+      runtime: `${version}-runtime`,
+    }));
+  }
+  return cacheNamePromise;
+}
 
 // 離線啟動的入口：manifest 的 start_url 是 ./index.html?source=pwa，
 // 導覽請求若查詢字串沒命中，就退回這一頁。
@@ -27,6 +62,7 @@ const PRECACHE = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './version.json',
   './css/style.css',
   // 圖示 (manifest 與 apple-touch-icon 會用到；SVG 是維護用的原始檔)
   './icons/icon.svg',
@@ -77,7 +113,8 @@ const PRECACHE = [
 // ── install：預快取後立刻接手 ──
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
-    const cache = await caches.open(SHELL_CACHE);
+    const { shell } = await currentCaches();
+    const cache = await caches.open(shell);
     try {
       await cache.addAll(PRECACHE);
     } catch (err) {
@@ -91,14 +128,20 @@ self.addEventListener('install', (event) => {
   })());
 });
 
-// ── activate：清舊版快取 + 立刻接管所有分頁 ──
+// ── activate：清舊版快取 + 立刻接管所有分頁 + 通知分頁換版 ──
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
+    const { version, shell, runtime } = await currentCaches();
     const keys = await caches.keys();
     await Promise.all(keys
-      .filter((key) => !CURRENT_CACHES.includes(key))
+      .filter((key) => ![shell, runtime].includes(key))
       .map((key) => caches.delete(key)));
     await self.clients.claim();
+
+    // 已安裝的 PWA 不一定會經歷 updatefound（可能上次開著時就換好了），
+    // 主動通知所有分頁可以重新載入；js/pwa.js 收到後會顯示更新橫幅。
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED', version }));
   })());
 });
 
@@ -107,7 +150,7 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-// 背景更新：不擋回應，抓到新版就換掉快取裡那份。
+// 背景更新：抓到新版就換掉快取裡那份 (呼叫端可 await，導覽請求靠它做到網路優先)。
 // cache: 'no-cache' → 一定跟伺服器對一次 (檔案沒變會走 304，不會白抓)。
 async function revalidate(cacheName, request) {
   try {
@@ -117,8 +160,10 @@ async function revalidate(cacheName, request) {
       const cache = await caches.open(cacheName);
       await cache.put(request, res.clone());
     }
+    return res;
   } catch (err) {
     // 離線或伺服器掛掉：保留舊快取，不打斷任何事
+    return null;
   }
 }
 
@@ -139,6 +184,10 @@ function offlineResponse() {
   });
 }
 
+async function matchShell(request) {
+  return (await caches.match(request)) || (await caches.match(SHELL_ENTRY)) || (await caches.match('./'));
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
@@ -155,25 +204,31 @@ self.addEventListener('fetch', (event) => {
 
   const isNavigation = request.mode === 'navigate'
     || (request.headers.get('accept') || '').includes('text/html');
+  // version.json 也必須網路優先：js/pwa.js 靠它決定註冊網址，
+  // 若被「快取優先」擋下，永遠只讀到舊版號 → 換版流程一輩子不會啟動。
+  const isVersionFile = url.pathname.endsWith('/version.json');
 
   event.respondWith((async () => {
-    // 1) 快取優先 (key 含查詢字串)
-    let hit = await caches.match(request);
-    let hitCache = SHELL_CACHE;
+    const { shell, runtime } = await currentCaches();
 
-    // 2) 導覽請求：?source=pwa 這種查詢字串不該讓離線開不了遊戲
-    if (!hit && isNavigation) {
-      hit = await caches.match(SHELL_ENTRY);
-      if (!hit) hit = await caches.match('./');
+    // 1) 導覽請求 (HTML) 與 version.json：網路優先，離線才退回快取
+    if (isNavigation || isVersionFile) {
+      const fresh = await revalidate(shell, request);
+      if (fresh) return fresh;
+      const cached = await matchShell(request);
+      return cached || offlineResponse();
     }
+
+    // 2) 其餘資源：快取優先 + 背景更新
+    let hit = await caches.match(request);
+    let hitCache = shell;
     if (!hit) {
-      const runtime = await caches.open(RUNTIME_CACHE);
-      hit = await runtime.match(request);
-      hitCache = RUNTIME_CACHE;
+      const rt = await caches.open(runtime);
+      hit = await rt.match(request);
+      hitCache = runtime;
     }
 
     if (hit) {
-      // 有快取就先給，順便背景對一次新版 (stale-while-revalidate)
       const update = revalidate(hitCache, request);
       try {
         event.waitUntil(update);
@@ -186,12 +241,12 @@ self.addEventListener('fetch', (event) => {
 
     // 3) 沒快取 → 走網路，成功就順手放進 runtime 快取
     try {
-      return await fromNetwork(request, RUNTIME_CACHE);
+      return await fromNetwork(request, runtime);
     } catch (err) {
       // 4) 連網路都沒有：導覽請求至少回 app shell，其餘回 503
       if (isNavigation) {
-        const shell = await caches.match(SHELL_ENTRY) || await caches.match('./');
-        if (shell) return shell;
+        const shellHit = await matchShell(request);
+        if (shellHit) return shellHit;
       }
       return offlineResponse();
     }
