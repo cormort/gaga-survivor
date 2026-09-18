@@ -53,13 +53,13 @@ export const LEVELS = {
       { type: 'supply', interval: 45, jitter: 20 },
     ],
     waves: [
-      { until: 65, pool: [['walker', 1]], interval: 0.85, batch: 1 },
-      { until: 120, pool: [['walker', 0.72], ['bat', 0.28]], interval: 0.72, batch: 1 },
-      { until: 240, pool: [['walker', 0.5], ['bat', 0.25], ['runner', 0.15], ['hound', 0.1]], interval: 0.6, batch: 1 },
-      { until: 360, pool: [['walker', 0.35], ['bat', 0.22], ['brute', 0.18], ['runner', 0.18], ['hound', 0.07], ['blinker', 0.07]], interval: 0.45, batch: 1 },
-      { until: LEVEL_DURATION, pool: [['walker', 0.22], ['bat', 0.16], ['brute', 0.14], ['boomer', 0.13], ['runner', 0.14], ['hound', 0.09], ['spitter', 0.12], ['blinker', 0.07]], interval: 0.3, batch: 2 },
+      { until: 65, pool: [['walker', 0.893], ['spitter', 0.107]], interval: 0.85, batch: 1 },
+      { until: 120, pool: [['walker', 0.643], ['bat', 0.25], ['spitter', 0.107]], interval: 0.72, batch: 1 },
+      { until: 240, pool: [['walker', 0.446], ['bat', 0.223], ['runner', 0.134], ['hound', 0.089], ['spitter', 0.107]], interval: 0.6, batch: 1 },
+      { until: 360, pool: [['walker', 0.315], ['bat', 0.198], ['brute', 0.162], ['runner', 0.162], ['hound', 0.063], ['blinker', 0.063], ['spitter', 0.108]], interval: 0.45, batch: 1 },
+      { until: LEVEL_DURATION, pool: [['walker', 0.165], ['bat', 0.12], ['brute', 0.105], ['boomer', 0.097], ['runner', 0.105], ['hound', 0.067], ['spitter', 0.359], ['blinker', 0.052]], interval: 0.3, batch: 2 },
       // 8 分鐘後：多而脆。玩家唯一要閃的不再只有身體碰撞
-      { until: 9999, pool: [['walker', 0.24], ['bat', 0.16], ['brute', 0.1], ['boomer', 0.14], ['runner', 0.16], ['hound', 0.06], ['spitter', 0.14], ['blinker', 0.07]], interval: 0.26, batch: 4 },
+      { until: 9999, pool: [['walker', 0.172], ['bat', 0.114], ['brute', 0.071], ['boomer', 0.101], ['runner', 0.114], ['hound', 0.043], ['spitter', 0.403], ['blinker', 0.05]], interval: 0.26, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 4000, name: '狂暴推土喪屍', speed: 58, damage: 30, skin: 'boss_street' },   // 慢、重、撞一下很痛
@@ -113,12 +113,12 @@ export const LEVELS = {
       { type: 'pool', interval: 24, jitter: 8, radius: 115, dur: 6, dmg: 6, color: '#b5179e' },
     ],
     waves: [
-      { until: 55, pool: [['walker', 0.72], ['boomer', 0.28]], interval: 0.8, batch: 1 },
-      { until: 100, pool: [['walker', 0.45], ['boomer', 0.28], ['spitter', 0.15], ['spore_host', 0.12]], interval: 0.7, batch: 1 },
-      { until: 240, pool: [['walker', 0.3], ['boomer', 0.22], ['bat', 0.16], ['spore_host', 0.14], ['spitter', 0.1], ['hatcher', 0.08]], interval: 0.5, batch: 1 },
-      { until: 360, pool: [['boomer', 0.24], ['brute', 0.2], ['bat', 0.16], ['spore_host', 0.16], ['spitter', 0.14], ['hatcher', 0.1], ['medic', 0.07]], interval: 0.4, batch: 2 },
-      { until: LEVEL_DURATION, pool: [['boomer', 0.22], ['brute', 0.22], ['walker', 0.14], ['spore_host', 0.16], ['spitter', 0.16], ['hatcher', 0.1], ['medic', 0.07]], interval: 0.28, batch: 2 },
-      { until: 9999, pool: [['boomer', 0.22], ['brute', 0.16], ['walker', 0.18], ['spore_host', 0.16], ['spitter', 0.18], ['hatcher', 0.1], ['medic', 0.07]], interval: 0.24, batch: 4 },
+      { until: 55, pool: [['walker', 0.643], ['boomer', 0.25], ['spitter', 0.107]], interval: 0.8, batch: 1 },
+      { until: 100, pool: [['walker', 0.31], ['boomer', 0.193], ['spitter', 0.414], ['spore_host', 0.082]], interval: 0.7, batch: 1 },
+      { until: 240, pool: [['walker', 0.231], ['boomer', 0.169], ['bat', 0.123], ['spore_host', 0.107], ['spitter', 0.308], ['hatcher', 0.062]], interval: 0.5, batch: 1 },
+      { until: 360, pool: [['boomer', 0.172], ['brute', 0.144], ['bat', 0.114], ['spore_host', 0.114], ['spitter', 0.403], ['hatcher', 0.071], ['medic', 0.05]], interval: 0.4, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['boomer', 0.152], ['brute', 0.152], ['walker', 0.097], ['spore_host', 0.11], ['spitter', 0.441], ['hatcher', 0.069], ['medic', 0.048]], interval: 0.28, batch: 2 },
+      { until: 9999, pool: [['boomer', 0.146], ['brute', 0.106], ['walker', 0.12], ['spore_host', 0.106], ['spitter', 0.478], ['hatcher', 0.067], ['medic', 0.047]], interval: 0.24, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 5500, name: '生化軟泥聚合體', speed: 52, damage: 30, behaviors: ['summon'], skin: 'boss_lab' },  // 極慢但黏
@@ -174,12 +174,12 @@ export const LEVELS = {
       { type: 'ice', friction: 0.92 },
     ],
     waves: [
-      { until: 50, pool: [['walker', 0.7], ['brute', 0.3]], interval: 0.8, batch: 1 },
-      { until: 100, pool: [['brute', 0.5], ['walker', 0.33], ['bat', 0.17]], interval: 0.75, batch: 1 },
-      { until: 240, pool: [['brute', 0.32], ['bat', 0.28], ['walker', 0.14], ['warden', 0.18], ['chimera', 0.08]], interval: 0.5, batch: 2 },
-      { until: 360, pool: [['brute', 0.3], ['bat', 0.22], ['boomer', 0.16], ['warden', 0.2], ['hound', 0.06], ['chimera', 0.06], ['sniper', 0.07]], interval: 0.38, batch: 2 },
-      { until: LEVEL_DURATION, pool: [['brute', 0.23], ['bat', 0.16], ['boomer', 0.18], ['warden', 0.2], ['hound', 0.05], ['chimera', 0.07], ['spitter', 0.11], ['sniper', 0.07]], interval: 0.26, batch: 2 },
-      { until: 9999, pool: [['brute', 0.18], ['bat', 0.18], ['boomer', 0.2], ['warden', 0.16], ['hound', 0.08], ['chimera', 0.07], ['spitter', 0.13], ['sniper', 0.07]], interval: 0.24, batch: 4 },
+      { until: 50, pool: [['walker', 0.625], ['brute', 0.268], ['spitter', 0.107]], interval: 0.8, batch: 1 },
+      { until: 100, pool: [['brute', 0.446], ['walker', 0.295], ['bat', 0.152], ['spitter', 0.107]], interval: 0.75, batch: 1 },
+      { until: 240, pool: [['brute', 0.286], ['bat', 0.25], ['walker', 0.125], ['warden', 0.161], ['chimera', 0.071], ['spitter', 0.107]], interval: 0.5, batch: 2 },
+      { until: 360, pool: [['brute', 0.251], ['bat', 0.184], ['boomer', 0.134], ['warden', 0.167], ['hound', 0.05], ['chimera', 0.05], ['sniper', 0.233]], interval: 0.38, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['brute', 0.153], ['bat', 0.106], ['boomer', 0.12], ['warden', 0.133], ['hound', 0.033], ['chimera', 0.047], ['spitter', 0.292], ['sniper', 0.186]], interval: 0.26, batch: 2 },
+      { until: 9999, pool: [['brute', 0.116], ['bat', 0.116], ['boomer', 0.129], ['warden', 0.103], ['hound', 0.051], ['chimera', 0.045], ['spitter', 0.333], ['sniper', 0.18]], interval: 0.24, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 7000, name: '冰霜機甲', speed: 46, damage: 34, behaviors: ['ground'], skin: 'boss_frost' },  // 最慢最痛的重甲
@@ -235,12 +235,12 @@ export const LEVELS = {
       { type: 'safeZone', interval: 25, jitter: 8, radius: 130, duration: 8, dmg: 6, color: '#ff9500' },
     ],
     waves: [
-      { until: 45, pool: [['walker', 0.55], ['boomer', 0.45]], interval: 0.72, batch: 1 },
-      { until: 90, pool: [['brute', 0.4], ['boomer', 0.35], ['spitter', 0.25]], interval: 0.6, batch: 1 },
-      { until: 220, pool: [['brute', 0.26], ['boomer', 0.2], ['bat', 0.16], ['runner', 0.16], ['spitter', 0.12], ['hatcher', 0.1]], interval: 0.42, batch: 2 },
-      { until: 360, pool: [['brute', 0.24], ['boomer', 0.16], ['bat', 0.12], ['warden', 0.14], ['spore_host', 0.12], ['spitter', 0.1], ['chimera', 0.06], ['hatcher', 0.06], ['blinker', 0.07], ['medic', 0.07]], interval: 0.3, batch: 2 },
-      { until: LEVEL_DURATION, pool: [['brute', 0.2], ['boomer', 0.16], ['bat', 0.1], ['warden', 0.14], ['spore_host', 0.1], ['runner', 0.06], ['spitter', 0.1], ['hound', 0.06], ['hatcher', 0.08], ['blinker', 0.07], ['medic', 0.07]], interval: 0.22, batch: 3 },
-      { until: 9999, pool: [['brute', 0.16], ['boomer', 0.16], ['bat', 0.12], ['warden', 0.12], ['spore_host', 0.1], ['runner', 0.08], ['spitter', 0.14], ['hound', 0.06], ['hatcher', 0.06], ['blinker', 0.07], ['medic', 0.07]], interval: 0.2, batch: 5 },
+      { until: 45, pool: [['walker', 0.491], ['boomer', 0.402], ['spitter', 0.107]], interval: 0.72, batch: 1 },
+      { until: 90, pool: [['brute', 0.229], ['boomer', 0.2], ['spitter', 0.571]], interval: 0.6, batch: 1 },
+      { until: 220, pool: [['brute', 0.191], ['boomer', 0.147], ['bat', 0.118], ['runner', 0.118], ['spitter', 0.353], ['hatcher', 0.073]], interval: 0.42, batch: 2 },
+      { until: 360, pool: [['brute', 0.19], ['boomer', 0.127], ['bat', 0.095], ['warden', 0.111], ['spore_host', 0.095], ['spitter', 0.317], ['chimera', 0.047], ['hatcher', 0.047], ['blinker', 0.055], ['medic', 0.055]], interval: 0.3, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['brute', 0.158], ['boomer', 0.127], ['bat', 0.079], ['warden', 0.111], ['spore_host', 0.079], ['runner', 0.047], ['spitter', 0.317], ['hound', 0.047], ['hatcher', 0.064], ['blinker', 0.055], ['medic', 0.055]], interval: 0.22, batch: 3 },
+      { until: 9999, pool: [['brute', 0.116], ['boomer', 0.116], ['bat', 0.088], ['warden', 0.088], ['spore_host', 0.073], ['runner', 0.058], ['spitter', 0.409], ['hound', 0.043], ['hatcher', 0.043], ['blinker', 0.051], ['medic', 0.051]], interval: 0.2, batch: 5 },
     ],
     bosses: [
       { at: 120, hp: 9000, name: '烈焰暴君', speed: 88, damage: 32, behaviors: ['nova', 'ground'], skin: 'boss_core' },
@@ -301,12 +301,12 @@ export const LEVELS = {
       { type: 'supply', interval: 50, jitter: 18 },
     ],
     waves: [
-      { until: 45, pool: [['walker', 0.5], ['hound', 0.5]], interval: 0.7, batch: 1 },
-      { until: 100, pool: [['hound', 0.4], ['runner', 0.3], ['walker', 0.3]], interval: 0.6, batch: 1 },
-      { until: 220, pool: [['hound', 0.3], ['runner', 0.26], ['brute', 0.2], ['bat', 0.14], ['spitter', 0.1]], interval: 0.46, batch: 2 },
-      { until: 360, pool: [['hound', 0.26], ['runner', 0.2], ['brute', 0.2], ['warden', 0.14], ['spitter', 0.12], ['bat', 0.08], ['sniper', 0.07], ['medic', 0.07]], interval: 0.34, batch: 2 },
-      { until: LEVEL_DURATION, pool: [['hound', 0.22], ['runner', 0.18], ['brute', 0.18], ['warden', 0.14], ['spitter', 0.12], ['chimera', 0.08], ['bat', 0.08], ['sniper', 0.07], ['medic', 0.07]], interval: 0.26, batch: 3 },
-      { until: 9999, pool: [['hound', 0.2], ['runner', 0.18], ['brute', 0.16], ['warden', 0.12], ['spitter', 0.14], ['chimera', 0.1], ['bat', 0.1], ['sniper', 0.07], ['medic', 0.07]], interval: 0.22, batch: 4 },
+      { until: 45, pool: [['walker', 0.446], ['hound', 0.446], ['spitter', 0.107]], interval: 0.7, batch: 1 },
+      { until: 100, pool: [['hound', 0.357], ['runner', 0.268], ['walker', 0.268], ['spitter', 0.107]], interval: 0.6, batch: 1 },
+      { until: 220, pool: [['hound', 0.231], ['runner', 0.2], ['brute', 0.154], ['bat', 0.107], ['spitter', 0.308]], interval: 0.46, batch: 2 },
+      { until: 360, pool: [['hound', 0.173], ['runner', 0.133], ['brute', 0.133], ['warden', 0.093], ['spitter', 0.32], ['bat', 0.054], ['sniper', 0.187], ['medic', 0.047]], interval: 0.34, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['hound', 0.147], ['runner', 0.12], ['brute', 0.12], ['warden', 0.093], ['spitter', 0.32], ['chimera', 0.054], ['bat', 0.054], ['sniper', 0.187], ['medic', 0.047]], interval: 0.26, batch: 3 },
+      { until: 9999, pool: [['hound', 0.129], ['runner', 0.116], ['brute', 0.103], ['warden', 0.077], ['spitter', 0.36], ['chimera', 0.064], ['bat', 0.064], ['sniper', 0.18], ['medic', 0.045]], interval: 0.22, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 12000, name: '裝甲列車長', speed: 70, damage: 34, behaviors: ['ground'], skin: 'boss_subway' },
@@ -362,12 +362,12 @@ export const LEVELS = {
       { type: 'geyser', interval: 20, jitter: 8, radius: 180, fuse: 1.2, dmg: 16, dmgEnemy: 1800, color: '#7dff8f' },
     ],
     waves: [
-      { until: 40, pool: [['walker', 0.6], ['sporeling', 0.4]], interval: 0.7, batch: 1 },
-      { until: 90, pool: [['sporeling', 0.4], ['walker', 0.3], ['spitter', 0.3]], interval: 0.6, batch: 1 },
-      { until: 200, pool: [['spore_host', 0.3], ['spitter', 0.28], ['brute', 0.2], ['walker', 0.12], ['hatcher', 0.1]], interval: 0.44, batch: 2 },
-      { until: 340, pool: [['spore_host', 0.26], ['spitter', 0.24], ['hatcher', 0.16], ['brute', 0.18], ['warden', 0.1], ['chimera', 0.06], ['blinker', 0.07], ['sniper', 0.07]], interval: 0.34, batch: 2 },
-      { until: LEVEL_DURATION, pool: [['spore_host', 0.22], ['spitter', 0.2], ['hatcher', 0.16], ['brute', 0.16], ['warden', 0.12], ['chimera', 0.08], ['hound', 0.06], ['blinker', 0.07], ['sniper', 0.07]], interval: 0.26, batch: 3 },
-      { until: 9999, pool: [['spore_host', 0.2], ['spitter', 0.22], ['hatcher', 0.16], ['brute', 0.14], ['warden', 0.1], ['chimera', 0.1], ['hound', 0.08], ['blinker', 0.07], ['sniper', 0.07]], interval: 0.22, batch: 4 },
+      { until: 40, pool: [['walker', 0.536], ['sporeling', 0.357], ['spitter', 0.107]], interval: 0.7, batch: 1 },
+      { until: 90, pool: [['sporeling', 0.211], ['walker', 0.158], ['spitter', 0.632]], interval: 0.6, batch: 1 },
+      { until: 200, pool: [['spore_host', 0.163], ['spitter', 0.609], ['brute', 0.108], ['walker', 0.065], ['hatcher', 0.054]], interval: 0.44, batch: 2 },
+      { until: 340, pool: [['spore_host', 0.143], ['spitter', 0.528], ['hatcher', 0.088], ['brute', 0.099], ['warden', 0.055], ['chimera', 0.033], ['blinker', 0.039], ['sniper', 0.154]], interval: 0.34, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['spore_host', 0.129], ['spitter', 0.467], ['hatcher', 0.093], ['brute', 0.093], ['warden', 0.07], ['chimera', 0.047], ['hound', 0.035], ['blinker', 0.041], ['sniper', 0.163]], interval: 0.26, batch: 3 },
+      { until: 9999, pool: [['spore_host', 0.113], ['spitter', 0.499], ['hatcher', 0.091], ['brute', 0.08], ['warden', 0.057], ['chimera', 0.057], ['hound', 0.046], ['blinker', 0.04], ['sniper', 0.159]], interval: 0.22, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 15000, name: '孢子主教', speed: 62, damage: 32, behaviors: ['summon'], skin: 'boss_swamp' },
@@ -421,12 +421,12 @@ export const LEVELS = {
       { type: 'safeZone', interval: 22, jitter: 8, radius: 120, duration: 7, dmg: 8, color: '#ffb703' },
     ],
     waves: [
-      { until: 40, pool: [['runner', 0.6], ['walker', 0.4]], interval: 0.6, batch: 1 },
-      { until: 90, pool: [['runner', 0.45], ['hound', 0.3], ['bat', 0.25]], interval: 0.5, batch: 1 },
-      { until: 200, pool: [['runner', 0.3], ['hound', 0.24], ['boomer', 0.2], ['bat', 0.14], ['spitter', 0.12]], interval: 0.38, batch: 2 },
-      { until: 340, pool: [['runner', 0.26], ['hound', 0.2], ['boomer', 0.18], ['warden', 0.14], ['chimera', 0.1], ['hatcher', 0.12], ['blinker', 0.07]], interval: 0.3, batch: 2 },
-      { until: LEVEL_DURATION, pool: [['runner', 0.22], ['hound', 0.18], ['boomer', 0.16], ['warden', 0.14], ['chimera', 0.12], ['hatcher', 0.1], ['spitter', 0.08], ['blinker', 0.07]], interval: 0.24, batch: 3 },
-      { until: 9999, pool: [['runner', 0.2], ['hound', 0.18], ['boomer', 0.16], ['warden', 0.12], ['chimera', 0.14], ['hatcher', 0.1], ['spitter', 0.1], ['blinker', 0.07]], interval: 0.2, batch: 4 },
+      { until: 40, pool: [['runner', 0.536], ['walker', 0.357], ['spitter', 0.107]], interval: 0.6, batch: 1 },
+      { until: 90, pool: [['runner', 0.402], ['hound', 0.268], ['bat', 0.223], ['spitter', 0.107]], interval: 0.5, batch: 1 },
+      { until: 200, pool: [['runner', 0.221], ['hound', 0.176], ['boomer', 0.147], ['bat', 0.103], ['spitter', 0.353]], interval: 0.38, batch: 2 },
+      { until: 340, pool: [['runner', 0.234], ['hound', 0.18], ['boomer', 0.162], ['warden', 0.126], ['chimera', 0.09], ['hatcher', 0.108], ['blinker', 0.063], ['spitter', 0.108]], interval: 0.3, batch: 2 },
+      { until: LEVEL_DURATION, pool: [['runner', 0.18], ['hound', 0.147], ['boomer', 0.131], ['warden', 0.114], ['chimera', 0.098], ['hatcher', 0.082], ['spitter', 0.262], ['blinker', 0.057]], interval: 0.24, batch: 3 },
+      { until: 9999, pool: [['runner', 0.156], ['hound', 0.141], ['boomer', 0.125], ['warden', 0.094], ['chimera', 0.109], ['hatcher', 0.078], ['spitter', 0.313], ['blinker', 0.055]], interval: 0.2, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 18000, name: '沙暴裝甲車', speed: 92, damage: 34, behaviors: ['barrage'], skin: 'boss_storm' },
@@ -487,12 +487,12 @@ export const LEVELS = {
       { type: 'mine', interval: 20, jitter: 8, radius: 160, fuse: 1.3, dmg: 18, dmgEnemy: 2200, color: '#ffb703' },
     ],
     waves: [
-      { until: 40, pool: [['walker', 0.45], ['brute', 0.35], ['boomer', 0.2]], interval: 0.66, batch: 1 },
-      { until: 95, pool: [['brute', 0.4], ['boomer', 0.3], ['warden', 0.2], ['walker', 0.1]], interval: 0.56, batch: 2 },
-      { until: 210, pool: [['brute', 0.3], ['warden', 0.24], ['boomer', 0.2], ['hatcher', 0.14], ['spitter', 0.12]], interval: 0.42, batch: 2 },
-      { until: 350, pool: [['brute', 0.26], ['warden', 0.22], ['hatcher', 0.16], ['chimera', 0.12], ['boomer', 0.14], ['spitter', 0.1], ['medic', 0.07]], interval: 0.32, batch: 3 },
-      { until: LEVEL_DURATION, pool: [['brute', 0.22], ['warden', 0.18], ['hatcher', 0.16], ['chimera', 0.14], ['boomer', 0.14], ['spitter', 0.1], ['hound', 0.06], ['medic', 0.07]], interval: 0.26, batch: 3 },
-      { until: 9999, pool: [['brute', 0.2], ['warden', 0.16], ['hatcher', 0.16], ['chimera', 0.16], ['boomer', 0.14], ['spitter', 0.1], ['hound', 0.08], ['medic', 0.07]], interval: 0.22, batch: 4 },
+      { until: 40, pool: [['walker', 0.402], ['brute', 0.312], ['boomer', 0.179], ['spitter', 0.107]], interval: 0.66, batch: 1 },
+      { until: 95, pool: [['brute', 0.357], ['boomer', 0.268], ['warden', 0.179], ['walker', 0.089], ['spitter', 0.107]], interval: 0.56, batch: 2 },
+      { until: 210, pool: [['brute', 0.221], ['warden', 0.176], ['boomer', 0.147], ['hatcher', 0.103], ['spitter', 0.353]], interval: 0.42, batch: 2 },
+      { until: 350, pool: [['brute', 0.203], ['warden', 0.172], ['hatcher', 0.125], ['chimera', 0.094], ['boomer', 0.109], ['spitter', 0.313], ['medic', 0.055]], interval: 0.32, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['brute', 0.172], ['warden', 0.141], ['hatcher', 0.125], ['chimera', 0.109], ['boomer', 0.109], ['spitter', 0.313], ['hound', 0.047], ['medic', 0.055]], interval: 0.26, batch: 3 },
+      { until: 9999, pool: [['brute', 0.156], ['warden', 0.125], ['hatcher', 0.125], ['chimera', 0.125], ['boomer', 0.109], ['spitter', 0.313], ['hound', 0.062], ['medic', 0.055]], interval: 0.22, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 24000, name: '鑄造監督官', speed: 66, damage: 36, behaviors: ['ground'], skin: 'boss_foundry' },
@@ -547,12 +547,12 @@ export const LEVELS = {
       { type: 'pool', interval: 15, jitter: 6, radius: 165, dur: 8, dmg: 13, color: '#9d8cff' },
     ],
     waves: [
-      { until: 45, pool: [['walker', 0.5], ['brute', 0.3], ['bat', 0.2]], interval: 0.66, batch: 1 },
-      { until: 100, pool: [['brute', 0.4], ['bat', 0.24], ['warden', 0.2], ['walker', 0.16]], interval: 0.56, batch: 2 },
-      { until: 215, pool: [['brute', 0.3], ['warden', 0.24], ['chimera', 0.14], ['spitter', 0.16], ['bat', 0.16]], interval: 0.42, batch: 2 },
-      { until: 350, pool: [['brute', 0.24], ['warden', 0.2], ['chimera', 0.18], ['spore_host', 0.14], ['spitter', 0.14], ['hound', 0.1], ['sniper', 0.07]], interval: 0.32, batch: 3 },
-      { until: LEVEL_DURATION, pool: [['brute', 0.2], ['warden', 0.18], ['chimera', 0.18], ['spore_host', 0.14], ['spitter', 0.14], ['hound', 0.08], ['hatcher', 0.08], ['sniper', 0.07]], interval: 0.26, batch: 3 },
-      { until: 9999, pool: [['brute', 0.18], ['warden', 0.16], ['chimera', 0.2], ['spore_host', 0.14], ['spitter', 0.14], ['hound', 0.1], ['hatcher', 0.08], ['sniper', 0.07]], interval: 0.22, batch: 4 },
+      { until: 45, pool: [['walker', 0.446], ['brute', 0.268], ['bat', 0.179], ['spitter', 0.107]], interval: 0.66, batch: 1 },
+      { until: 100, pool: [['brute', 0.357], ['bat', 0.214], ['warden', 0.179], ['walker', 0.143], ['spitter', 0.107]], interval: 0.56, batch: 2 },
+      { until: 215, pool: [['brute', 0.203], ['warden', 0.162], ['chimera', 0.095], ['spitter', 0.433], ['bat', 0.108]], interval: 0.42, batch: 2 },
+      { until: 350, pool: [['brute', 0.151], ['warden', 0.126], ['chimera', 0.113], ['spore_host', 0.088], ['spitter', 0.352], ['hound', 0.063], ['sniper', 0.176]], interval: 0.32, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['brute', 0.126], ['warden', 0.113], ['chimera', 0.113], ['spore_host', 0.088], ['spitter', 0.352], ['hound', 0.05], ['hatcher', 0.05], ['sniper', 0.176]], interval: 0.26, batch: 3 },
+      { until: 9999, pool: [['brute', 0.113], ['warden', 0.101], ['chimera', 0.126], ['spore_host', 0.088], ['spitter', 0.352], ['hound', 0.063], ['hatcher', 0.05], ['sniper', 0.176]], interval: 0.22, batch: 4 },
     ],
     bosses: [
       { at: 120, hp: 30000, name: '霜封守望者', speed: 58, damage: 38, behaviors: ['nova'], skin: 'boss_frostvoid' },
@@ -605,12 +605,12 @@ export const LEVELS = {
       { type: 'supply', interval: 42, jitter: 14 },
     ],
     waves: [
-      { until: 40, pool: [['runner', 0.4], ['hound', 0.35], ['walker', 0.25]], interval: 0.56, batch: 1 },
-      { until: 95, pool: [['runner', 0.34], ['hound', 0.3], ['boomer', 0.2], ['bat', 0.16]], interval: 0.48, batch: 2 },
-      { until: 210, pool: [['runner', 0.26], ['hound', 0.22], ['boomer', 0.2], ['chimera', 0.14], ['spitter', 0.18]], interval: 0.36, batch: 2 },
-      { until: 350, pool: [['runner', 0.22], ['hound', 0.2], ['chimera', 0.18], ['boomer', 0.16], ['warden', 0.12], ['hatcher', 0.12], ['blinker', 0.07], ['medic', 0.07]], interval: 0.28, batch: 3 },
-      { until: LEVEL_DURATION, pool: [['runner', 0.2], ['hound', 0.18], ['chimera', 0.18], ['boomer', 0.14], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.08], ['blinker', 0.07], ['medic', 0.07]], interval: 0.22, batch: 4 },
-      { until: 9999, pool: [['runner', 0.18], ['hound', 0.16], ['chimera', 0.2], ['boomer', 0.14], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.1], ['blinker', 0.07], ['medic', 0.07]], interval: 0.18, batch: 5 },
+      { until: 40, pool: [['runner', 0.357], ['hound', 0.312], ['walker', 0.223], ['spitter', 0.107]], interval: 0.56, batch: 1 },
+      { until: 95, pool: [['runner', 0.304], ['hound', 0.268], ['boomer', 0.179], ['bat', 0.143], ['spitter', 0.107]], interval: 0.48, batch: 2 },
+      { until: 210, pool: [['runner', 0.169], ['hound', 0.142], ['boomer', 0.129], ['chimera', 0.091], ['spitter', 0.467]], interval: 0.36, batch: 2 },
+      { until: 350, pool: [['runner', 0.199], ['hound', 0.181], ['chimera', 0.163], ['boomer', 0.145], ['warden', 0.109], ['hatcher', 0.109], ['blinker', 0.063], ['medic', 0.063], ['spitter', 0.109]], interval: 0.28, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['runner', 0.165], ['hound', 0.148], ['chimera', 0.148], ['boomer', 0.116], ['warden', 0.099], ['hatcher', 0.082], ['spitter', 0.265], ['blinker', 0.057], ['medic', 0.057]], interval: 0.22, batch: 4 },
+      { until: 9999, pool: [['runner', 0.142], ['hound', 0.127], ['chimera', 0.158], ['boomer', 0.111], ['warden', 0.095], ['hatcher', 0.079], ['spitter', 0.317], ['blinker', 0.055], ['medic', 0.055]], interval: 0.18, batch: 5 },
     ],
     bosses: [
       { at: 120, hp: 36000, name: '裂道遊魂', speed: 104, damage: 38, behaviors: ['barrage'], skin: 'boss_voidroad' },
@@ -664,7 +664,7 @@ export const LEVELS = {
       { type: 'shrinkCircle', startRadius: 1800, endRadius: 500, shrinkRate: 0.6, dmg: 8, dmgInterval: 0.4, color: '#b388ff' },
     ],
     waves: [
-      { until: 1e9, pool: [['walker', 0.14], ['bat', 0.12], ['brute', 0.1], ['boomer', 0.12], ['runner', 0.1], ['warden', 0.08], ['spore_host', 0.08], ['spitter', 0.08], ['hound', 0.08], ['hatcher', 0.06], ['chimera', 0.04], ['sniper', 0.07], ['medic', 0.07], ['blinker', 0.07]], interval: 0.55, batch: 2 },
+      { until: 1e9, pool: [['walker', 0.102], ['bat', 0.088], ['brute', 0.073], ['boomer', 0.088], ['runner', 0.073], ['warden', 0.058], ['spore_host', 0.058], ['spitter', 0.233], ['hound', 0.058], ['hatcher', 0.043], ['chimera', 0.029], ['sniper', 0.205], ['medic', 0.051], ['blinker', 0.051]], interval: 0.55, batch: 2 },
     ],
     bosses: [],
   },
@@ -744,6 +744,12 @@ export function mergeRules(...sources) {
   return out;
 }
 
+// 敵人基礎移速的全局倍率（單一真相）。為什麼要一個全局旋鈕而不是逐隻改：
+// 「近得了身」是**全體**的節奏問題 —— 玩家回報的是「敵人都到不了我面前」，
+// 不是某一種怪太慢。逐隻調速度會讓 13 種怪的手感差異（蛇行/撲擊/風箏）一起跑掉，
+// 全局倍率則完整保留相對關係。要調手感就改這一個數字。
+export const ENEMY_SPEED_BASE = 1.6;
+
 // 敵人隨時間 / 關卡難度的成長係數 (Spawner、孵化、裂解共用一份公式)
 //
 // dmg 的封頂原本是 1.8×，8 分鐘就到頂 —— 但血量無上限成長，於是 23 分鐘的怪比
@@ -754,14 +760,25 @@ export function mergeRules(...sources) {
 // 讓「撐得越久」這件事重新有代價。10 分鐘前完全不受影響。
 export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
   const endless = level && level.id === 'endless';
-  return {
-    // 0.4 → 0.28：後期改走「數量多、單隻脆」而不是「一隻一隻變成肉山」。
-    // 8 分鐘時的血量倍率由 4.2 降為 3.24，配合下面各關卡新增的高 batch 末波。
-    hp: (1 + (gameTime / 60) * 0.28) * ((level && level.hpScale) || 1)
+  return {    // 血量曲線（第三輪：玩家回報「敵人太脆，近不了身」）
+    //
+    // 實測（tools/probe-enemy-pressure.mjs）在標準難度、真實主迴圈下：
+    //   雜兵從生成距離 500px 出發，玩家站著不動、用正常武器 —— **接觸率 0%**。
+    //   原因不是玩家太強，是兩條曲線脫節：雜兵血量每分鐘只成長 ×0.28
+    //   （8 分鐘 ×3.2），而玩家輸出實測 2→20 分鐘成長 413 倍。雜兵在接近途中就被清掉，
+    //   「近戰」這個威脅類別等於不存在。
+    //
+    // 舊值 0.28 → 0.55、`(1 + (gameTime / 60) * 0.55)`，並另外乘 3 倍：
+    //   1 分鐘 ×2.4、3 分鐘 ×4.0、5 分鐘 ×5.7、8 分鐘 ×8.1、20 分鐘 ×18
+    //   （搭配各關 hpScale 與難度 enemyHpMul 再往上乘）。
+    // 為什麼連前三分鐘也一起加：玩家回報的是全程手感，不是只有後期；
+    // 而且雜兵的血量是「能不能走到你面前」的唯一門檻。
+    // 3 倍是實測調出來的（tools/probe-enemy-pressure.mjs 的接觸率）：
+    // ×2 時 walker 在 5 分鐘只有 75 HP，玩家實測 44 DPS 下 1.7 秒就死，
+    // 而牠要走 3.5 秒 —— 接觸率只有 10%，玩家仍然覺得「近不了身」。
+    hp: (1 + (gameTime / 60) * 0.55) * 3 * ((level && level.hpScale) || 1)
         * (endless ? 1 + gameTime / 300 : 1) * rules.enemyHpMul
-        // 後期二次項：玩家輸出實測 2→20 分鐘成長 413 倍，血量只成長 26 倍，
-        // 於是雜兵在接近途中就被清掉。10 分鐘前不動 (維持「多而脆」的手感)，
-        // 之後才加速追上。23 分鐘時整體倍率約為原本的 2.1 倍。
+        // 後期二次項：10 分鐘前不動（維持「多而脆」的節奏），之後才加速追上輸出曲線。
         * (1 + Math.pow(Math.max(0, gameTime / 60 - 10), 2) * 0.012),
     // 敵人傷害隨時間的成長（dmg 上限 12 倍，見下方註解）
     dmg: Math.min(
@@ -775,9 +792,16 @@ export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
     //（基礎接觸傷害 8 就等於 640 點一下）—— 那已經不是「難」而是必死，
     // 會把走位與裝備的價值一起抹掉。12 倍 ≈ 96 點基礎傷害：有減傷與裝備的
     // 老手撐得住，站著不動的一定死。
-    // 移動速度原本完全不隨時間成長，而玩家有移速升級 —— 實測「中位敵人距離」
-    // 全程卡在 400px，雜兵根本走不到玩家面前。緩升並封頂 1.5×。
-    speed: rules.enemySpeedMul * Math.min(1.5, 1 + (gameTime / 60) * 0.03),
+    // 移動速度：原本完全不隨時間成長，而玩家有移速升級 —— 實測「中位敵人距離」
+    // 全程卡在 400px，雜兵根本走不到玩家面前。
+    //
+    // ENEMY_SPEED_BASE = 1.6 是「近得了身」的核心旋鈕（玩家回報的第二個瓶頸）。
+    // 為什麼不是只堆血量：實測一輪之後發現，血量 ×2 讓雜兵存活 4.1 秒，
+    // 但牠從生成距離 500px 走過來要 6~7 秒 —— 接觸率仍然是 0%。
+    // 血量決定「能不能撐到面前」，移速決定「能不能在撐住之前走到」，兩個都要動。
+    // 1.6 倍讓 walker 的 500px 行軍從 5.6 秒降到 3.5 秒，配上血量成長才進得了身。
+    // 上限 1.5× 與關卡/難度的 enemySpeedMul 照舊，所以地獄的 ×1.14 仍然有效。
+    speed: ENEMY_SPEED_BASE * rules.enemySpeedMul * Math.min(1.5, 1 + (gameTime / 60) * 0.03),
   };
 }
 

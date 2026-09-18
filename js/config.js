@@ -540,7 +540,9 @@ export const ENEMY_TYPES = {
     name: '酸液噴吐者',
     // 繞行方向在生成時隨機，否則整關的噴吐者會一起同方向繞圈
     ai: { kind: 'kite', windup: 0.35, animSpeed: 6.5, sepMul: 0.9 },
-    hp: 42,
+    // 42 → 95：遠程怪是「玩家要求多一些」的對象，但牠原本 42 血在玩家 44 DPS 下
+    // 撐不到 1 秒 —— 加權重只會變成更多「一出現就被清掉」的雜兵，射不到幾發。
+    hp: 95,
     speed: 75,
     damage: 8,
     color: '#06d6a0',
@@ -548,7 +550,7 @@ export const ENEMY_TYPES = {
     exp: 2,
     ranged: {
       range: 270,        // 保持在射程外射擊
-      cd: 2.4,           // 射擊冷卻 (秒)
+      cd: 2.0,           // 射擊冷卻 (秒)：2.4 → 2.0，讓遠程壓力真的存在
       speed: 230,        // 投射物速度
       damage: 12,        // 投射物傷害
       radius: 6,         // 投射物半徑
@@ -599,13 +601,13 @@ export const ENEMY_TYPES = {
   sniper: {
     name: '酸蝕狙擊蟲',
     ai: { kind: 'kite', windup: 0.6, animSpeed: 5, sepMul: 0.9 }, // 長預警，閃得掉但不能站樁
-    hp: 38,
+    hp: 80,   // 38 → 80（同 spitter 的理由）
     speed: 60,
     damage: 8,
     color: '#4895ef',
     radius: 15,
     exp: 3,
-    ranged: { range: 460, cd: 3.6, speed: 520, damage: 20, radius: 5, color: '#4cc9f0' },
+    ranged: { range: 460, cd: 3.0, speed: 520, damage: 20, radius: 5, color: '#4cc9f0' },
   },
   medic: {
     name: '屍群巫醫',

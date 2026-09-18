@@ -10,8 +10,8 @@
 //
 // 用法：node tools/verify-balance.mjs
 import { readFileSync } from 'node:fs';
-import { DIFFICULTIES, RULE_DEFAULTS, enemyScale, LEVELS } from '../js/levels.js';
-import { BLESSINGS, blessingPool, BOMB_TUNING } from '../js/config.js';
+import { DIFFICULTIES, RULE_DEFAULTS, enemyScale, LEVELS, ENEMY_SPEED_BASE } from '../js/levels.js';
+import { BLESSINGS, blessingPool, BOMB_TUNING, ENEMY_TYPES } from '../js/config.js';
 
 // 原始碼層級：確認實際抽祝福的路徑真的走 blessingPool（而不是各自再寫一次 filter）
 const progressionSrc = readFileSync(new URL('../js/systems/Progression.js', import.meta.url), 'utf8');
@@ -116,6 +116,30 @@ console.log('\n=== A2. 敵人傷害曲線：後期必須真的會痛 ===');
   ok('血量也持續成長，不會出現「血薄到秒殺」的反向失衡',
     hpAt(30) > hpAt(10) * 1.5, `10 分 ×${hpAt(10).toFixed(1)} → 30 分 ×${hpAt(30).toFixed(1)}`);
 
+  // ── 血量曲線要讓雜兵「活著走到玩家面前」──
+  // 玩家回報「敵人太脆，近不了身」。實測（tools/probe-enemy-pressure.mjs）：
+  // 舊曲線每分鐘只成長 ×0.28（8 分鐘 ×3.2），而玩家輸出 2→20 分鐘成長 413 倍，
+  // 雜兵在接近途中就被清掉。契約用「撐不撐得住自己的行軍時間」當門檻。
+  const BASE_GRUNT_HP = ENEMY_TYPES.walker.hp;
+  const BASE_GRUNT_SPEED = ENEMY_TYPES.walker.speed;
+  const marchSeconds = 500 / (BASE_GRUNT_SPEED * ENEMY_SPEED_BASE);   // 生成距離 500px ÷ 實際移速
+  // 注意：hpAt() 已經含全局倍率，直接用「基礎血量 × hpAt(分)」就是該時間點的實際血量
+  // （先前多除了一次 hpAt(0)，把 225 HP 算成 75，害契約一直紅燈）
+  const gruntHpAt = (min) => BASE_GRUNT_HP * hpAt(min);
+  const PLAYER_DPS = 44;                                  // 實測：2~8 分鐘的基礎武器輸出
+  ok('雜兵血量成長明顯高於舊曲線（24 分鐘 ≥ 12 倍，舊版約 7.7 倍）',
+    hpAt(24) / 3 >= 12, `24 分 ×${(hpAt(24) / 3).toFixed(1)}（舊版 ×${(1 + 24 * 0.28).toFixed(1)}）`);
+  ok(`5 分鐘的雜兵能撐過自己的行軍時間（≥ ${marchSeconds.toFixed(1)} 秒）`,
+    gruntHpAt(5) / PLAYER_DPS >= marchSeconds,
+    `walker ${Math.round(gruntHpAt(5))} HP ÷ ${PLAYER_DPS} DPS = ${(gruntHpAt(5) / PLAYER_DPS).toFixed(1)}s vs 行軍 ${marchSeconds.toFixed(1)}s`);
+  ok('8 分鐘的雜兵存活時間明顯超過行軍時間（撐得住才代表「近得了身」）',
+    gruntHpAt(8) / PLAYER_DPS >= marchSeconds * 1.3,
+    `walker ${Math.round(gruntHpAt(8))} HP ÷ ${PLAYER_DPS} DPS = ${(gruntHpAt(8) / PLAYER_DPS).toFixed(1)}s vs 行軍 ${marchSeconds.toFixed(1)}s`);
+
+  // 移速：全局旋鈕必須真的存在且 > 1，否則行軍時間會回到 5.6 秒
+  ok('敵人基礎移速有全局加成（ENEMY_SPEED_BASE ≥ 1.4）',
+    ENEMY_SPEED_BASE >= 1.4, `ENEMY_SPEED_BASE=${ENEMY_SPEED_BASE}`);
+
   // 實測換算：雜兵基礎接觸傷害 8，玩家 0.5 秒無敵影格 → 單怪上限 = 傷害/0.5 秒
   const BASE_CONTACT = 8;
   const dps = (min) => (BASE_CONTACT * dmgAt(min)) / 0.5;
@@ -123,6 +147,45 @@ console.log('\n=== A2. 敵人傷害曲線：後期必須真的會痛 ===');
     dps(20) >= 90, `約 ${dps(20).toFixed(0)} DPS（舊版約 28）`);
   ok('封頂後單下傷害 ≤ 100（有減傷與裝備的老手撐得住，站著不動的必死）',
     BASE_CONTACT * dmgAt(60) <= 100, `40 分單下約 ${(BASE_CONTACT * dmgAt(40)).toFixed(0)} 點`);
+}
+
+console.log('\n=== A3. 發射投射物的敵人（玩家要求「多一些」）===');
+{
+  // 只有兩種敵人會發射投射物（ENEMY_TYPES 裡有 ranged 的）。玩家回報太少，
+  // 所以這裡把「每一關的每一個波次」都要有遠程敵人、而且佔比有下限寫成契約。
+  const rangedKeys = Object.keys(ENEMY_TYPES).filter((k) => ENEMY_TYPES[k].ranged);
+  ok('遠程敵人種類 ≥ 2', rangedKeys.length >= 2, rangedKeys.join('、'));
+
+  const rangedShareOf = (pool) => {
+    const total = (pool || []).reduce((s, [, w]) => s + (Number(w) || 0), 0);
+    if (!total) return 0;
+    return (pool || []).filter(([k]) => rangedKeys.includes(k))
+      .reduce((s, [, w]) => s + (Number(w) || 0), 0) / total;
+  };
+
+  const emptyWaves = [];
+  const levelBest = {};
+  for (const [id, lv] of Object.entries(LEVELS)) {
+    let best = 0;
+    (lv.waves || []).forEach((w, i) => {
+      const share = rangedShareOf(w.pool);
+      if (share === 0) emptyWaves.push(`${id}#${i + 1}`);
+      best = Math.max(best, share);
+    });
+    levelBest[id] = best;
+  }
+  ok('每一個波次都有遠程敵人（沒有整段空窗）',
+    emptyWaves.length === 0, emptyWaves.slice(0, 6).join('、') || `${Object.keys(LEVELS).length} 關全部涵蓋`);
+
+  const weakest = Object.entries(levelBest).sort((a, b) => a[1] - b[1])[0];
+  ok('每一關的遠程敵人佔比都 ≥ 20%（最高波次）',
+    weakest[1] >= 0.20, `最低是 ${weakest[0]} ${(weakest[1] * 100).toFixed(1)}%`);
+  const avgShare = Object.values(levelBest).reduce((s, v) => s + v, 0) / Object.keys(levelBest).length;
+  ok('全關卡平均遠程佔比 ≥ 25%（玩家要求「多一些」）',
+    avgShare >= 0.25, `平均 ${(avgShare * 100).toFixed(1)}%`);
+  ok('遠程敵人有足夠血量撐到開火（spitter ≥ 80、sniper ≥ 70）',
+    ENEMY_TYPES.spitter.hp >= 80 && ENEMY_TYPES.sniper.hp >= 70,
+    `spitter ${ENEMY_TYPES.spitter.hp}、sniper ${ENEMY_TYPES.sniper.hp}`);
 }
 
 console.log('\n=== B. 引力異常的等級門檻 ===');
