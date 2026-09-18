@@ -758,8 +758,10 @@ class Game {
         if (eff.pierce) this.player.bonusPierce = (this.player.bonusPierce || 0) + eff.pierce;
         if (eff.magnet) this.applyRunMul('magnet', 1 + eff.magnet);
         if (eff.gold) this.runGoldMul = (this.runGoldMul || 1) * eff.gold;
-        if (eff.crit) this.player.metaCrit = (this.player.metaCrit || 0) + eff.crit;
-        if (eff.critDmg) this.player.metaCritDmg = (this.player.metaCritDmg || 0) + eff.critDmg;
+        // 也走局內層：metaCrit / metaCritDmg 是「永久層＋局內層」的總和，
+        // 直接寫進總和會在升級重算時被歸零（與祝福同一類問題）。
+        if (eff.crit) this.player.blessing.crit += eff.crit;
+        if (eff.critDmg) this.player.blessing.critDmg += eff.critDmg;
         // 注意：這裡刻意「不」寫 speedMultiplier / magnetMultiplier / metaGoldMul。
         // 那三個欄位在開局時已經由 applyMetaTalents 依天賦重算過一次，直接在這裡
         // 累加會變成乘兩次；移速／磁力改走 applyRunMul（見上），金幣走 runGoldMul。
@@ -790,8 +792,12 @@ class Game {
       }
     }
 
-    // 規則層注入：輸出、受傷、金幣三個乘數
-    this.player.damageTakenMul *= this.rules.damageTakenMul;
+    // 規則層注入：輸出、受傷、金幣三個乘數。
+    // 受傷拆成兩層：baseDamageTaken 是「角色特質 × 每日詞綴 × 關卡／難度規則」，
+    // damageTakenMul 再乘上「祝福的風險懲罰」。分開的理由是祝福懲罰必須可重算 ——
+    // 直接寫進 damageTakenMul 的話，任何重新指派這條公式的地方都會把它沖掉
+    // （裝備的 meta 加成就是這樣踩過的）。baseDamageTaken 由 applyPassives() 負責套用。
+    this.player.baseDamageTaken = this.player.damageTakenMul * this.rules.damageTakenMul;
     this.player.modeDmgMul = (this.player.modeDmgMul || 1) * this.rules.playerDmgMul;
     // rules.goldMul 不在這裡烘進 metaGoldMul：rules 會被局內事件暫時改寫
     // （Progression 的 spawnMul/goldMul 事件），烘進去會在事件結束後留下殘留值。

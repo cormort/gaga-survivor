@@ -2431,6 +2431,17 @@ body, html {
   border: 1px solid rgba(255, 0, 85, 0.5);
 }
 
+/* 代價祝福的風險列：把「承受傷害 +X%（輸出約 ×Y）」直接寫在卡片上。
+   為什麼要獨立一行而不是塞進 desc：風險是玩家決定要不要選的關鍵資訊，
+   混在說明文字裡會被忽略，選完才發現受傷變高就變成「被騙」的感覺。 */
+.card-risk-line {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ff6b8a;
+  letter-spacing: 0.02em;
+}
+
 /* ==================== 特殊卡 (Special Card) ==================== */
 .card-special {
   border-color: var(--card-glow-color, #ffb703) !important;

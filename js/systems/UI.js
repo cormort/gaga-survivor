@@ -1795,15 +1795,23 @@ export class UIManager {
       this.blessingCards.innerHTML = '';
       choices.forEach((b) => {
         const card = document.createElement('div');
-        card.className = `upgrade-card card-blessing ${b.risk ? 'card-risk' : ''}`;
+        // 有 damageRisk 的祝福一律標成代價祝福：讓「代價」在卡片上就看得見，
+        // 而不是要玩家點進去玩一輪才發現受傷變高。
+        const risky = !!b.damageRisk;
+        card.className = `upgrade-card card-blessing ${b.risk || risky ? 'card-risk' : ''}`;
+        // 風險／報酬同時列出來：只寫「攻速 +25%」玩家無從判斷划不划算。
+        const riskLine = risky
+          ? `<div class="card-risk-line">⚠️ 承受傷害 +${Math.round((b.damageRisk - 1) * 100)}%</div>`
+          : '';
         card.innerHTML = `
           <div class="card-icon-box">${b.icon}</div>
           <div class="card-info">
             <div class="card-title-row">
               <span class="card-name">${b.name}</span>
-              <span class="card-tag ${b.risk ? 'tag-risk' : 'tag-blessing'}">${b.risk ? '代價祝福' : '神聖祝福'}</span>
+              <span class="card-tag ${b.risk || risky ? 'tag-risk' : 'tag-blessing'}">${b.risk || risky ? '代價祝福' : '神聖祝福'}</span>
             </div>
             <div class="card-desc">${b.desc}</div>
+            ${riskLine}
           </div>
         `;
         card.addEventListener('click', () => {

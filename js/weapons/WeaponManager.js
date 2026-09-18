@@ -141,14 +141,20 @@ export class WeaponManager {
 
     // 唯一的「局外加成套用點」。計算語意是「重算」而不是「累加」：
     // 每次升級／買被動都會重跑這裡，所以任何加成只要寫成 += 就會被疊第二次或沖掉。
-    // 生命上限也在這裡一次算完：角色基礎 + 裝備 + 防彈護甲。
+    //
+    // 每一條 meta 欄位都是「永久層 + 局內層」相加：
+    //   永久層 = player.meta（天賦＋裝備詞條），局內層 = player.blessing*（祝福、興奮劑）
+    // 為什麼要分局內層：祝福是單局的，但這些欄位的總和必須每次重算 ——
+    // 直接寫進總和欄位（例如 p.metaCrit += 0.15）會在升級時被這行重算歸零，
+    // 祝福就等於沒選到（實測 crit_storm 選了之後 metaCrit 一直是 0）。
+    const bl = p.blessing || {};
     p.legendaryEffects = this.game?.gearEffects || p.legendaryEffects || [];
     p.metaDmg = meta.dmg;
     p.metaCdr = meta.cdr;
-    p.metaCrit = meta.crit;
-    p.metaCritDmg = meta.critdmg;
+    p.metaCrit = (meta.crit || 0) + (bl.crit || 0);
+    p.metaCritDmg = (meta.critdmg || 0) + (bl.critDmg || 0);
     p.metaArmor = Math.min(0.5, meta.armor);   // 減傷上限 50%，防止堆滿免疫
-    p.metaExp = meta.exp;
+    p.metaExp = (meta.exp || 0) + (bl.exp || 0);
     p.gearHp = meta.hp;
 
     p.damageMultiplier = 1.0 + (p.metaDmg || 0);          // 天賦／裝備的常駐傷害
@@ -247,6 +253,13 @@ export class WeaponManager {
     const totalCdr = (this.player.metaCdr || 0) + (leg.cdr || 0);
     if (totalCdr > 0) {
       this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * (1 - totalCdr));
+    }
+
+    // 承受傷害 = 基礎層（角色特質 × 每日詞綴 × 關卡／難度規則）× 祝福的風險懲罰。
+    // 風險懲罰在這裡重算而不是在 applyBlessing 裡寫死：祝福是每局重新拿的，
+    // 但這條公式會被升級、買被動、換祝福反覆重跑，寫死就會被沖掉或疊兩次。
+    if (p.baseDamageTaken !== undefined) {
+      p.damageTakenMul = p.baseDamageTaken * (p.blessingDamageRisk || 1);
     }
 
     // 角色特質的常駐加成 (例如兔兔「跑得越快打越痛」)

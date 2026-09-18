@@ -265,6 +265,137 @@ const results = await page.evaluate(async () => {
       `基準 ×${b.gold} → 套用後 ×${thrice.gold}（期望 ×${(b.gold * realGold).toFixed(4)}）`);
   }
 
+  // ── 7) 增傷祝福的風險必須高於增益（玩家要求）────────────────────────
+  // 「增傷的祝福，收到的傷害比率要高於增傷的比率」。
+  // 這裡不是只比對表上的兩個數字，而是**真的把祝福套進遊戲物件**再量：
+  //   增益  = damageMultiplier↑ / 1/cdrMultiplier↑ / crit↑×(critMul-1) / 穿透 / 範圍 / 轉速
+  //   代價  = player.damageTakenMul 相對套用前的倍率
+  // 只比對常數的話，apply() 裡漏乘風險層（或乘錯層）照樣會過。
+  {
+    const { BLESSINGS } = await import(new URL('js/config.js', document.baseURI).href);
+    const { applyBlessing } = await import(new URL('js/systems/Progression.js', document.baseURI).href);
+
+    // 量測一個祝福帶來的輸出增益（取「最有利情況」的峰值：穿透上限、貼身高血線、
+    // 範圍全中）。契約拿峰值當分母，所以保證的形式是
+    // 「就算你在最有利的情況下拿到最大增益，代價仍然更大」。
+    const measureGain = (p, b) => {
+      let gain = 1;
+      gain *= p.damageMultiplier / b.damageMultiplier;
+      const cdrBefore = b.cdrMultiplier || 1;
+      const cdrAfter = p.cdrMultiplier || 1;
+      if (cdrAfter !== cdrBefore) gain *= cdrBefore / cdrAfter;       // 冷卻 ↓ = 輸出 ↑
+      const critBefore = b.metaCrit || 0;
+      const critAfter = p.metaCrit || 0;
+      if (critAfter !== critBefore) gain *= 1 + (critAfter - critBefore) * (1 + (p.metaCritDmg || 0));
+      if ((p.bonusPierce || 0) > (b.bonusPierce || 0)) gain *= 1.6;   // 穿透：對群體的峰值
+      if ((p.blessingAreaMul || 1) > (b.blessingAreaMul || 1)) gain *= 1.1;
+      if ((p.blessingSpinMul || 1) > (b.blessingSpinMul || 1)) gain *= p.blessingSpinMul / (b.blessingSpinMul || 1);
+      // 低血線型（狂戰士／處刑人）：傷害不是在 damageMultiplier 上，而是在傷害計算末端
+      // 讀旗標（blessingBerserkerMul 最高 1.6、blessingExecute 對 <30% 敵人 ×1.6）。
+      // 契約取峰值，所以這裡就用峰值，不另外模擬血量曲線。
+      if (p.blessingBerserker) gain *= 1.6;
+      if (p.blessingExecute) gain *= 1.6;
+      return gain;
+    };
+
+    // 固定基準：一場開始（含角色特質與難度 1.0 的規則）
+    boot(null);
+    g.start();
+
+    const snapshotFor = () => ({
+      damageMultiplier: g.player.damageMultiplier,
+      cdrMultiplier: g.player.cdrMultiplier,
+      metaCrit: g.player.metaCrit,
+      metaCritDmg: g.player.metaCritDmg,
+      bonusPierce: g.player.bonusPierce,
+      blessingAreaMul: g.player.blessingAreaMul,
+      blessingSpinMul: g.player.blessingSpinMul,
+      blessingBerserker: g.player.blessingBerserker,
+      blessingExecute: g.player.blessingExecute,
+      damageTakenMul: g.player.damageTakenMul,
+    });
+
+    const rows = [];
+    let worstMargin = Infinity;
+    let worstId = '';
+    let noRisk = [];
+    let noGain = [];
+
+    // 每個祝福都「重新開始一局再單獨套用」：同一輪裡套一整排會讓峰值型的加成互相相乘
+    // （實測 berserker 會被記成 ×2.56，因為那時處刑人已經在身上），
+    // 而契約要驗的是「這一個祝福自己」的代價夠不夠。
+    for (const bl of BLESSINGS) {
+      if (bl.damageBoosting === false) continue;
+      if (typeof bl.damageRisk !== 'number') { noRisk.push(`${bl.id}.damageRisk`); continue; }
+
+      boot(null);
+      g.start();
+      const before = snapshotFor();
+      applyBlessing(g, bl);
+      const gain = measureGain(g.player, before);
+      const risk = g.player.damageTakenMul / before.damageTakenMul;
+      const margin = risk / gain;
+      if (gain <= 1.0) noGain.push(`${bl.id}(×${gain.toFixed(2)})`);
+      if (margin < worstMargin) { worstMargin = margin; worstId = bl.id; }
+      rows.push({ id: bl.id, name: bl.name, gain, risk, margin, declared: bl.damageRisk });
+    }
+
+    // 完整列舉：池子裡每個祝福都必須是「明確標記不增傷」或「有宣告 damageRisk」
+    const unmarked = BLESSINGS.filter((b) => b.damageBoosting !== false && typeof (b.damageRisk) !== 'number');
+    ok('每一個增傷祝福都必須宣告 damageRisk（契約要能完整列舉，不能靠欄位有無來猜）',
+      unmarked.length === 0, unmarked.map((b) => b.id).join('、') || `${rows.length} 個增傷祝福都有宣告`);
+
+    ok('每個被標為增傷的祝福，實際套用後輸出增益都 > 1（標記沒有說謊）',
+      noGain.length === 0, noGain.join('、') || `全部 ${rows.length} 個都真的增傷`);
+
+    const losers = rows.filter((r) => r.risk <= r.gain);
+    const worst = rows.find((r) => r.id === worstId);
+    ok('沒有任何增傷祝福的「受傷倍率 ≤ 增益倍率」',
+      losers.length === 0,
+      losers.length
+        ? losers.map((r) => `${r.id} gain×${r.gain.toFixed(2)} risk×${r.risk.toFixed(2)}`).join('、')
+        : `最差邊際 ${worstId}（gain×${worst.gain.toFixed(2)} vs risk×${worst.risk.toFixed(2)}）`);
+
+    // 1.05 倍是「有感」的門檻：只高 0.5% 玩家根本感覺不出代價
+    const tight = rows.filter((r) => r.margin < 1.05);
+    ok('每一個增傷祝福的受傷倍率都 ≥ 實測增益 × 1.05（代價要有感）',
+      tight.length === 0,
+      tight.length
+        ? tight.map((r) => `${r.id} 只有 ${r.margin.toFixed(3)}×`).join('、')
+        : `最小邊際 ${worstMargin.toFixed(3)}×（${worstId}）`);
+
+    ok('宣告的 damageRisk 與實際進到玩家身上的受傷倍率一致（說明不能騙人）',
+      rows.every((r) => Math.abs(r.declared - r.risk) < 1e-6),
+      rows.filter((r) => Math.abs(r.declared - r.risk) >= 1e-6)
+        .map((r) => `${r.id} 宣告×${r.declared} 實際×${r.risk.toFixed(3)}`).join('、') || '全部一致');
+
+    ok('所有增傷祝福的實際受傷倍率都 > 1（不是只在表上寫了 risk）',
+      rows.length > 0 && rows.every((r) => r.risk > 1),
+      `${rows.length} 個祝福的實際受傷倍率：${rows.map((r) => `${r.id}×${r.risk.toFixed(2)}`).join(' ')}`);
+
+    // ── 整輪全拿的累積契約 ──
+    // 玩家實際會「一輪又一輪地選」，所以也要驗總帳：全部增傷祝福都拿之後，
+    // 累積承受傷害倍率必須大於累積增益倍率（乘法疊加，不是只看單一祝福）。
+    {
+      boot(null);
+      g.start();
+      const before = snapshotFor();
+      let cumGain = 1;
+      for (const bl of BLESSINGS) {
+        if (bl.damageBoosting === false) continue;
+        applyBlessing(g, bl);
+      }
+      // 累積增益：把每個祝福的峰值相乘（只有一個祝福時即為它自己的峰值）
+      for (const r of rows) cumGain *= r.gain;
+      const cumRisk = g.player.damageTakenMul / before.damageTakenMul;
+      ok('全部增傷祝福拿滿時，累積受傷倍率仍高於累積增益倍率',
+        cumRisk > cumGain,
+        `累積 gain×${cumGain.toFixed(1)} vs 累積 risk×${cumRisk.toFixed(1)}`);
+      ok('全部拿滿後玩家承受的傷害倍率合理（不會一擊必死，也不要完全無感）',
+        cumRisk > 10 && cumRisk < 60, `×${cumRisk.toFixed(1)}`);
+    }
+  }
+
   return out;
 });
 

@@ -27,6 +27,11 @@ export class Player {
     this.baseSpeedMul = 1.0;
     this.baseMagnet = 1.0;
     this.damageTakenMul = 1.0;
+    // 承受傷害拆兩層（見 WeaponManager.applyPassives）：
+    //   baseDamageTaken   —— 角色特質 × 每日詞綴 × 關卡／難度規則
+    //   blessingDamageRisk —— 增傷祝福的風險懲罰乘數（可重算，不會被升級沖掉）
+    this.baseDamageTaken = undefined;   // undefined = 還沒進局，不覆寫角色特質的初值
+    this.blessingDamageRisk = 1;
     this.critChance = 0;
     this.overloadTimer = 0;
 
@@ -47,6 +52,10 @@ export class Player {
     this.gearHp = 0;              // 裝備提供的生命上限
     this.metaDmg = 0; // 局外天賦「火力核心」＋裝備的常駐傷害加成 (applyPassives 重置時要加回去)
     this.metaCdr = 0; // 局外裝備的冷卻縮減 (0~1)，在被動算完之後再乘上去
+    // 局內加成層（祝福、興奮劑）。為什麼要獨立於 metaCrit / metaExp 這些「總和」欄位：
+    // 總和每次 applyPassives 都會被重算成「永久層 + 局內層」，直接寫進總和會在升級時
+    // 被歸零（祝福等於沒選到）。這裡放的是「局內那一份」，只增不減、每局開始清空。
+    this.blessing = { crit: 0, critDmg: 0, exp: 0 };
     this.metaCrit = 0;     // 局外裝備的暴擊率 (0~1)
     this.metaCritDmg = 0;  // 局外裝備的暴擊傷害加值 (2 之外的額外倍率)
     this.metaArmor = 0;    // 局外裝備的減傷 (0~1，乘在 damageTakenMul 之後)

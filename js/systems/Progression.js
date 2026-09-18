@@ -153,10 +153,20 @@ export function offerBlessingChoice(game, title) {
 export function applyBlessing(game, blessing) {
   game.blessings.push({ id: blessing.id, name: blessing.name, icon: blessing.icon });
   blessing.apply(game.player, game);
-  game.weaponManager.applyPassives(); // 重算被動 (部分祝福改了乘數)
+  // 增傷祝福的代價：承受傷害倍率。語意是「乘進風險層」而不是直接改 damageTakenMul ——
+  // damageTakenMul 會被 applyPassives 用「基礎層 × 風險層」重算，寫死會被沖掉。
+  // 契約（tools/verify-gear.mjs）要求 damageRisk ≥ 實測輸出增益 × 1.05，也就是
+  // 「收到的傷害比率要高於增傷的比率」。
+  if (blessing.damageRisk) {
+    game.player.blessingDamageRisk = (game.player.blessingDamageRisk || 1) * blessing.damageRisk;
+  }
+  game.weaponManager.applyPassives(); // 重算被動 (部分祝福改了乘數) 與承受傷害
   game.particles.createShockwave(game.player.x, game.player.y, 200, '#b388ff');
   sound.playEvoFanfare();
-  game.ui.say(`🔮 獲得祝福：${blessing.icon} ${blessing.name}`, '#b388ff', 3);
+  const riskText = blessing.damageRisk
+    ? `（受傷 +${Math.round((blessing.damageRisk - 1) * 100)}%）`
+    : '';
+  game.ui.say(`🔮 獲得祝福：${blessing.icon} ${blessing.name}${riskText}`, '#b388ff', 3);
   game.ui.updateBlessings(game.blessings);
 }
 

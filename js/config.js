@@ -794,38 +794,69 @@ export function blessingPool(ownedIds, playerLevel, pool = BLESSINGS) {
 // ── 局內隨機祝福 (Blessings)：里程碑二選一，本局限定的被動效果 ──
 // apply(player, game) 在獲得時呼叫一次注入加成，tick(dt, game) 每幀呼叫（需要的話）。
 // 部分祝福有 risk 標記（高收益但有代價），UI 會特別標示。
+// 風險／報酬原則（玩家要求）：「增傷的祝福，收到的傷害比率要高於增傷的比率」。
+//
+// 所以每一個會提高輸出的祝福都必須同時宣告兩個欄位：
+//   damageRisk —— 承受傷害的倍率。契約要求 **damageRisk ≥ 實測輸出增益 × 1.05**
+//
+// 增益為什麼不寫在這裡：輸出增益不是一個現成的數字 —— 攻速是 1/cd、暴擊率要乘上
+// 暴擊倍率、穿透與範圍取決於場面。手寫第二份估計值一定會跟引擎漂移（第一版就是
+// 這樣：宣告 overcharge ×1.13，引擎量到 ×1.33）。所以 tools/verify-gear.mjs
+// 直接把祝福套進遊戲物件量測，再用實測值檢查 damageRisk。
+// 要調平衡就改這一個欄位，契約會立刻告訴你夠不夠。
+//
+// 祝福寫進 p.blessing.* 而不是 metaCrit / metaExp 這些「總和」欄位：
+// 總和每次升級都會被 applyPassives 重算成「永久層＋局內層」，寫進總和會被歸零。
+//
+// `damageBoosting: false` 標記「這個祝福不提供輸出增益」，因此不需要 damageRisk。
+// 契約會列舉整個池子：每一個祝福都必須是「有 gain 與 risk」或「明確標記不增傷」
+// —— 靠欄位有無來判斷的話，之後新增一個增傷祝福忘了寫 risk 就會靜默漏掉。
+//
+// `risk: true` 只影響卡片樣式（代價祝福／神聖祝福），語意標記請以 damageRisk 為準。
 export const BLESSINGS = [
-  { id: 'flame_touch',     name: '烈焰之觸',     icon: '🔥', desc: '所有武器範圍 +20%',
+  { id: 'flame_touch',     name: '烈焰之觸',     icon: '🔥', desc: '所有武器範圍 +20%，受傷 +16%', risk: true,
+    damageRisk: 1.16,
     apply(p) { p.blessingAreaMul = (p.blessingAreaMul || 1) * 1.20; } },
-  { id: 'overcharge',      name: '過載協議',      icon: '⚡', desc: '攻速 +25%，受傷 +15%', risk: true,
-    apply(p) { p.blessingCdrMul = (p.blessingCdrMul || 1) * 0.75; p.damageTakenMul *= 1.15; } },
-  { id: 'blood_pact',      name: '嗜血契約',      icon: '🩸', desc: '擊殺回血 2，拾取範圍 -25%', risk: true,
+  { id: 'overcharge',      name: '過載協議',      icon: '⚡', desc: '攻速 +25%，受傷 +45%', risk: true,
+    damageRisk: 1.45,
+    apply(p) { p.blessingCdrMul = (p.blessingCdrMul || 1) * 0.75; } },
+  { id: 'blood_pact',      name: '嗜血契約',      icon: '🩸', desc: '擊殺回血 2，拾取範圍 -25%', risk: true, damageBoosting: false,
     apply(p) { p.blessingKillHeal = (p.blessingKillHeal || 0) + 2; p.blessingMagnetMul = (p.blessingMagnetMul || 1) * 0.75; } },
-  { id: 'fortune_gem',     name: '幸運寶鑽',      icon: '💎', desc: '經驗獲得 +50%',
-    apply(p) { p.metaExp = (p.metaExp || 0) + 0.50; } },
-  { id: 'phase_shield',    name: '相位護盾',      icon: '🛡️', desc: '每 25 秒自動觸發 2.5 秒無敵',
+  { id: 'fortune_gem',     name: '幸運寶鑽',      icon: '💎', desc: '經驗獲得 +50%', damageBoosting: false,
+    apply(p) { p.blessing.exp += 0.50; } },
+  { id: 'phase_shield',    name: '相位護盾',      icon: '🛡️', desc: '每 25 秒自動觸發 2.5 秒無敵', damageBoosting: false,
     apply(p) { p.blessingShieldCD = 25; p.blessingShieldTimer = 0; p.blessingShieldDur = 2.5; } },
   // minLevel：要玩家等級（局內 LV）達到才會進入祝福池。拾取範圍翻倍在前期就拿到
   // 會讓「撿東西」這件事完全消失，因此排到 21 級之後（Progression.pickBlessingPool 會過濾）。
-  { id: 'gravity_well',    name: '引力異常',      icon: '🧲', desc: '拾取範圍翻倍', minLevel: 21,
+  { id: 'gravity_well',    name: '引力異常',      icon: '🧲', desc: '拾取範圍翻倍', minLevel: 21, damageBoosting: false,
     apply(p) { p.blessingMagnetMul = (p.blessingMagnetMul || 1) * 2; } },
-  { id: 'crit_storm',      name: '暴擊風暴',      icon: '🗡️', desc: '暴擊率 +15%',
-    apply(p) { p.metaCrit = (p.metaCrit || 0) + 0.15; } },
-  { id: 'golden_age',      name: '黃金時代',      icon: '💰', desc: '金幣掉落率翻倍',
+  { id: 'crit_storm',      name: '暴擊風暴',      icon: '🗡️', desc: '暴擊率 +15%，受傷 +23%', risk: true,
+    // 增益要看暴擊倍率：+15% 暴擊率在 critMul = 2 時是 ×(1 + 0.15×1) = 1.15
+    damageRisk: 1.23,
+    apply(p) { p.blessing.crit += 0.15; } },
+  { id: 'golden_age',      name: '黃金時代',      icon: '💰', desc: '金幣掉落率翻倍', damageBoosting: false,
     apply(_, g) { g.metaGoldMul = (g.metaGoldMul || 1) * 2; } },
-  { id: 'cooldown_crunch', name: '冷卻壓縮',      icon: '🔄', desc: '所有武器冷卻 -18%',
+  { id: 'cooldown_crunch', name: '冷卻壓縮',      icon: '🔄', desc: '所有武器冷卻 -18%，受傷 +30%', risk: true,
+    // -18% 冷卻 = 輸出 ×1/0.82 = 1.22
+    damageRisk: 1.3,
     apply(p) { p.blessingCdrMul = (p.blessingCdrMul || 1) * 0.82; } },
-  { id: 'ghost_step',      name: '幽靈步伐',      icon: '🏃', desc: '閃避冷卻 -40%，距離 +30%',
+  { id: 'ghost_step',      name: '幽靈步伐',      icon: '🏃', desc: '閃避冷卻 -40%，距離 +30%', damageBoosting: false,
     apply(p) { p.blessingDashCdr = 0.6; p.blessingDashDist = 1.3; } },
-  { id: 'armor_pierce',    name: '穿甲之刃',      icon: '⚔️', desc: '所有投射物穿透 +2',
+  // 穿透的增益高度取決於場面（對單體幾乎是 0、對整排敵人接近翻倍），
+  // 但契約取的是峰值，所以 risk 要壓過峰值 1.60 × 1.05 = 1.68。
+  { id: 'armor_pierce',    name: '穿甲之刃',      icon: '⚔️', desc: '所有投射物穿透 +2，受傷 +75%', risk: true,
+    damageRisk: 1.75,
     apply(p) { p.bonusPierce = (p.bonusPierce || 0) + 2; } },
-  { id: 'tornado_spin',    name: '龍捲共鳴',      icon: '🌪️', desc: '環繞型武器轉速 +50%',
+  { id: 'tornado_spin',    name: '龍捲共鳴',      icon: '🌪️', desc: '環繞型武器轉速 +50%，受傷 +58%', risk: true,
+    damageRisk: 1.58,
     apply(p) { p.blessingSpinMul = (p.blessingSpinMul || 1) * 1.5; } },
-  { id: 'executioner',     name: '處刑人',        icon: '💀', desc: '對低血量 (<30%) 敵人傷害 +60%',
+  { id: 'executioner',     name: '處刑人',        icon: '💀', desc: '對低血量 (<30%) 敵人傷害 +60%，受傷 +70%', risk: true,
+    damageRisk: 1.70,
     apply(p) { p.blessingExecute = true; } },
-  { id: 'rainbow_aegis',   name: '虹光護佑',      icon: '🌈', desc: '致死傷害時以 1 HP 存活（每局一次）',
+  { id: 'rainbow_aegis',   name: '虹光護佑',      icon: '🌈', desc: '致死傷害時以 1 HP 存活（每局一次）', damageBoosting: false,
     apply(p) { p.blessingDeathSave = true; } },
-  { id: 'berserker',       name: '狂戰士',        icon: '😈', desc: '生命越低傷害越高（30% HP → +60% 傷害）', risk: true,
+  { id: 'berserker',       name: '狂戰士',        icon: '😈', desc: '生命越低傷害越高（30% HP → +60%），受傷 +72%', risk: true,
+    damageRisk: 1.72,
     apply(p) { p.blessingBerserker = true; } },
 ];
 
