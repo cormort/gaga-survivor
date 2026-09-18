@@ -10,7 +10,7 @@
 //
 // 用法：node tools/verify-balance.mjs
 import { readFileSync } from 'node:fs';
-import { DIFFICULTIES, RULE_DEFAULTS } from '../js/levels.js';
+import { DIFFICULTIES, RULE_DEFAULTS, enemyScale, LEVELS } from '../js/levels.js';
 import { BLESSINGS, blessingPool, BOMB_TUNING } from '../js/config.js';
 
 // 原始碼層級：確認實際抽祝福的路徑真的走 blessingPool（而不是各自再寫一次 filter）
@@ -27,8 +27,8 @@ const AXES = ['enemyHpMul', 'damageTakenMul', 'spawnMul', 'eliteChanceMul', 'ene
 
 console.log('=== A. 難度分級：每一階都要多方加壓 ===');
 {
-  const order = ['easy', 'normal', 'hard', 'nightmare'];
-  ok('四個難度都在（輕鬆／標準／困難／惡夢）',
+  const order = ['easy', 'normal', 'hard', 'nightmare', 'hell'];
+  ok('五個難度都在（輕鬆／標準／困難／惡夢／地獄）',
     order.every((k) => DIFFICULTIES[k]), order.map((k) => `${k}=${DIFFICULTIES[k]?.name || '?'}`).join(' '));
 
   const value = (key, axis) => (key === 'normal' ? 1 : (DIFFICULTIES[key][axis] || 1));
@@ -59,14 +59,28 @@ console.log('=== A. 難度分級：每一階都要多方加壓 ===');
     value('nightmare', 'enemyHpMul') / value('hard', 'enemyHpMul') >= 1.5,
     `${(value('nightmare', 'enemyHpMul') / value('hard', 'enemyHpMul')).toFixed(2)}×`);
 
+  // 地獄：難度上限要再往上開一階，讓「惡夢也覺得不夠」的玩家有去處。
+  // 這一階是玩家第二次回報「難度還是不夠」後新增的，契約比照惡夢對困難的寫法。
+  const hellWeaker = AXES.filter((a) => value('hell', a) < value('nightmare', a));
+  ok('地獄在每一個軸上都不弱於惡夢', hellWeaker.length === 0, hellWeaker.join('、') || '全部 ≥ 惡夢');
+  ok('地獄明顯高於惡夢：敵人血量級距 ≥1.3 倍、受傷 ≥1.3 倍',
+    value('hell', 'enemyHpMul') / value('nightmare', 'enemyHpMul') >= 1.3
+      && value('hell', 'damageTakenMul') / value('nightmare', 'damageTakenMul') >= 1.3,
+    `hp=${value('hell', 'enemyHpMul')}（${(value('hell', 'enemyHpMul') / value('nightmare', 'enemyHpMul')).toFixed(2)}×）`
+    + ` 受傷=${value('hell', 'damageTakenMul')}（${(value('hell', 'damageTakenMul') / value('nightmare', 'damageTakenMul')).toFixed(2)}×）`);
+  // 敵人移速刻意不跟著爆衝：會撞上 enemyScale 的 1.5× 封頂，變成不公平的追殺
+  ok('敵人移速不超過 1.2（避免撞上 1.5× 封頂變成不公平追殺）',
+    value('hell', 'enemySpeedMul') <= 1.2, `${value('hell', 'enemySpeedMul')}`);
+
   // 收益要跟著風險走，且越高難越多
   const dna = (k) => DIFFICULTIES[k].dnaMult || 1;
   const gold = (k) => DIFFICULTIES[k].goldMul || 1;
-  ok('DNA 收益隨難度單調上升（輕鬆 < 標準 < 困難 < 惡夢）',
-    dna('easy') < dna('normal') && dna('normal') < dna('hard') && dna('hard') < dna('nightmare'),
-    `${dna('easy')} / ${dna('normal')} / ${dna('hard')} / ${dna('nightmare')}`);
-  ok('金幣收益也隨難度上升', gold('easy') < 1 && gold('hard') > 1 && gold('nightmare') > gold('hard'),
-    `${gold('easy')} / 1 / ${gold('hard')} / ${gold('nightmare')}`);
+  ok('DNA 收益隨難度單調上升（輕鬆 < 標準 < 困難 < 惡夢 < 地獄）',
+    dna('easy') < dna('normal') && dna('normal') < dna('hard')
+      && dna('hard') < dna('nightmare') && dna('nightmare') < dna('hell'),
+    `${dna('easy')} / ${dna('normal')} / ${dna('hard')} / ${dna('nightmare')} / ${dna('hell')}`);
+  ok('金幣收益也隨難度上升', gold('easy') < 1 && gold('hard') > 1 && gold('hell') > gold('nightmare'),
+    `${gold('easy')} / 1 / ${gold('hard')} / ${gold('nightmare')} / ${gold('hell')}`);
 
   // 所有倍率都必須是 RULE_DEFAULTS 認得的欄位，否則 mergeRules 會直接丟掉
   const unknown = [];
@@ -77,6 +91,38 @@ console.log('=== A. 難度分級：每一階都要多方加壓 ===');
     }
   }
   ok('難度只使用 mergeRules 認得的欄位（打錯字會靜默失效）', unknown.length === 0, unknown.join('、') || '全部合法');
+}
+
+console.log('\n=== A2. 敵人傷害曲線：後期必須真的會痛 ===');
+{
+  // 這是「難度還是不夠」的真正瓶頸。舊版雜兵傷害封頂在 ×3.5，配上玩家 0.5 秒的
+  // 無敵影格，20 分鐘後的雜兵最大輸出只有約 28 DPS，而玩家此時有 100+ 血、減傷
+  // 與回復 —— 後期不是難，是死不了。這裡把「撐得越久越危險」寫成契約。
+  const lv = LEVELS.street || Object.values(LEVELS)[0];
+  const dmgAt = (min) => enemyScale(min * 60, lv).dmg;
+  const hpAt = (min) => enemyScale(min * 60, lv).hp;
+
+  ok('前 10 分鐘不受影響：3 分鐘的傷害倍率 < 1.6（與舊版一致）',
+    dmgAt(3) < 1.6, `3 分 ×${dmgAt(3).toFixed(2)}`);
+  ok('傷害隨時間單調成長（10 / 20 / 30 分）',
+    dmgAt(10) < dmgAt(20) && dmgAt(20) < dmgAt(30),
+    `${dmgAt(10).toFixed(1)} → ${dmgAt(20).toFixed(1)} → ${dmgAt(30).toFixed(1)}`);
+  ok('傷害有最終封頂，不會變成必死（40 分鐘 ≤ 12 倍）',
+    dmgAt(40) <= 12.01, `40 分 ×${dmgAt(40).toFixed(2)}`);
+  ok('20 分鐘的傷害倍率 ≥ 6.5（舊版封頂只有 3.5，後期不痛）',
+    dmgAt(20) >= 6.5, `20 分 ×${dmgAt(20).toFixed(2)}`);
+  ok('30 分鐘的傷害倍率 ≥ 10（後期二次項要有感）',
+    dmgAt(30) >= 10, `30 分 ×${dmgAt(30).toFixed(2)}`);
+  ok('血量也持續成長，不會出現「血薄到秒殺」的反向失衡',
+    hpAt(30) > hpAt(10) * 1.5, `10 分 ×${hpAt(10).toFixed(1)} → 30 分 ×${hpAt(30).toFixed(1)}`);
+
+  // 實測換算：雜兵基礎接觸傷害 8，玩家 0.5 秒無敵影格 → 單怪上限 = 傷害/0.5 秒
+  const BASE_CONTACT = 8;
+  const dps = (min) => (BASE_CONTACT * dmgAt(min)) / 0.5;
+  ok('20 分鐘的單怪接觸 DPS 上限 ≥ 90（舊版約 28，後期完全無威脅）',
+    dps(20) >= 90, `約 ${dps(20).toFixed(0)} DPS（舊版約 28）`);
+  ok('封頂後單下傷害 ≤ 100（有減傷與裝備的老手撐得住，站著不動的必死）',
+    BASE_CONTACT * dmgAt(60) <= 100, `40 分單下約 ${(BASE_CONTACT * dmgAt(40)).toFixed(0)} 點`);
 }
 
 console.log('\n=== B. 引力異常的等級門檻 ===');

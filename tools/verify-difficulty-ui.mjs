@@ -58,8 +58,9 @@ async function probe(width, height, mobile, label) {
   ok(`${label}：難度選單在首屏可見（不需捲動面板）`, view.selectInView,
     `height=${view.selectHeight}px, bg=${view.dark}`);
   ok(`${label}：出擊鈕也在首屏可見`, view.startBtnInView);
-  ok(`${label}：四個難度選項齊全且標示 DNA 倍率`,
-    view.options.length === 4 && view.options.every((t) => /DNA ×/.test(t)),
+  ok(`${label}：五個難度選項齊全且標示 DNA 倍率（含新增的地獄）`,
+    view.options.length === 5 && view.options.every((t) => /DNA ×/.test(t))
+      && view.options.some((t) => /地獄/.test(t)),
     view.options.join(' / '));
   ok(`${label}：行動版點擊目標 ≥ 44px`, mobile ? view.selectHeight >= 44 : true, `${view.selectHeight}px`);
 

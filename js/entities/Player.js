@@ -35,7 +35,17 @@ export class Player {
     // 角色特質的即時傷害倍率（例如脈衝喵喵超載期間 +25%）。
     // 與 damageMultiplier 分開：那個由被動重算覆寫，這個由角色的 tick 逐幀維護。
     this.traitDmgMul = 1.0;
-    this.metaDmg = 0; // 局外天賦「火力核心」的常駐傷害加成 (applyPassives 重置時要加回去)
+    // 局外天賦＋裝備的加成（由 Game.applyMetaTalents 一次寫入，applyPassives 每次重讀）。
+    // 為什麼要獨立成一個物件：這些數字必須「可重算」而不是「累加」——
+    // 每次升級都會跑一次 applyPassives，累加式的寫法會讓裝備加成在升級時被疊第二次
+    // 或被重置掉（兩者都真的發生過）。
+    this.meta = { dmg: 0, hp: 0, speed: 0, magnet: 0, gold: 0, cdr: 0, crit: 0, critdmg: 0, armor: 0, exp: 0 };
+    this.runMuls = { speed: 1, magnet: 1 };  // 單局加成（興奮劑／每日詞綴），乘法語意
+    this.charBaseSpeedMul = 1.0;  // 角色特質的基礎移速（不含局外裝備）
+    this.charBaseMagnet = 1.0;    // 角色特質的基礎磁力
+    this.charMaxHp = 100;         // 角色特質的基礎生命上限（不含裝備與局內被動）
+    this.gearHp = 0;              // 裝備提供的生命上限
+    this.metaDmg = 0; // 局外天賦「火力核心」＋裝備的常駐傷害加成 (applyPassives 重置時要加回去)
     this.metaCdr = 0; // 局外裝備的冷卻縮減 (0~1)，在被動算完之後再乘上去
     this.metaCrit = 0;     // 局外裝備的暴擊率 (0~1)
     this.metaCritDmg = 0;  // 局外裝備的暴擊傷害加值 (2 之外的額外倍率)
@@ -96,12 +106,18 @@ export class Player {
       soccer: 'achilles',
     };
 
-    // 套用角色專屬特質的初始值
+    // 套用角色專屬特質的初始值。
+    // 角色 init 會直接改 baseSpeedMul / baseMagnet / maxHp（例如企鵝 130、兔兔 1.25），
+    // 這裡把它們存成「角色基礎值」——applyPassives 之後每次都用這組基準重算，
+    // 局外裝備與單局興奮劑才不會被重算覆蓋掉，也不會被疊第二次。
     this.character.init?.(this);
-    this.speedMultiplier = this.baseSpeedMul;
-    this.magnetMultiplier = this.baseMagnet;
+    this.charBaseSpeedMul = this.baseSpeedMul;
+    this.charBaseMagnet = this.baseMagnet;
+    this.charMaxHp = this.maxHp;
     // 被動(防彈護甲)重算生命上限的基準：角色 init 若抬高 maxHp (企鵝 130) 要留在這裡
     this.baseMaxHp = this.maxHp;
+    this.speedMultiplier = this.baseSpeedMul;
+    this.magnetMultiplier = this.baseMagnet;
   }
 
   get pickupRadius() {

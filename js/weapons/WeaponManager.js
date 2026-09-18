@@ -132,13 +132,41 @@ export class WeaponManager {
   }
 
   applyPassives() {
-    // 重置基礎被動倍率 (天賦的常駐傷害加成不被重置)
-    this.player.damageMultiplier = 1.0 + (this.player.metaDmg || 0);
-    this.player.speedMultiplier = this.player.baseSpeedMul;
-    this.player.cdrMultiplier = 1.0;
-    this.player.rangeMultiplier = 1.0;
-    this.player.magnetMultiplier = this.player.baseMagnet;
-    this.player.hpRegen = 0;
+    const p = this.player;
+    const meta = p.meta || { dmg: 0, hp: 0, speed: 0, magnet: 0, gold: 0, cdr: 0, crit: 0, critdmg: 0, armor: 0, exp: 0 };
+    const run = p.runMuls || { speed: 1, magnet: 1 };
+    // 傳奇特效的屬性加成（音速突進／引力漩渦）。這些在引擎裡是加到「最終倍率」上，
+    // 與詞條／天賦（加在角色基礎值）語意不同 —— 混在一起會讓 50% 移速變成 +8%。
+    const leg = p.legendary || { cdr: 0, speed: 0, magnet: 0 };
+
+    // 唯一的「局外加成套用點」。計算語意是「重算」而不是「累加」：
+    // 每次升級／買被動都會重跑這裡，所以任何加成只要寫成 += 就會被疊第二次或沖掉。
+    // 生命上限也在這裡一次算完：角色基礎 + 裝備 + 防彈護甲。
+    p.legendaryEffects = this.game?.gearEffects || p.legendaryEffects || [];
+    p.metaDmg = meta.dmg;
+    p.metaCdr = meta.cdr;
+    p.metaCrit = meta.crit;
+    p.metaCritDmg = meta.critdmg;
+    p.metaArmor = Math.min(0.5, meta.armor);   // 減傷上限 50%，防止堆滿免疫
+    p.metaExp = meta.exp;
+    p.gearHp = meta.hp;
+
+    p.damageMultiplier = 1.0 + (p.metaDmg || 0);          // 天賦／裝備的常駐傷害
+    // 角色基礎移速 + 裝備詞條移速 + 傳奇特效移速。
+    // baseSpeedMul 保持「不含單局加成」的語意，單局加成只反映在 speedMultiplier 上
+    // （唯一寫入點就是這三行，其他地方不該再改它）。
+    const baseSpeed = (p.charBaseSpeedMul ?? 1.0) + (meta.speed || 0) + (leg.speed || 0);
+    const baseMagnet = (p.charBaseMagnet ?? 1.0) + (meta.magnet || 0) + (leg.magnet || 0);
+    p.baseSpeedMul = baseSpeed;
+    p.baseMagnet = baseMagnet;
+    p.speedMultiplier = baseSpeed * (run.speed || 1);
+    p.magnetMultiplier = baseMagnet * (run.magnet || 1);
+    p.cdrMultiplier = 1.0;
+    p.rangeMultiplier = 1.0;
+    p.hpRegen = 0;
+    const prevMaxHp = p.maxHp;
+    p.maxHp = (p.charMaxHp ?? p.baseMaxHp ?? 100) + (p.gearHp || 0);
+    p.hp = Math.min(p.maxHp, p.hp + Math.max(0, p.maxHp - prevMaxHp));
 
     let vestLevel = 0;
     for (const [id, data] of this.passives.entries()) {
@@ -168,12 +196,16 @@ export class WeaponManager {
       }
     }
 
-    // 防彈護甲：生命上限以角色基礎值往上加 (企鵝 130 不會被覆寫回 100)，
-    // 升級瞬間把多出來的上限同步補進當前 HP，玩家會立刻有感
+    // 防彈護甲：生命上限 = 角色基礎 + 裝備 + 護甲被動。維持「角色基礎值往上加」
+    // 的語意（企鵝 130 不會被覆寫回 100），升級瞬間把多出來的上限同步補進當前 HP。
     if (vestLevel > 0) {
       const prevMax = this.player.maxHp;
-      this.player.maxHp = this.player.baseMaxHp + PASSIVES.max_hp_vest.valuePerLevel * vestLevel;
-      this.player.hp = Math.min(this.player.maxHp, this.player.hp + (this.player.maxHp - prevMax));
+      const nextMax = (this.player.charMaxHp ?? this.player.baseMaxHp ?? 100)
+        + (this.player.gearHp || 0)
+        + PASSIVES.max_hp_vest.valuePerLevel * vestLevel;
+      this.player.maxHp = nextMax;
+      this.player.baseMaxHp = nextMax;
+      this.player.hp = Math.min(nextMax, this.player.hp + Math.max(0, nextMax - prevMax));
       this.player.hpRegen = 1.2 * vestLevel;
     }
 
@@ -210,9 +242,11 @@ export class WeaponManager {
       this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * this.player.synergies.projCdrMul);
     }
 
-    // 局外裝備的冷卻縮減：被動算完後再乘 (被動是直接指派，不能相加)
-    if (this.player.metaCdr > 0) {
-      this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * (1 - this.player.metaCdr));
+    // 局外裝備的冷卻縮減：被動算完後再乘 (被動是直接指派，不能相加)。
+    // 詞條（metaCdr）與傳奇特效「極限超頻」（leg.cdr）同語意，一起算。
+    const totalCdr = (this.player.metaCdr || 0) + (leg.cdr || 0);
+    if (totalCdr > 0) {
+      this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * (1 - totalCdr));
     }
 
     // 角色特質的常駐加成 (例如兔兔「跑得越快打越痛」)

@@ -310,10 +310,19 @@ export function salvageValue(item) {
 }
 
 // 已穿裝備 → 加成總和 (含套裝效果、傳奇特效屬性加成與特效清單)
+//
+// 回傳值分兩桶：
+//   m[stat]      —— 乘在「角色基礎值」上的加成（天賦與詞條同語意，加法後乘 base）
+//   m.legendary  —— 傳奇特效的屬性加成。與詞條分開的理由：這些值在引擎裡是加到
+//                   「最終倍率」而不是角色基礎值上（speedMultiplier += 0.12）。
+//                   混在同一桶會讓 50% 的移速加成一夕變成 +8%。分開之後，
+//                   applyPassives 才能用同一份資料重算出完全一樣的結果 ——
+//                   先前特效是「寫進 speedMultiplier 之後被重算蓋掉」。
 export function gearBonuses(stash = [], equipped = {}) {
   const m = {
     dmg: 0, hp: 0, speed: 0, magnet: 0, gold: 0,
     cdr: 0, crit: 0, critdmg: 0, armor: 0, exp: 0,
+    legendary: { cdr: 0, speed: 0, magnet: 0 },
     effects: [],
     activeSets: [],
   };
@@ -339,7 +348,8 @@ export function gearBonuses(stash = [], equipped = {}) {
       const legDef = LEGENDARY_EFFECTS[item.legendaryEffect];
       if (legDef && legDef.bonus) {
         for (const [stat, val] of Object.entries(legDef.bonus)) {
-          if (m[stat] !== undefined) m[stat] += val;
+          if (stat === 'speed' || stat === 'magnet') m.legendary[stat] += val;
+          else if (m[stat] !== undefined) m[stat] += val;
         }
       }
     }

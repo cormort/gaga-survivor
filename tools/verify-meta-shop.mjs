@@ -192,16 +192,20 @@ const results = await page.evaluate(async () => {
     ok('[興奮劑] 同一種可疊到上限，超過會被拒絕', false, MISSING);
   }
 
-  // 疊加要真的進遊戲：2 劑速度 → +2×18%；2 劑護盾 → 240（先前是覆寫成 100，疊不起來）
+  // 疊加要真的進遊戲：2 劑速度 → ×(1.18)²；2 劑護盾 → 240（先前是覆寫成 100，疊不起來）
+  //
+  // 讀 speedMultiplier 而不是 baseSpeedMul：重構之後 baseSpeedMul 的語意是
+  // 「角色基礎 + 局外裝備」，**不含**單局興奮劑；單局加成只反映在 speedMultiplier。
+  // 興奮劑是乘法語意，所以兩劑是 (1.18)² = 1.3924 而不是 1.36。
   save.data.boosters = ['speed_stim', 'speed_stim', 'vitality_shield', 'vitality_shield'];
   g.start(false);
-  const spd = +(g.player.baseSpeedMul - 1).toFixed(3);
+  const spdMul = +(g.player.speedMultiplier / (g.player.charBaseSpeedMul || 1)).toFixed(3);
   const shield = Math.round(g.player.shield);
-  const wantSpd = HAS.effect ? +(shop.SHOP_BOOSTERS.speed_stim.effect.speed * 2).toFixed(3) : 0;
+  const wantSpdMul = HAS.effect ? +((1 + shop.SHOP_BOOSTERS.speed_stim.effect.speed) ** 2).toFixed(3) : 1;
   const wantShield = HAS.effect ? shop.SHOP_BOOSTERS.vitality_shield.effect.shield * 2 : 240;
-  ok('[興奮劑] 同種多劑在局內是疊加（速度 ×2、護盾累加而不是覆寫）',
-    HAS.effect && Math.abs(spd - wantSpd) < 0.02 && shield === wantShield,
-    `速度 +${spd}（期望 +${wantSpd}）、護盾 ${shield}（期望 ${wantShield}）`);
+  ok('[興奮劑] 同種多劑在局內是疊加（速度相乘、護盾累加而不是覆寫）',
+    HAS.effect && Math.abs(spdMul - wantSpdMul) < 0.02 && shield === wantShield,
+    `速度 ×${spdMul}（期望 ×${wantSpdMul}）、護盾 ${shield}（期望 ${wantShield}）`);
   save.data.boosters = [];
 
   // 說明文字與 effect 必須一致（先前「說明 +15% / 程式 +10%」這種漂移踩過）

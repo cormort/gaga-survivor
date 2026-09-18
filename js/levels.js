@@ -713,11 +713,23 @@ export const RULE_DEFAULTS = {
 //   收益（金幣、DNA）再按風險等比上調；惡夢的 spawnMul 2.3 疊上深淵關的 1.4
 //   會逼近 MAX_ENEMIES(250) 的硬上限，這是刻意設計（用數量壓迫走位），
 //   效能預算仍由 MAX_ENEMIES 與 worst-case 工具守住。
+//
+// 第二輪上調（玩家再次回報「難度還是不夠」）：
+//   量測到的真正瓶頸不是血量，是**傷害**。舊版雜兵傷害 = 基礎 × min(3.5, 1+分鐘×0.1)，
+//   8 分鐘時 ×1.8、20 分鐘就封頂 ×3.5；配上玩家 0.5 秒無敵影格，後期雜兵的實際
+//   最大輸出只有約 28 DPS，而玩家此時有 100+ 血、50% 減傷與回復 —— 後期不是難，
+//   是死不了。所以這一輪：
+//     ① 傷害曲線斜率 0.1 → 0.16、封頂 3.5 → 6.0（見 enemyScale），
+//     ② 新增第五階「地獄」，血量級距維持 ≥1.4×，
+//     ③ 菁英機率與生成密度一起拉開，讓「數量壓迫」與「單體威脅」同時成立。
+//   速度刻意調得保守（原本會逼近 enemyScale 的 1.5× 封頂，調太高會變成不公平的
+//   追殺而不是難度）—— 壓力改由傷害與密度提供。
 export const DIFFICULTIES = {
   easy:      { name: '🐣 輕鬆', enemyHpMul: 0.65, damageTakenMul: 0.5, spawnMul: 0.85, goldMul: 0.75, dnaMult: 0.6 },
   normal:    { name: '🦆 標準' },
-  hard:      { name: '🔥 困難', enemyHpMul: 1.8, damageTakenMul: 1.5, spawnMul: 1.7, eliteChanceMul: 1.5, enemySpeedMul: 1.05, goldMul: 1.35, dnaMult: 1.6 },
-  nightmare: { name: '💀 惡夢', enemyHpMul: 2.8, damageTakenMul: 2.0, spawnMul: 2.3, eliteChanceMul: 2.0, enemySpeedMul: 1.15, goldMul: 1.8, dnaMult: 2.4 },
+  hard:      { name: '🔥 困難', enemyHpMul: 1.9, damageTakenMul: 1.7, spawnMul: 1.8, eliteChanceMul: 1.6, enemySpeedMul: 1.06, goldMul: 1.40, dnaMult: 1.7 },
+  nightmare: { name: '💀 惡夢', enemyHpMul: 3.0, damageTakenMul: 2.4, spawnMul: 2.4, eliteChanceMul: 2.2, enemySpeedMul: 1.14, goldMul: 1.9, dnaMult: 2.6 },
+  hell:      { name: '☠️ 地獄', enemyHpMul: 4.2, damageTakenMul: 3.2, spawnMul: 3.0, eliteChanceMul: 3.0, enemySpeedMul: 1.14, goldMul: 2.5, dnaMult: 3.6 },
 };
 
 // 把關卡規則與每日詞綴相乘合併 (缺的欄位一律當 1)
@@ -736,8 +748,10 @@ export function mergeRules(...sources) {
 //
 // dmg 的封頂原本是 1.8×，8 分鐘就到頂 —— 但血量無上限成長，於是 23 分鐘的怪比
 // 8 分鐘的耐打 5 倍、傷害卻一模一樣，玩家又多了二十幾級與整套裝備，結果是
-// 「完全不會死，只是磨得久」。封頂拉到 3.5×，斜率不變 (約 25 分鐘到頂)，
-// 前 8 分鐘的體驗完全不受影響。
+// 「完全不會死，只是磨得久」。第一次拉到 3.5× 仍然不夠：配上玩家 0.5 秒的無敵
+// 影格，後期雜兵的最大輸出只有約 28 DPS，而此時玩家有 100+ 血＋減傷＋回復。
+// 第二次改為斜率 0.16、封頂 6.0，並補上 10 分鐘後的二次項（與血量同一手法），
+// 讓「撐得越久」這件事重新有代價。10 分鐘前完全不受影響。
 export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
   const endless = level && level.id === 'endless';
   return {
@@ -749,7 +763,18 @@ export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
         // 於是雜兵在接近途中就被清掉。10 分鐘前不動 (維持「多而脆」的手感)，
         // 之後才加速追上。23 分鐘時整體倍率約為原本的 2.1 倍。
         * (1 + Math.pow(Math.max(0, gameTime / 60 - 10), 2) * 0.012),
-    dmg: Math.min(3.5, 1 + (gameTime / 60) * 0.1),
+    // 敵人傷害隨時間的成長（dmg 上限 12 倍，見下方註解）
+    dmg: Math.min(
+      12,
+      Math.min(5.5, 1 + (gameTime / 60) * 0.14)
+        // 後期二次項（與血量同一手法）：10 分鐘前完全不動，維持前中期的標準手感，
+        // 之後才加速追上玩家的血量與減傷成長。
+        * (1 + Math.pow(Math.max(0, gameTime / 60 - 10), 2) * 0.010),
+    ),
+    // 為什麼要有最外層的 12 倍封頂：沒有它的話 40 分鐘會到 ×80 以上
+    //（基礎接觸傷害 8 就等於 640 點一下）—— 那已經不是「難」而是必死，
+    // 會把走位與裝備的價值一起抹掉。12 倍 ≈ 96 點基礎傷害：有減傷與裝備的
+    // 老手撐得住，站著不動的一定死。
     // 移動速度原本完全不隨時間成長，而玩家有移速升級 —— 實測「中位敵人距離」
     // 全程卡在 400px，雜兵根本走不到玩家面前。緩升並封頂 1.5×。
     speed: rules.enemySpeedMul * Math.min(1.5, 1 + (gameTime / 60) * 0.03),

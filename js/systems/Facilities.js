@@ -235,7 +235,10 @@ export function updateMercenaries(game, dt) {
 export function facilityGoldMul(game) {
   // 淘金狂潮與幸運藥劑都改成「讀計時器」而不是改動 metaGoldMul：
   // 乘數本身可以隨時被重算，不會再有「到期還原一次」造成永久殘留的問題。
-  let mul = game.metaGoldMul || 1;
+  // runGoldMul 放單局興奮劑：與 metaGoldMul 分開，才不會被開局的天賦重算蓋掉。
+  // rules.goldMul（關卡／難度／每日詞綴）也一起放在這裡相乘 —— rules 會被我方
+  // 事件暫時改寫，烘進 metaGoldMul 會在事件結束後留下殘留值。
+  let mul = (game.metaGoldMul || 1) * (game.runGoldMul || 1) * ((game.rules && game.rules.goldMul) || 1);
   if (game._goldRushTimer > 0) mul *= 2;
   if (game.player && game.player.luckPotionTimer > 0) mul *= 2;
   return Math.min(GOLD_MUL_CAP, mul);

@@ -656,11 +656,24 @@ class Game {
 
   // 結算畫面 → 回主選單：清掉戰局殘留並重繪選單 (DNA 等資料已由 recordRun 更新)
 
-  // 把局外天賦加成套進這一局的玩家身上 (傷害天賦需在被動重算時保留 → 寫進 metaDmg)
+  // 把局外天賦＋裝備加成套進這一局的玩家身上。
+  //
+  // 為什麼拆成「meta（跨局，每局唯一一次）」與「run（單局，每次被動重算都要重套）」：
+  // 舊寫法把局外加成直接寫進 p.damageMultiplier / p.speedMultiplier / p.magnetMultiplier，
+  // 6 行之後 applyPassives() 又把這幾個欄位從頭重算 —— 只因為 applyPassives 剛好記得
+  // 讀回 metaDmg / baseSpeedMul / baseMagnet 才活著。這種「靠對方記得補回來」的耦合，
+  // 每加一個欄位就會靜默失效一次。現在有了唯一的套用點 WeaponManager.applyPassives()：
+  //   damageMultiplier = 1 + meta.dmg + 被動
+  //   speedMultiplier  = 角色基礎 + meta.speed（再乘單局加成）
+  //   cdrMultiplier    = 被動 × (1 - meta.cdr)…
   applyMetaTalents() {
     const t = metaBonuses(save.data.talents);
     const g = gearBonuses(save.data.stash, save.data.equipped);
-    const m = {
+    // 角色的基礎移速／磁力先存成獨立欄位：applyPassives 每次都用它重算，
+    // 所以 meta 加成不會在每次升級時被疊第二次。
+    const p = this.player;
+    p.runMuls = { speed: 1, magnet: 1 };
+    p.meta = {
       dmg: t.dmg + g.dmg,
       hp: t.hp + g.hp,
       speed: t.speed + g.speed,
@@ -672,25 +685,26 @@ class Game {
       armor: g.armor,
       exp: g.exp,
     };
-    const p = this.player;
-    p.legendaryEffects = g.effects || [];
-    p.metaDmg = m.dmg;
-    p.metaCdr = m.cdr;
-    p.metaCrit = m.crit;
-    p.metaCritDmg = m.critdmg;
-    p.metaArmor = Math.min(0.5, m.armor);   // 減傷上限 50%，防止堆滿免疫
-    p.metaExp = m.exp;
-    p.damageMultiplier = 1 + m.dmg; // 開場就生效；之後 applyPassives 重置時也會加回 metaDmg
-    p.baseSpeedMul += m.speed;
-    p.baseMagnet += m.magnet;
-    p.magnetMultiplier = p.baseMagnet;
-    p.speedMultiplier = p.baseSpeedMul;
-    p.maxHp += m.hp;
-    p.baseMaxHp += m.hp;
-    p.hp = p.maxHp;
-    this.metaGoldMul = (1 + m.gold) * (this.mode ? this.mode.goldMul : 1);
-    // 冷卻加成要在被動重算時才會套用，開局先跑一次
+    // 傳奇特效的屬性加成（音速突進／引力漩渦／極限超頻）走另一桶：
+    // 它們在引擎裡是加到最終倍率，不是加在角色基礎值上。收進 p.legendary 之後，
+    // applyPassives 每次都能重算出相同結果 —— 舊寫法是直接改 speedMultiplier，
+    // 然後被同一輪的 applyPassives 蓋掉（實測 speedMul 一直是 1.0）。
+    p.legendary = { cdr: 0, speed: 0, magnet: 0, ...(g.legendary || {}) };
+    this.gearEffects = g.effects || [];
+    // 金幣乘數分兩層：metaGoldMul 是「局外＋模式」的常駐倍率，runGoldMul 放單局興奮劑。
+    // 為什麼要分開：舊寫法把興奮劑直接乘進 metaGoldMul，而 applyMetaTalents 開局會用
+    // 天賦重算這個欄位 —— 等於同一劑興奮劑乘了兩次，而且每次重算都會再乘一次。
+    this.metaGoldMul = (1 + (p.meta.gold || 0)) * (this.mode ? this.mode.goldMul : 1);
+    this.runGoldMul = 1;
     this.weaponManager.applyPassives();
+  }
+
+  // 單局加成（興奮劑、每日詞綴）：一律乘在這個倍率上，不直接改 baseSpeedMul，
+  // 才不會在「升級 → applyPassives 重算」時被重置掉。
+  applyRunMul(stat, mul) {
+    const p = this.player;
+    if (!p.runMuls) p.runMuls = { speed: 1, magnet: 1 };
+    p.runMuls[stat] = (p.runMuls[stat] || 1) * mul;
   }
 
   start(isDaily = false) {
@@ -737,18 +751,18 @@ class Game {
         const booster = SHOP_BOOSTERS[bId];
         const eff = booster && booster.effect;
         if (!eff) continue;
-        if (eff.speed) {
-          this.player.speedMultiplier += eff.speed;
-          this.player.baseSpeedMul += eff.speed;
-        }
+        // 走 applyRunMul 而不是直接改 speedMultiplier / magnetMultiplier：
+        // 那兩個欄位每次 applyPassives 都會從 base × runMuls 重算，直接改會在
+        // 下一次升級時被抹掉（同一劑興奮劑只生效到第一次升級為止）。
+        if (eff.speed) this.applyRunMul('speed', 1 + eff.speed);
         if (eff.pierce) this.player.bonusPierce = (this.player.bonusPierce || 0) + eff.pierce;
-        if (eff.magnet) {
-          this.player.magnetMultiplier += eff.magnet;
-          this.player.baseMagnet += eff.magnet;
-        }
-        if (eff.gold) this.metaGoldMul = (this.metaGoldMul || 1) * eff.gold;
+        if (eff.magnet) this.applyRunMul('magnet', 1 + eff.magnet);
+        if (eff.gold) this.runGoldMul = (this.runGoldMul || 1) * eff.gold;
         if (eff.crit) this.player.metaCrit = (this.player.metaCrit || 0) + eff.crit;
         if (eff.critDmg) this.player.metaCritDmg = (this.player.metaCritDmg || 0) + eff.critDmg;
+        // 注意：這裡刻意「不」寫 speedMultiplier / magnetMultiplier / metaGoldMul。
+        // 那三個欄位在開局時已經由 applyMetaTalents 依天賦重算過一次，直接在這裡
+        // 累加會變成乘兩次；移速／磁力改走 applyRunMul（見上），金幣走 runGoldMul。
         if (eff.shield) {
           this.player.shield = (this.player.shield || 0) + eff.shield;
           this.player.maxShield = Math.max(this.player.maxShield || 0, this.player.shield);
@@ -757,24 +771,21 @@ class Game {
       }
       const list = [...names].map(([n, c]) => (c > 1 ? `${n}×${c}` : n)).join('、');
       this.ui.sayStatus(`💉 戰術興奮劑已生效！${list}`);
+      // 興奮劑的移速／磁力都進了 runMuls，要在這裡重算一次才會生效
+      this.weaponManager.applyPassives();
     }
 
     // 每日挑戰中規則層處理不了的兩項 (玩家速度與血量上限是加法/覆寫語意)
+    // 移速走單局乘數，不直接改 baseSpeedMul —— 後者每次 applyPassives 都會重算。
     if (this.isDaily && this.dailyConfig) {
       for (const mod of this.dailyConfig.modifiers) {
-        if (mod.playerSpeedMul) {
-          this.player.speedMultiplier *= mod.playerSpeedMul;
-          this.player.baseSpeedMul *= mod.playerSpeedMul;
-        }
+        if (mod.playerSpeedMul) this.applyRunMul('speed', mod.playerSpeedMul);
         if (mod.playerHpMul) {
-          this.player.maxHp = Math.round(this.player.maxHp * mod.playerHpMul);
-          this.player.baseMaxHp = this.player.maxHp;
+          this.player.charMaxHp = Math.round(this.player.charMaxHp * mod.playerHpMul);
         }
         if (mod.maxHpOffset) {
-          this.player.maxHp = Math.max(20, this.player.maxHp + mod.maxHpOffset);
-          this.player.baseMaxHp = this.player.maxHp;
+          this.player.charMaxHp = Math.max(20, this.player.charMaxHp + mod.maxHpOffset);
         }
-        this.player.hp = this.player.maxHp;
         if (mod.eliteHeal) this._eliteHeal = mod.eliteHeal;
       }
     }
@@ -782,8 +793,12 @@ class Game {
     // 規則層注入：輸出、受傷、金幣三個乘數
     this.player.damageTakenMul *= this.rules.damageTakenMul;
     this.player.modeDmgMul = (this.player.modeDmgMul || 1) * this.rules.playerDmgMul;
-    this.metaGoldMul *= this.rules.goldMul;
+    // rules.goldMul 不在這裡烘進 metaGoldMul：rules 會被局內事件暫時改寫
+    // （Progression 的 spawnMul/goldMul 事件），烘進去會在事件結束後留下殘留值。
+    // 它由 facilityGoldMul() 每次即時相乘。
+    // 以上全部就緒後才做最後一次套用：生命上限／移速／傷害都在這裡一次算完
     this.weaponManager.applyPassives();
+    this.player.hp = this.player.maxHp;
 
     this.lowHpWarned = false;
     this.particles.clear();
