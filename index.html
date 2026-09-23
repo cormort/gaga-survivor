@@ -188,6 +188,37 @@
       </div>
     </div>
 
+    <!-- 每日任務：依本地日期固定 3 個，跨局累積，完成領獎 -->
+    <div id="quest-modal" class="overlay hidden">
+      <div class="modal-content recipe-content">
+        <div class="modal-header">
+          <h2 class="glow-text">📋 每日任務</h2>
+          <p class="subtitle">每天午夜換新，進度跨局累積（陣亡、放棄任務也照算）</p>
+        </div>
+        <div id="quest-list" class="quest-list"></div>
+        <button id="btn-close-quests" class="game-btn secondary-btn">關閉</button>
+      </div>
+    </div>
+
+    <!-- 圖鑑：武器／超武／敵人／珠寶，收集里程碑領獎 -->
+    <div id="codex-modal" class="overlay hidden">
+      <div class="modal-content recipe-content">
+        <div class="modal-header">
+          <h2 class="glow-text">📖 特工圖鑑</h2>
+          <p id="codex-progress" class="subtitle"></p>
+        </div>
+        <div id="codex-milestones" class="codex-milestones"></div>
+        <div class="shop-tabs codex-tabs">
+          <button class="shop-tab codex-tab active" data-cat="weapons">🔫 武器</button>
+          <button class="shop-tab codex-tab" data-cat="evos">✨ 超武</button>
+          <button class="shop-tab codex-tab" data-cat="enemies">🧟 敵人</button>
+          <button class="shop-tab codex-tab" data-cat="jewels">💎 珠寶</button>
+        </div>
+        <div id="codex-list" class="codex-list"></div>
+        <button id="btn-close-codex" class="game-btn secondary-btn">關閉</button>
+      </div>
+    </div>
+
     <!-- 暫停面板：目前的構築（武器／配件／超武配方進度／總數值）+ 顯示設定 -->
     <div id="pause-modal" class="overlay hidden">
       <div class="modal-content pause-content">
@@ -398,6 +429,8 @@
             <button id="btn-recipe" class="game-btn talent-btn">✨ 超武配方</button>
             <button id="btn-achievements" class="game-btn talent-btn">🎯 特工成就</button>
             <button id="btn-daily" class="game-btn talent-btn">📅 每日挑戰</button>
+            <button id="btn-quests" class="game-btn talent-btn">📋 每日任務</button>
+            <button id="btn-codex" class="game-btn talent-btn">📖 圖鑑</button>
           </div>
           <div class="audio-row">
             <label class="vol-item">🔊<input id="sfx-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音效音量"></label>
@@ -411,6 +444,11 @@
             <label class="difficulty-label" for="difficulty-select">作戰難度</label>
             <select id="difficulty-select" aria-describedby="difficulty-desc"></select>
             <span id="difficulty-desc" class="difficulty-desc"></span>
+          </div>
+          <div class="difficulty-row">
+            <label class="difficulty-label" for="runcard-select">出擊規則卡</label>
+            <select id="runcard-select" aria-describedby="runcard-desc"></select>
+            <span id="runcard-desc" class="difficulty-desc"></span>
           </div>
           <div id="start-status" class="menu-status"></div>
           <button id="btn-start-game" class="game-btn primary-btn pulse">立即出擊 🚀</button>
@@ -474,6 +512,7 @@
           </div>
           <div id="game-over-gear-items" class="game-over-gear-items"></div>
         </div>
+        <div id="game-over-quest-line" class="game-over-quest-line hidden"></div>
         <!-- 本局珠寶：撿到當下已入袋，陣亡也保留；回主選單到黑市收購 -->
         <div id="game-over-jewel-box" class="game-over-gear-box hidden">
           <div class="game-over-gear-title">

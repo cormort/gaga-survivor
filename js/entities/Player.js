@@ -308,6 +308,15 @@ export class Player {
         if (this.game?.ui) this.game.ui.say('🌈 虹光護佑觸發！以 1 HP 存活！', '#00f59b', 3);
         return true;
       }
+      // 緊急復甦天賦（每局一次）：Lv1 回 50%、Lv2 回滿並由遊戲層震退周圍
+      if (this.revivesLeft > 0) {
+        this.revivesLeft--;
+        this.hp = Math.round(this.maxHp * (this.reviveFull ? 1 : 0.5));
+        this.invulnerableTimer = 3.0;
+        sound.playEvoFanfare();
+        this.game?.onPlayerRevive?.(this.reviveFull);
+        return true;
+      }
       this.hp = 0;
       this.isDead = true;
     }

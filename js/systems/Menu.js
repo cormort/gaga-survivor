@@ -10,6 +10,7 @@
 import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
 import { DIFFICULTIES, LEVELS, LEVEL_ORDER, getDailyChallenge } from '../levels.js';
 import { MODES, MODE_ORDER, getMode } from '../modes.js';
+import { RUN_CARDS, RUN_CARD_ORDER } from '../runcards.js';
 import { MAX_BOOSTER_STACK, MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXPANSION_STEP, stashExpandCost, shopItemLevel } from '../shop.js';
 import { itemName } from '../items.js';
 import { save } from '../save.js';
@@ -251,6 +252,27 @@ export function bindEvents(game) {
   game.ui.quitBtn?.addEventListener('click', quitMission);
   document.getElementById('btn-pause-quit')?.addEventListener('click', quitMission);
 
+  // 每日任務與圖鑑（領獎後重畫、更新錢包與「❗」提示）
+  const afterClaim = (res, rebuild) => {
+    if (!res.ok) { game.ui.sayStatus(res.reason, true); sound.playHurt(); return; }
+    sound.playEvoFanfare();
+    game.ui.sayStatus(`領取獎勵：${res.gold} 🪙 + ${res.dna} 🧬`);
+    game.ui.updateDnaChip(save.data.dna, save.data.gold);
+    rebuild();
+    game.ui.updateClaimBadges(save);
+  };
+  document.getElementById('btn-quests')?.addEventListener('click', () => {
+    sound.playGem();
+    game.ui.openQuestModal(save, (i) => afterClaim(save.claimQuest(i), () => game.ui.rebuildQuestView(save)));
+  });
+  document.getElementById('btn-close-quests')?.addEventListener('click', () => document.getElementById('quest-modal').classList.add('hidden'));
+  document.getElementById('btn-codex')?.addEventListener('click', () => {
+    sound.playGem();
+    game.ui.openCodexModal(save, (i) => afterClaim(save.claimCodexMilestone(i), () => game.ui.rebuildCodexView(save)));
+  });
+  document.getElementById('btn-close-codex')?.addEventListener('click', () => document.getElementById('codex-modal').classList.add('hidden'));
+  game.ui.updateClaimBadges(save);
+
   // 顯示設定：主選單「養成基地」與暫停面板各一份，改其中一邊就同步重畫兩邊並立即套用
   const settingBoxes = ['display-settings-menu', 'display-settings-pause'].map((id) => document.getElementById(id));
   const renderSettings = () => {
@@ -370,6 +392,27 @@ export function refreshLevelSelect(game) {
     }
     renderDifficultyDesc(sel.value);
   }
+  // 出擊規則卡：整局生效的取捨（每日挑戰不套用）
+  const card = document.getElementById('runcard-select');
+  if (card) {
+    if (!card.options.length) {
+      card.innerHTML = '<option value="">（不使用）</option>'
+        + RUN_CARD_ORDER.map((k) => `<option value="${k}">${RUN_CARDS[k].icon} ${RUN_CARDS[k].name}</option>`).join('');
+      card.value = RUN_CARDS[save.data.runCard] ? save.data.runCard : '';
+      card.addEventListener('change', () => {
+        save.set({ runCard: card.value || null });
+        sound.playGem();
+        renderRunCardDesc(card.value);
+      });
+    }
+    renderRunCardDesc(card.value);
+  }
+}
+
+function renderRunCardDesc(key) {
+  const el = document.getElementById('runcard-desc');
+  if (!el) return;
+  el.textContent = RUN_CARDS[key] ? RUN_CARDS[key].desc : '不改變任何規則（每日挑戰一律不套用規則卡）';
 }
 
 // 難度選單下方的效果說明：只寫「DNA ×1.4」看不出敵人變多強，
@@ -470,6 +513,7 @@ export function returnToMenu(game) {
   game.ui.quitBtn?.classList.add('hidden');
   document.getElementById('pause-modal')?.classList.add('hidden');
   game.ui.updateDnaChip(save.data.dna, save.data.gold);
+  game.ui.updateClaimBadges(save);
   refreshModeSelect(game);
   refreshCharSelect(game);
   refreshLevelSelect(game);

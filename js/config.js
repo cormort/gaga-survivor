@@ -16,6 +16,7 @@ export const GAME_CONFIG = {
   BANISH_PER_RUN: 3,
   SKIP_PER_RUN: 3,
   SKIP_GOLD: 25,
+  REROLL_COST: 60,   // 升級卡刷新的本局金幣費用（規則卡「命運編織」可打折）
   BASE_EXP_REQUIREMENT: 10,
   EXP_GROWTH_FACTOR: 1.35,
 };

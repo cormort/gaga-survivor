@@ -228,6 +228,10 @@ export class WeaponManager {
     if (this.player.blessingCdrMul) {
       this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * this.player.blessingCdrMul);
     }
+    // 出擊規則卡的冷卻倍率（貫穿彈頭 ×1.15、時間壓縮 ×0.8）
+    if (this.player.runCardCdrMul) {
+      this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * this.player.runCardCdrMul);
+    }
     if (this.player.blessingAreaMul) {
       this.player.rangeMultiplier *= this.player.blessingAreaMul;
     }

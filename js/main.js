@@ -88,6 +88,7 @@ import {
 } from './items.js';
 import { MODES, getMode } from './modes.js';
 import { JEWELS, JEWEL_DROP, rollJewel } from './jewels.js';
+import { RUN_CARDS } from './runcards.js';
 import { Core } from './entities/Core.js';
 
 
@@ -239,7 +240,7 @@ class Game {
     this.boss = null;
 
     // 局內金幣 reroll：升級三選一花錢重抽；幸運加成天賦放大金幣收入
-    this.rerollCost = 60;
+    this.rerollCost = GAME_CONFIG.REROLL_COST;
     this.metaGoldMul = 1;
     this._shownUpgradeKeys = [];
 
@@ -771,7 +772,48 @@ class Game {
     // 天賦重算這個欄位 —— 等於同一劑興奮劑乘了兩次，而且每次重算都會再乘一次。
     this.metaGoldMul = (1 + (p.meta.gold || 0)) * (this.mode ? this.mode.goldMul : 1);
     this.runGoldMul = 1;
+    // 緊急復甦天賦：每局 1 次；Lv2 回滿並震退周圍
+    p.revivesLeft = t.revive > 0 ? 1 : 0;
+    p.reviveFull = t.revive >= 2;
     this.weaponManager.applyPassives();
+  }
+
+  // 緊急復甦觸發（Player.takeDamage 在致死時呼叫）：特效、提示；Lv2 把附近的雜兵與子彈清開
+  onPlayerRevive(full) {
+    const p = this.player;
+    this.camera.shake = Math.max(this.camera.shake, 14);
+    this.particles.createShockwave(p.x, p.y, full ? 300 : 160, '#ffd166');
+    this.ui.say(full ? '💫 緊急復甦！生命全滿並震退周圍敵人！' : '💫 緊急復甦！回復 50% 生命！', '#ffd166', 3);
+    if (!full) return;
+    for (const e of this.enemies) {
+      if (e.isDead || e.isBoss) continue;
+      const dx = e.x - p.x;
+      const dy = e.y - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d < 260) {
+        e.x += (dx / d) * (260 - d + 40);
+        e.y += (dy / d) * (260 - d + 40);
+      }
+    }
+    this.enemyProjectiles = this.enemyProjectiles.filter((b) => Math.hypot(b.x - p.x, b.y - p.y) > 300);
+  }
+
+  // 出擊規則卡的屬性效果（封印／跳過／刷新費用在本局狀態重置時處理）。
+  // 每一項都寫進「會被 applyPassives 重算時保留」的欄位：modeDmgMul、baseDamageTaken、
+  // runMuls、blessing.exp、runCardCdrMul —— 直接改最終倍率會在第一次升級時被洗掉。
+  applyRunCard() {
+    const eff = this.runCard && this.runCard.effect;
+    if (!eff) return;
+    const p = this.player;
+    if (eff.dmgMul) p.modeDmgMul = (p.modeDmgMul || 1) * eff.dmgMul;
+    if (eff.damageTaken) p.baseDamageTaken = (p.baseDamageTaken || 1) * eff.damageTaken;
+    if (eff.pierce) p.bonusPierce = (p.bonusPierce || 0) + eff.pierce;
+    if (eff.cdMul) p.runCardCdrMul = eff.cdMul;
+    if (eff.gold) this.runGoldMul = (this.runGoldMul || 1) * eff.gold;
+    if (eff.exp) p.blessing.exp += eff.exp;
+    if (eff.magnet) this.applyRunMul('magnet', eff.magnet);
+    if (eff.speed) this.applyRunMul('speed', eff.speed);
+    if (eff.maxHp) p.charMaxHp = Math.max(20, Math.round(p.charMaxHp * eff.maxHp));
   }
 
   // 單局加成（興奮劑、每日詞綴）：一律乘在這個倍率上，不直接改 baseSpeedMul，
@@ -785,6 +827,8 @@ class Game {
   start(isDaily = false) {
     this.isDaily = isDaily;
     this.dailyConfig = isDaily ? (this.dailyConfig || getDailyChallenge()) : null;
+    // 出擊規則卡：每日挑戰不套用（比的是同一套規則）
+    this.runCard = (!isDaily && RUN_CARDS[save.data.runCard]) || null;
 
     sound.ensureContext();
     const activeLevelId = this.isDaily ? this.dailyConfig.levelKey : this.levelId;
@@ -877,6 +921,7 @@ class Game {
     // rules.goldMul 不在這裡烘進 metaGoldMul：rules 會被局內事件暫時改寫
     // （Progression 的 spawnMul/goldMul 事件），烘進去會在事件結束後留下殘留值。
     // 它由 facilityGoldMul() 每次即時相乘。
+    this.applyRunCard();
     // 以上全部就緒後才做最後一次套用：生命上限／移速／傷害都在這裡一次算完
     this.weaponManager.applyPassives();
     this.player.hp = this.player.maxHp;
@@ -923,6 +968,11 @@ class Game {
     this.pendingGear = [];       // 局內拾獲待回收裝備 (暫存區)
     this.ui.updatePendingGear(0);
     this.runJewels = {};         // 本局撿到的珠寶（撿到當下已入存檔，這裡只給結算畫面列出）
+    // 圖鑑／每日任務的本局統計（結算時一次寫入存檔）
+    this._killsByType = {};
+    this._eliteKills = 0;
+    this._bossKills = 0;
+    this._weaponsSeen = new Set(this.weaponManager.weapons.keys());
 
     // 戰術口袋與武器型態重設
     this.player.pockets = [null, null];
@@ -936,9 +986,12 @@ class Game {
     this.ui.quitBtn?.classList.add('hidden');
 
     // 升級卡封印／跳過：每局重置次數，封印名單只在本局有效
+    // 規則卡「命運編織」加次數、刷新打折
+    const cardEff = (this.runCard && this.runCard.effect) || {};
     this.banished = new Set();
-    this.banishesLeft = GAME_CONFIG.BANISH_PER_RUN;
-    this.skipsLeft = GAME_CONFIG.SKIP_PER_RUN;
+    this.banishesLeft = GAME_CONFIG.BANISH_PER_RUN + (cardEff.banish || 0);
+    this.skipsLeft = GAME_CONFIG.SKIP_PER_RUN + (cardEff.skip || 0);
+    this.rerollCost = Math.round(GAME_CONFIG.REROLL_COST * (cardEff.rerollMul || 1));
 
     // ── 新系統重設 ──
     this.blessings = [];
@@ -2244,6 +2297,12 @@ class Game {
   }
 
   spawnDropItem(enemy) {
+    // 每一隻死掉的敵人都會走這裡：順手記圖鑑擊殺與任務用的精英／首領數
+    if (this._killsByType) {
+      this._killsByType[enemy.typeKey] = (this._killsByType[enemy.typeKey] || 0) + 1;
+      if (enemy.isBoss) this._bossKills++;
+      else if (enemy.isElite) this._eliteKills++;
+    }
     const rand = Math.random();
     let kind = 'EXP_GREEN';
 
@@ -2606,6 +2665,10 @@ class Game {
   applyUpgradeOption(selectedOption) {
     // 應用升級選項
     if (selectedOption.type === 'evo') {
+      // 圖鑑：進化會把基礎武器（和武器配方件）吃掉，先記下來
+      this._weaponsSeen.add(selectedOption.baseId);
+      const pair = WEAPONS[selectedOption.baseId]?.pairPassive;
+      if (pair && WEAPONS[pair]) this._weaponsSeen.add(pair);
       this.weaponManager.evolveWeapon(selectedOption.baseId, selectedOption.targetId);
       save.markEvolved(selectedOption.targetId); // 圖鑑 ★ 標記 (跨局保留)
       this._evosThisRun++;
@@ -2710,6 +2773,33 @@ class Game {
     }
   }
 
+  // 每日任務用的本局數據（js/quests.js 的 stat 欄位）
+  collectRunStats(isVictory) {
+    // 武器家族傷害：超武的傷害算回它的基礎武器（進化時已繼承基礎武器的累計傷害）
+    const baseOf = (id) => {
+      const def = WEAPONS[id];
+      if (!def || !def.isEvo) return id;
+      return Object.keys(WEAPONS).find((k) => WEAPONS[k].evoTarget === id) || id;
+    };
+    const weaponDamage = {};
+    for (const [id, item] of this.weaponManager.weapons) {
+      const b = baseOf(id);
+      weaponDamage[b] = (weaponDamage[b] || 0) + (item.totalDamage || 0);
+    }
+    return {
+      kills: this.kills,
+      elites: this._eliteKills,
+      bosses: this._bossKills,
+      survive: this.gameTime,
+      evos: this._evosThisRun,
+      jewels: Object.values(this.runJewels || {}).reduce((a, b) => a + b, 0),
+      chests: this._chestsOpened,
+      gold: this.gold,
+      clears: isVictory ? 1 : 0,
+      weaponDamage,
+    };
+  }
+
   settleRun(isVictory = false) {
     this.state = 'GAME_OVER';
     sound.stopBGM();
@@ -2735,6 +2825,13 @@ class Game {
         cleared: isVictory,
       });
     }
+
+    // 圖鑑與每日任務：本局數據一次寫入（陣亡、放棄任務也照算）
+    for (const id of this.weaponManager.weapons.keys()) this._weaponsSeen.add(id);
+    save.recordCodex({ weapons: [...this._weaponsSeen], kills: this._killsByType });
+    const questsBefore = save.dailyQuests().map((q) => q.progress >= q.target);
+    const questsAfter = save.progressQuests(this.collectRunStats(isVictory));
+    this._questsDone = questsAfter.filter((q, i) => q.progress >= q.target && !questsBefore[i]).length;
 
     // 局內待回收裝備結算：通關 100% 入庫，陣亡隨機保留 50% (撤離井是當場入庫，不留旗標)
     const savedGear = [];
@@ -2792,7 +2889,7 @@ class Game {
         deathRecap: isVictory ? null : this.deathRecap(),
       },
       this.weaponManager,
-      { savedGear, lostGear, salvagedGear, jewels: this.runJewels }
+      { savedGear, lostGear, salvagedGear, jewels: this.runJewels, questsDone: this._questsDone || 0 }
     );
 
     // 解鎖新關卡後，選單要立刻反映

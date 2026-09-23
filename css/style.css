@@ -790,6 +790,8 @@ body, html {
 #gear-modal,
 #aspect-modal,
 #achievements-modal,
+#quest-modal,
+#codex-modal,
 #recipe-modal,
 #shop-modal {
   z-index: 200;
@@ -3106,7 +3108,8 @@ body, html {
 }
 
 /* 原生 select 在深色底上是「白底黑字」的突兀控制項，這裡改成一致的主題樣式 */
-#difficulty-select {
+#difficulty-select,
+#runcard-select {
   appearance: none;
   -webkit-appearance: none;
   min-height: 40px;
@@ -3126,8 +3129,10 @@ body, html {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-#difficulty-select:hover { border-color: rgba(0, 229, 255, 0.6); }
-#difficulty-select:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.35); }
+#difficulty-select:hover,
+#runcard-select:hover { border-color: rgba(0, 229, 255, 0.6); }
+#difficulty-select:focus-visible,
+#runcard-select:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.35); }
 
 .difficulty-desc {
   flex-basis: 100%;
@@ -3144,7 +3149,7 @@ body, html {
 
 @media (max-width: 640px) {
   .start-actions { margin: 6px -14px -14px; padding: 12px 14px 16px; }
-  #difficulty-select { min-height: 44px; font-size: 14px; }
+  #difficulty-select, #runcard-select { min-height: 44px; font-size: 14px; }
   .difficulty-label { letter-spacing: 2px; }
 }
 
@@ -3195,3 +3200,33 @@ body, html {
 .display-settings { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; margin-top: 8px; font-size: 13px; color: #c9d4e3; }
 .ds-item { display: inline-flex; align-items: center; gap: 6px; }
 .ds-item select { background: #111827; color: #e9ecef; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 2px 6px; }
+
+/* ==================== 每日任務 ==================== */
+.quest-list { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 12px; text-align: left; }
+.quest-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); }
+.quest-row.done { border-color: rgba(0, 245, 155, 0.5); }
+.quest-row.claimed { opacity: 0.5; }
+.quest-main { flex: 1; min-width: 0; }
+.quest-text { font-weight: 700; font-size: 14px; color: #e9ecef; }
+.quest-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); margin: 6px 0 4px; overflow: hidden; }
+.quest-bar span { display: block; height: 100%; background: linear-gradient(90deg, #00b4d8, #00f59b); }
+.quest-meta { font-size: 12px; color: #9fb0c8; }
+.quest-claim { flex: 0 0 auto; }
+.quest-reset { text-align: center; font-size: 12px; color: #6c7a8f; }
+.game-over-quest-line { margin: 8px 0; padding: 8px 10px; border-radius: 10px; text-align: center; font-size: 13px; font-weight: 700;
+  color: #00f59b; background: rgba(0, 245, 155, 0.08); border: 1px solid rgba(0, 245, 155, 0.35); }
+.talent-btn.has-claim::after { content: ' ❗'; }
+
+/* ==================== 圖鑑 ==================== */
+.codex-milestones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 10px; }
+.codex-ms { font-size: 12px; padding: 6px 10px; }
+.codex-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin: 8px 0 12px;
+  max-height: 46vh; overflow-y: auto; }
+.codex-entry { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border-radius: 10px; text-align: center;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); }
+.codex-entry.locked { opacity: 0.4; }
+.codex-icon { font-size: 26px; line-height: 1.2; }
+.codex-name { font-size: 13px; font-weight: 700; color: #e9ecef; }
+.codex-sub { font-size: 11px; color: #9fb0c8; }
+.codex-tabs .shop-tab { padding: 6px 4px; font-size: 12px; white-space: nowrap; }

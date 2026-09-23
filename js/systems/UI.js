@@ -8,6 +8,7 @@ import {
   ACHIEVEMENTS,
   CONSUMABLE_ITEMS,
   WEAPON_ASPECTS,
+  ENEMY_TYPES,
 } from '../config.js';
 import { TALENTS, TALENT_ORDER, talentCost, talentInvested, talentTreeCost, talentValueAt, upgradeKeyOf, isBanishable, CHAR_LEVEL, charLevelBonuses, charLevelCost } from '../meta.js';
 import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
@@ -32,6 +33,8 @@ import {
   fuseItems,
 } from '../items.js';
 import { JEWELS, JEWEL_ORDER, jewelValue } from '../jewels.js';
+import { questText } from '../quests.js';
+import { CODEX_MILESTONES, codexCategories, codexHas, codexProgress } from '../codex.js';
 import { save, STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 import {
@@ -610,11 +613,15 @@ export class UIManager {
       const affordable = !maxed && dna >= cost;
       const nowTxt = def.valuePerLevel < 1 ? `${Math.round(now * 100)}%` : `${Math.round(now)}`;
       const nextTxt = def.valuePerLevel < 1 ? `${Math.round(next * 100)}%` : `${Math.round(next)}`;
+      // 有 levelDesc 的天賦（緊急復甦）逐級用文字描述，數字說明不了
+      const lvText = def.levelDesc
+        ? (maxed ? `（已滿：${def.levelDesc[def.maxLevel]}）` : `　<span class="talent-next">下一級：${def.levelDesc[lvl + 1]}</span>`)
+        : (maxed ? `（已滿：+${nextTxt}）` : `　<span class="talent-next">下一級 ${nowTxt} → ${nextTxt}</span>`);
       row.innerHTML = `
         <span class="talent-icon">${def.icon}</span>
         <div class="talent-info">
           <div class="talent-name">${def.name}<span class="talent-lv">LV ${lvl}/${def.maxLevel}</span></div>
-          <div class="talent-desc">${def.desc}${maxed ? `（已滿：+${nextTxt}）` : `　<span class="talent-next">下一級 ${nowTxt} → ${nextTxt}</span>`}</div>
+          <div class="talent-desc">${def.desc}${lvText}</div>
         </div>
         <button class="talent-up${affordable ? ' affordable' : ''}"${maxed ? ' disabled' : ''}>${maxed ? 'MAX' : `升級 ${cost} 🧬`}</button>
       `;
@@ -1381,6 +1388,124 @@ export class UIManager {
     }
   }
 
+  // ── 每日任務 ──
+  openQuestModal(save, onClaim) {
+    this._questClaim = onClaim;
+    this.rebuildQuestView(save);
+    document.getElementById('quest-modal')?.classList.remove('hidden');
+  }
+
+  rebuildQuestView(save) {
+    const box = document.getElementById('quest-list');
+    if (!box) return;
+    const list = save.dailyQuests();
+    box.innerHTML = '';
+    list.forEach((q, i) => {
+      const done = q.progress >= q.target;
+      const row = document.createElement('div');
+      row.className = 'quest-row' + (q.claimed ? ' claimed' : done ? ' done' : '');
+      const pct = Math.min(100, (q.progress / q.target) * 100);
+      const prog = q.stat === 'survive'
+        ? `${Math.floor(q.progress / 60)}:${String(q.progress % 60).padStart(2, '0')} / ${Math.floor(q.target / 60)}:${String(q.target % 60).padStart(2, '0')}`
+        : `${q.progress.toLocaleString()} / ${q.target.toLocaleString()}`;
+      row.innerHTML = `
+        <div class="quest-main">
+          <div class="quest-text">${questText(q)}</div>
+          <div class="quest-bar"><span style="width:${pct.toFixed(1)}%"></span></div>
+          <div class="quest-meta">${prog}　獎勵 ${q.gold} 🪙 + ${q.dna} 🧬</div>
+        </div>
+        <button class="shop-buy-btn quest-claim" data-quest="${i}" ${done && !q.claimed ? '' : 'disabled'}>${q.claimed ? '已領取' : done ? '領取' : '進行中'}</button>
+      `;
+      row.querySelector('button').addEventListener('click', () => this._questClaim?.(i));
+      box.appendChild(row);
+    });
+    const reset = document.createElement('div');
+    reset.className = 'quest-reset';
+    reset.textContent = '每天午夜（本地時間）換一組新任務';
+    box.appendChild(reset);
+  }
+
+  // ── 圖鑑 ──
+  openCodexModal(save, onClaim) {
+    this._codexClaim = onClaim;
+    if (!this._codexTabsBound) {
+      this._codexTabsBound = true;
+      this._codexCat = 'weapons';
+      document.querySelectorAll('.codex-tab').forEach((t) => t.addEventListener('click', () => {
+        document.querySelectorAll('.codex-tab').forEach((x) => x.classList.toggle('active', x === t));
+        this._codexCat = t.dataset.cat;
+        this.rebuildCodexView(this._codexSave);
+      }));
+    }
+    this._codexSave = save;
+    this.rebuildCodexView(save);
+    document.getElementById('codex-modal')?.classList.remove('hidden');
+  }
+
+  rebuildCodexView(save) {
+    const data = save.data;
+    const prog = codexProgress(data);
+    const progEl = document.getElementById('codex-progress');
+    if (progEl) progEl.textContent = `收集進度 ${prog.found} / ${prog.total}（${Math.round(prog.pct * 100)}%）`;
+
+    const ms = document.getElementById('codex-milestones');
+    if (ms) {
+      ms.innerHTML = '';
+      CODEX_MILESTONES.forEach((m, i) => {
+        const claimed = data.codex.claimed.includes(i);
+        const ready = prog.pct + 1e-9 >= m.pct;
+        const b = document.createElement('button');
+        b.className = 'shop-buy-btn codex-ms';
+        b.disabled = claimed || !ready;
+        b.textContent = `${Math.round(m.pct * 100)}%：${claimed ? '已領取' : `${m.gold}🪙 + ${m.dna}🧬`}`;
+        b.addEventListener('click', () => this._codexClaim?.(i));
+        ms.appendChild(b);
+      });
+    }
+
+    const list = document.getElementById('codex-list');
+    if (!list) return;
+    const cat = this._codexCat || 'weapons';
+    const ids = codexCategories()[cat] || [];
+    list.innerHTML = '';
+    for (const id of ids) {
+      const has = codexHas(data, cat, id);
+      let icon = '❓';
+      let name = '？？？';
+      let sub = '';
+      if (cat === 'weapons' || cat === 'evos') {
+        const w = WEAPONS[id];
+        if (has) { icon = w.icon; name = w.name; sub = cat === 'evos' ? '已合成' : '已取得'; }
+        else sub = cat === 'evos' ? '合成後解鎖' : '局內取得後解鎖';
+      } else if (cat === 'enemies') {
+        const e = ENEMY_TYPES[id];
+        if (has) {
+          icon = `<span style="color:${e.color}">●</span>`;
+          name = e.name;
+          sub = `擊殺 ${(data.codex.enemies[id] || 0).toLocaleString()}`;
+        } else sub = '擊殺後解鎖';
+      } else if (cat === 'jewels') {
+        const j = JEWELS[id];
+        if (has) { icon = j.icon; name = j.name; sub = `累計撿到 ${data.codex.jewels[id]}`; }
+        else sub = '撿到後解鎖';
+      }
+      const el = document.createElement('div');
+      el.className = 'codex-entry' + (has ? '' : ' locked');
+      el.innerHTML = `<span class="codex-icon">${icon}</span><span class="codex-name">${name}</span><span class="codex-sub">${sub}</span>`;
+      list.appendChild(el);
+    }
+  }
+
+  // 主選單按鈕上的「❗」：有可以領的每日任務／圖鑑里程碑
+  updateClaimBadges(save) {
+    const quests = save.dailyQuests();
+    const qReady = quests.some((q) => !q.claimed && q.progress >= q.target);
+    const prog = codexProgress(save.data);
+    const cReady = CODEX_MILESTONES.some((m, i) => !save.data.codex.claimed.includes(i) && prog.pct + 1e-9 >= m.pct);
+    document.getElementById('btn-quests')?.classList.toggle('has-claim', qReady);
+    document.getElementById('btn-codex')?.classList.toggle('has-claim', cReady);
+  }
+
   // 暫停面板：目前的構築。參考 Brotato／吸血鬼倖存者的暫停畫面 ——
   // 玩家在戰鬥中最常想知道的是「每把武器幾級、離超武還差什麼、總數值多少」。
   renderPauseBuild(game) {
@@ -1435,13 +1560,14 @@ export class UIManager {
     ].map(([k, v]) => `<div class="pb-stat"><span>${k}</span><strong>${v}</strong></div>`).join('');
 
     const chips = (list) => list.map((b) => `<span class="pb-chip">${b.icon || ''} ${esc(b.name)}</span>`).join('');
-    const buffs = [...(game.blessings || []), ...(game.activeSynergies || [])];
+    const buffs = [...(game.runCard ? [{ icon: game.runCard.icon, name: `規則卡：${game.runCard.name}` }] : []),
+      ...(game.blessings || []), ...(game.activeSynergies || [])];
 
     box.innerHTML = `
       <div class="pb-section"><div class="pb-title">🔫 武器（${wm.weapons.size}/${GAME_CONFIG.MAX_WEAPON_SLOTS}）</div>${weaponRows || '<div class="pb-empty">—</div>'}</div>
       <div class="pb-section"><div class="pb-title">🧩 配件（${wm.passives.size}/${GAME_CONFIG.MAX_PASSIVE_SLOTS}）</div>${passiveRows || '<div class="pb-empty">尚未取得</div>'}</div>
       <div class="pb-section"><div class="pb-title">📊 總數值</div><div class="pb-stats">${stats}</div></div>
-      ${buffs.length ? `<div class="pb-section"><div class="pb-title">✨ 祝福與協同</div><div class="pb-chips">${chips(buffs)}</div></div>` : ''}
+      ${buffs.length ? `<div class="pb-section"><div class="pb-title">✨ 規則卡、祝福與協同</div><div class="pb-chips">${chips(buffs)}</div></div>` : ''}
       <div class="pb-section pb-meta">🚫 封印剩 ${game.banishesLeft ?? 0} 次 · ⏭️ 跳過剩 ${game.skipsLeft ?? 0} 次 · 🎲 刷新 ${game.rerollCost} 🪙</div>
     `;
   }
@@ -1930,6 +2056,14 @@ export class UIManager {
       } else {
         gearBox.classList.add('hidden');
       }
+    }
+
+    // 每日任務：這局讓幾個任務剛好完成 → 提醒回主選單領取
+    const qLine = document.getElementById('game-over-quest-line');
+    if (qLine) {
+      const n = gearSummary?.questsDone || 0;
+      qLine.classList.toggle('hidden', n === 0);
+      qLine.textContent = n > 0 ? `📋 完成 ${n} 個每日任務！回主選單「養成基地 → 每日任務」領取獎勵` : '';
     }
 
     // 本局珠寶（撿到當下已入存檔）：列出數量與可換得的金幣／DNA

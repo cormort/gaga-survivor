@@ -66,9 +66,21 @@ export const TALENTS = {
     maxLevel: 8,
     costs: TALENT_COSTS,
   },
+  // 復活（參考吸血鬼倖存者 Revival、噠噠特攻的復活）：只有 2 級、很貴，是天賦樹的尾巴。
+  // levelDesc 取代數值顯示 —— 「+1」這種數字說明不了「復活」
+  revive: {
+    id: 'revive',
+    name: '緊急復甦',
+    icon: '💫',
+    desc: '陣亡時自動復活一次（每局）',
+    levelDesc: ['未啟用', '復活回 50% 生命', '復活回滿生命並震退周圍敵人'],
+    valuePerLevel: 1,
+    maxLevel: 2,
+    costs: [200, 1000],
+  },
 };
 
-export const TALENT_ORDER = ['power', 'vitality', 'swift', 'magnet', 'fortune'];
+export const TALENT_ORDER = ['power', 'vitality', 'swift', 'magnet', 'fortune', 'revive'];
 
 export function talentCost(def, level) {
   return def.costs[level] ?? def.costs[def.costs.length - 1];
@@ -82,7 +94,7 @@ export function talentFullCost(def) {
   return sum;
 }
 
-// 整棵樹全滿的 DNA（2470）：這是局外養成的長度指標
+// 整棵樹全滿的 DNA（2470 + 復甦 1200 = 3670）：這是局外養成的長度指標
 export function talentTreeCost() {
   return TALENT_ORDER.reduce((sum, id) => sum + talentFullCost(TALENTS[id]), 0);
 }
@@ -117,7 +129,7 @@ export function upgradeKeyOf(opt) {
 
 // 由存檔的 talents {id: lvl} 算出整場的加成總和 (Game.start 時套用到玩家身上)
 export function metaBonuses(talents = {}) {
-  const m = { dmg: 0, hp: 0, speed: 0, magnet: 0, gold: 0 };
+  const m = { dmg: 0, hp: 0, speed: 0, magnet: 0, gold: 0, revive: 0 };
   for (const [id, lvl] of Object.entries(talents)) {
     const def = TALENTS[id];
     if (!def || !lvl) continue;
@@ -127,6 +139,7 @@ export function metaBonuses(talents = {}) {
     else if (id === 'swift') m.speed += v;
     else if (id === 'magnet') m.magnet += v;
     else if (id === 'fortune') m.gold += v;
+    else if (id === 'revive') m.revive = Math.min(def.maxLevel, lvl);
   }
   return m;
 }

@@ -9,6 +9,9 @@ import { MAX_BOOSTER_STACK, STASH_CAP } from './shop.js';
 import { LEVELS } from './levels.js';
 // 珠寶是純資料檔（不 import 任何模組），不會循環
 import { JEWELS, jewelValue } from './jewels.js';
+import { CODEX_MILESTONES, codexProgress } from './codex.js';
+import { localDateKey, generateDailyQuests, applyRunToQuest } from './quests.js';
+import { WEAPONS } from './config.js';
 
 export { STASH_CAP };
 
@@ -30,6 +33,11 @@ function blank() {
     charLevels: {},         // 特工等級 { charId: level }，沒有記錄 = Lv1
     stash: [],              // 打寶倉庫 (最多 stashCap 件)
     jewels: {},             // 珠寶袋 { jewelId: 數量 }：撿到當下就入袋，陣亡也保留
+    // 圖鑑 codex { weapons, enemies, jewels, claimed } 刻意不放在這裡：load() 是
+    // { ...blank(), ...存檔 }，放了的話舊存檔會拿到空的 codex，ensureDefaults 的回填
+    // （珠寶袋 → 撿過、合成過的超武 → 基礎武器取得過）永遠不會執行。由 ensureDefaults 建立。
+    quests: { date: '', list: [] },   // 每日任務（依本地日期產生，跨局累積）
+    runCard: null,                    // 出擊規則卡（js/runcards.js 的 id，null = 不使用）
     equipped: {},           // 已穿裝備 { slotKey: itemId }
     unlocked: { survivor: ['street'], defense: ['street'] }, // 已解鎖關卡 (依模式)
     unlockedChars: ['duck'], // 已解鎖特工
@@ -107,6 +115,16 @@ function ensureDefaults(d) {
   if (!d.charLevels || typeof d.charLevels !== 'object') d.charLevels = {};
   if (!Array.isArray(d.stash)) d.stash = [];
   if (!d.jewels || typeof d.jewels !== 'object') d.jewels = {};
+  if (!d.codex || typeof d.codex !== 'object') {
+    // 舊存檔補圖鑑：珠寶袋裡現有的算「撿過」、合成過的超武其基礎武器算「取得過」
+    d.codex = { weapons: {}, enemies: {}, jewels: { ...d.jewels }, claimed: [] };
+    for (const evo of (Array.isArray(d.evolvedEver) ? d.evolvedEver : [])) {
+      for (const [id, w] of Object.entries(WEAPONS)) if (w.evoTarget === evo) d.codex.weapons[id] = 1;
+    }
+  }
+  for (const k of ['weapons', 'enemies', 'jewels']) if (!d.codex[k] || typeof d.codex[k] !== 'object') d.codex[k] = {};
+  if (!Array.isArray(d.codex.claimed)) d.codex.claimed = [];
+  if (!d.quests || typeof d.quests !== 'object' || !Array.isArray(d.quests.list)) d.quests = { date: '', list: [] };
   if (!d.equipped || typeof d.equipped !== 'object') d.equipped = {};
   if (!d.daily || typeof d.daily !== 'object') d.daily = { date: '', bestTime: 0, completed: false };
   if (!Array.isArray(d.evolvedEver)) d.evolvedEver = [];
@@ -332,6 +350,7 @@ export const save = {
   addJewel(id, n = 1) {
     if (!JEWELS[id] || !(n > 0)) return false;
     this.data.jewels[id] = (this.data.jewels[id] || 0) + n;
+    this.data.codex.jewels[id] = (this.data.codex.jewels[id] || 0) + n;   // 圖鑑：歷史累計
     this.flush();
     return true;
   },
@@ -360,6 +379,59 @@ export const save = {
     this.data.dna += dna;
     this.flush();
     return { ok: true, count: sold, gold, dna };
+  },
+
+  // ----- 圖鑑 -----
+  // 每局結算寫一次：本局取得過的武器 id、各敵人類型的擊殺數
+  recordCodex({ weapons = [], kills = {} } = {}) {
+    const c = this.data.codex;
+    for (const id of weapons) if (WEAPONS[id] && !WEAPONS[id].isEvo) c.weapons[id] = 1;
+    for (const [type, n] of Object.entries(kills)) if (n > 0) c.enemies[type] = (c.enemies[type] || 0) + n;
+    this.flush();
+  },
+
+  // 領收集里程碑（index = CODEX_MILESTONES 的第幾個）
+  claimCodexMilestone(i) {
+    const m = CODEX_MILESTONES[i];
+    if (!m) return { ok: false, reason: '沒有這個里程碑' };
+    if (this.data.codex.claimed.includes(i)) return { ok: false, reason: '已經領過了' };
+    const prog = codexProgress(this.data);
+    if (prog.pct + 1e-9 < m.pct) return { ok: false, reason: `收集進度未達 ${Math.round(m.pct * 100)}%` };
+    this.data.codex.claimed.push(i);
+    this.data.gold = (this.data.gold || 0) + m.gold;
+    this.data.dna += m.dna;
+    this.flush();
+    return { ok: true, gold: m.gold, dna: m.dna };
+  },
+
+  // ----- 每日任務 -----
+  // 換日就重新產生（同一天永遠同一組）；回傳當天的任務清單
+  dailyQuests(dateKey = localDateKey()) {
+    if (this.data.quests.date !== dateKey) {
+      this.data.quests = { date: dateKey, list: generateDailyQuests(dateKey) };
+      this.flush();
+    }
+    return this.data.quests.list;
+  },
+
+  // 每局結算：把本局數據累加進當天的任務（已領過的不再動）
+  progressQuests(run, dateKey = localDateKey()) {
+    const list = this.dailyQuests(dateKey);
+    for (const q of list) if (!q.claimed) applyRunToQuest(q, run);
+    this.flush();
+    return list;
+  },
+
+  claimQuest(i, dateKey = localDateKey()) {
+    const q = this.dailyQuests(dateKey)[i];
+    if (!q) return { ok: false, reason: '沒有這個任務' };
+    if (q.claimed) return { ok: false, reason: '已經領過了' };
+    if (q.progress < q.target) return { ok: false, reason: '任務尚未完成' };
+    q.claimed = true;
+    this.data.gold = (this.data.gold || 0) + q.gold;
+    this.data.dna += q.dna;
+    this.flush();
+    return { ok: true, gold: q.gold, dna: q.dna };
   },
 
   // 分解單件：換 DNA＋金幣。正穿著的要先脫下，避免手滑把主力裝拆了
