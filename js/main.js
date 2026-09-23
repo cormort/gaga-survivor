@@ -9,6 +9,9 @@ import {
   CONSUMABLE_ITEMS,
   WEAPON_ASPECTS,
   BOMB_TUNING,
+  worldBounds,
+  isWorldBounded,
+  setWorldBounded,
 } from './config.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
@@ -41,6 +44,8 @@ import {
   initExplodableProps,
   initDestructibles,
   spawnSingleDestructible,
+  recycleScenery,
+  sceneryRespawnDist,
   dropCrateLoot,
   updateHazards,
   drawExplodableProps,
@@ -96,6 +101,11 @@ import { Core } from './entities/Core.js';
 // 否則自我增殖的怪會把名額吃光、後續波次的新怪種再也進不來。
 // 上限會被自適應效能調整，所以是即時算（hatchCap()），不是常數。
 const HATCH_MARGIN = 10;
+// 無限地圖（生存者模式）：離玩家超過這個距離的雜兵會被搬到玩家前方重新出現
+// （參考吸血鬼倖存者 —— 不然一路往前跑，身後會拖著一大串永遠追不上的怪，場上數量卡滿、前方卻沒怪）。
+// 1400 ≈ 畫面對角線的 1.5 倍，確定已經不在畫面上
+const FAR_RECYCLE_DIST = 1400;
+const FAR_RECYCLE_EVERY = 0.5;   // 每 0.5 秒檢查一次就夠了
 // 核心外圈實際擠得下的同時攻擊數 (半徑 46 的六角形一圈約十幾隻)
 // 不會過期的掉落物 (裝備/寶箱/消費道具/補給) 在場上的數量上限
 const NON_EXPIRING_DROP_CAP = 15;
@@ -159,6 +169,7 @@ class Game {
     this.characterId = CHARACTERS[save.data.character] ? save.data.character : 'duck';
     this.modeId = MODES[save.data.mode] ? save.data.mode : 'survivor';
     this.mode = getMode(this.modeId);
+    setWorldBounded(!!this.mode.boundedMap);
     this.levelId = save.isUnlocked(save.data.lastLevel, this.modeId) ? save.data.lastLevel : 'street';
     this.core = null;
     this.player = new Player(0, 0, this.characterId);
@@ -860,6 +871,9 @@ class Game {
 
     // 模式：守塔在場中央生出基地核心，玩家開場站在核心下方讓出位置
     this.mode = getMode(this.modeId);
+    setWorldBounded(!!this.mode.boundedMap);   // 生存者：無限地圖；守塔：4000×4000 圍牆
+    this._recycleTimer = 0;
+    this._recycleFrom = null;
     this.core = this.mode.core ? new Core(this.mode.core) : null;
     const spawnY = this.core ? this.core.y + this.core.radius + 90 : 0;
     this.player = new Player(this.core ? this.core.x : 0, spawnY, this.characterId);
@@ -1155,7 +1169,7 @@ class Game {
       // 地面預警雷區：在特工附近召喚定時爆破地雷 (與關卡 mech 地雷同 schema：kind/r/t)
       const offsetAng = Math.random() * Math.PI * 2;
       const offsetDist = Math.random() * 80 + 35;
-      const b = GAME_CONFIG.WORLD_BOUNDS;
+      const b = worldBounds();
       const mx = Math.max(b.minX + 60, Math.min(b.maxX - 60, this.player.x + Math.cos(offsetAng) * offsetDist));
       const my = Math.max(b.minY + 60, Math.min(b.maxY - 60, this.player.y + Math.sin(offsetAng) * offsetDist));
       this.hazards.push({
@@ -1198,6 +1212,10 @@ class Game {
     for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
       const ep = this.enemyProjectiles[i];
       ep.update(dt);
+      // 無限地圖沒有世界邊界可以撞：離玩家太遠（遠超出畫面）就回收
+      if (!ep.isDead && !isWorldBounded() && Math.abs(ep.x - this.player.x) + Math.abs(ep.y - this.player.y) > FAR_RECYCLE_DIST * 1.4) {
+        ep.isDead = true;
+      }
       if (ep.isDead) {
         this.enemyProjectiles.splice(i, 1);
       }
@@ -1491,6 +1509,7 @@ class Game {
     // 4.1 怪物互相推擠 (分離力)。沒有這一步的話，全部敵人會收斂到同一個座標上
     // 變成一坨在移動 —— 這是「敵人看起來很單調」最強的單一來源，比美術更關鍵。
     this.applyEnemySeparation(dt);
+    this.recycleFarEnemies(dt);
 
     // 4.2 更新敵方投射物與判定
     this.updateEnemyProjectiles(dt);
@@ -1577,8 +1596,9 @@ class Game {
       c.update(dt);
       if (c.isDead) this.destructibles.splice(i, 1);
     }
+    recycleScenery(this);   // 無限地圖：太遠的場景物件回收、可引爆物補回
     if (this.destructibles.length < 12) {
-      spawnSingleDestructible(this);
+      spawnSingleDestructible(this, sceneryRespawnDist());
     }
 
     // 地面殘跡生命週期
@@ -1592,7 +1612,7 @@ class Game {
     if (!this.extractionWell && ((this.gameTime >= 150 && this.gameTime < 155) || (this.gameTime >= 330 && this.gameTime < 335))) {
       const ang = Math.random() * Math.PI * 2;
       const d = 360 + Math.random() * 120;
-      const b = GAME_CONFIG.WORLD_BOUNDS;
+      const b = worldBounds();
       this.extractionWell = {
         x: Math.max(b.minX + 90, Math.min(b.maxX - 90, this.player.x + Math.cos(ang) * d)),
         y: Math.max(b.minY + 90, Math.min(b.maxY - 90, this.player.y + Math.sin(ang) * d)),
@@ -1734,14 +1754,48 @@ class Game {
   // 成本控制：用空間雜湊 (44 單位一格) 把鄰居查詢從 O(n²) 壓成 O(n)；格子用
   // 平鋪的鏈結串列 (head/next + frame stamp)，暖機後每幀零配置 —— 原本若用
   // Map<cell, array> 每幀會重建數百個小陣列，反而製造 GC 壓力。
+  // 無限地圖：被甩在後面太遠的雜兵搬到玩家「前進方向」的前方（畫面外），首領不動。
+  // 前進方向用這段時間內玩家的位移估；站著不動時隨機方向。回傳這次搬了幾隻（測試用）
+  recycleFarEnemies(dt) {
+    if (isWorldBounded()) return 0;
+    this._recycleTimer = (this._recycleTimer || 0) + dt;
+    if (this._recycleTimer < FAR_RECYCLE_EVERY) return 0;
+    this._recycleTimer = 0;
+    const p = this.player;
+    const from = this._recycleFrom || { x: p.x, y: p.y };
+    this._recycleFrom = { x: p.x, y: p.y };
+    const mx = p.x - from.x;
+    const my = p.y - from.y;
+    const moving = mx * mx + my * my > 20 * 20;
+    const heading = moving ? Math.atan2(my, mx) : 0;
+    const far2 = FAR_RECYCLE_DIST * FAR_RECYCLE_DIST;
+    let moved = 0;
+    for (const e of this.enemies) {
+      if (e.isDead || e.isBoss) continue;
+      const dx = e.x - p.x;
+      const dy = e.y - p.y;
+      if (dx * dx + dy * dy <= far2) continue;
+      // 前方 ±60° 扇形、距離 560~700（與一般生成距離相同，剛好在畫面外）
+      const a = moving ? heading + (Math.random() - 0.5) * (Math.PI * 2 / 3) : Math.random() * Math.PI * 2;
+      const d = 560 + Math.random() * 140;
+      e.x = p.x + Math.cos(a) * d;
+      e.y = p.y + Math.sin(a) * d;
+      moved++;
+    }
+    return moved;
+  }
+
   applyEnemySeparation(dt) {
     const list = this.enemies;
     const n = list.length;
     if (n < 2) return;
 
     const CELL = 44;
-    const CW = 96;                       // 4000 / 44 ≈ 91，取 96 留邊
-    const B = GAME_CONFIG.WORLD_BOUNDS;
+    const CW = 96;                       // 96 × 44 ≈ 4200 世界單位見方
+    // 網格以玩家為中心（無限地圖沒有固定原點；被甩太遠的雜兵會被搬回來，見 recycleFarEnemies，
+    // 所以場上的敵人都在這個範圍內 —— 範圍外的只會被夾進邊緣格，不會出錯）
+    const B = { minX: this.player.x - (CW * CELL) / 2, minY: this.player.y - (CW * CELL) / 2 };
+    const WB = worldBounds();
     if (!this._sep) {
       this._sep = {
         head: new Int32Array(CW * CW),
@@ -1823,8 +1877,8 @@ class Game {
       const push = Math.min(1, mag) * STRENGTH * ai.sepMul * dt;
       const nx = (px / mag) * push;
       const ny = (py / mag) * push;
-      e.x = Math.max(B.minX, Math.min(B.maxX, e.x + nx));
-      e.y = Math.max(B.minY, Math.min(B.maxY, e.y + ny));
+      e.x = Math.max(WB.minX, Math.min(WB.maxX, e.x + nx));
+      e.y = Math.max(WB.minY, Math.min(WB.maxY, e.y + ny));
     }
   }
 
@@ -3167,11 +3221,13 @@ class Game {
     ctx.stroke();
     ctx.clip();
 
-    // 地圖邊界 (走近時才會出現在小地圖上，提示別撞牆)
-    const b = GAME_CONFIG.WORLD_BOUNDS;
-    ctx.strokeStyle = 'rgba(255, 0, 85, 0.55)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(toX(b.minX), toY(b.minY), (b.maxX - b.minX) * k, (b.maxY - b.minY) * k);
+    // 地圖邊界 (走近時才會出現在小地圖上，提示別撞牆)；無限地圖沒有邊界
+    if (isWorldBounded()) {
+      const b = worldBounds();
+      ctx.strokeStyle = 'rgba(255, 0, 85, 0.55)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(toX(b.minX), toY(b.minY), (b.maxX - b.minX) * k, (b.maxY - b.minY) * k);
+    }
 
     // 目前畫面視野
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';

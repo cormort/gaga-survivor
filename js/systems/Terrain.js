@@ -10,12 +10,14 @@
 //   2. 大型地標：每關 2 種，每 ~1200 單位出現一次，讓地圖有「地方」可言
 //   3. 隨時間劣化：開局乾淨、越接近終局地面越裂越亮 (escalate)，8 分鐘有推進感
 //
-// 效能策略：宏觀結構整張世界烘成一張 1/3 縮尺的離屏畫布 (4000 世界單位 → 1334px)，
-// 每幀只要一次 drawImage；地標數量少 (每個 ~1200 單位格最多一個) 且各自烘成 sprite。
+// 效能策略：宏觀結構烘成一塊可無縫拼接的 1/3 縮尺地形磚 (約 4000 世界單位 → ~1334px)，
+// 無限地圖靠重複貼磚，每幀最多 4 次 drawImage；地標數量少 (每個 ~1200 單位格最多一個) 且各自烘成 sprite。
 // 整層每幀固定 1~3 次繪圖呼叫，不隨場上敵人數成長。
 
 // 世界 → 宏觀畫布的縮尺。從 4 提高到 3：整張世界烘一次的成本只多 1.8 倍記憶體
 // (4000/3 ≈ 1334²)，但道路/板塊/渠道的邊緣銳利度明顯提升 (放大倍率從 4× 降到 3×)。
+import { worldBounds } from '../config.js';
+
 const SCALE = 3;
 const LANDMARK_SPRITE = new Map();   // key: `${kind}:${seed}` → canvas
 
@@ -38,18 +40,29 @@ function levelSeed(id) {
 
 const macroCache = new Map();
 
-// 把整張世界的宏觀結構烘成一張縮尺畫布。每關只做一次。
+// 地形磚邊長的目標值（世界單位）。實際邊長取「關卡格距的整數倍」最接近這個值的數字，
+// 道路／渠道的格線才會在磚與磚的接縫處對齊。
+const TILE_TARGET = 4000;
+
+// 把宏觀結構烘成一張「可無縫重複拼接」的縮尺地形磚。每關只做一次。
+//
+// 為什麼要能拼接：生存者模式是無限地圖。原本整張世界（±2000）烘成一張圖，走出去就是一片空白。
+// 做法：磚的邊長 P = 格距 × N；格線畫在 0..P（兩端各一條，拼起來剛好接上）；
+// 每格一個的特徵（冰湖、裂縫、板塊）多畫一圈外框格，座標用 i mod N 取雜湊 ——
+// 越過磚邊的特徵會在另一側以同一個雜湊續畫，接縫處看不出斷口。
 function getMacroLayer(level) {
   const id = (level && level.id) || 'street';
   const cached = macroCache.get(id);
   if (cached) return cached;
 
   const macro = level.theme && level.theme.ground && level.theme.ground.macro;
-  const b = { minX: -2000, maxX: 2000, minY: -2000, maxY: 2000 };
-  const w = Math.ceil((b.maxX - b.minX) / SCALE);
-  const h = Math.ceil((b.maxY - b.minY) / SCALE);
+  const cell = (macro && macro.cell) || 1000;
+  const n = Math.max(2, Math.round(TILE_TARGET / cell));
+  const P = n * cell;
+  const w = Math.ceil(P / SCALE);
+  const h = w;
 
-  const entry = { canvas: null, w, h, b };
+  const entry = { canvas: null, w, h, P };
   if (!macro) {
     macroCache.set(id, entry);
     return entry;
@@ -60,12 +73,12 @@ function getMacroLayer(level) {
   cv.height = h;
   const ctx = cv.getContext('2d');
   const seed = levelSeed(id);
-  // 世界座標 → 畫布座標
-  const X = (wx) => (wx - b.minX) / SCALE;
-  const Y = (wy) => (wy - b.minY) / SCALE;
+  // 磚內世界座標（0..P）→ 畫布座標
+  const X = (wx) => wx / SCALE;
+  const Y = (wy) => wy / SCALE;
   const S = (len) => len / SCALE;
 
-  drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h);
+  drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h, n);
 
   entry.canvas = cv;
   macroCache.set(id, entry);
@@ -73,27 +86,34 @@ function getMacroLayer(level) {
 }
 
 // 五種宏觀結構。每一種都只用到少量填色與描邊，且全部在縮尺畫布上做一次。
-function drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h) {
+// n = 磚內格數；wrap(i) 讓外框格取到對面那一格的雜湊（無縫拼接的關鍵）
+function drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h, n) {
   const kind = macro.kind || 'none';
   const base = macro.base || 'rgba(255,255,255,0.035)';
   const line = macro.line || 'rgba(0,0,0,0.22)';
   const accent = macro.accent || 'rgba(255,255,255,0.10)';
+  const wrap = (i) => ((i % n) + n) % n;
+  const cell = macro.cell || 1000;
+  // 格線位置（磚內世界座標）：0, cell, …, n*cell —— 兩端都畫，拼接後剛好接上
+  const lines = [];
+  for (let k = 0; k <= n; k++) lines.push(k * cell);
+  // 每格一個的特徵：多畫外框一圈（-1..n）
+  const eachCell = (fn) => {
+    for (let i = -1; i <= n; i++) {
+      for (let j = -1; j <= n; j++) fn(i * cell, j * cell, wrap(i), wrap(j));
+    }
+  };
 
   if (kind === 'road') {
     // 淪陷商業街：棋盤式街廓。路面比底色亮一階、帶路緣與中央虛線，
     // 十字路口畫斑馬線 —— 這是玩家唯一能拿來定位的結構。
-    const cell = macro.cell || 900;
     const roadW = cell * 0.3;
     ctx.fillStyle = base;
-    for (let gx = -2000; gx <= 2000; gx += cell) {
-      ctx.fillRect(X(gx) - S(roadW) / 2, 0, S(roadW), h);
-    }
-    for (let gy = -2000; gy <= 2000; gy += cell) {
-      ctx.fillRect(0, Y(gy) - S(roadW) / 2, w, S(roadW));
-    }
+    for (const gx of lines) ctx.fillRect(X(gx) - S(roadW) / 2, 0, S(roadW), h);
+    for (const gy of lines) ctx.fillRect(0, Y(gy) - S(roadW) / 2, w, S(roadW));
     ctx.strokeStyle = line;
     ctx.lineWidth = 1;
-    for (let gx = -2000; gx <= 2000; gx += cell) {
+    for (const gx of lines) {
       const x = X(gx);
       ctx.beginPath();
       ctx.moveTo(x - S(roadW) / 2, 0);
@@ -102,7 +122,7 @@ function drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h) {
       ctx.lineTo(x + S(roadW) / 2, h);
       ctx.stroke();
     }
-    for (let gy = -2000; gy <= 2000; gy += cell) {
+    for (const gy of lines) {
       const y = Y(gy);
       ctx.beginPath();
       ctx.moveTo(0, y - S(roadW) / 2);
@@ -111,18 +131,18 @@ function drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h) {
       ctx.lineTo(w, y + S(roadW) / 2);
       ctx.stroke();
     }
-    // 中央虛線 + 斑馬線
+    // 中央虛線 + 斑馬線（虛線週期 56 世界單位；格距不一定整除，接縫處虛線相位可能差一點，肉眼幾乎看不出）
     ctx.setLineDash([S(30), S(26)]);
     ctx.strokeStyle = accent;
     ctx.lineWidth = Math.max(1, S(6));
-    for (let gx = -2000; gx <= 2000; gx += cell) {
+    for (const gx of lines) {
       const x = X(gx);
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, h);
       ctx.stroke();
     }
-    for (let gy = -2000; gy <= 2000; gy += cell) {
+    for (const gy of lines) {
       const y = Y(gy);
       ctx.beginPath();
       ctx.moveTo(0, y);
@@ -131,8 +151,8 @@ function drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h) {
     }
     ctx.setLineDash([]);
     ctx.fillStyle = accent;
-    for (let gx = -2000; gx <= 2000; gx += cell) {
-      for (let gy = -2000; gy <= 2000; gy += cell) {
+    for (const gx of lines) {
+      for (const gy of lines) {
         const cx = X(gx);
         const cy = Y(gy);
         for (let i = -3; i <= 3; i++) {
@@ -142,151 +162,132 @@ function drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h) {
     }
   } else if (kind === 'plates') {
     // 廢棄生化實驗室：大型金屬地板，板與板之間有明顯接縫與警示條。
-    const cell = macro.cell || 760;
-    let gi = 0;
-    for (let gx = -2000; gx < 2000; gx += cell, gi++) {
-      let gj = 0;
-      for (let gy = -2000; gy < 2000; gy += cell, gj++) {
-        const r = hash(gi, gj, seed + 7);
-        // 板材本身：明暗交替，讓大區塊看得出來
-        ctx.fillStyle = r > 0.5 ? base : 'rgba(255,255,255,0.015)';
-        ctx.fillRect(X(gx) + 1, Y(gy) + 1, S(cell) - 2, S(cell) - 2);
-        // 接縫
-        ctx.strokeStyle = line;
-        ctx.lineWidth = Math.max(1, S(5));
-        ctx.strokeRect(X(gx) + 1, Y(gy) + 1, S(cell) - 2, S(cell) - 2);
-        // 一部分板塊帶警示斜紋邊
-        if (r > 0.8) {
-          ctx.fillStyle = 'rgba(255,190,60,0.10)';
-          ctx.fillRect(X(gx) + S(10), Y(gy) + S(10), S(cell) - S(20), S(9));
-        }
-        // 大型模板噴字 (圓形艙位標記)
-        if (r < 0.18) {
-          ctx.strokeStyle = accent;
-          ctx.lineWidth = Math.max(1, S(6));
-          ctx.beginPath();
-          ctx.arc(X(gx + cell / 2), Y(gy + cell / 2), S(cell * 0.3), 0, Math.PI * 2);
-          ctx.stroke();
-        }
+    eachCell((gx, gy, gi, gj) => {
+      const r = hash(gi, gj, seed + 7);
+      // 板材本身：明暗交替，讓大區塊看得出來
+      ctx.fillStyle = r > 0.5 ? base : 'rgba(255,255,255,0.015)';
+      ctx.fillRect(X(gx) + 1, Y(gy) + 1, S(cell) - 2, S(cell) - 2);
+      // 接縫
+      ctx.strokeStyle = line;
+      ctx.lineWidth = Math.max(1, S(5));
+      ctx.strokeRect(X(gx) + 1, Y(gy) + 1, S(cell) - 2, S(cell) - 2);
+      // 一部分板塊帶警示斜紋邊
+      if (r > 0.8) {
+        ctx.fillStyle = 'rgba(255,190,60,0.10)';
+        ctx.fillRect(X(gx) + S(10), Y(gy) + S(10), S(cell) - S(20), S(9));
       }
-    }
+      // 大型模板噴字 (圓形艙位標記)
+      if (r < 0.18) {
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = Math.max(1, S(6));
+        ctx.beginPath();
+        ctx.arc(X(gx + cell / 2), Y(gy + cell / 2), S(cell * 0.3), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
   } else if (kind === 'icefield') {
     // 極寒暴風雪基地：大面積冰原與凍湖，長裂縫貫穿整個區塊。
-    const cell = macro.cell || 1000;
-    for (let gx = -2000; gx < 2000; gx += cell) {
-      for (let gy = -2000; gy < 2000; gy += cell) {
-        const i = Math.round(gx / cell);
-        const j = Math.round(gy / cell);
-        const r = hash(i, j, seed + 13);
-        if (r > 0.45) {
-          // 凍湖：大塊偏藍的冰面
-          ctx.fillStyle = base;
-          ctx.beginPath();
-          const cx = X(gx + cell * (0.3 + hash(i, j, seed + 1) * 0.4));
-          const cy = Y(gy + cell * (0.3 + hash(i, j, seed + 2) * 0.4));
-          const rad = S(cell * (0.3 + r * 0.25));
-          ctx.ellipse(cx, cy, rad, rad * 0.74, r * Math.PI, 0, Math.PI * 2);
-          ctx.fill();
-          // 冰面上的長裂縫 (從中心往外岔)
-          ctx.strokeStyle = accent;
-          ctx.lineWidth = Math.max(1, S(4));
-          for (let k = 0; k < 5; k++) {
-            const a = hash(i, j, seed + 20 + k) * Math.PI * 2;
-            let px = cx;
-            let py = cy;
-            ctx.beginPath();
-            ctx.moveTo(px, py);
-            for (let s2 = 0; s2 < 3; s2++) {
-              const seg = rad * (0.3 + hash(i, j, seed + 40 + k * 3 + s2) * 0.4);
-              const aa = a + (hash(i, j, seed + 70 + k * 3 + s2) - 0.5) * 0.9;
-              px += Math.cos(aa) * seg;
-              py += Math.sin(aa) * seg;
-              ctx.lineTo(px, py);
-            }
-            ctx.stroke();
-          }
+    eachCell((gx, gy, i, j) => {
+      const r = hash(i, j, seed + 13);
+      if (r <= 0.45) return;
+      // 凍湖：大塊偏藍的冰面
+      ctx.fillStyle = base;
+      ctx.beginPath();
+      const cx = X(gx + cell * (0.3 + hash(i, j, seed + 1) * 0.4));
+      const cy = Y(gy + cell * (0.3 + hash(i, j, seed + 2) * 0.4));
+      const rad = S(cell * (0.3 + r * 0.25));
+      ctx.ellipse(cx, cy, rad, rad * 0.74, r * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+      // 冰面上的長裂縫 (從中心往外岔)
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = Math.max(1, S(4));
+      for (let k = 0; k < 5; k++) {
+        const a = hash(i, j, seed + 20 + k) * Math.PI * 2;
+        let px = cx;
+        let py = cy;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        for (let s2 = 0; s2 < 3; s2++) {
+          const seg = rad * (0.3 + hash(i, j, seed + 40 + k * 3 + s2) * 0.4);
+          const aa = a + (hash(i, j, seed + 70 + k * 3 + s2) - 0.5) * 0.9;
+          px += Math.cos(aa) * seg;
+          py += Math.sin(aa) * seg;
+          ctx.lineTo(px, py);
         }
+        ctx.stroke();
       }
-    }
+    });
   } else if (kind === 'channels') {
     // 熔岩核心熔爐：貫穿的岩漿渠道切開玄武岩平台，渠道邊緣透出橙紅。
-    const cell = macro.cell || 1100;
     ctx.fillStyle = base;
-    for (let gy = -2000; gy <= 2000; gy += cell) {
-      const y = Y(gy);
-      ctx.fillRect(0, y - S(46), w, S(92));
-    }
-    for (let gx = -2000; gx <= 2000; gx += cell) {
-      const x = X(gx);
-      ctx.fillRect(x - S(38), 0, S(76), h);
-    }
+    for (const gy of lines) ctx.fillRect(0, Y(gy) - S(46), w, S(92));
+    for (const gx of lines) ctx.fillRect(X(gx) - S(38), 0, S(76), h);
     // 渠道內的白熱核心 (細、亮)
     ctx.fillStyle = accent;
-    for (let gy = -2000; gy <= 2000; gy += cell) {
-      const y = Y(gy);
-      ctx.fillRect(0, y - S(9), w, S(18));
-    }
-    for (let gx = -2000; gx <= 2000; gx += cell) {
-      const x = X(gx);
-      ctx.fillRect(x - S(7), 0, S(14), h);
-    }
+    for (const gy of lines) ctx.fillRect(0, Y(gy) - S(9), w, S(18));
+    for (const gx of lines) ctx.fillRect(X(gx) - S(7), 0, S(14), h);
   } else if (kind === 'rifts') {
     // 深淵無盡戰：虛空裂縫與符文圓陣，裂縫邊緣帶紫光。
-    const cell = macro.cell || 1150;
-    for (let gx = -2000; gx < 2000; gx += cell) {
-      for (let gy = -2000; gy < 2000; gy += cell) {
-        const i = Math.round(gx / cell);
-        const j = Math.round(gy / cell);
-        const r = hash(i, j, seed + 31);
-        if (r < 0.55) {
-          const cx = X(gx + cell * 0.5);
-          const cy = Y(gy + cell * 0.5);
-          const a = r * Math.PI * 2;
-          const len = S(cell * (0.34 + r * 0.3));
-          ctx.strokeStyle = base;
-          ctx.lineWidth = Math.max(2, S(46));
-          ctx.beginPath();
-          ctx.moveTo(cx - Math.cos(a) * len, cy - Math.sin(a) * len);
-          ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
-          ctx.stroke();
-          ctx.strokeStyle = accent;
-          ctx.lineWidth = Math.max(1, S(6));
-          ctx.beginPath();
-          ctx.moveTo(cx - Math.cos(a) * len, cy - Math.sin(a) * len);
-          ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
-          ctx.stroke();
-        }
-        if (r > 0.86) {
-          const cx = X(gx + cell * 0.5);
-          const cy = Y(gy + cell * 0.5);
-          ctx.strokeStyle = accent;
-          ctx.lineWidth = Math.max(1, S(5));
-          ctx.beginPath();
-          ctx.arc(cx, cy, S(cell * 0.3), 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(cx, cy, S(cell * 0.22), 0, Math.PI * 2);
-          ctx.stroke();
-        }
+    eachCell((gx, gy, i, j) => {
+      const r = hash(i, j, seed + 31);
+      if (r < 0.55) {
+        const cx = X(gx + cell * 0.5);
+        const cy = Y(gy + cell * 0.5);
+        const a = r * Math.PI * 2;
+        const len = S(cell * (0.34 + r * 0.3));
+        ctx.strokeStyle = base;
+        ctx.lineWidth = Math.max(2, S(46));
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(a) * len, cy - Math.sin(a) * len);
+        ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+        ctx.stroke();
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = Math.max(1, S(6));
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(a) * len, cy - Math.sin(a) * len);
+        ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+        ctx.stroke();
       }
-    }
+      if (r > 0.86) {
+        const cx = X(gx + cell * 0.5);
+        const cy = Y(gy + cell * 0.5);
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = Math.max(1, S(5));
+        ctx.beginPath();
+        ctx.arc(cx, cy, S(cell * 0.3), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, S(cell * 0.22), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
   }
   // kind === 'none' → 不畫 (保持原樣)
 }
 
-// 每幀貼上宏觀結構層。整層只有一次 drawImage。
+// 每幀把地形磚貼滿畫面：視野跨過幾塊磚就貼幾次（視野比磚小，最多 4 次 drawImage）
 export function drawMacro(ctx, camera, level, vw, vh) {
   const layer = getMacroLayer(level);
   if (!layer.canvas) return;
-  const b = layer.b;
-  // 相機（世界座標）→ 來源矩形（縮尺畫布座標）
-  const sx = (camera.x - b.minX) / SCALE;
-  const sy = (camera.y - b.minY) / SCALE;
-  const sw = vw / SCALE;
-  const sh = vh / SCALE;
-  // 全部在世界外就跳過
-  if (sx > layer.w || sy > layer.h || sx + sw < 0 || sy + sh < 0) return;
-  ctx.drawImage(layer.canvas, sx, sy, sw, sh, 0, 0, vw, vh);
+  const P = layer.P;
+  const k = layer.w / P;                     // 世界 → 磚畫布的縮尺（= 1/SCALE，取整後的精確值）
+  const tx0 = Math.floor(camera.x / P);
+  const ty0 = Math.floor(camera.y / P);
+  const tx1 = Math.floor((camera.x + vw) / P);
+  const ty1 = Math.floor((camera.y + vh) / P);
+  for (let tx = tx0; tx <= tx1; tx++) {
+    for (let ty = ty0; ty <= ty1; ty++) {
+      // 這塊磚與視野的交集（世界座標）
+      const wx0 = Math.max(camera.x, tx * P);
+      const wy0 = Math.max(camera.y, ty * P);
+      const wx1 = Math.min(camera.x + vw, (tx + 1) * P);
+      const wy1 = Math.min(camera.y + vh, (ty + 1) * P);
+      if (wx1 <= wx0 || wy1 <= wy0) continue;
+      ctx.drawImage(layer.canvas,
+        (wx0 - tx * P) * k, (wy0 - ty * P) * k, (wx1 - wx0) * k, (wy1 - wy0) * k,
+        wx0 - camera.x, wy0 - camera.y, wx1 - wx0, wy1 - wy0);
+    }
+  }
 }
 
 // ── 大型地標 ────────────────────────────────────────────────
@@ -567,7 +568,8 @@ export function drawLandmarks(ctx, camera, level, vw, vh) {
       const wy = cy * cell + hash(cx, cy, seed + 104) * (cell - 400) + 200;
       // 避開世界原點附近 (出生點 / 核心)
       if (Math.abs(wx) < 520 && Math.abs(wy) < 520) continue;
-      if (wx < -2000 || wx > 2000 || wy < -2000 || wy > 2000) continue;
+      const wb = worldBounds();   // 無限地圖：±Infinity，不限範圍
+      if (wx < wb.minX || wx > wb.maxX || wy < wb.minY || wy > wb.maxY) continue;
 
       const sx = wx - camera.x;
       const sy = wy - camera.y;

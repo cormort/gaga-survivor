@@ -1,6 +1,6 @@
 // 敵方投射物實體 (遠程怪酸液彈、Boss 散彈幕等)
 
-import { GAME_CONFIG } from '../config.js';
+import { worldBounds } from '../config.js';
 
 // 酸液彈光暈烘焙：原本每顆每幀都設 shadowBlur = 10 再填圓。陰影模糊是 Canvas2D
 // 最貴的操作之一（活躍彈上限 150 = 每幀 150 次），但彈體是固定形狀、顏色只有少數
@@ -73,8 +73,8 @@ export class EnemyProjectile {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
 
-    // 超出世界邊界則銷毀
-    const bounds = GAME_CONFIG.WORLD_BOUNDS;
+    // 超出世界邊界則銷毀（無限地圖時邊界是 ±Infinity，改由 main.js 依「離玩家的距離」回收）
+    const bounds = worldBounds();
     if (this.x < bounds.minX - 50 || this.x > bounds.maxX + 50 ||
         this.y < bounds.minY - 50 || this.y > bounds.maxY + 50) {
       this.isDead = true;

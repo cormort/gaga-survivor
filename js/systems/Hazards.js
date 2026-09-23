@@ -8,7 +8,7 @@
 // 呼叫端：main.js 以 hazards.updateHazards(this, dt) 這種形式呼叫；
 // 外部（例如 WeaponManager 的爆炸波及木箱）則走 Game 上的同名薄包裝。
 
-import { GAME_CONFIG, FX } from '../config.js';
+import { GAME_CONFIG, FX, worldBounds, isWorldBounded } from '../config.js';
 import { LEVELS } from '../levels.js';
 import { DropItem, DestructibleCrate } from '../entities/DropItem.js';
 import { JEWEL_DROP, rollJewel } from '../jewels.js';
@@ -23,31 +23,51 @@ function hexToRgba(hex, a) {
 // 會改變移動速度的地形 (玩家與敵人一視同仁) → 預設倍率
 const SPEED_ZONES = { tar: 0.55, gale: 1.45 };
 
+// 無限地圖的場景物件（油桶／車輛、木箱）：沒有固定的世界範圍可以撒，改成撒在玩家周圍的環帶，
+// 離太遠就回收、數量不足就在畫面外補 —— 場上數量固定，密度與原本 4000×4000 的地圖相當
+const SCENERY_RING_MAX = 2000;   // 環帶外徑
+const SCENERY_FAR = 2600;        // 超過就回收
+const SCENERY_OFFSCREEN = 700;   // 遊戲中補充時的內徑（畫面外）
+const EXPLODABLE_COUNT = 14;
+
+function ringSpot(game, minD) {
+  const p = game.player || { x: 0, y: 0 };
+  const a = Math.random() * Math.PI * 2;
+  // 面積均勻：半徑取 sqrt 分佈
+  const r = Math.sqrt(minD * minD + Math.random() * (SCENERY_RING_MAX * SCENERY_RING_MAX - minD * minD));
+  return { x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r };
+}
+
 export function initExplodableProps(game) {
   game.explodableProps = [];
-  const bounds = GAME_CONFIG.WORLD_BOUNDS;
-  const count = 14;
+  for (let i = 0; i < EXPLODABLE_COUNT; i++) spawnExplodableProp(game, 320);
+}
+
+function spawnExplodableProp(game, minD) {
   const types = ['tank', 'car', 'hazard'];
-  for (let i = 0; i < count; i++) {
-    let px = 0, py = 0;
+  let px = 0, py = 0;
+  if (!isWorldBounded()) {
+    ({ x: px, y: py } = ringSpot(game, minD));
+  } else {
+    const bounds = GAME_CONFIG.WORLD_BOUNDS;
     let tries = 0;
     do {
       px = bounds.minX + 250 + Math.random() * (bounds.maxX - bounds.minX - 500);
       py = bounds.minY + 250 + Math.random() * (bounds.maxY - bounds.minY - 500);
       tries++;
-    } while (Math.hypot(px, py) < 320 && tries < 20);
-
-    const type = types[Math.floor(Math.random() * types.length)];
-    game.explodableProps.push({
-      x: px,
-      y: py,
-      hp: 45,
-      maxHp: 45,
-      radius: type === 'car' ? 32 : 24,
-      type: type,
-      flashTimer: 0,
-    });
+    } while (Math.hypot(px, py) < minD && tries < 20);
   }
+
+  const type = types[Math.floor(Math.random() * types.length)];
+  game.explodableProps.push({
+    x: px,
+    y: py,
+    hp: 45,
+    maxHp: 45,
+    radius: type === 'car' ? 32 : 24,
+    type: type,
+    flashTimer: 0,
+  });
 }
 
 export function triggerPropExplosion(game, prop) {
@@ -170,18 +190,38 @@ export function initDestructibles(game) {
   }
 }
 
-export function spawnSingleDestructible(game) {
-  const bounds = GAME_CONFIG.WORLD_BOUNDS;
+// minD：離玩家至少多遠（開局 200；無限地圖遊戲中補充時傳畫面外的距離）
+export function spawnSingleDestructible(game, minD = 200) {
   let px = 0, py = 0;
-  let tries = 0;
-  do {
-    px = bounds.minX + 160 + Math.random() * (bounds.maxX - bounds.minX - 320);
-    py = bounds.minY + 160 + Math.random() * (bounds.maxY - bounds.minY - 320);
-    tries++;
-  } while (game.player && Math.hypot(px - game.player.x, py - game.player.y) < 200 && tries < 25);
+  if (!isWorldBounded()) {
+    ({ x: px, y: py } = ringSpot(game, minD));
+  } else {
+    const bounds = GAME_CONFIG.WORLD_BOUNDS;
+    let tries = 0;
+    do {
+      px = bounds.minX + 160 + Math.random() * (bounds.maxX - bounds.minX - 320);
+      py = bounds.minY + 160 + Math.random() * (bounds.maxY - bounds.minY - 320);
+      tries++;
+    } while (game.player && Math.hypot(px - game.player.x, py - game.player.y) < minD && tries < 25);
+  }
 
   const kind = Math.random() < 0.65 ? 'crate' : 'barrel';
   game.destructibles.push(new DestructibleCrate(px, py, kind));
+}
+
+// 無限地圖：回收離玩家太遠的場景物件，並在畫面外補回可引爆物（木箱由 main.js 的補充邏輯補）
+export function recycleScenery(game) {
+  if (isWorldBounded()) return;
+  const p = game.player;
+  const far2 = SCENERY_FAR * SCENERY_FAR;
+  const near = (o) => (o.x - p.x) * (o.x - p.x) + (o.y - p.y) * (o.y - p.y) <= far2;
+  game.explodableProps = game.explodableProps.filter(near);
+  game.destructibles = game.destructibles.filter(near);
+  while (game.explodableProps.length < EXPLODABLE_COUNT) spawnExplodableProp(game, SCENERY_OFFSCREEN);
+}
+
+export function sceneryRespawnDist() {
+  return isWorldBounded() ? 200 : SCENERY_OFFSCREEN;
 }
 
 export function dropCrateLoot(game, x, y, kind = 'crate') {
@@ -338,7 +378,7 @@ function applySpeedZones(game) {
 export function spawnHazard(game, mech) {
   const angle = Math.random() * Math.PI * 2;
   const dist = 260 + Math.random() * 170;
-  const b = GAME_CONFIG.WORLD_BOUNDS;
+  const b = worldBounds();
   const m = 60;
   const x = Math.max(b.minX + m, Math.min(b.maxX - m, game.player.x + Math.cos(angle) * dist));
   const y = Math.max(b.minY + m, Math.min(b.maxY - m, game.player.y + Math.sin(angle) * dist));

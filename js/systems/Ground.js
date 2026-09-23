@@ -7,7 +7,7 @@
 //
 // 快取全部留在實例上（地表磚、暗角畫布、底色漸層），換局沿用、不重烘。
 
-import { GAME_CONFIG, FX } from '../config.js';
+import { GAME_CONFIG, FX, isWorldBounded } from '../config.js';
 import { LEVELS } from '../levels.js';
 import { drawTerrain } from './Terrain.js';
 import { makeFbm, reliefDot, bevelRect, reliefCrack, starPoint } from './Texture.js';
@@ -135,7 +135,8 @@ export class GroundRenderer {
     }
     if (dash > 0) ctx.setLineDash([]);
 
-    // 地圖邊界警示線 (發光紅牆)
+    // 地圖邊界警示線 (發光紅牆)：只有有邊界的地圖（守塔）才畫
+    if (!isWorldBounded()) { ctx.restore(); return; }
     const bounds = GAME_CONFIG.WORLD_BOUNDS;
     const bMinX = bounds.minX - camera.x;
     const bMaxX = bounds.maxX - camera.x;

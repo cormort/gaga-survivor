@@ -1,6 +1,6 @@
 // 武器投射物與攻擊實體 (苦無、旋轉輪盤、火箭爆破、地面积火、落雷、彈跳足球)
 
-import { GAME_CONFIG, CHARGE } from '../config.js';
+import { GAME_CONFIG, CHARGE, worldBounds } from '../config.js';
 import { drawGlow, drawStreak } from '../weapons/ProjectileFX.js';
 
 // ── 飛行光暈與拖尾 ─────────────────────────────────────────────────
@@ -363,7 +363,7 @@ export class Projectile {
 
         // 螢幕邊界反彈：先前只撞世界邊界（±2000px），球等於一路飛出畫面不再回來。
         // 改用「以玩家為中心的視野框」，球會在畫面裡來回彈（世界邊界仍是最外層保險）
-        const bounds = GAME_CONFIG.WORLD_BOUNDS;
+        const bounds = worldBounds();
         const hw = player ? (window.innerWidth || 1280) / 2 - this.radius : Infinity;
         const hh = player ? (window.innerHeight || 720) / 2 - this.radius : Infinity;
         const minX = Math.max(bounds.minX, player ? player.x - hw : -Infinity);

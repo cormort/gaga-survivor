@@ -3,7 +3,7 @@
 
 import { Enemy } from '../entities/Enemy.js';
 import { LEVELS, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL, endlessBossInterval } from '../levels.js';
-import { GAME_CONFIG } from '../config.js';
+import { worldBounds } from '../config.js';
 import { ELITE_AFFIXES } from '../config.js';
 import { hasSprite } from '../sprites.js';
 
@@ -147,7 +147,7 @@ export class Spawner {
   }
 
   getSpawnPosition(player, distance) {
-    const b = GAME_CONFIG.WORLD_BOUNDS;
+    const b = worldBounds();   // 無限地圖時是 ±Infinity，夾範圍自動失效
     const margin = 60;
     // 生成點要夾回世界邊界內 (不然怪會生在紅牆外走不進來)，但直接夾會讓貼著角落的
     // 玩家旁邊瞬間冒出怪 —— 改成換角度重抽，抽不到就取這幾次裡離玩家最遠的那個點。

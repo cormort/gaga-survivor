@@ -1,7 +1,7 @@
 // 傭兵 (局內 AI 幫手)：花金幣僱傭，跟隨特工自動索敵射擊；擊殺升級、會被咬死要重雇。
 // 像「會移動的砲塔」：不吃武器槽、不進升級三選一，純局內消耗金幣的戰力。
 
-import { GAME_CONFIG } from '../config.js';
+import { worldBounds } from '../config.js';
 import { sound } from '../audio.js';
 
 export const MERC = {
@@ -84,7 +84,7 @@ export class Mercenary {
     }
 
     // 地圖邊界限制
-    const b = GAME_CONFIG.WORLD_BOUNDS;
+    const b = worldBounds();
     this.x = Math.max(b.minX + 30, Math.min(b.maxX - 30, this.x));
     this.y = Math.max(b.minY + 30, Math.min(b.maxY - 30, this.y));
 

@@ -24,6 +24,17 @@ export const GAME_CONFIG = {
   EXP_GROWTH_FACTOR: 1.35,
 };
 
+// ── 這一局的世界邊界 ──
+// 生存者模式是無限地圖（參考吸血鬼倖存者）；守塔模式的基地核心在世界原點，維持 WORLD_BOUNDS。
+// 由模式資料的 boundedMap 決定、Game.start() 設定。無限地圖回傳 ±Infinity 的邊界 ——
+// 夾範圍的寫法（Math.max(min + m, …)）不用改就自動失效；會「在邊界內隨機撒點」或
+// 「用邊界切網格」的地方則要改問 isWorldBounded()（Infinity 會算出 NaN）。
+export const UNBOUNDED = { minX: -Infinity, maxX: Infinity, minY: -Infinity, maxY: Infinity };
+let activeBounds = GAME_CONFIG.WORLD_BOUNDS;
+export function worldBounds() { return activeBounds; }
+export function isWorldBounded() { return activeBounds !== UNBOUNDED; }
+export function setWorldBounded(bounded) { activeBounds = bounded ? GAME_CONFIG.WORLD_BOUNDS : UNBOUNDED; }
+
 // 武器定義
 export const WEAPONS = {
   kunai: {

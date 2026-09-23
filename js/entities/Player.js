@@ -1,6 +1,6 @@
 // 特工鴨 (Player) 實體類別 - 包含精緻特工裝扮繪製、屬性與成長邏輯
 
-import { GAME_CONFIG } from '../config.js';
+import { GAME_CONFIG, worldBounds } from '../config.js';
 import { sound } from '../audio.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
 import { CHARACTERS } from '../characters.js';
@@ -246,7 +246,7 @@ export class Player {
     }
 
     // 地圖邊界限制
-    const bounds = GAME_CONFIG.WORLD_BOUNDS;
+    const bounds = worldBounds();   // 無限地圖時 ±Infinity，不夾
     this.x = Math.max(bounds.minX, Math.min(bounds.maxX, this.x));
     this.y = Math.max(bounds.minY, Math.min(bounds.maxY, this.y));
 

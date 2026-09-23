@@ -18,6 +18,7 @@ export const MODES = {
     mercs: false,
     core: null,
     enemyTarget: 'player',
+    boundedMap: false,     // 無限地圖（守塔的核心在原點，才需要邊界）
 
     weaponMul: 1,
     goldMul: 1,
@@ -47,6 +48,7 @@ export const MODES = {
     // 不是回歸。血量是很弱的槓桿 (14,000→116s、24,000→130s，+71% 血量只換 +14 秒)，
     // 真要調難度應該動 CORE_MAX_ATTACKERS 或守塔模式的生成密度。
     core: { hp: 14000, radius: 46, x: 0, y: 0 },
+    boundedMap: true,      // 核心在世界原點：維持 4000×4000 的有邊界地圖
     enemyTarget: 'core',
 
     weaponMul: 0.6,      // 自身武器變弱 → 砲塔才是主力
