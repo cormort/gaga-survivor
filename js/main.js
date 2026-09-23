@@ -103,6 +103,8 @@ const ELITE_HITSTOP_GAP = 0.5;
 // 局內待回收裝備的上限，超出的自動分解成金幣 (原本無上限，實測 23 分鐘累積數百件)
 const PENDING_GEAR_CAP = 40;
 
+const POCKET_STACK = 2; // 口袋每格同款道具的堆疊上限
+
 // 道具自動使用的觸發條件 (c = autoUseContext())。說明文字在 config.js 的 CONSUMABLE_ITEMS[].auto
 const AUTO_USE = {
   potion:        (c) => c.hp < 0.45,
@@ -608,13 +610,15 @@ class Game {
   // 用過之後冷卻 1.5 秒，避免同款兩瓶在同一個危機裡連灌。
   updateAutoPocket(dt) {
     const p = this.player;
-    if (!p.pocketItem || save.data.settings.autoPocket === false) return;
+    if (!p.pockets.some(Boolean) || save.data.settings.autoPocket === false) return;
     this._autoPocketTimer = (this._autoPocketTimer || 0) - dt;
     if (this._autoPocketTimer > 0) return;
     this._autoPocketTimer = 0.25;
-    const rule = AUTO_USE[p.pocketItem];
-    if (rule && rule(this.autoUseContext())) {
-      this.usePocketItem();
+    const ctx = this.autoUseContext();
+    // 兩格都符合時先用第 1 格；一次只用一個，下一個等冷卻結束再判斷
+    const slot = p.pockets.findIndex((s) => s && AUTO_USE[s.id]?.(ctx));
+    if (slot >= 0) {
+      this.usePocketItem(slot);
       this._autoPocketTimer = 1.5;
     }
   }
@@ -637,18 +641,16 @@ class Game {
     return { hp: p.hp / p.maxHp, near220, near260, near400, near500, bossNear, bullets, drops: this.dropItems.length };
   }
 
-  usePocketItem() {
+  usePocketItem(slot = 0) {
     if (this.state !== 'PLAYING' || !this.player || this.player.isDead) return;
-    if (!this.player.pocketItem || this.player.pocketItemCount <= 0) return;
+    const pockets = this.player.pockets;
+    const s = pockets[slot];
+    if (!s) return;
 
-    const itemId = this.player.pocketItem;
-    this.activateConsumable(itemId);
-    this.player.pocketItemCount--;
-    if (this.player.pocketItemCount <= 0) {
-      this.player.pocketItem = null;
-      this.player.pocketItemCount = 0;
-    }
-    this.ui.updatePocketItem(this.player.pocketItem, this.player.pocketItemCount);
+    this.activateConsumable(s.id);
+    s.count--;
+    if (s.count <= 0) pockets[slot] = null;
+    this.ui.updatePockets(pockets);
   }
 
   // 拾取幸運補給箱抽獎
@@ -919,11 +921,10 @@ class Game {
     this.ui.updatePendingGear(0);
 
     // 戰術口袋與武器型態重設
-    this.player.pocketItem = null;
-    this.player.pocketItemCount = 0;
+    this.player.pockets = [null, null];
     this._autoPocketTimer = 0;
     this.player.weaponAspects = { ...(save.data.weaponAspects || {}) };
-    this.ui.updatePocketItem(null, 0);
+    this.ui.updatePockets(this.player.pockets);
 
     // ── 新系統重設 ──
     this.blessings = [];
@@ -2361,22 +2362,24 @@ class Game {
       if (!cDef) return;
       sound.playGem();
 
-      // 如果口袋為空，或放同款道具且堆疊未滿 (上限 2)
-      if (!this.player.pocketItem) {
-        this.player.pocketItem = item.subType;
-        this.player.pocketItemCount = 1;
-        this.ui.updatePocketItem(item.subType, 1);
+      // 先疊到同款的格子，再放進空格；兩格都被別款占滿才即拾即用
+      const pockets = this.player.pockets;
+      const same = pockets.findIndex((s) => s && s.id === item.subType && s.count < POCKET_STACK);
+      const empty = pockets.indexOf(null);
+      if (same >= 0) {
+        pockets[same].count++;
+        this.ui.updatePockets(pockets);
+        this.ui.say(`道具【${cDef.name}】堆疊 (${pockets[same].count}/${POCKET_STACK})！`, cDef.color, 2.0);
+      } else if (empty >= 0) {
+        pockets[empty] = { id: item.subType, count: 1 };
+        this.ui.updatePockets(pockets);
+        const key = empty === 0 ? 'E' : 'F';
         this.ui.say(save.data.settings.autoPocket === false
-          ? `獲得道具【${cDef.name}】！[E] 鍵使用`
+          ? `獲得道具【${cDef.name}】！[${key}] 鍵使用`
           : `獲得道具【${cDef.name}】！自動使用：${cDef.auto}`, cDef.color, 2.2);
-      } else if (this.player.pocketItem === item.subType && this.player.pocketItemCount < 2) {
-        this.player.pocketItemCount++;
-        this.ui.updatePocketItem(item.subType, this.player.pocketItemCount);
-        this.ui.say(`道具【${cDef.name}】堆疊 (${this.player.pocketItemCount}/2)！`, cDef.color, 2.0);
       } else {
-        // 口袋已滿或裝有不同道具：即拾即用 (直接觸發效果，絕不浪費)
         this.activateConsumable(item.subType);
-        this.ui.say(`拾獲並立即使用【${cDef.name}】！`, cDef.color, 2.0);
+        this.ui.say(`口袋已滿，拾獲並立即使用【${cDef.name}】！`, cDef.color, 2.0);
       }
     }
   }

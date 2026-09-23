@@ -36,30 +36,31 @@ const out = await page.evaluate(async () => {
   g.ui.startScreen.classList.add('hidden');
   g.start();
   const p = g.player;
-  const give = (id, n = 1) => { p.pocketItem = id; p.pocketItemCount = n; g._autoPocketTimer = 0; };
+  const give = (id, n = 1) => { p.pockets = [{ id, count: n }, null]; g._autoPocketTimer = 0; };
+  const slot0 = () => p.pockets[0]?.id ?? null;
   const step = (n = 1) => { for (let i = 0; i < n; i++) g.update(1 / 60); };
   const clear = () => { g.enemies = []; g.enemyProjectiles = []; g.dropItems = []; p.invulnerableTimer = 999; };
 
   clear(); give('potion'); p.hp = p.maxHp * 0.6; step(3);
-  ok('恢復藥水：生命 60% 不會自動喝', p.pocketItem === 'potion', `${p.pocketItem} hp ${Math.round(p.hp)}`);
+  ok('恢復藥水：生命 60% 不會自動喝', slot0() === 'potion', `${slot0()} hp ${Math.round(p.hp)}`);
   p.hp = p.maxHp * 0.4; step(20); // 檢查間隔 0.25 秒
-  ok('恢復藥水：生命 40% 自動喝', p.pocketItem === null && p.hp > p.maxHp * 0.4, `${p.pocketItem} hp ${Math.round(p.hp)}/${p.maxHp}`);
+  ok('恢復藥水：生命 40% 自動喝', slot0() === null && p.hp > p.maxHp * 0.4, `${slot0()} hp ${Math.round(p.hp)}/${p.maxHp}`);
 
   clear(); give('potion', 2); p.hp = p.maxHp * 0.2; step(3);
-  ok('兩瓶藥水不會同一刻連灌 (1.5 秒冷卻)', p.pocketItemCount === 1, p.pocketItemCount);
+  ok('兩瓶藥水不會同一刻連灌 (1.5 秒冷卻)', p.pockets[0]?.count === 1, p.pockets[0]?.count);
 
   save.data.settings.autoPocket = false;
   clear(); give('potion'); p.hp = p.maxHp * 0.2; step(30);
-  ok('關閉自動使用後不會自動喝', p.pocketItem === 'potion', p.pocketItem);
+  ok('關閉自動使用後不會自動喝', slot0() === 'potion', slot0());
   save.data.settings.autoPocket = true;
 
   clear(); give('holy_water'); p.hp = p.maxHp;
   for (let i = 0; i < 5; i++) g.enemies.push(new Enemy('walker', p.x + 100, p.y + i * 10, {}));
   step(20);
-  ok('聖水：身邊 5 隻、滿血不會用', p.pocketItem === 'holy_water', p.pocketItem);
+  ok('聖水：身邊 5 隻、滿血不會用', slot0() === 'holy_water', slot0());
   for (let i = 0; i < 10; i++) g.enemies.push(new Enemy('walker', p.x - 100, p.y + i * 10, {}));
   step(20);
-  ok('聖水：身邊 15 隻自動使用', p.pocketItem === null, p.pocketItem);
+  ok('聖水：身邊 15 隻自動使用', slot0() === null, slot0());
 
   // 聖水傷害隨時間成長：8 分鐘時單隻吃到的傷害 > 基礎 260
   clear(); g.gameTime = 480;
@@ -71,11 +72,37 @@ const out = await page.evaluate(async () => {
   ok('魔法門票 8 分鐘金幣 > 基礎 100', g.gold - gold0 > 250, g.gold - gold0);
 
   clear(); give('luck_potion'); step(20);
-  ok('幸運藥水：沒有怪時不浪費', p.pocketItem === 'luck_potion', p.pocketItem);
+  ok('幸運藥水：沒有怪時不浪費', slot0() === 'luck_potion', slot0());
 
   // HUD 顯示 AUTO
-  give('potion'); g.ui.updatePocketItem('potion', 1);
-  ok('口袋顯示 AUTO 標記', document.getElementById('pocket-slot').classList.contains('auto'), document.getElementById('pocket-slot').className);
+  give('potion'); g.ui.updatePockets(p.pockets);
+  const el0 = document.querySelector('.pocket-slot[data-slot="0"]');
+  ok('口袋顯示 AUTO 標記', el0.classList.contains('auto'), el0.className);
+
+  // ── 兩格口袋 ──
+  const { DropItem } = await imp('js/entities/DropItem.js');
+  const pick = (type) => { const d = new DropItem(p.x, p.y, type); g.handleItemPickup(d); };
+  save.data.settings.autoPocket = false;
+  clear(); p.pockets = [null, null];
+  pick('POTION'); pick('HOLY_WATER');
+  ok('兩格各放不同道具', p.pockets[0]?.id === 'potion' && p.pockets[1]?.id === 'holy_water', JSON.stringify(p.pockets));
+  pick('HOLY_WATER');
+  ok('同款疊到自己那一格', p.pockets[1]?.count === 2 && p.pockets[0]?.count === 1, JSON.stringify(p.pockets));
+  p.hp = p.maxHp * 0.5; const hpBefore = p.hp;
+  pick('ELIXIR');
+  ok('兩格都被占滿時新道具即拾即用', p.hp === p.maxHp && hpBefore < p.maxHp && p.pockets.every((s) => s && s.id !== 'elixir'), `${hpBefore} → ${p.hp}`);
+  const n1 = p.pockets[1].count;
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' }));
+  ok('F 使用第 2 格、第 1 格不動', p.pockets[1]?.count === n1 - 1 && p.pockets[0]?.count === 1, JSON.stringify(p.pockets));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }));
+  ok('E 用完第 1 格後第 2 格不往前補位', p.pockets[0] === null && p.pockets[1]?.id === 'holy_water', JSON.stringify(p.pockets));
+  document.querySelector('.pocket-slot[data-slot="1"]').click();
+  ok('點擊第 2 格使用', p.pockets[1] === null, JSON.stringify(p.pockets));
+  save.data.settings.autoPocket = true;
+
+  clear(); p.pockets = [{ id: 'luck_potion', count: 1 }, { id: 'potion', count: 1 }]; g._autoPocketTimer = 0;
+  p.hp = p.maxHp * 0.3; step(20);
+  ok('自動使用會檢查第 2 格 (第 1 格條件不成立)', p.pockets[1] === null && p.pockets[0]?.id === 'luck_potion', JSON.stringify(p.pockets));
   return r;
 });
 

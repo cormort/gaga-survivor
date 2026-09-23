@@ -77,10 +77,18 @@
         </div>
         <!-- 戰術口袋槽 (惡魔城消費道具) -->
         <div class="slot-group">
-          <span class="slot-label">道具 [E]</span>
-          <div id="pocket-slot" class="pocket-slot empty" title="戰術口袋 (按 E 或點擊使用)">
-            <span id="pocket-item-icon" class="pocket-icon">🎒</span>
-            <span id="pocket-item-badge" class="pocket-badge hidden">0</span>
+          <span class="slot-label">道具 [E][F]</span>
+          <div class="slots-container">
+            <div class="pocket-slot empty" data-slot="0" title="戰術口袋 1 (按 E 或點擊使用)">
+              <span class="pocket-icon">🎒</span>
+              <span class="pocket-key">E</span>
+              <span class="pocket-badge hidden">0</span>
+            </div>
+            <div class="pocket-slot empty" data-slot="1" title="戰術口袋 2 (按 F 或點擊使用)">
+              <span class="pocket-icon">🎒</span>
+              <span class="pocket-key">F</span>
+              <span class="pocket-badge hidden">0</span>
+            </div>
           </div>
         </div>
       </div>
@@ -142,10 +150,15 @@
         <span class="action-key">SPACE</span>
         <div id="dash-cooldown-overlay"></div>
       </button>
-      <button id="btn-pocket" class="action-btn pocket-btn hidden" title="使用戰術道具 (E)">
-        <span id="action-pocket-icon" class="action-icon">🎒</span>
+      <button class="action-btn pocket-btn hidden" data-slot="0" title="使用戰術道具 1 (E)">
+        <span class="action-icon">🎒</span>
         <span class="action-key">E</span>
-        <span id="action-pocket-badge" class="action-badge hidden">0</span>
+        <span class="action-badge hidden">0</span>
+      </button>
+      <button class="action-btn pocket-btn hidden" data-slot="1" title="使用戰術道具 2 (F)">
+        <span class="action-icon">🎒</span>
+        <span class="action-key">F</span>
+        <span class="action-badge hidden">0</span>
       </button>
       <button id="btn-hire" class="action-btn hire-btn" title="僱傭傭兵 (G)">
         <span class="action-icon">💂</span>

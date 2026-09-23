@@ -2745,6 +2745,16 @@ body, html {
   line-height: 11px;
 }
 
+/* 格子左上角的按鍵提示 (E / F)，兩格並排時才分得出哪格是哪個鍵 */
+.pocket-key {
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  font-size: 8px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.55);
+}
+
 .pocket-badge {
   position: absolute;
   top: -4px;
@@ -2761,6 +2771,7 @@ body, html {
 
 /* 行動端戰術道具按鈕 */
 .action-btn.pocket-btn {
+  overflow: visible; /* .action-btn 的 hidden 是給翻滾冷卻遮罩用的，會把角落的堆疊數字切掉 */
   border-color: rgba(0, 245, 155, 0.65);
   box-shadow: 0 4px 18px rgba(0, 245, 155, 0.35);
 }

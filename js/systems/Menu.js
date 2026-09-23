@@ -236,12 +236,14 @@ export function bindEvents(game) {
     if (e.key === 'b' || e.key === 'B') buildFacility(game, game.selectedFacility || 'turret');
     if (e.key === 't' || e.key === 'T') tryUpgradeNearestTurret(game);
     if (e.key === 'g' || e.key === 'G') hireMercenary(game);
-    if (e.key === 'e' || e.key === 'E' || e.key === 'f' || e.key === 'F') game.usePocketItem();
+    if (e.key === 'e' || e.key === 'E') game.usePocketItem(0);
+    if (e.key === 'f' || e.key === 'F') game.usePocketItem(1);
   });
 
-  // 戰術口袋道具點擊使用 (HUD 口袋槽 / 行動端快捷鍵)
-  game.ui.pocketSlot?.addEventListener('click', () => game.usePocketItem());
-  game.ui.btnPocket?.addEventListener('click', () => game.usePocketItem());
+  // 戰術口袋道具點擊使用 (HUD 兩格口袋 / 行動端兩顆快捷鍵，都以 data-slot 分辨)
+  document.querySelectorAll('.pocket-slot[data-slot], .pocket-btn[data-slot]').forEach((el) => {
+    el.addEventListener('click', () => game.usePocketItem(Number(el.dataset.slot)));
+  });
   // 設施列各按鈕點擊
   for (const [type, item] of Object.entries(game.ui.facilityButtons || {})) {
     if (item && item.btn) {

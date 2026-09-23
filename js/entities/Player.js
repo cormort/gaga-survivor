@@ -93,8 +93,9 @@ export class Player {
     this.dashGhosts = [];
 
     // 戰術口袋 (惡魔城風格消費道具)
-    this.pocketItem = null;      // 例如 'potion', 'stopwatch'
-    this.pocketItemCount = 0;   // 堆疊上限 2
+    // 兩格，各放一種道具 { id, count } (同款堆疊上限 POCKET_STACK)；空格為 null。
+    // 用完不往前補位：E 永遠是第 1 格、F 永遠是第 2 格
+    this.pockets = [null, null];
     this.atkPotionTimer = 0;
     this.shieldPotionTimer = 0;
     this.luckPotionTimer = 0;

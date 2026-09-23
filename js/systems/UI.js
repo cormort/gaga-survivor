@@ -94,8 +94,6 @@ export class UIManager {
     this._objectiveText = null;
     this.weaponSlots = document.getElementById('weapon-slots');
     this.passiveSlots = document.getElementById('passive-slots');
-    this.pocketSlot = document.getElementById('pocket-slot');
-    this.btnPocket = document.getElementById('btn-pocket');
 
     this.bossHud = document.getElementById('boss-hud');
     this.bossHpFill = document.getElementById('boss-hp-fill');
@@ -1293,47 +1291,33 @@ export class UIManager {
     }
   }
 
-  updatePocketItem(itemId, count) {
+  // 兩格口袋：HUD 槽與行動端按鈕都用 data-slot 對應 player.pockets 的索引
+  updatePockets(pockets) {
     this.peek(this.skillsTray);
-    const pocketSlot = document.getElementById('pocket-slot');
-    const pocketIcon = document.getElementById('pocket-item-icon');
-    const pocketBadge = document.getElementById('pocket-item-badge');
-    const actionBtn = document.getElementById('btn-pocket');
-    const actionIcon = document.getElementById('action-pocket-icon');
-    const actionBadge = document.getElementById('action-pocket-badge');
-
-    if (!itemId || count <= 0) {
-      if (pocketSlot) {
-        pocketSlot.className = 'pocket-slot empty';
-        pocketSlot.title = '戰術口袋 (目前為空)';
+    const auto = save.data.settings.autoPocket !== false;
+    pockets.forEach((s, i) => {
+      const key = i === 0 ? 'E' : 'F';
+      const conf = s && CONSUMABLE_ITEMS[s.id];
+      const slotEl = document.querySelector(`.pocket-slot[data-slot="${i}"]`);
+      const btnEl = document.querySelector(`.pocket-btn[data-slot="${i}"]`);
+      if (slotEl) {
+        slotEl.className = conf ? `pocket-slot filled${auto ? ' auto' : ''}` : 'pocket-slot empty';
+        slotEl.title = conf
+          ? `【${conf.name}】${conf.desc}${auto ? `\n自動使用：${conf.auto}` : ''} (按 ${key} 或點擊使用)`
+          : `戰術口袋 ${i + 1} (目前為空)`;
+        slotEl.querySelector('.pocket-icon').textContent = conf ? conf.icon : '🎒';
+        const badge = slotEl.querySelector('.pocket-badge');
+        badge.textContent = s ? s.count : 0;
+        badge.classList.toggle('hidden', !s || s.count <= 1);
       }
-      if (pocketIcon) pocketIcon.textContent = '🎒';
-      if (pocketBadge) pocketBadge.classList.add('hidden');
-      if (actionBtn) actionBtn.classList.add('hidden');
-      return;
-    }
-
-    const conf = CONSUMABLE_ITEMS[itemId];
-    if (!conf) return;
-
-    if (pocketSlot) {
-      const auto = save.data.settings.autoPocket !== false;
-      pocketSlot.className = `pocket-slot filled${auto ? ' auto' : ''}`;
-      pocketSlot.title = `【${conf.name}】${conf.desc}${auto ? `\n自動使用：${conf.auto}` : ''} (按 E 或點擊使用)`;
-    }
-    if (pocketIcon) pocketIcon.textContent = conf.icon;
-    if (pocketBadge) {
-      pocketBadge.textContent = count;
-      pocketBadge.classList.toggle('hidden', count <= 1);
-    }
-    if (actionBtn) {
-      actionBtn.classList.remove('hidden');
-      if (actionIcon) actionIcon.textContent = conf.icon;
-      if (actionBadge) {
-        actionBadge.textContent = count;
-        actionBadge.classList.toggle('hidden', count <= 1);
+      if (btnEl) {
+        btnEl.classList.toggle('hidden', !conf);
+        if (conf) btnEl.querySelector('.action-icon').textContent = conf.icon;
+        const badge = btnEl.querySelector('.action-badge');
+        badge.textContent = s ? s.count : 0;
+        badge.classList.toggle('hidden', !s || s.count <= 1);
       }
-    }
+    });
   }
 
   updateBossHUD(boss) {
