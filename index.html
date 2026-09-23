@@ -335,18 +335,24 @@
         <div class="menu-meta">
           <span id="dna-chip" class="dna-chip">🧬 0</span>
           <span id="gold-chip" class="dna-chip gold-chip">🪙 0</span>
-          <button id="btn-shop" class="game-btn talent-btn shop-btn">🛒 特工黑市</button>
-          <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
-          <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
-          <button id="btn-achievements" class="game-btn talent-btn">🎯 特工成就</button>
-          <button id="btn-recipe" class="game-btn talent-btn">✨ 超武配方</button>
-          <button id="btn-aspects" class="game-btn talent-btn">⚔️ 兵器型態</button>
-          <button id="btn-daily" class="game-btn talent-btn">📅 每日挑戰</button>
         </div>
-        <div class="audio-row">
-          <label class="vol-item">🔊<input id="sfx-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音效音量"></label>
-          <label class="vol-item">🎵<input id="bgm-vol" class="vol-slider" type="range" min="0" max="100" value="80" aria-label="音樂音量"></label>
-        </div>
+        <!-- 次要入口收進「養成基地」：主畫面只留模式／特工／關卡／出擊，新玩家不會被九顆按鈕淹沒 -->
+        <details id="base-hub" class="base-hub">
+          <summary class="game-btn talent-btn base-hub-toggle">🏠 養成基地</summary>
+          <div class="menu-meta base-hub-grid">
+            <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
+            <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
+            <button id="btn-shop" class="game-btn talent-btn shop-btn">🛒 特工黑市</button>
+            <button id="btn-aspects" class="game-btn talent-btn">⚔️ 兵器型態</button>
+            <button id="btn-recipe" class="game-btn talent-btn">✨ 超武配方</button>
+            <button id="btn-achievements" class="game-btn talent-btn">🎯 特工成就</button>
+            <button id="btn-daily" class="game-btn talent-btn">📅 每日挑戰</button>
+          </div>
+          <div class="audio-row">
+            <label class="vol-item">🔊<input id="sfx-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音效音量"></label>
+            <label class="vol-item">🎵<input id="bgm-vol" class="vol-slider" type="range" min="0" max="100" value="80" aria-label="音樂音量"></label>
+          </div>
+        </details>
         <div class="start-actions">
           <div class="difficulty-row">
             <label class="difficulty-label" for="difficulty-select">作戰難度</label>

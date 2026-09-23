@@ -1914,6 +1914,24 @@ body, html {
   justify-content: center;
 }
 
+/* ===== 養成基地：次要入口的折疊面板 (原生 <details>，不需 JS) ===== */
+.base-hub {
+  margin: 0 0 10px;
+}
+.base-hub-toggle {
+  display: block;
+  width: fit-content;
+  list-style: none;
+  cursor: pointer;
+  margin: 0 auto 8px;
+}
+.base-hub-toggle::-webkit-details-marker { display: none; }
+.base-hub-toggle::after { content: ' ▾'; }
+.base-hub[open] > .base-hub-toggle::after { content: ' ▴'; }
+.base-hub-grid {
+  gap: 8px;
+}
+
 /* ===== 作戰模式選擇 (生存者 / 守塔) ===== */
 .mode-select {
   display: grid;
