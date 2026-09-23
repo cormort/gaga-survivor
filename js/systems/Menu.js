@@ -10,7 +10,7 @@
 import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
 import { DIFFICULTIES, LEVELS, LEVEL_ORDER, getDailyChallenge } from '../levels.js';
 import { MODES, MODE_ORDER, getMode } from '../modes.js';
-import { MAX_BOOSTER_STACK, MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXPAND_COST, STASH_EXPANSION_STEP, shopItemLevel } from '../shop.js';
+import { MAX_BOOSTER_STACK, MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXPANSION_STEP, stashExpandCost, shopItemLevel } from '../shop.js';
 import { itemName } from '../items.js';
 import { save } from '../save.js';
 import { sound } from '../audio.js';
@@ -73,7 +73,8 @@ export function bindEvents(game) {
           game.ui.sayStatus('倉庫已擴建至最大容量！', true);
           return;
         }
-        buy(currency, STASH_EXPAND_COST.costGold, STASH_EXPAND_COST.costDna, () => {
+        const cost = stashExpandCost(save.getStashCap());
+        buy(currency, cost.costGold, cost.costDna, () => {
           save.expandStash(STASH_EXPANSION_STEP, MAX_STASH_CAP);
           game.ui.sayStatus(`特工倉庫擴充成功！當前容量上限：${save.getStashCap()}`);
         });

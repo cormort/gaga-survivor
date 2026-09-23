@@ -880,7 +880,7 @@ const results = await page.evaluate(async () => {
       // 新武器不被既有武器支配（≥ 既有中位數）、也不做壞平衡（≤ 既有最大值的 1.6 倍）。
       // 1.6 倍的由來：既有八把的 DPS 已經橫跨 2.9~31.4（11 倍），新武器只要落在那個區間
       // 的合理上緣即可；1.6 倍留給「新武器定位偏慢但單發重」的設計空間，又擋得住明顯超模。
-      const NEW_IDS = ['boomerang', 'railgun'];
+      const NEW_IDS = ['boomerang', 'railgun', 'frost_nova', 'shotgun'];
       const refIds = bases.filter((id) => !NEW_IDS.includes(id));
       const refDps = refIds.map((id) => dps(WEAPONS[id])).sort((a, b) => a - b);
       const median = refDps.length === 0 ? 0
@@ -899,7 +899,7 @@ const results = await page.evaluate(async () => {
         if (!(d >= median)) bad.push(`${id} ${d.toFixed(1)} < 既有中位數 ${median.toFixed(1)}（被支配）`);
         if (!(d <= maxRef * 1.6)) bad.push(`${id} ${d.toFixed(1)} > 既有最大值 ${maxRef.toFixed(1)} 的 1.6 倍（超模）`);
       }
-      ok(`D15 兩把新武器的粗算 DPS ≥ 既有 ${refIds.length} 把的中位數（不被支配）、且 ≤ 既有最大值的 1.6 倍`,
+      ok(`D15 ${NEW_IDS.length} 把新武器的粗算 DPS ≥ 既有 ${refIds.length} 把的中位數（不被支配）、且 ≤ 既有最大值的 1.6 倍`,
         bad.length === 0,
         bad.length ? list(bad) : `${detail.join('、')}｜既有中位數 ${median.toFixed(1)}、最大值 ${maxRef.toFixed(1)}、上限 ${(maxRef * 1.6).toFixed(1)}`);
     }

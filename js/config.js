@@ -372,6 +372,82 @@ export const WEAPONS = {
     radius: 62,
     projType: 'saw',
   },
+
+  // ── 第三輪擴充：兩把新基礎武器 ──────────────────────────────────────
+  // 一樣刻意選「既有類型之外的新行為」：
+  //   frost_nova 以玩家為中心的冰霜脈衝（不鎖定、不飛行，範圍內一次全吃，附帶減速）
+  //   shotgun    近距離扇形霰彈（多顆短射程彈丸 + 強擊退，貼臉才打得滿）
+  frost_nova: {
+    id: 'frost_nova',
+    name: '冰霜新星',
+    icon: '❄️',
+    description: '以特工為中心爆發冰霜脈衝，範圍內的敵人全部受創並減速。',
+    isEvo: false,
+    evoTarget: 'absolute_zero',
+    pairPassive: 'range_fuel',     // 範圍型武器 ↔ 範圍配件
+    maxLevel: 5,
+    baseDamage: 30,
+    damageGrowth: 10,
+    baseCooldown: 1.8,
+    cooldownGrowth: -0.1,
+    radius: [110, 120, 135, 150, 165],
+    slowDur: 2.0,                  // 比冷卻長：範圍內的敵人會被持續減速（赫爾碎冰也靠這個）
+  },
+  shotgun: {
+    id: 'shotgun',
+    name: '特工霰彈槍',
+    icon: '💥',
+    description: '朝最近敵人轟出扇形霰彈，射程短但彈丸多、擊退強，越貼近越痛。',
+    isEvo: false,
+    evoTarget: 'dragon_breath',
+    pairPassive: 'max_hp_vest',    // 近戰距離武器 ↔ 生存配件
+    maxLevel: 5,
+    baseDamage: 17,                // 單顆彈丸
+    damageGrowth: 6,
+    baseCooldown: 1.15,
+    cooldownGrowth: -0.07,
+    speed: 720,
+    projType: 'pellet',
+    pellets: [4, 5, 6, 7, 8],
+    spread: 0.8,                   // 扇形總角度（弧度）
+    range: 240,
+    pierce: [1, 1, 1, 2, 2],
+  },
+
+  absolute_zero: {
+    id: 'absolute_zero',
+    name: '絕對零度 (超武)',
+    icon: '🧊',
+    description: '冰霜脈衝擴張成絕對零度領域，範圍翻倍，命中的雜兵直接凍結。',
+    isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,
+    baseWeapon: 'frost_nova',
+    baseDamage: 85,
+    baseCooldown: 1.2,
+    radius: 230,
+    slowDur: 2.5,
+    freezeOnHit: 1.0,              // 雜兵凍結秒數（Boss 改吃減速，見 Enemy.applyFreeze）
+  },
+  dragon_breath: {
+    id: 'dragon_breath',
+    name: '龍息霰彈 (超武)',
+    icon: '🐲',
+    description: '霰彈化為龍息烈焰，一次噴出 12 顆燃燒彈丸，貫穿並點燃整片怪群。',
+    isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.15,
+    baseWeapon: 'shotgun',
+    baseDamage: 32,
+    baseCooldown: 0.5,
+    speed: 780,
+    projType: 'pellet',
+    pellets: 12,
+    spread: 1.0,
+    range: 300,
+    pierce: 3,
+    burnOnHit: 6,
+  },
 };
 
 // 蓄能彈 (Charged Shot)：投射武器每打出固定發數，下一發附帶元素效果。
@@ -817,6 +893,28 @@ export const WEAPON_ASPECTS = {
     { id: 'thanatos', name: '塔納托斯 (湮滅死球)', icon: '💀', tag: '第5擊核爆',
       desc: '足球每次命中傷害提升 25%，第 5 次命中時引發虛空引爆（半徑 100、200 點終結傷害）。',
       stats: { bounceDmgGrowth: 0.25, implosionAt: 5, implosionRadius: 100, implosionDamage: 200 } },
+  ],
+  frost_nova: [
+    { id: 'boreas', name: '玻瑞阿斯 (凜冬風暴)', icon: '🌬️', tag: '擴散擊退',
+      desc: '脈衝半徑 +35%，並把範圍內的敵人向外吹開。',
+      stats: { radiusMul: 1.35, knockback: 9 } },
+    { id: 'skadi',  name: '斯卡蒂 (永凍)', icon: '🏔️', tag: '脈衝凍結',
+      desc: '每次脈衝都凍結範圍內的雜兵 0.8 秒（Boss 改為減速），但傷害 ×0.8。',
+      stats: { freezeDur: 0.8, damageMul: 0.8 } },
+    { id: 'hel',    name: '赫爾 (碎冰)', icon: '💀', tag: '碎冰重擊',
+      desc: '脈衝傷害 ×0.75，但對已被減速、冰凍或眩暈的敵人傷害 ×1.6。',
+      stats: { shatterMul: 1.6, damageMul: 0.75 } },
+  ],
+  shotgun: [
+    { id: 'hermes',     name: '赫米斯 (速射)', icon: '💨', tag: '快速連轟',
+      desc: '開火冷卻 -25%，射程 +30%。',
+      stats: { cdMul: 0.75, rangeMul: 1.3 } },
+    { id: 'hephaestus', name: '赫菲斯托斯 (燃燒彈)', icon: '🔥', tag: '點燃彈丸',
+      desc: '彈丸命中點燃（每秒 5 點），扇形收窄 25% 讓彈丸更集中。',
+      stats: { burnOnHit: 5, spreadMul: 0.75 } },
+    { id: 'ares',       name: '阿瑞斯 (獨頭彈)', icon: '🎯', tag: '單發貫穿',
+      desc: '改射一顆獨頭重彈：傷害 = 單顆彈丸 × 2.5，貫穿 3 名敵人。',
+      stats: { slugShot: true, slugDamageMul: 2.5, pierce: 3 } },
   ],
 };
 

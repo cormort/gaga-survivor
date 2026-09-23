@@ -36,7 +36,7 @@ import {
   MAX_BOOSTER_STACK,
   SHOP_CRATES,
   SHOP_BOOSTERS,
-  STASH_EXPAND_COST,
+  stashExpandCost,
   MAX_STASH_CAP,
   STASH_EXPANSION_STEP,
   shopItemLevel,
@@ -511,7 +511,7 @@ export class UIManager {
         <div class="shop-card-icon">🏢</div>
         <div class="shop-card-title" style="color: #4cc9f0">特工倉庫擴建</div>
         <div class="shop-card-desc">擴充特工裝備庫存容量 +${STASH_EXPANSION_STEP} 格<br>當前容量: <strong>${stashCap}</strong> / 最大: <strong>${MAX_STASH_CAP}</strong></div>
-        ${isMax ? '<div class="booster-equipped-badge">已達最高等級 (MAX)</div>' : group('expand-stash', 'stash', STASH_EXPAND_COST, isMax)}
+        ${isMax ? '<div class="booster-equipped-badge">已達最高等級 (MAX)</div>' : group('expand-stash', 'stash', stashExpandCost(stashCap), isMax)}
       `;
       grid.appendChild(card);
     }

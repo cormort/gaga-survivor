@@ -783,10 +783,13 @@ body, html {
 
 /* 主選單上疊開的彈窗要蓋過 #start-screen。
    兩者同為 .overlay (z-index 100)，DOM 順序在後的開始畫面會蓋掉先宣告的彈窗，
-   結果就是點「基因強化 / 裝備倉庫」看起來沒反應。 */
+   結果就是點「基因強化 / 裝備倉庫」看起來沒反應。
+   兵器型態與特工成就先前漏列，一樣是「點了沒反應」（彈窗其實開了、被蓋在底下）。 */
 #talent-modal,
 #char-level-modal,
 #gear-modal,
+#aspect-modal,
+#achievements-modal,
 #recipe-modal,
 #shop-modal {
   z-index: 200;

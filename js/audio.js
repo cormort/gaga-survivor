@@ -97,6 +97,9 @@ const SHOOT_TIMBRES = {
   // 沒有這兩個條目時 playShoot 會靜默退回 kunai —— 八把武器裡唯一「聽起來一模一樣」的組合。
   boomerang: { type: 'triangle', f0: 420, f1: 980, dur: 0.18, level: 0.24 },
   railgun:   { type: 'square',   f0: 1400, f1: 180, dur: 0.22, level: 0.30 },
+  // 第三輪擴充：冰霜新星是清脆的高頻下滑，霰彈槍是短促低沉的鋸齒爆音
+  frost_nova: { type: 'sine',     f0: 1800, f1: 600, dur: 0.20, level: 0.20 },
+  shotgun:    { type: 'sawtooth', f0: 220,  f1: 60,  dur: 0.12, level: 0.32 },
 };
 
 // 前瞻排程：提前 SCHEDULE_AHEAD 秒把音符排進音訊時鐘，每 SCHEDULER_MS 補排一次。

@@ -30,9 +30,19 @@ const out = await page.evaluate(async () => {
   res = save.levelUpChar('penguin');
   ok('未解鎖特工不能升級', !res.ok, res.reason);
 
-  save.data.gold = 200; save.data.dna = 20;
+  const c1 = charLevelCost(1);
+  save.data.gold = c1.gold; save.data.dna = c1.dna;
   res = save.levelUpChar('duck');
-  ok('Lv1→2 花 200🪙 + 20🧬', res.ok && save.charLevel('duck') === 2 && save.data.gold === 0 && save.data.dna === 0, JSON.stringify(res));
+  ok(`Lv1→2 花 ${c1.gold}🪙 + ${c1.dna}🧬（剛好花光）`, res.ok && save.charLevel('duck') === 2 && save.data.gold === 0 && save.data.dna === 0, JSON.stringify(res));
+
+  // 成本指數成長：每一級的金幣與 DNA 對前一級的比值都落在同一個倍率附近（取整誤差內），
+  // 而不是線性的「每級 +固定值」（線性時比值會一路往 1 收斂）
+  const ratios = [];
+  for (let l = 2; l < CHAR_LEVEL.max; l++) ratios.push(charLevelCost(l).gold / charLevelCost(l - 1).gold);
+  const late = charLevelCost(CHAR_LEVEL.max - 1).gold / charLevelCost(CHAR_LEVEL.max - 2).gold;
+  ok('升級成本指數成長（逐級比值穩定 > 1.1，後段不收斂）',
+    ratios.every((x) => x > 1.1) && late > 1.1,
+    `Lv1 ${c1.gold}🪙/${c1.dna}🧬 → Lv${CHAR_LEVEL.max - 1} ${charLevelCost(CHAR_LEVEL.max - 1).gold}🪙/${charLevelCost(CHAR_LEVEL.max - 1).dna}🧬，末段比值 ${late.toFixed(3)}`);
 
   save.data.gold = 1e7; save.data.dna = 1e6;
   res = save.levelUpChar('duck', Infinity);

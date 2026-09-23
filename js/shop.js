@@ -2,6 +2,7 @@
 
 import { rollItem, RARITIES, itemLevelFor } from './items.js';
 import { LEVELS } from './levels.js';
+import { expCost } from './meta.js';
 
 // ── 黑市裝備等級 ────────────────────────────────────────────────────────
 // 為什麼要有這支：黑市箱子原本是 `rollItem({ rarity })` —— 沒帶 ilvl，所以**永遠是 ilvl 1**
@@ -124,9 +125,13 @@ export const SHOP_BOOSTERS = {
   },
 };
 
+export const STASH_CAP = 30;              // 倉庫基礎容量
 export const STASH_EXPANSION_STEP = 5;
 export const MAX_STASH_CAP = 60;
-export const STASH_EXPAND_COST = {
-  costGold: 800,
-  costDna: 160,
-};
+
+// 倉庫擴建成本：第 n 次擴建（n 從 0 起算）= 800×1.4^n 🪙 或 160×1.4^n 🧬（指數成長）。
+// 30 → 60 共 6 次：800 → 4,300 🪙／160 → 861 🧬。
+export function stashExpandCost(currentCap) {
+  const n = Math.max(0, Math.round((currentCap - STASH_CAP) / STASH_EXPANSION_STEP));
+  return { costGold: expCost(800, 1.4, n, 10), costDna: expCost(160, 1.4, n) };
+}

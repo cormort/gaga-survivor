@@ -3,11 +3,12 @@
 import { TALENTS, talentCost, CHAR_LEVEL, charLevelCost } from './meta.js';
 import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes, FUSION_COST, fuseItems } from './items.js';
 // 疊加上限住在黑市商品表旁邊（那裡才是「可以帶幾劑」的定義），存檔只負責執行
-import { MAX_BOOSTER_STACK } from './shop.js';
+// 倉庫基礎容量也住在黑市（擴建成本要從它算第幾次擴建），這裡再匯出給既有的讀者
+import { MAX_BOOSTER_STACK, STASH_CAP } from './shop.js';
 // 舊存檔的解鎖鏈修補需要關卡表（levels.js 是純資料、不 import 任何模組，不會循環）
 import { LEVELS } from './levels.js';
 
-export const STASH_CAP = 30;
+export { STASH_CAP };
 
 const KEY = 'gaga_save';
 const VERSION = 4;

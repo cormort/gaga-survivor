@@ -44,6 +44,12 @@ export const WEAPON_ART = {
   twin_storm: { family: 'blade', len: 30, color: '#ffe066', evoGlow: true, boomerang: true },
   railgun: { family: 'launcher', len: 44, color: '#7df8ff' },
   annihilation_beam: { family: 'launcher', len: 52, color: '#7df8ff', evoGlow: true },
+
+  // 第三輪擴充：冰霜新星走 coil 的法器造型，霰彈槍走 launcher 的短粗槍管
+  frost_nova: { family: 'coil', len: 26, color: '#7fd8ff' },
+  absolute_zero: { family: 'coil', len: 32, color: '#e0fbff', evoGlow: true },
+  shotgun: { family: 'launcher', len: 30, color: '#ffb347' },
+  dragon_breath: { family: 'launcher', len: 36, color: '#ff5722', evoGlow: true },
 };
 
 // ── 四種家族 ────────────────────────────────────────────────────────────

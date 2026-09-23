@@ -22,6 +22,7 @@ const FX = {
   soccer:    { color: '#00e5ff', glow: 1.7, trail: 0.045 },
   boomerang: { color: '#ffd166', glow: 1.6, trail: 0.035 },
   rail_beam: { color: '#7df8ff', glow: 2.2, trail: 0 },
+  pellet:    { color: '#ffb347', glow: 1.7, trail: 0.03 },
 };
 const FX_DEFAULT = { color: '#ffffff', glow: 1.8, trail: 0.05 };
 // 拖尾只在「真的在飛」時畫：環繞刀刃與地面积火是慢速/靜止實體
@@ -379,6 +380,10 @@ export class Projectile {
         this.drawRailBeam(ctx);
         break;
 
+      case 'pellet':
+        this.drawPellet(ctx);
+        break;
+
       default:
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
@@ -388,6 +393,20 @@ export class Projectile {
     }
 
     ctx.restore();
+  }
+
+  // 霰彈彈丸：拉長的熾熱彈頭（超武龍息是橘紅火球）
+  drawPellet(ctx) {
+    ctx.rotate(Math.atan2(this.vy, this.vx));
+    const r = this.radius;
+    ctx.fillStyle = this.isEvo ? '#ff5722' : '#ffb347';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.6, r, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = this.isEvo ? '#ffe066' : '#fff3c4';
+    ctx.beginPath();
+    ctx.arc(r * 0.4, 0, r * 0.55, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // 傭兵能量彈 (金色曳光)

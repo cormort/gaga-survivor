@@ -22,6 +22,8 @@ const ASPECT_FAMILY = {
   soccer: 'soccer', quantum_sphere: 'soccer',
   boomerang: 'boomerang', twin_storm: 'boomerang',
   railgun: 'railgun', annihilation_beam: 'railgun',
+  frost_nova: 'frost_nova', absolute_zero: 'frost_nova',
+  shotgun: 'shotgun', dragon_breath: 'shotgun',
 };
 
 export class WeaponManager {
@@ -415,6 +417,16 @@ export class WeaponManager {
       case 'soccer':
       case 'quantum_sphere':
         this.fireSoccer(def, item, finalDamage, enemies, crit);
+        break;
+
+      case 'frost_nova':
+      case 'absolute_zero':
+        this.fireFrostNova(def, item, finalDamage, enemies, particleSystem);
+        break;
+
+      case 'shotgun':
+      case 'dragon_breath':
+        this.fireShotgun(def, item, finalDamage, enemies, crit);
         break;
     }
   }
@@ -841,6 +853,79 @@ export class WeaponManager {
       );
       sound.playShoot('soccer');
     }
+  }
+
+  // 冰霜新星：以玩家為中心的瞬發脈衝（跟軌道炮一樣開火當下就結算，沒有飛行彈體）
+  fireFrostNova(def, item, damage, enemies, particleSystem) {
+    const { stats } = this.aspectOf(def.id);
+    const lvl = Math.min(item.level, def.maxLevel) - 1;
+    const baseR = Array.isArray(def.radius) ? def.radius[lvl] : def.radius;
+    const radius = baseR * this.player.rangeMultiplier * (stats.radiusMul || 1);
+    const dmg = Math.round(damage * (stats.damageMul || 1));
+    const freezeDur = def.freezeOnHit || stats.freezeDur || 0;
+    const px = this.player.x;
+    const py = this.player.y;
+
+    if (particleSystem) {
+      particleSystem.createShockwave(px, py, radius, def.isEvo ? '#e0fbff' : '#7fd8ff');
+    }
+    sound.playShoot('frost_nova');
+
+    for (const enemy of enemies) {
+      if (enemy.isDead) continue;
+      const d = Math.hypot(enemy.x - px, enemy.y - py);
+      if (d > radius + enemy.radius) continue;
+      // 赫爾型態：已被減速／冰凍／眩暈的目標吃碎冰加成（判定在本次減速之前）
+      const brittle = enemy.slowTimer > 0 || enemy.freezeTimer > 0 || enemy.stunTimer > 0;
+      const hit = stats.shatterMul && brittle ? Math.round(dmg * stats.shatterMul) : dmg;
+      enemy.takeDamage(hit, stats.knockback || 1, px, py);
+      this.recordDamage(def.id, hit);
+      enemy.applySlow(def.slowDur || 2);
+      if (freezeDur) enemy.applyFreeze(freezeDur);
+      if (particleSystem) particleSystem.createDamageText(enemy.x, enemy.y, hit, def.isEvo);
+    }
+  }
+
+  // 霰彈槍：朝最近敵人扇形噴出多顆短射程彈丸（射程 = 彈速 × 壽命）
+  fireShotgun(def, item, damage, enemies, crit = false) {
+    const target = this.getClosestEnemy(enemies);
+    if (!target) return;
+
+    const { stats } = this.aspectOf(def.id);
+    const lvl = Math.min(item.level, def.maxLevel) - 1;
+    const at = (v) => (Array.isArray(v) ? v[lvl] : v);
+    const slug = !!stats.slugShot;   // 阿瑞斯型態：單發獨頭彈
+    const count = slug ? 1 : at(def.pellets);
+    const spread = def.spread * (stats.spreadMul || 1);
+    const range = def.range * (stats.rangeMul || 1) * this.player.rangeMultiplier;
+    const dmg = slug ? Math.round(damage * (stats.slugDamageMul || 2.5)) : damage;
+    const pierce = slug ? (stats.pierce || 3) : at(def.pierce);
+    const baseAngle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
+
+    for (let i = 0; i < count; i++) {
+      // 彈丸平均分布在扇形內，再加一點抖動，避免每次都是同一把梳子
+      const t = count > 1 ? i / (count - 1) - 0.5 : 0;
+      const a = baseAngle + t * spread + (count > 1 ? (Math.random() - 0.5) * 0.08 : 0);
+      const speed = def.speed * (0.92 + Math.random() * 0.16);
+      this.projectiles.push(
+        this.mkProjectile({
+          type: 'pellet',
+          weaponId: def.id,
+          x: this.player.x,
+          y: this.player.y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          damage: dmg,
+          radius: slug ? 9 : 5,
+          pierce,
+          life: range / speed,
+          isEvo: def.isEvo,
+          knockback: slug ? 6 : 4,
+          burnOnHit: def.burnOnHit || stats.burnOnHit || 0,
+        }, crit)
+      );
+    }
+    sound.playShoot('shotgun');
   }
 
   // 火箭爆炸處理
