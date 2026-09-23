@@ -9,7 +9,7 @@ import {
   CONSUMABLE_ITEMS,
   WEAPON_ASPECTS,
 } from '../config.js';
-import { TALENTS, TALENT_ORDER, talentCost, talentInvested, talentTreeCost, talentValueAt, upgradeKeyOf, CHAR_LEVEL, charLevelBonuses, charLevelCost } from '../meta.js';
+import { TALENTS, TALENT_ORDER, talentCost, talentInvested, talentTreeCost, talentValueAt, upgradeKeyOf, isBanishable, CHAR_LEVEL, charLevelBonuses, charLevelCost } from '../meta.js';
 import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
 import {
   RARITIES,
@@ -104,6 +104,8 @@ export class UIManager {
     this.levelUpModal = document.getElementById('level-up-modal');
     this.cardsGrid = document.getElementById('upgrade-cards');
     this.rerollBtn = document.getElementById('btn-reroll');
+    this.skipUpgradeBtn = document.getElementById('btn-skip-upgrade');
+    this.banishInfo = document.getElementById('banish-info');
 
     this.startScreen = document.getElementById('start-screen');
     this.gameOverModal = document.getElementById('game-over-modal');
@@ -1379,9 +1381,96 @@ export class UIManager {
     }
   }
 
+  // 暫停面板：目前的構築。參考 Brotato／吸血鬼倖存者的暫停畫面 ——
+  // 玩家在戰鬥中最常想知道的是「每把武器幾級、離超武還差什麼、總數值多少」。
+  renderPauseBuild(game) {
+    const box = document.getElementById('pause-build');
+    if (!box) return;
+    const wm = game.weaponManager;
+    const p = game.player;
+    const pct = (v) => `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%`;
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    // 武器 + 超武配方進度
+    const weaponRows = [...wm.weapons.entries()].map(([id, item]) => {
+      const def = WEAPONS[id];
+      if (!def) return '';
+      let recipe = '';
+      if (item.isEvo) {
+        recipe = `<span class="pb-note">超武覺醒 ${item.level}/${def.maxLevel}</span>`;
+      } else if (def.evoTarget && WEAPONS[def.evoTarget]) {
+        const pid = def.pairPassive;
+        const pDef = PASSIVES[pid] || WEAPONS[pid];
+        const pItem = wm.passives.get(pid) || wm.weapons.get(pid);
+        const pLv = pItem ? pItem.level : 0;
+        const wOk = item.level >= def.maxLevel;
+        const pOk = pDef && pLv >= pDef.maxLevel;
+        recipe = `<span class="pb-note">→ ${WEAPONS[def.evoTarget].icon} ${esc(WEAPONS[def.evoTarget].name)}：`
+          + `武器 ${wOk ? '✓' : `${item.level}/${def.maxLevel}`} · `
+          + `${pDef ? `${pDef.icon}${esc(pDef.name)} ${pOk ? '✓' : `${pLv}/${pDef.maxLevel}`}` : '—'}`
+          + `${wOk && pOk ? ' <b class="pb-ready">可合成</b>' : ''}</span>`;
+      }
+      return `<div class="pb-row"><span class="pb-name">${def.icon} ${esc(def.name)}</span>`
+        + `<span class="pb-lv">LV ${item.level}/${def.maxLevel}</span>${recipe}</div>`;
+    }).join('');
+
+    const passiveRows = [...wm.passives.entries()].map(([id, item]) => {
+      const def = PASSIVES[id];
+      return def ? `<div class="pb-row"><span class="pb-name">${def.icon} ${esc(def.name)}</span><span class="pb-lv">LV ${item.level}/${def.maxLevel}</span></div>` : '';
+    }).join('');
+
+    const crit = (p.critChance || 0) + (p.metaCrit || 0) + (p.luckPotionTimer > 0 ? 0.25 : 0);
+    const stats = [
+      ['⚔️ 傷害', `×${((p.damageMultiplier || 1) * (p.traitDmgMul || 1)).toFixed(2)}`],
+      ['⏱️ 冷卻', pct((p.cdrMultiplier || 1) - 1)],
+      ['🎯 暴擊率', `${Math.round(crit * 100)}%`],
+      ['💥 暴擊傷害', `×${(2 + (p.metaCritDmg || 0)).toFixed(2)}`],
+      ['📐 範圍', pct((p.rangeMultiplier || 1) - 1)],
+      ['👟 移速', pct((p.speedMultiplier || 1) - 1)],
+      ['🧲 拾取', pct((p.magnetMultiplier || 1) - 1)],
+      ['🛡️ 減傷', `${Math.round((p.metaArmor || 0) * 100)}%`],
+      ['❤️ 生命', `${Math.round(p.hp)}/${Math.round(p.maxHp)}`],
+      ['💗 每秒回復', `${(p.hpRegen || 0).toFixed(1)}`],
+      ['🩸 承受傷害', `×${(p.damageTakenMul || 1).toFixed(2)}`],
+    ].map(([k, v]) => `<div class="pb-stat"><span>${k}</span><strong>${v}</strong></div>`).join('');
+
+    const chips = (list) => list.map((b) => `<span class="pb-chip">${b.icon || ''} ${esc(b.name)}</span>`).join('');
+    const buffs = [...(game.blessings || []), ...(game.activeSynergies || [])];
+
+    box.innerHTML = `
+      <div class="pb-section"><div class="pb-title">🔫 武器（${wm.weapons.size}/${GAME_CONFIG.MAX_WEAPON_SLOTS}）</div>${weaponRows || '<div class="pb-empty">—</div>'}</div>
+      <div class="pb-section"><div class="pb-title">🧩 配件（${wm.passives.size}/${GAME_CONFIG.MAX_PASSIVE_SLOTS}）</div>${passiveRows || '<div class="pb-empty">尚未取得</div>'}</div>
+      <div class="pb-section"><div class="pb-title">📊 總數值</div><div class="pb-stats">${stats}</div></div>
+      ${buffs.length ? `<div class="pb-section"><div class="pb-title">✨ 祝福與協同</div><div class="pb-chips">${chips(buffs)}</div></div>` : ''}
+      <div class="pb-section pb-meta">🚫 封印剩 ${game.banishesLeft ?? 0} 次 · ⏭️ 跳過剩 ${game.skipsLeft ?? 0} 次 · 🎲 刷新 ${game.rerollCost} 🪙</div>
+    `;
+  }
+
+  // 顯示設定（主選單與暫停面板共用同一份）：onChange(patch) 由呼叫端寫存檔並套用
+  renderDisplaySettings(container, settings, onChange) {
+    if (!container) return;
+    const st = settings || {};
+    const mode = ['all', 'crit', 'off'].includes(st.damageNumbers) ? st.damageNumbers : 'all';
+    container.innerHTML = `
+      <label class="ds-item">🔢 傷害數字
+        <select data-ds="damageNumbers">
+          <option value="all"${mode === 'all' ? ' selected' : ''}>全部顯示</option>
+          <option value="crit"${mode === 'crit' ? ' selected' : ''}>只顯示暴擊</option>
+          <option value="off"${mode === 'off' ? ' selected' : ''}>關閉</option>
+        </select>
+      </label>
+      <label class="ds-item"><input type="checkbox" data-ds="screenShake"${st.screenShake !== false ? ' checked' : ''}> 📳 畫面震動</label>
+      <label class="ds-item"><input type="checkbox" data-ds="reduceFlash"${st.reduceFlash ? ' checked' : ''}> 🕶️ 減少閃光</label>
+    `;
+    container.querySelector('[data-ds="damageNumbers"]').addEventListener('change', (e) => onChange({ damageNumbers: e.target.value }));
+    container.querySelector('[data-ds="screenShake"]').addEventListener('change', (e) => onChange({ screenShake: e.target.checked }));
+    container.querySelector('[data-ds="reduceFlash"]').addEventListener('change', (e) => onChange({ reduceFlash: e.target.checked }));
+  }
+
   // 升級三選一對話框：渲染卡牌 + reroll 按鈕狀態
-  showUpgradeCards(options, gold, rerollCost, onSelect, onReroll) {
-    sound.playLevelUp();
+  // extra：{ silent, banishesLeft, skipsLeft, skipGold, onBanish(opt), onSkip() }
+  showUpgradeCards(options, gold, rerollCost, onSelect, onReroll, extra = {}) {
+    if (!extra.silent) sound.playLevelUp();
     this.cardsGrid.innerHTML = '';
     this._rerollCb = onReroll || null;
     this._rerollCost = rerollCost || 0;
@@ -1420,8 +1509,36 @@ export class UIManager {
         onSelect(opt);
       });
 
+      // 封印按鈕：卡片右上角。點它不能順便選到這張卡（stopPropagation）
+      if (extra.onBanish && isBanishable(opt)) {
+        const ban = document.createElement('button');
+        ban.className = 'card-banish';
+        ban.type = 'button';
+        ban.textContent = '🚫';
+        ban.title = extra.banishesLeft > 0 ? `封印：【${opt.name}】本局不再出現（剩 ${extra.banishesLeft} 次）` : '封印次數已用完';
+        ban.disabled = !(extra.banishesLeft > 0);
+        ban.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          extra.onBanish(opt);
+        });
+        card.appendChild(ban);
+      }
+
       this.cardsGrid.appendChild(card);
     });
+
+    // 跳過與封印剩餘次數
+    const skip = this.skipUpgradeBtn;
+    if (skip) {
+      const left = extra.skipsLeft || 0;
+      skip.classList.toggle('hidden', !extra.onSkip);
+      skip.disabled = left <= 0;
+      skip.textContent = `⏭️ 跳過 +${extra.skipGold || 0}🪙（剩 ${left}）`;
+      skip.onclick = () => { if (left > 0 && extra.onSkip) extra.onSkip(); };
+    }
+    if (this.banishInfo) {
+      this.banishInfo.textContent = extra.onBanish ? `🚫 封印剩 ${extra.banishesLeft || 0} 次（點卡片右下角 🚫）` : '';
+    }
 
     // 金幣 reroll：花錢重抽三選一 (不重複目前顯示的卡)
     const rr = this.rerollBtn;
@@ -1460,7 +1577,8 @@ export class UIManager {
     }, 900);
   }
 
-  generateUpgradeOptions(weaponManager, excludeKeys = null) {
+  // banished：本局被封印的武器／配件 id（Set），它們的卡不會進卡池
+  generateUpgradeOptions(weaponManager, excludeKeys = null, banished = null) {
     const candidates = [];
 
     // ── 超武配方狀態 (VS 精神：武器滿級 + 對應配件也滿級才可合成) ──
@@ -1632,6 +1750,13 @@ export class UIManager {
         tag: '特殊奇遇',
         color: sp.color,
       });
+    }
+
+    // 封印：被封印的武器／配件本局不再出現（超武進化卡不受影響 —— 它的 id 是 undefined）
+    if (banished && banished.size > 0) {
+      for (let i = candidates.length - 1; i >= 0; i--) {
+        if (isBanishable(candidates[i]) && banished.has(candidates[i].id)) candidates.splice(i, 1);
+      }
     }
 
     // 若全部選滿/無可升級，提供特工急救包

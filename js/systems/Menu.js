@@ -213,29 +213,56 @@ export function bindEvents(game) {
     returnToMenu(game);
   });
 
-  // 暫停按鈕
-  game.ui.pauseBtn.addEventListener('click', () => {
+  // 暫停：打開暫停面板（目前構築 + 顯示設定）；再按一次或面板的「繼續」回到戰鬥
+  const pauseModal = document.getElementById('pause-modal');
+  const togglePause = () => {
     if (game.state === 'PLAYING') {
       game.state = 'PAUSED';
       sound.pauseBGM();
       game.ui.pauseBtn.textContent = '▶️';
       game.ui.quitBtn?.classList.remove('hidden');
+      game.ui.renderPauseBuild(game);
+      pauseModal?.classList.remove('hidden');
     } else if (game.state === 'PAUSED') {
       game.state = 'PLAYING';
       sound.resumeBGM();
       game.ui.pauseBtn.textContent = '⏸️';
       game.ui.quitBtn?.classList.add('hidden');
+      pauseModal?.classList.add('hidden');
     }
+  };
+  game.ui.pauseBtn.addEventListener('click', togglePause);
+  document.getElementById('btn-resume')?.addEventListener('click', togglePause);
+  // Esc / P 快捷鍵（只在戰鬥中或暫停中有效；選卡、開箱時不搶按鍵）
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' && e.key !== 'p' && e.key !== 'P') return;
+    if (game.state === 'PLAYING' || game.state === 'PAUSED') togglePause();
   });
 
   // 放棄任務 (暫停時可見)：以「陣亡」結算後回主選單
-  game.ui.quitBtn?.addEventListener('click', () => {
+  const quitMission = () => {
     if (game.state !== 'PAUSED') return;
     if (!confirm('確定要放棄本次任務？（將以失敗結算）')) return;
-    game.ui.quitBtn.classList.add('hidden');
+    game.ui.quitBtn?.classList.add('hidden');
+    pauseModal?.classList.add('hidden');
     game.handleGameOver(false);
     returnToMenu(game);
-  });
+  };
+  game.ui.quitBtn?.addEventListener('click', quitMission);
+  document.getElementById('btn-pause-quit')?.addEventListener('click', quitMission);
+
+  // 顯示設定：主選單「養成基地」與暫停面板各一份，改其中一邊就同步重畫兩邊並立即套用
+  const settingBoxes = ['display-settings-menu', 'display-settings-pause'].map((id) => document.getElementById(id));
+  const renderSettings = () => {
+    for (const box of settingBoxes) {
+      game.ui.renderDisplaySettings(box, save.data.settings, (patch) => {
+        save.set({ settings: { ...save.data.settings, ...patch } });
+        game.applyDisplaySettings();
+        renderSettings();
+      });
+    }
+  };
+  renderSettings();
 
   // 佈署戰場防禦設施 (1/2/3/4/B、HUD 按鈕)
   window.addEventListener('keydown', (e) => {
@@ -441,6 +468,7 @@ export function returnToMenu(game) {
   game.ui.updateHUD(game.player, 0, 0, 0);
   game.ui.pauseBtn.textContent = '⏸️';
   game.ui.quitBtn?.classList.add('hidden');
+  document.getElementById('pause-modal')?.classList.add('hidden');
   game.ui.updateDnaChip(save.data.dna, save.data.gold);
   refreshModeSelect(game);
   refreshCharSelect(game);

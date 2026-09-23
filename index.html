@@ -180,7 +180,30 @@
         <div id="upgrade-cards" class="cards-grid">
           <!-- 動態生成 3 張卡牌 -->
         </div>
-        <button id="btn-reroll" class="game-btn secondary-btn hidden">🎲 刷新選擇</button>
+        <div class="levelup-actions">
+          <button id="btn-reroll" class="game-btn secondary-btn hidden">🎲 刷新選擇</button>
+          <button id="btn-skip-upgrade" class="game-btn secondary-btn hidden">⏭️ 跳過</button>
+        </div>
+        <div id="banish-info" class="banish-info"></div>
+      </div>
+    </div>
+
+    <!-- 暫停面板：目前的構築（武器／配件／超武配方進度／總數值）+ 顯示設定 -->
+    <div id="pause-modal" class="overlay hidden">
+      <div class="modal-content pause-content">
+        <div class="modal-header">
+          <h2 class="glow-text">⏸️ 暫停</h2>
+          <p class="subtitle">Esc / P 鍵也可以暫停與繼續</p>
+        </div>
+        <div id="pause-build" class="pause-build"></div>
+        <details class="pause-settings">
+          <summary>⚙️ 顯示設定</summary>
+          <div id="display-settings-pause" class="display-settings"></div>
+        </details>
+        <div class="pause-actions">
+          <button id="btn-resume" class="game-btn primary-btn">▶️ 繼續</button>
+          <button id="btn-pause-quit" class="game-btn secondary-btn">🚪 放棄任務</button>
+        </div>
       </div>
     </div>
 
@@ -381,6 +404,7 @@
             <label class="vol-item">🎵<input id="bgm-vol" class="vol-slider" type="range" min="0" max="100" value="80" aria-label="音樂音量"></label>
             <label class="vol-item" title="口袋道具在危急時自動使用（按 E 仍可手動使用）"><input id="auto-pocket" type="checkbox" checked> 🎒 道具自動使用</label>
           </div>
+          <div id="display-settings-menu" class="display-settings"></div>
         </details>
         <div class="start-actions">
           <div class="difficulty-row">

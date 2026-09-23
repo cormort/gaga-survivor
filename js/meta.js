@@ -103,6 +103,12 @@ export function talentValueAt(def, level) {
   return def.valuePerLevel * Math.max(0, Math.min(level, def.maxLevel));
 }
 
+// 能被「封印」的升級卡：武器與配件（新取得或升級）。超武進化、特殊奇遇、急救包不行 ——
+// 封印的單位是武器／配件 id，那三種卡沒有可以從卡池移除的對象
+export function isBanishable(opt) {
+  return !!opt && !!opt.id && ['weapon_new', 'weapon_upgrade', 'passive_new', 'passive_upgrade'].includes(opt.type);
+}
+
 export function upgradeKeyOf(opt) {
   if (opt.type === 'evo') return 'evo:' + opt.baseId;
   if (opt.type === 'special') return 'special:' + opt.specialId;

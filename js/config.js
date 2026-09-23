@@ -11,6 +11,11 @@ export const GAME_CONFIG = {
   },
   MAX_WEAPON_SLOTS: 4,
   MAX_PASSIVE_SLOTS: 4,
+  // 升級卡的「封印」與「跳過」每局次數（參考吸血鬼倖存者的 Banish / Skip）。
+  // 封印：該武器／配件本局不再出現在升級卡；跳過：這次不選，換一點本局金幣
+  BANISH_PER_RUN: 3,
+  SKIP_PER_RUN: 3,
+  SKIP_GOLD: 25,
   BASE_EXP_REQUIREMENT: 10,
   EXP_GROWTH_FACTOR: 1.35,
 };

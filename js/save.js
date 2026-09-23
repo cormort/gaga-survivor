@@ -36,7 +36,8 @@ function blank() {
     best: { survivor: {}, defense: {} }, // { modeId: { levelId: { time, kills, cleared } } }
     character: 'duck',
     mode: 'survivor',       // 上次選的模式
-    settings: { sfx: 1, bgm: 0.8, autoPocket: true }, // 音量 (主選單滑桿)、口袋道具自動使用
+    // 音量 (主選單滑桿)、口袋道具自動使用、顯示設定（傷害數字 all/crit/off、畫面震動、減少閃光）
+    settings: { sfx: 1, bgm: 0.8, autoPocket: true, damageNumbers: 'all', screenShake: true, reduceFlash: false },
     daily: { date: '', bestTime: 0, completed: false },
     evolvedEver: [],            // 歷史上合成過的超武 id (合成圖鑑打勾用)
     weaponAspects: {            // Hades 武器型態配置
@@ -117,7 +118,7 @@ function ensureDefaults(d) {
   if (!Array.isArray(d.boosters)) d.boosters = [];
   if (typeof d.stashCap !== 'number') d.stashCap = STASH_CAP;
   if (!d.settings || typeof d.settings !== 'object') d.settings = {};
-  d.settings = { sfx: 1, bgm: 0.8, autoPocket: true, ...d.settings };
+  d.settings = { sfx: 1, bgm: 0.8, autoPocket: true, damageNumbers: 'all', screenShake: true, reduceFlash: false, ...d.settings };
 
   if (!d.weaponAspects || typeof d.weaponAspects !== 'object') {    d.weaponAspects = {
       kunai: 'zagreus',

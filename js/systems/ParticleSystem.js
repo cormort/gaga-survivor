@@ -26,6 +26,12 @@ export class ParticleSystem {
     this._dtHead = 0;
     this._dtCount = 0;
     this.lightnings = [];
+    // 顯示設定（由 Game.applyDisplaySettings 寫入）：
+    //   damageTextMode  'all' 全部跳字 / 'crit' 只顯示真暴擊 / 'off' 不顯示傷害數字
+    //   reduceFlash     落雷與電弧的亮度與光暈減半
+    // 只影響「數字」跳字；文字提示（+50 HP、撿到的珠寶名）與玩家受傷數字照常顯示
+    this.damageTextMode = 'all';
+    this.reduceFlash = false;
     // 每幀的摩擦衰減倍率快取 (見 update)
     this._frictionMul = new Map();
   }
@@ -79,6 +85,9 @@ export class ParticleSystem {
   }
 
   createDamageText(x, y, text, isCrit = false, isRealCrit = false) {
+    if (this.damageTextMode !== 'all' && (typeof text === 'number' || /^\d+$/.test(text))) {
+      if (this.damageTextMode === 'off' || !isRealCrit) return;
+    }
     // 跳字太多時丟掉最舊的 (已淡出大半)，保留最新傷害反饋
     const displayText = typeof text === 'number' ? String(Math.round(text)) : String(text);
     this._pushDamageText({
@@ -259,13 +268,15 @@ export class ParticleSystem {
 
   draw(ctx, camera) {
     // 繪製雷擊
+    const flashMul = this.reduceFlash ? 0.4 : 1;
     for (const l of this.lightnings) {
       const alpha = Math.max(0, l.life / l.maxLife);
       ctx.save();
+      ctx.globalAlpha = flashMul;
       ctx.strokeStyle = l.color;
       ctx.lineWidth = 4 * alpha;
       ctx.shadowColor = l.color;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = this.reduceFlash ? 0 : 12;
 
       ctx.beginPath();
       for (let i = 0; i < l.points.length; i++) {
@@ -278,7 +289,7 @@ export class ParticleSystem {
 
       // 地面落雷光環
       ctx.fillStyle = l.color;
-      ctx.globalAlpha = 0.3 * alpha;
+      ctx.globalAlpha = 0.3 * alpha * flashMul;
       ctx.beginPath();
       ctx.arc(l.points[l.points.length - 1].x - camera.x, l.points[l.points.length - 1].y - camera.y, l.radius, 0, Math.PI * 2);
       ctx.fill();

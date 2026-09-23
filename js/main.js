@@ -74,7 +74,7 @@ import {
   drawMerchant,
 } from './systems/Merchant.js';
 import { bindEvents, returnToMenu } from './systems/Menu.js';
-import { metaBonuses, upgradeKeyOf, charLevelBonuses } from './meta.js';
+import { metaBonuses, upgradeKeyOf, isBanishable, charLevelBonuses } from './meta.js';
 import { SHOP_BOOSTERS } from './shop.js';
 import {
   rollItem,
@@ -170,6 +170,7 @@ class Game {
     this.weaponManager.game = this;
     this.spawner = new Spawner();
     this.particles = new ParticleSystem();
+    this.applyDisplaySettings();
     this.ground = new GroundRenderer();
     this.ui = new UIManager();
 
@@ -928,6 +929,16 @@ class Game {
     this._autoPocketTimer = 0;
     this.player.weaponAspects = { ...(save.data.weaponAspects || {}) };
     this.ui.updatePockets(this.player.pockets);
+
+    // 暫停面板與按鈕回到初始狀態（從暫停中直接重開一局也不會殘留）
+    document.getElementById('pause-modal')?.classList.add('hidden');
+    this.ui.pauseBtn.textContent = '⏸️';
+    this.ui.quitBtn?.classList.add('hidden');
+
+    // 升級卡封印／跳過：每局重置次數，封印名單只在本局有效
+    this.banished = new Set();
+    this.banishesLeft = GAME_CONFIG.BANISH_PER_RUN;
+    this.skipsLeft = GAME_CONFIG.SKIP_PER_RUN;
 
     // ── 新系統重設 ──
     this.blessings = [];
@@ -2510,15 +2521,67 @@ class Game {
 
   // 生成並顯示三張升級卡；excludeKeys = 上一輪顯示的卡 (reroll 時用)
   presentUpgradeChoices(excludeKeys) {
-    const opts = this.ui.generateUpgradeOptions(this.weaponManager, excludeKeys);
+    const opts = this.ui.generateUpgradeOptions(this.weaponManager, excludeKeys, this.banished);
+    this.renderUpgradeChoices(opts, false);
+  }
+
+  // 把目前這組卡畫出來（silent = 封印換卡時重畫，不再播一次升級音效）
+  renderUpgradeChoices(opts, silent) {
+    this._shownUpgradeOpts = opts;
     this._shownUpgradeKeys = opts.map(upgradeKeyOf);
     this.ui.showUpgradeCards(
       opts,
       this.gold,
       this.rerollCost,
       (selectedOption) => this.applyUpgradeOption(selectedOption),
-      () => this.tryRerollUpgrade()
+      () => this.tryRerollUpgrade(),
+      {
+        silent,
+        banishesLeft: this.banishesLeft,
+        skipsLeft: this.skipsLeft,
+        skipGold: GAME_CONFIG.SKIP_GOLD,
+        onBanish: (opt) => this.banishUpgrade(opt),
+        onSkip: () => this.skipUpgrade(),
+      }
     );
+  }
+
+  // 封印：這張卡的武器／配件本局不再出現，只把這一張換成新的（其他兩張保留，
+  // 否則封印就等於一次免費重抽）。沒有可換的卡就只拿掉這張。
+  banishUpgrade(opt) {
+    if (this.state !== 'LEVEL_UP' || this.banishesLeft <= 0 || !isBanishable(opt)) return;
+    this.banished.add(opt.id);
+    this.banishesLeft--;
+    const shown = this._shownUpgradeOpts || [];
+    const keep = shown.filter((o) => upgradeKeyOf(o) !== upgradeKeyOf(opt));
+    const keepKeys = new Set(keep.map(upgradeKeyOf));
+    const fresh = this.ui.generateUpgradeOptions(this.weaponManager, [...keepKeys, upgradeKeyOf(opt)], this.banished)
+      .find((o) => !keepKeys.has(upgradeKeyOf(o)) && !(o.id && this.banished.has(o.id)));
+    const next = shown.map((o) => (o === opt ? fresh : o)).filter(Boolean);
+    sound.playHurt();
+    this.ui.say(`🚫 已封印【${opt.name}】：本局不再出現`, '#ff6b6b', 1.6);
+    // 全部都被封印光了（極端情況）：退回急救包，不讓玩家卡在空白的選卡畫面
+    this.renderUpgradeChoices(next.length > 0 ? next : this.ui.generateUpgradeOptions(this.weaponManager, null, this.banished), true);
+  }
+
+  // 跳過：這次不選任何升級，換一點本局金幣
+  skipUpgrade() {
+    if (this.state !== 'LEVEL_UP' || this.skipsLeft <= 0) return;
+    this.skipsLeft--;
+    this.gold += GAME_CONFIG.SKIP_GOLD;
+    this.ui.levelUpModal.classList.add('hidden');
+    this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
+    this.ui.say(`⏭️ 跳過升級 +${GAME_CONFIG.SKIP_GOLD} 🪙`, '#9fb0c8', 1.4);
+    this.continueAfterLevelUp();
+  }
+
+  // 選完（或跳過）一張升級卡之後：還有待處理的升級就接著開下一輪，否則回到戰鬥
+  continueAfterLevelUp() {
+    if (this.pendingLevelUps > 0) {
+      this.triggerLevelUp();
+    } else {
+      this.state = 'PLAYING';
+    }
   }
 
   // 金幣 reroll：扣 60 金，重抽不重複的三選一
@@ -2564,11 +2627,7 @@ class Game {
 
     // 檢查是否還有多餘升級 (連續升級)。改看待處理計數 —— 原本比對銀行內的 exp，
     // 一次跨多級時 gainExp 已把 exp 扣光，條件不成立，多出來的升級卡就被吃掉了。
-    if (this.pendingLevelUps > 0) {
-      this.triggerLevelUp();
-    } else {
-      this.state = 'PLAYING';
-    }
+    this.continueAfterLevelUp();
   }
 
   // ── 方向 3：特殊升級卡 ──
@@ -2745,10 +2804,20 @@ class Game {
     }
   }
 
+  // 顯示設定（存檔 settings）→ 跳字模式、閃光、震動。選單或暫停面板改設定後也會呼叫
+  applyDisplaySettings() {
+    const st = save.data.settings || {};
+    this.particles.damageTextMode = ['all', 'crit', 'off'].includes(st.damageNumbers) ? st.damageNumbers : 'all';
+    this.particles.reduceFlash = !!st.reduceFlash;
+    this._shakeOn = st.screenShake !== false;
+    this._flashMul = st.reduceFlash ? 0.35 : 1;
+  }
+
   render() {
-    // 螢幕震動偏移
-    const shakeX = (Math.random() - 0.5) * this.camera.shake;
-    const shakeY = (Math.random() - 0.5) * this.camera.shake;
+    // 螢幕震動偏移（顯示設定可關閉；camera.shake 仍照常衰減，只是不畫出來）
+    const shake = this._shakeOn === false ? 0 : this.camera.shake;
+    const shakeX = (Math.random() - 0.5) * shake;
+    const shakeY = (Math.random() - 0.5) * shake;
 
     const renderCam = {
       x: this.camera.x + shakeX,
@@ -2842,7 +2911,7 @@ class Game {
         this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.35,
         this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.75);
       g.addColorStop(0, 'rgba(255,0,60,0)');
-      g.addColorStop(1, `rgba(255,0,60,${(0.3 * this.redFlash).toFixed(3)})`);
+      g.addColorStop(1, `rgba(255,0,60,${(0.3 * this.redFlash * (this._flashMul ?? 1)).toFixed(3)})`);
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, this.vw, this.vh);
     }
