@@ -53,6 +53,35 @@ const HUD_PEEK_SECONDS = 1.0;
 // 的時長，只有超過上限的才被截短。
 const HUD_HINT_MAX_SECONDS = 2.5;
 
+// 升級卡的實際數值變化：和 WeaponManager 開火時讀的是同一份 config，改平衡時卡面自動跟著變
+const LEVEL_STAT_LABELS = {
+  projectiles: '發射數', count: '數量', pierce: '穿透', radius: '範圍', explosionRadius: '爆炸半徑',
+  strikes: '落雷數', bounces: '彈跳', outTime: '飛行時間', width: '光束寬',
+};
+export function weaponLevelDiff(def, level) {
+  const parts = [];
+  if (def.damageGrowth) parts.push(`傷害 +${def.damageGrowth}`);
+  if (def.cooldownGrowth) parts.push(`冷卻 ${def.cooldownGrowth}s`);
+  for (const [k, label] of Object.entries(LEVEL_STAT_LABELS)) {
+    const arr = def[k];
+    if (Array.isArray(arr) && arr[level] !== undefined && arr[level] !== arr[level - 1]) {
+      parts.push(`${label} ${arr[level - 1]}→${arr[level]}`);
+    }
+  }
+  return parts.join('，') || '效果提升';
+}
+
+// 被動配件卡：標出它是哪把「已持有武器」的超武配方，選卡時不用翻圖鑑
+function pairedWeaponNote(passiveId, weaponManager) {
+  for (const [wid, item] of weaponManager.weapons.entries()) {
+    const def = WEAPONS[wid];
+    if (!item.isEvo && def.pairPassive === passiveId && def.evoTarget) {
+      return `<br>✨ ${def.icon}${def.name} 的超武配件（→【${WEAPONS[def.evoTarget].name}】）`;
+    }
+  }
+  return '';
+}
+
 export class UIManager {
   constructor() {
     this.expFill = document.getElementById('exp-bar-fill');
@@ -1409,8 +1438,14 @@ export class UIManager {
         const pair = pairInfo(id);
         const hint = recipeHints.get(id); // 自己是別把武器的雙武合成缺件 (如 苦無 for 相位風暴)
         const recipeReady = pair && pair.maxed && isLastLevel;
-        let desc = `提升等級至 LV ${item.level + 1}。傷害與彈幕增強。`;
+        let desc = `LV ${item.level} → ${item.level + 1}：${weaponLevelDiff(def, item.level)}`;
         let tag = '武器升級';
+        // 還沒到最後一級也給「距超武多遠」，不必另開超武配方查
+        if (!recipeReady && !hint && def.evoTarget) {
+          const pDef = PASSIVES[def.pairPassive] || WEAPONS[def.pairPassive];
+          const pLv = pair && pair.owned ? (weaponManager.passives.get(def.pairPassive) || weaponManager.weapons.get(def.pairPassive)).level : 0;
+          if (pDef) desc += `<br>✨ 超武【${WEAPONS[def.evoTarget].name}】：武器差 ${def.maxLevel - item.level} 級 · ${pDef.icon}${pDef.name} ${pLv ? `LV ${pLv}/${pDef.maxLevel}` : '未持有'}`;
+        }
         if (recipeReady) {
           desc = `提升至滿級！配方齊備，可合成【${WEAPONS[def.evoTarget].name}】`;
           tag = '武器升級 · 配方就緒';
@@ -1461,9 +1496,9 @@ export class UIManager {
           id: id,
           name: def.name,
           icon: def.icon,
-          description: hint
+          description: (hint
             ? `提升等級至 LV ${item.level + 1}。完成後即可合成【${hint.evoName}】`
-            : `提升等級至 LV ${item.level + 1}。效果提升。`,
+            : `提升等級至 LV ${item.level + 1}。效果提升。`) + (hint ? '' : pairedWeaponNote(id, weaponManager)),
           tag: hint ? '被動升級 · 超武缺件' : '被動升級',
           nextLevel: item.level + 1,
           maxLevel: def.maxLevel,
@@ -1505,7 +1540,7 @@ export class UIManager {
             icon: def.icon,
             description: hint
               ? `${def.description}（缺件：取得並升滿即可合成【${hint.evoName}】）`
-              : def.description,
+              : def.description + pairedWeaponNote(id, weaponManager),
             tag: hint ? '新被動 · 超武缺件' : '新被動',
             isNew: true,
             nextLevel: 1,
@@ -1611,6 +1646,12 @@ export class UIManager {
     document.getElementById('total-dna').textContent = stats.totalDna;
     const totalGoldEl = document.getElementById('total-gold');
     if (totalGoldEl) totalGoldEl.textContent = stats.totalGold ?? 0;
+
+    const recapRow = document.getElementById('death-recap');
+    if (recapRow) {
+      recapRow.textContent = stats.deathRecap || '';
+      recapRow.classList.toggle('hidden', !stats.deathRecap);
+    }
 
     const unlockRow = document.getElementById('unlock-notice');
     if (stats.unlockedName) {

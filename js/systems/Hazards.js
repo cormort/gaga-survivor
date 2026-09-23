@@ -63,7 +63,7 @@ export function triggerPropExplosion(game, prop) {
     }
   }
   const playerDist = Math.hypot(game.player.x - prop.x, game.player.y - prop.y);
-  if (playerDist < blastR && game.player.takeDamage(12)) {
+  if (playerDist < blastR && game.player.takeDamage(12, '場景爆炸')) {
     game.particles.createHurtText(game.player.x, game.player.y, 12);
   }
 }
@@ -230,7 +230,7 @@ export function updateHazards(game, dt) {
       if (dist > sc.radius) {
         if (sc.tick <= 0) {
           sc.tick = mech.dmgInterval || 0.4;
-          if (p.takeDamage(mech.dmg)) game.particles.createHurtText(p.x, p.y, mech.dmg);
+          if (p.takeDamage(mech.dmg, '毒圈收縮')) game.particles.createHurtText(p.x, p.y, mech.dmg);
         }
         // 微推向圈心
         if (dist > 0) {
@@ -266,7 +266,7 @@ export function updateHazards(game, dt) {
         const dy = p.y - h.y;
         const rr = h.r + p.radius;
         if (dx * dx + dy * dy < rr * rr) {
-          if (p.takeDamage(h.dmg)) game.particles.createHurtText(p.x, p.y, h.dmg);
+          if (p.takeDamage(h.dmg, '地面毒池')) game.particles.createHurtText(p.x, p.y, h.dmg);
         }
       }
       if (h.t >= h.dur) game.hazards.splice(i, 1);
@@ -279,7 +279,7 @@ export function updateHazards(game, dt) {
         const dy = p.y - h.y;
         const rr = h.r + p.radius;
         if (dx * dx + dy * dy > rr * rr) {
-          if (p.takeDamage(h.dmg)) game.particles.createHurtText(p.x, p.y, h.dmg);
+          if (p.takeDamage(h.dmg, '安全區外')) game.particles.createHurtText(p.x, p.y, h.dmg);
         }
       }
       if (h.t >= h.dur) game.hazards.splice(i, 1);
@@ -338,7 +338,7 @@ export function explodeHazard(game, h) {
     }
   }
   const pd = Math.hypot(game.player.x - h.x, game.player.y - h.y);
-  if (pd < rr + game.player.radius) game.player.takeDamage(h.dmg);
+  if (pd < rr + game.player.radius) game.player.takeDamage(h.dmg, h.kind === 'geyser' ? '地面噴發' : '地雷');
 }
 
 export function drawHazards(game, cam) {

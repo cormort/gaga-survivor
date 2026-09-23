@@ -20,7 +20,7 @@ import { MERC } from './entities/Mercenary.js';
 import { InputController } from './input.js';
 import { WeaponManager } from './weapons/WeaponManager.js';
 import { Spawner, MAX_ENEMIES as SPAWNER_MAX_ENEMIES } from './systems/Spawner.js';
-import { ParticleSystem } from './systems/ParticleSystem.js';
+import { ParticleSystem, MAX_PARTICLES } from './systems/ParticleSystem.js';
 import { UIManager } from './systems/UI.js';
 import { sound } from './audio.js';
 import { CHARACTERS } from './characters.js';
@@ -203,6 +203,8 @@ class Game {
     this._merchantBuys = 0;
     this._maxCombo = 0;
     this._damageTaken = 0;
+    this._lastHit = null;
+    this._dmgBySource = {};
     this._chestsOpened = 0;
     this._evosThisRun = 0;
     this._goldRushTimer = 0;       // 淘金狂潮特殊卡的計時
@@ -383,6 +385,18 @@ class Game {
 
   // 真的跟不上就降階；降階後長期有餘裕才升回（升階要連續 DPR_UP_STREAK 次）
   _adaptDpr(avgMs) {
+    // 最後一階：解析度已到底 (或裝置本來就 1×) 仍然太慢 → 粒子上限減半；有餘裕就先恢復粒子
+    const ps = this.particles;
+    if (ps && !this._dprLocked && this._dprIdx === 0) {
+      if (avgMs > DPR_DOWN_MS && ps.cap === MAX_PARTICLES) {
+        ps.cap = MAX_PARTICLES / 2;
+        return;
+      }
+      if (avgMs < DPR_UP_MS && ps.cap !== MAX_PARTICLES) {
+        ps.cap = MAX_PARTICLES;
+        return;
+      }
+    }
     const steps = this._dprSteps;
     if (!steps || this._dprLocked || steps.length <= 1) return;
     if (avgMs > DPR_DOWN_MS && this._dprIdx > 0) {
@@ -872,6 +886,8 @@ class Game {
     this._merchantBuys = 0;
     this._maxCombo = 0;
     this._damageTaken = 0;
+    this._lastHit = null;
+    this._dmgBySource = {};
     this._chestsOpened = 0;
     this._evosThisRun = 0;
     this._goldRushTimer = 0;
@@ -946,7 +962,7 @@ class Game {
       this.camera.shake = Math.max(this.camera.shake, 10);
       const d = Math.hypot(this.player.x - boss.x, this.player.y - boss.y);
       if (d < R + this.player.radius) {
-        this.player.takeDamage(14);
+        this.player.takeDamage(14, `${boss.name}・震波`);
         this.particles.createHurtText(this.player.x, this.player.y, 14);
       }
     } else if (act === 'summon') {
@@ -1018,9 +1034,20 @@ class Game {
     }
   }
 
+  // 失敗結算的「為什麼死」：最後一擊 + 本局承受最多的來源
+  deathRecap() {
+    if (this.core && this.core.isDead) return '💥 基地核心被摧毀';
+    const hit = this._lastHit;
+    if (!hit) return null;
+    const [topSrc, topDmg] = Object.entries(this._dmgBySource || {}).sort((a, b) => b[1] - a[1])[0];
+    return `💀 最後傷害：${hit.source} ${hit.dmg}　·　承受最多：${topSrc} ${topDmg}（共 ${this._damageTaken}）`;
+  }
+
   spawnEnemyProjectile(shooter, projData) {
     if (this.enemyProjectiles.length < 150) {
-      this.enemyProjectiles.push(new EnemyProjectile(projData));
+      const ep = new EnemyProjectile(projData);
+      ep.sourceName = shooter?.name;
+      this.enemyProjectiles.push(ep);
     }
   }
 
@@ -1067,7 +1094,7 @@ class Game {
       // 優先判定玩家 (含無敵幀擋彈)
       if (dist < p.radius + ep.radius) {
         consumed = true;
-        if (p.takeDamage(ep.damage)) {
+        if (p.takeDamage(ep.damage, ep.sourceName ? `${ep.sourceName}・子彈` : '敵方子彈')) {
           this.camera.shake = Math.max(this.camera.shake, 6);
           this.particles.createHurtText(p.x, p.y, ep.damage);
           this.particles.createDeathParticles(ep.x, ep.y, ep.color || '#06d6a0', 6);
@@ -1233,7 +1260,7 @@ class Game {
           sound.playExplosion();
           const dist = Math.hypot(this.player.x - boomer.x, this.player.y - boomer.y);
           if (dist <= 75 + this.player.radius) {
-            this.player.takeDamage(20);
+            this.player.takeDamage(20, `${boomer.name}・自爆`);
             this.camera.shake = 8;
           }
         },
@@ -1260,7 +1287,7 @@ class Game {
           const sdx = this.player.x - e.x;
           const sdy = this.player.y - e.y;
           if (Math.sqrt(sdx * sdx + sdy * sdy) <= slam.radius + this.player.radius) {
-            if (this.player.takeDamage(slam.dmg)) {
+            if (this.player.takeDamage(slam.dmg, `${e.name}・重擊`)) {
               this.particles.createHurtText(this.player.x, this.player.y, slam.dmg);
             }
           }
@@ -1300,7 +1327,7 @@ class Game {
       // 怪物撞擊特工傷害檢測
       const dist = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
       if (dist < this.player.radius + enemy.radius) {
-        if (this.player.takeDamage(enemy.damage)) {
+        if (this.player.takeDamage(enemy.damage, enemy.name)) {
           this.camera.shake = 6;
           this.particles.createDeathParticles(this.player.x, this.player.y, '#ff0055', 6);
           this.player.character.onHit?.(this);
@@ -2505,6 +2532,7 @@ class Game {
         achievements: newAchievements,
         blessings: this.blessings,
         synergies: this.activeSynergies,
+        deathRecap: isVictory ? null : this.deathRecap(),
       },
       this.weaponManager,
       { savedGear, lostGear, salvagedGear }

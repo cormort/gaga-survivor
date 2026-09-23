@@ -263,7 +263,7 @@ export class Player {
     }
   }
 
-  takeDamage(amount) {
+  takeDamage(amount, source = '未知來源') {
     if (this.invulnerableTimer > 0 || this.isDead) return false;
 
     let dmg = Math.round(amount * this.damageTakenMul * (1 - (this.metaArmor || 0)));
@@ -289,6 +289,10 @@ export class Player {
     this.hp -= dmg;
     if (this.game && dmg > 0) {
       this.game._damageTaken = (this.game._damageTaken || 0) + dmg;
+      // 死亡結算用：最後一擊與各來源累計，讓「莫名其妙死掉」變成可學習的回饋
+      this.game._lastHit = { source, dmg };
+      const by = (this.game._dmgBySource ||= {});
+      by[source] = (by[source] || 0) + dmg;
     }
     this.invulnerableTimer = 0.5; // 0.5 秒無敵時間
     sound.playHurt();

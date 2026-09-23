@@ -131,14 +131,16 @@ export const save = {
   data: blank(),
 
   load() {
+    let raw = null;
     try {
-      const raw = localStorage.getItem(KEY);
-      this.data = raw ? { ...blank(), ...JSON.parse(raw) } : migrate(blank());
+      raw = localStorage.getItem(KEY);
+      this.data = ensureDefaults(raw ? { ...blank(), ...JSON.parse(raw) } : migrate(blank()));
     } catch (e) {
-      // 存檔壞掉不該讓遊戲開不起來，直接重來一份
-      this.data = blank();
+      // 存檔壞掉不該讓遊戲開不起來，直接重來一份 ——
+      // 但原始字串先備份到另一個 key：下一次 flush 就會蓋掉 KEY，不留備份等於整份進度蒸發
+      try { if (raw) localStorage.setItem(`${KEY}_corrupt_backup`, raw); } catch (_) { /* 寫不進去也只能放棄 */ }
+      this.data = ensureDefaults(blank());
     }
-    ensureDefaults(this.data);
     return this.data;
   },
 

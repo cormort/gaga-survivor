@@ -2,7 +2,7 @@
 
 // 特效數量上限：避免滿級燃燒瓶×大批怪、全場炸彈等極端場面把行動裝置壓垮。
 // 跳字用「丟最舊保留最新」；粒子用「容量不足就少生幾顆」。
-const MAX_PARTICLES = 900;
+export const MAX_PARTICLES = 900;
 const MAX_DAMAGE_TEXTS = 110;
 const MAX_LIGHTNINGS = 12;
 
@@ -17,6 +17,8 @@ const TEXT_BUCKETS = [[], [], []];
 
 export class ParticleSystem {
   constructor() {
+    // 解析度已降到最低仍跟不上時，main.js 的自適應會把它減半 (省粒子)
+    this.cap = MAX_PARTICLES;
     this.particles = [];
     // 跳字環狀緩衝：這仍是一個陣列，但滿了之後是「就地覆寫最舊槽位」，
     // 而不是 shift() 把後面 110 筆整排往前搬。_dtHead 指向最舊的一筆。
@@ -123,7 +125,7 @@ export class ParticleSystem {
 
   createDeathParticles(x, y, color = '#38b000', count = 8) {
     for (let i = 0; i < count; i++) {
-      if (this.particles.length >= MAX_PARTICLES) break;
+      if (this.particles.length >= this.cap) break;
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 140 + 40;
       this.particles.push({
@@ -142,7 +144,7 @@ export class ParticleSystem {
 
   createExplosion(x, y, radius, isEvo = false) {
     // 衝擊波環 (容量滿就略過視覺，傷害計算不受影響)
-    if (this.particles.length < MAX_PARTICLES) {
+    if (this.particles.length < this.cap) {
       this.particles.push({
         type: 'shockwave',
         x: x,
@@ -158,7 +160,7 @@ export class ParticleSystem {
     // 破片與火花
     const count = isEvo ? 24 : 14;
     for (let i = 0; i < count; i++) {
-      if (this.particles.length >= MAX_PARTICLES) break;
+      if (this.particles.length >= this.cap) break;
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 220 + 60;
       this.particles.push({
@@ -177,7 +179,7 @@ export class ParticleSystem {
 
   // 純衝擊波環 (角色特質用)
   createShockwave(x, y, radius, color = '#00e5ff') {
-    if (this.particles.length >= MAX_PARTICLES) return;
+    if (this.particles.length >= this.cap) return;
     this.particles.push({
       type: 'shockwave',
       x, y,
@@ -192,7 +194,7 @@ export class ParticleSystem {
   // 腳下小火花 (兔兔火痕用)
   createHitSpark(x, y, color = '#ff6b00') {
     for (let i = 0; i < 4; i++) {
-      if (this.particles.length >= MAX_PARTICLES) break;
+      if (this.particles.length >= this.cap) break;
       const angle = Math.random() * Math.PI * 2;
       this.particles.push({
         x, y,

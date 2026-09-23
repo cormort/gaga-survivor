@@ -764,6 +764,12 @@ body, html {
   margin-bottom: 4px;
 }
 
+.unlock-notice.death-recap {
+  background: rgba(255, 0, 85, 0.12);
+  border-color: #ff0055;
+  color: #ff8fab;
+}
+
 .unlock-notice {
   margin: 8px 0 4px;
   padding: 8px 12px;
