@@ -2341,6 +2341,33 @@ body, html {
   letter-spacing: 0.3px;
 }
 
+/* 選關卡片：地形機制逐項標籤 + 過關解鎖武器 */
+.level-mechs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+  margin: 2px 0;
+}
+.level-mech {
+  font-size: 10px;
+  color: #bde0fe;
+  background: rgba(120, 180, 255, 0.1);
+  border: 1px solid rgba(120, 180, 255, 0.28);
+  border-radius: 4px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.level-reward {
+  text-align: center;
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ff9ecf;
+  margin: 2px 0;
+}
+.level-reward.owned { color: #7dff8f; opacity: 0.8; }
+
 /* ==================== 局內隨機事件橫幅 (Event Banner) ==================== */
 .event-banner {
   --event-color: #ff0055;

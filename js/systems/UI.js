@@ -34,6 +34,7 @@ import {
 } from '../items.js';
 import { JEWELS, JEWEL_ORDER, jewelValue } from '../jewels.js';
 import { questText } from '../quests.js';
+import { MECH_INFO } from '../levels.js';
 import { CODEX_MILESTONES, codexCategories, codexHas, codexProgress } from '../codex.js';
 import { save, STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
@@ -1131,6 +1132,7 @@ export class UIManager {
   // 開始畫面的關卡選擇 (未解鎖的關卡不能點)
   buildLevelSelect(levels, order, save, onPick, currentId) {
     this.levelSelect.innerHTML = '';
+    const weaponsOwned = save.unlockedWeapons();
 
     order.forEach((id) => {
       const lv = levels[id];
@@ -1143,11 +1145,24 @@ export class UIManager {
       const bestLine = best
         ? `最佳 ${String(Math.floor(best.time / 60)).padStart(2, '0')}:${String(Math.floor(best.time % 60)).padStart(2, '0')}${best.cleared ? ' ✔' : ''}`
         : '尚未挑戰';
+      // 地形機制逐項列出（每種一個標籤），不再只寫在說明文字裡
+      const mechChips = unlocked && lv.mechs?.length
+        ? `<span class="level-mechs">${lv.mechs.filter((m) => MECH_INFO[m.type])
+          .map((m) => `<span class="level-mech">${MECH_INFO[m.type].icon} ${MECH_INFO[m.type].name}</span>`).join('')}</span>`
+        : '';
+      // 過關獎勵武器：取得前是「🎁 過關解鎖」，取得後打勾
+      const rw = lv.rewardWeapon && WEAPONS[lv.rewardWeapon];
+      const rewardLine = rw
+        ? `<span class="level-reward${weaponsOwned.has(lv.rewardWeapon) ? ' owned' : ''}">`
+          + `${weaponsOwned.has(lv.rewardWeapon) ? '✔ 已取得' : '🎁 過關解鎖'}：${rw.icon} ${rw.name}</span>`
+        : '';
       card.innerHTML = `
         <span class="level-icon">${unlocked ? lv.icon : '🔒'}</span>
         <span class="level-name">${lv.name}</span>
         <span class="level-sub">${lv.sub} ‧ 難度 ${'★'.repeat(lv.difficulty)}</span>
         ${unlocked && lv.rules?.label ? `<span class="level-rule" title="${lv.rules.desc}">⚔️ ${lv.rules.label}</span>` : ''}
+        ${mechChips}
+        ${rewardLine}
         <span class="level-best">${unlocked ? bestLine : '通關前一關即可解鎖'}</span>
       `;
       card.addEventListener('click', () => {
@@ -1826,7 +1841,8 @@ export class UIManager {
     // 4. 新武器 (若武器槽未滿)
     if (weaponManager.weapons.size < GAME_CONFIG.MAX_WEAPON_SLOTS) {
       for (const [id, def] of Object.entries(WEAPONS)) {
-        if (!def.isEvo && !weaponManager.weapons.has(id)) {
+        // weaponPool：本局可抽的武器（未通關解鎖的不進卡池）；null = 全開放（每日挑戰）
+        if (!def.isEvo && !weaponManager.weapons.has(id) && (!weaponManager.weaponPool || weaponManager.weaponPool.has(id))) {
           const hint = recipeHints.get(id);
           candidates.push({
             type: 'weapon_new',
@@ -1978,8 +1994,11 @@ export class UIManager {
     }
 
     const unlockRow = document.getElementById('unlock-notice');
-    if (stats.unlockedName) {
-      unlockRow.textContent = `🎉 解鎖新關卡：${stats.unlockedName}`;
+    const unlockLines = [];
+    if (stats.unlockedName) unlockLines.push(`🎉 解鎖新關卡：${stats.unlockedName}`);
+    if (stats.unlockedWeapon) unlockLines.push(`🔓 解鎖新武器：${stats.unlockedWeapon.icon} ${stats.unlockedWeapon.name}（之後的升級卡會出現）`);
+    if (unlockLines.length) {
+      unlockRow.innerHTML = unlockLines.join('<br>');   // 關卡與武器名稱都是靜態資料
       unlockRow.classList.remove('hidden');
     } else {
       unlockRow.classList.add('hidden');

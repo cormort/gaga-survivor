@@ -10,6 +10,7 @@ export const LEVEL_DURATION = 480;
 export const LEVELS = {
   street: {
     id: 'street',
+    rewardWeapon: 'rocket',   // 首次通關解鎖的武器
     name: '淪陷商業街',
     sub: '新手啟航',
     icon: '🌃',
@@ -71,6 +72,7 @@ export const LEVELS = {
 
   lab: {
     id: 'lab',
+    rewardWeapon: 'molotov',
     name: '廢棄生化實驗室',
     sub: '狹小壓迫',
     icon: '🧪',
@@ -131,6 +133,7 @@ export const LEVELS = {
 
   frost: {
     id: 'frost',
+    rewardWeapon: 'frost_nova',
     name: '極寒暴風雪基地',
     sub: '速度與風箏考驗',
     icon: '❄️',
@@ -193,6 +196,7 @@ export const LEVELS = {
 
   core: {
     id: 'core',
+    rewardWeapon: 'lightning',
     name: '熔岩核心熔爐',
     sub: '高溫死鬥',
     icon: '🌋',
@@ -262,6 +266,7 @@ export const LEVELS = {
 
   subway: {
     id: 'subway',
+    rewardWeapon: 'railgun',
     name: '鏽蝕地下鐵',
     sub: '窄道圍殺',
     icon: '🚇',
@@ -322,6 +327,7 @@ export const LEVELS = {
 
   swamp: {
     id: 'swamp',
+    rewardWeapon: 'boomerang',
     name: '毒霧沼澤',
     sub: '持續消耗',
     icon: '☣️',
@@ -384,6 +390,7 @@ export const LEVELS = {
 
   storm: {
     id: 'storm',
+    rewardWeapon: 'shotgun',
     name: '沙暴要塞',
     sub: '視野與極速',
     icon: '🏜️',
@@ -450,6 +457,7 @@ export const LEVELS = {
 
   foundry: {
     id: 'foundry',
+    rewardWeapon: 'orbit_saw',
     name: '熔毀鑄造廠',
     sub: '鐵水與重甲',
     icon: '🏭',
@@ -511,6 +519,7 @@ export const LEVELS = {
 
   frostvoid: {
     id: 'frostvoid',
+    rewardWeapon: 'soccer',
     name: '霜封虛空',
     sub: '冰面與符文',
     icon: '🧊',
@@ -572,6 +581,7 @@ export const LEVELS = {
 
   voidroad: {
     id: 'voidroad',
+    rewardWeapon: 'phase_blade',
     name: '虛空裂道',
     sub: '無盡之前',
     icon: '🕳️',
@@ -679,6 +689,24 @@ export const LEVELS = {
     ],
     bosses: [],
   },
+};
+
+// 武器解鎖：從頭開始的玩家只有這兩把，其餘每把都綁在一張關卡的首次通關（rewardWeapon）。
+// 解鎖狀態不另存，由存檔的通關紀錄推導（save.unlockedWeapons），老玩家已通關的關卡自動補發。
+export const STARTER_WEAPONS = ['kunai', 'guardian'];
+
+// 地形機制／局內事件的圖示與名稱：選關卡片的機制標籤、小地圖標記與圖例共用
+export const MECH_INFO = {
+  supply: { icon: '📦', name: '空投物資' },
+  spring: { icon: '💧', name: '回復泉' },
+  pool: { icon: '☠️', name: '腐蝕毒池' },
+  mine: { icon: '💥', name: '地雷' },
+  ice: { icon: '🧊', name: '冰面滑行' },
+  gale: { icon: '🌪️', name: '疾風帶' },
+  geyser: { icon: '🌋', name: '地面噴發' },
+  safeZone: { icon: '🛡️', name: '安全高台' },
+  tar: { icon: '🟤', name: '焦油泥沼' },
+  shrinkCircle: { icon: '⭕', name: '縮圈結界' },
 };
 
 export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'subway', 'swamp', 'storm',

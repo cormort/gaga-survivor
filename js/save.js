@@ -6,7 +6,7 @@ import { SLOT_ORDER, salvageValue, salvageGold, reforgeCost, rerollAffixes, FUSI
 // 倉庫基礎容量也住在黑市（擴建成本要從它算第幾次擴建），這裡再匯出給既有的讀者
 import { MAX_BOOSTER_STACK, STASH_CAP } from './shop.js';
 // 舊存檔的解鎖鏈修補需要關卡表（levels.js 是純資料、不 import 任何模組，不會循環）
-import { LEVELS } from './levels.js';
+import { LEVELS, STARTER_WEAPONS } from './levels.js';
 // 珠寶是純資料檔（不 import 任何模組），不會循環
 import { JEWELS, jewelValue } from './jewels.js';
 import { CODEX_MILESTONES, codexProgress } from './codex.js';
@@ -532,7 +532,20 @@ export const save = {
     return true;
   },
 
-  // 單局結算：回傳這場拿到多少 DNA 與金幣、是否破紀錄、是否解鎖新關卡
+  // 已解鎖的武器（升級卡「新武器」的卡池）：起始兩把 + 任一模式通關過的關卡的 rewardWeapon。
+  // 由通關紀錄推導而不另存，舊存檔已通關的關卡自動補發。
+  unlockedWeapons() {
+    const set = new Set(STARTER_WEAPONS);
+    for (const m of MODE_IDS) {
+      for (const [levelId, rec] of Object.entries(this.data.best[m] || {})) {
+        const w = rec && rec.cleared && LEVELS[levelId] && LEVELS[levelId].rewardWeapon;
+        if (w) set.add(w);
+      }
+    }
+    return set;
+  },
+
+  // 單局結算：回傳這場拿到多少 DNA 與金幣、是否破紀錄、是否解鎖新關卡／新武器
   // skipProgress=true (每日挑戰) 時只發 DNA/金幣，不寫該關最佳紀錄、不解鎖下一關
   recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null, skipProgress = false, modeId = 'survivor', gold = 0 }) {
     const dna = Math.max(1, Math.round((time / 10 + kills / 20 + level * 2) * dnaMult * (cleared ? 1.5 : 1)));
@@ -541,6 +554,7 @@ export const save = {
     this.data.gold = (this.data.gold || 0) + runGold;
 
     if (!skipProgress) {
+      const weaponsBefore = this.unlockedWeapons();
       if (!this.data.best[modeId]) this.data.best[modeId] = {};
       const prev = this.data.best[modeId][levelId];
       const isRecord = !prev || time > prev.time;
@@ -551,11 +565,13 @@ export const save = {
       };
 
       const unlockedNew = cleared ? this.unlock(nextLevel, modeId) : false;
+      const w = LEVELS[levelId] && LEVELS[levelId].rewardWeapon;
+      const unlockedWeapon = w && !weaponsBefore.has(w) && this.unlockedWeapons().has(w) ? w : null;
       this.flush();
-      return { dna, isRecord, unlockedNew };
+      return { dna, isRecord, unlockedNew, unlockedWeapon };
     }
     this.flush();
-    return { dna, isRecord: false, unlockedNew: false };
+    return { dna, isRecord: false, unlockedNew: false, unlockedWeapon: null };
   },
 
   recordDailyRun({ date, time, cleared }) {
