@@ -992,7 +992,8 @@ export class UIManager {
   }
 
   // 幸運物資箱抽獎彈窗
-  showLuckyChest(count, rewards, onClaim) {
+  // opts：{ title, subtitle } —— 首領寶藏箱用不同標題；一般補給箱沿用預設
+  showLuckyChest(count, rewards, onClaim, opts = {}) {
     // 自動跳過開箱動畫：直接套用獎勵並回遊戲
     if (this.skipChestChk && this.skipChestChk.checked) {
       if (onClaim) onClaim();
@@ -1003,7 +1004,9 @@ export class UIManager {
     this.luckyChestModal.classList.remove('hidden');
     this.chestCards.innerHTML = '';
     this.chestClaimBtn.classList.add('hidden');
-    this.chestSubtitle.textContent = `恭喜獲得 ${count} 連抽特工物資！`;
+    this.chestSubtitle.textContent = opts.subtitle || `恭喜獲得 ${count} 連抽特工物資！`;
+    const titleEl = this.luckyChestModal.querySelector('.chest-title');
+    if (titleEl) titleEl.textContent = opts.title || '🎁 特工幸運補給！ 🎁';
 
     sound.playGem();
 

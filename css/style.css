@@ -1840,16 +1840,20 @@ body, html {
 
 .chest-cards-grid {
   display: flex;
+  /* 同一個元素也掛著 .cards-grid（升級卡用的直排）：這裡要明確改回橫排並換行，
+     否則 3~5 張開箱卡會直直疊下去，把「確認領取」擠出畫面 */
+  flex-direction: row;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 16px;
-  margin: 24px 0;
+  gap: 12px;
+  margin: 20px 0;
   perspective: 1000px;
 }
 
 .chest-card {
-  flex: 1;
-  max-width: 170px;
-  min-height: 210px;
+  flex: 1 1 104px;
+  max-width: 150px;
+  min-height: 150px;
   background: rgba(15, 22, 40, 0.9);
   border: 2px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;

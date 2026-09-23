@@ -2310,7 +2310,7 @@ class Game {
       kind = 'EXP_GOLD';
       // Boss 必掉幸運輪盤補給箱與高階戰術道具 (終極首領打完直接勝利，箱子撿不到，略過)
       if (!enemy.isFinal) {
-        this.dropItems.push(new DropItem(enemy.x + 24, enemy.y + 24, 'CHEST'));
+        this.dropItems.push(new DropItem(enemy.x + 24, enemy.y + 24, 'CHEST', 'boss'));   // 首領寶藏箱：多次升級
         const bossConsumables = ['ELIXIR', 'MANNA_PRISM', 'STOPWATCH', 'HOLY_WATER'];
         const pickBossC = bossConsumables[Math.floor(Math.random() * bossConsumables.length)];
         this.dropItems.push(new DropItem(enemy.x - 24, enemy.y + 24, pickBossC));
@@ -2503,7 +2503,8 @@ class Game {
       sound.playGem();
       this.gold += Math.round(item.value * facilityGoldMul(this));
     } else if (item.type === 'chest') {
-      this.openLuckyChest();
+      if (item.item === 'boss') this.openBossChest();
+      else this.openLuckyChest();
     } else if (item.type === 'jewel') {
       // 撿到當下就寫進存檔：陣亡、放棄任務、甚至直接關掉網頁都不會丟
       const j = JEWELS[item.item];
@@ -2663,7 +2664,14 @@ class Game {
   }
 
   applyUpgradeOption(selectedOption) {
-    // 應用升級選項
+    this.applyUpgradeEffect(selectedOption);
+    // 檢查是否還有多餘升級 (連續升級)。改看待處理計數 —— 原本比對銀行內的 exp，
+    // 一次跨多級時 gainExp 已把 exp 扣光，條件不成立，多出來的升級卡就被吃掉了。
+    this.continueAfterLevelUp();
+  }
+
+  // 只套用一張升級卡的效果（不動遊戲狀態）：升級選卡與首領寶藏箱共用
+  applyUpgradeEffect(selectedOption) {
     if (selectedOption.type === 'evo') {
       // 圖鑑：進化會把基礎武器（和武器配方件）吃掉，先記下來
       this._weaponsSeen.add(selectedOption.baseId);
@@ -2687,10 +2695,63 @@ class Game {
     }
 
     this.ui.updateSkillSlots(this.weaponManager);
+  }
 
-    // 檢查是否還有多餘升級 (連續升級)。改看待處理計數 —— 原本比對銀行內的 exp，
-    // 一次跨多級時 gainExp 已把 exp 扣光，條件不成立，多出來的升級卡就被吃掉了。
-    this.continueAfterLevelUp();
+  // 首領寶藏箱的一次升級：照升級卡的卡池抽（尊重封印名單與欄位上限），
+  // 超武能合成就優先合成；不開特殊奇遇與急救包。沒有任何可升級的回傳 null
+  rollChestUpgrade() {
+    const opts = this.ui.generateUpgradeOptions(this.weaponManager, null, this.banished)
+      .filter((o) => o.type !== 'special' && o.type !== 'heal');
+    if (opts.length === 0) return null;
+    return opts.find((o) => o.isEvo) || opts[Math.floor(Math.random() * opts.length)];
+  }
+
+  // 首領寶藏箱：當場依序套用 N 次升級（每次重抽，才抓得到「剛升滿 → 可以合成超武」），
+  // 開箱畫面只負責展示結果
+  // 這一箱開幾次（BOSS_CHEST_COUNTS 的權重）；rand 可注入，測試才驗得到每一種次數
+  rollBossChestCount(rand = Math.random) {
+    const table = GAME_CONFIG.BOSS_CHEST_COUNTS;
+    let r = rand() * table.reduce((a, [, w]) => a + w, 0);
+    for (const [n, w] of table) { if (r < w) return n; r -= w; }
+    return table[table.length - 1][0];
+  }
+
+  openBossChest(count = this.rollBossChestCount()) {
+    this._chestsOpened++;
+    this.state = 'CHEST_MODAL';
+    sound.pauseBGM();
+    sound.playEvoFanfare();
+
+    const shown = [];
+    for (let i = 0; i < count; i++) {
+      const opt = this.rollChestUpgrade();
+      if (!opt) {
+        // 全部都滿了：退回金幣（吸血鬼倖存者也是這樣）
+        const g = Math.round(150 * facilityGoldMul(this));
+        this.gold += g;
+        shown.push({ name: '金幣', desc: `全部滿級 +${g} 🪙`, icon: '🪙', isGold: true });
+        continue;
+      }
+      const from = opt.nextLevel ? opt.nextLevel - 1 : 0;
+      this.applyUpgradeEffect(opt);
+      shown.push({
+        name: opt.name,
+        icon: opt.icon,
+        isGold: !!opt.isEvo,
+        desc: opt.isEvo ? '✨ 超武進化！'
+          : opt.isNew ? `NEW ${opt.type === 'weapon_new' ? '新武器' : '新配件'}`
+          : opt.tag && opt.tag.startsWith('超武覺醒') ? opt.tag
+          : `LV ${from} → ${opt.nextLevel}`,
+      });
+    }
+
+    this.ui.showLuckyChest(count, shown, () => {
+      this.state = 'PLAYING';
+      sound.resumeBGM();
+      this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
+      this.ui.updateBuildBtn(this.gold, this.turretCost);
+      this.particles.createShockwave(this.player.x, this.player.y, 200, '#ffd60a');
+    }, { title: '👑 首領寶藏箱 👑', subtitle: `開出 ${count} 次升級！` });
   }
 
   // ── 方向 3：特殊升級卡 ──

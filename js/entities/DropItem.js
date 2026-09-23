@@ -41,6 +41,11 @@ export class DropItem {
     if (this.type === 'gear' && payload) {
       this.color = RARITIES[payload.rarity].color;
     }
+    // 首領寶藏箱：比一般補給箱大一號、換成王冠圖示，遠遠就認得出來
+    if (this.type === 'chest' && payload === 'boss') {
+      this.icon = '👑';
+      this.radius = 18;
+    }
     // 珠寶：payload 是珠寶 id，圖示與光暈顏色跟著種類
     if (this.type === 'jewel') {
       const j = JEWELS[payload] || JEWELS.quartz;

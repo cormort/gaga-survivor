@@ -17,6 +17,9 @@ export const GAME_CONFIG = {
   SKIP_PER_RUN: 3,
   SKIP_GOLD: 25,
   REROLL_COST: 60,   // 升級卡刷新的本局金幣費用（規則卡「命運編織」可打折）
+  // 首領寶藏箱（參考吸血鬼倖存者）：一次開出 1 / 3 / 5 次真正的升級，權重如下。
+  // 只有首領的箱子是這種；精英箱（一局約 50 個）維持雜物輪盤，否則強度會爆掉
+  BOSS_CHEST_COUNTS: [[1, 20], [3, 55], [5, 25]],
   BASE_EXP_REQUIREMENT: 10,
   EXP_GROWTH_FACTOR: 1.35,
 };
