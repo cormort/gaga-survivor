@@ -7,13 +7,19 @@ import { GAME_CONFIG } from '../config.js';
 import { ELITE_AFFIXES } from '../config.js';
 import { hasSprite } from '../sprites.js';
 
-export const MAX_ENEMIES = 250;   // 場上敵人硬上限 (main.js 的孵化/裂解上限由此推導)
+// 場上敵人硬上限（main.js 的孵化／裂解上限由 spawner.maxEnemies 推導）。
+// 250 → 450：實測（CPU 降速 4 倍模擬中低階手機）600 隻的遊戲邏輯每幀 7.2ms、
+// 每隻畫面內的敵人只多 1 次 drawImage，效能不是瓶頸。
+// 裝置真的跟不上時，自適應效能的最後一階會把上限降到 LOW_END_MAX_ENEMIES（main.js _adaptDpr）。
+export const MAX_ENEMIES = 450;
+export const LOW_END_MAX_ENEMIES = 300;
 
 // 精英詞綴清單只算一次 (原本每生成一隻怪就 Object.keys 一次)
 const ELITE_KEYS = Object.keys(ELITE_AFFIXES);
 
 export class Spawner {
   constructor() {
+    this.maxEnemies = MAX_ENEMIES;   // 目前生效的上限（低階裝置會被自適應效能調低）
     this.setLevel('street');
   }
 
@@ -82,7 +88,7 @@ export class Spawner {
     if (this.spawnTimer < interval) return;
     this.spawnTimer = 0;
 
-    if (enemies.length >= MAX_ENEMIES) return;
+    if (enemies.length >= this.maxEnemies) return;
 
     // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)
     const scale = enemyScale(gameTime, level, rules);
@@ -97,8 +103,8 @@ export class Spawner {
       this.rollElite(e, gameTime);
       enemies.push(e);
       // 每一隻都要檢查上限：原本只在迴圈外檢查一次，batch 5 時實際上限是 254，
-      // 而 HATCH_ENEMY_CAP 是從名目的 250 推導的
-      if (enemies.length >= MAX_ENEMIES) break;
+      // 而孵化上限是從名目上限推導的
+      if (enemies.length >= this.maxEnemies) break;
     }
   }
 

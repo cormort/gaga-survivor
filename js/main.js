@@ -19,7 +19,7 @@ import { MERC } from './entities/Mercenary.js';
 
 import { InputController } from './input.js';
 import { WeaponManager } from './weapons/WeaponManager.js';
-import { Spawner, MAX_ENEMIES as SPAWNER_MAX_ENEMIES } from './systems/Spawner.js';
+import { Spawner, MAX_ENEMIES, LOW_END_MAX_ENEMIES } from './systems/Spawner.js';
 import { ParticleSystem, MAX_PARTICLES } from './systems/ParticleSystem.js';
 import { UIManager } from './systems/UI.js';
 import { sound } from './audio.js';
@@ -92,10 +92,10 @@ import { RUN_CARDS } from './runcards.js';
 import { Core } from './entities/Core.js';
 
 
-// 孵化/裂解用的上限：比 Spawner 的 MAX_ENEMIES 低 10 隻，留給波次生成的餘裕，
+// 孵化/裂解用的上限：比 Spawner 目前的上限低 10 隻，留給波次生成的餘裕，
 // 否則自我增殖的怪會把名額吃光、後續波次的新怪種再也進不來。
-// 兩邊過去各寫一個數字 (240 / 250) 且沒說明關係，改為從同一個來源推導。
-const HATCH_ENEMY_CAP = SPAWNER_MAX_ENEMIES - 10;
+// 上限會被自適應效能調整，所以是即時算（hatchCap()），不是常數。
+const HATCH_MARGIN = 10;
 // 核心外圈實際擠得下的同時攻擊數 (半徑 46 的六角形一圈約十幾隻)
 // 不會過期的掉落物 (裝備/寶箱/消費道具/補給) 在場上的數量上限
 const NON_EXPIRING_DROP_CAP = 15;
@@ -404,12 +404,27 @@ class Game {
   }
 
   // 真的跟不上就降階；降階後長期有餘裕才升回（升階要連續 DPR_UP_STREAK 次）
+  // 孵化／裂解的上限：跟著 Spawner 目前的上限走（低階裝置會被調低）
+  hatchCap() {
+    return (this.spawner ? this.spawner.maxEnemies : MAX_ENEMIES) - HATCH_MARGIN;
+  }
+
   _adaptDpr(avgMs) {
-    // 最後一階：解析度已到底 (或裝置本來就 1×) 仍然太慢 → 粒子上限減半；有餘裕就先恢復粒子
+    // 解析度已到底 (或裝置本來就 1×) 仍然太慢 → 先把粒子上限減半，再不行才把敵人上限降到
+    // LOW_END_MAX_ENEMIES（只擋新生成，場上已有的不會消失）；有餘裕時反序恢復（先敵人、再粒子）
     const ps = this.particles;
+    const sp = this.spawner;
     if (ps && !this._dprLocked && this._dprIdx === 0) {
       if (avgMs > DPR_DOWN_MS && ps.cap === MAX_PARTICLES) {
         ps.cap = MAX_PARTICLES / 2;
+        return;
+      }
+      if (avgMs > DPR_DOWN_MS && sp && sp.maxEnemies === MAX_ENEMIES) {
+        sp.maxEnemies = LOW_END_MAX_ENEMIES;
+        return;
+      }
+      if (avgMs < DPR_UP_MS && sp && sp.maxEnemies !== MAX_ENEMIES) {
+        sp.maxEnemies = MAX_ENEMIES;
         return;
       }
       if (avgMs < DPR_UP_MS && ps.cap !== MAX_PARTICLES) {
@@ -838,7 +853,8 @@ class Game {
     // 關卡常駐規則 × 每日挑戰詞綴 → 合併成單一份係數，Spawner 與各注入點共用
     // 全域難度疊在關卡規則上；每日挑戰固定標準難度，成績才可比
     this.difficulty = (!this.isDaily && DIFFICULTIES[save.data.difficulty]) || DIFFICULTIES.normal;
-    this.rules = mergeRules(this.level.rules, this.difficulty, ...(this.isDaily ? this.dailyConfig.modifiers : []));
+    this.rules = mergeRules(this.level.rules, this.difficulty, ...(this.isDaily ? this.dailyConfig.modifiers : []),
+      this.runCard && this.runCard.rules);   // 規則卡的生成密度／雜兵血量（屍潮）
     this.spawner.setLevel(activeLevelId, this.rules);
     this._eliteHeal = 0; // 每日「吸血盛宴」用，開局先清掉上一局的殘留
 
@@ -2197,7 +2213,7 @@ class Game {
         }
 
         // 孢子母體死亡裂解成幼體 (沿用母體的血量成長係數)
-        if (enemy.splitInto && this.enemies.length < HATCH_ENEMY_CAP) {
+        if (enemy.splitInto && this.enemies.length < this.hatchCap()) {
           // 沿用母體的血量成長，傷害與移速用目前時間/規則重算
           const scale = enemyScale(this.gameTime, this.level, this.rules);
           scale.hp = enemy.maxHp / ENEMY_TYPES[enemy.typeKey].hp;
@@ -2279,7 +2295,7 @@ class Game {
 
   // 增殖胞囊孵化：吐出雜兵 (沿用目前關卡的雜兵血量成長係數)
   spawnHatchling(hatcher) {
-    if (this.enemies.length + this._pendingSpawns.length >= HATCH_ENEMY_CAP) return;
+    if (this.enemies.length + this._pendingSpawns.length >= this.hatchCap()) return;
     const scale = enemyScale(this.gameTime, this.level, this.rules);
     for (let i = 0; i < (hatcher.hatchCount || 1); i++) {
       const ang = Math.random() * Math.PI * 2;

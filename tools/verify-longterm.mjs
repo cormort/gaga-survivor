@@ -75,11 +75,11 @@ const cards = await page.evaluate(async () => {
   const picked = save.data.runCard;
   const desc = document.getElementById('runcard-desc').textContent;
 
-  save.data.runCard = null; g.start(); const base = snap();
+  save.data.runCard = null; g.start(); const base = { ...snap(), spawnMul: g.rules.spawnMul, enemyHpMul: g.rules.enemyHpMul };
   const out = { picked, desc, opts: sel.options.length, cards: {} };
   for (const id of RUN_CARD_ORDER) {
     save.data.runCard = id; g.start();
-    const a = snap();
+    const a = { ...snap(), spawnMul: g.rules.spawnMul, enemyHpMul: g.rules.enemyHpMul };
     g.weaponManager.addOrUpgradePassive('magnet');   // 升級會重算 applyPassives：效果不能被洗掉
     const b = snap();
     out.cards[id] = { a, b };
@@ -93,7 +93,7 @@ const cards = await page.evaluate(async () => {
 const B = cards.base;
 const C = cards.cards;
 const near = (x, y) => Math.abs(x - y) < 1e-6;
-ok('開始畫面有規則卡下拉（不使用 + 6 張），選了會寫進存檔並顯示說明', cards.opts === 7 && cards.picked === 'midas' && /金幣/.test(cards.desc),
+ok('開始畫面有規則卡下拉（不使用 + 7 張），選了會寫進存檔並顯示說明', cards.opts === 8 && cards.picked === 'midas' && /金幣/.test(cards.desc),
   `${cards.opts} 個選項、存檔 ${cards.picked}、${cards.desc}`);
 ok('火力過載：傷害 ×1.25、承受傷害 ×1.3', near(C.overload.a.dmg, B.dmg * 1.25) && near(C.overload.a.taken, B.taken * 1.3),
   `${B.dmg}→${C.overload.a.dmg}、${B.taken}→${C.overload.a.taken}`);
@@ -101,12 +101,14 @@ ok('貫穿彈頭：穿透 +1、冷卻 ×1.15', C.piercer.a.pierce === B.pierce +
 ok('黃金之手：金幣 ×2、經驗 -25%', near(C.midas.a.gold, B.gold * 2) && near(C.midas.a.exp, B.exp - 0.25), `${C.midas.a.gold} / ${C.midas.a.exp}`);
 ok('引力核心：拾取 ×2、移速 ×0.9', near(C.gravity.a.mag, B.mag * 2) && near(C.gravity.a.spd, B.spd * 0.9), `${C.gravity.a.mag} / ${C.gravity.a.spd}`);
 ok('時間壓縮：冷卻 ×0.8、最大生命 ×0.7', near(C.haste.a.cdr, B.cdr * 0.8) && C.haste.a.hp === Math.round(B.hp * 0.7), `${C.haste.a.cdr} / ${C.haste.a.hp}`);
+ok('屍潮：生成密度 ×5（併進關卡規則）、雜兵血量不變、經驗 -40%', near(C.horde.a.spawnMul, B.spawnMul * 5)
+  && near(C.horde.a.enemyHpMul, B.enemyHpMul) && near(C.horde.a.exp, B.exp - 0.4), `${B.spawnMul}→${C.horde.a.spawnMul} / ${C.horde.a.exp}`);
 ok('命運編織：封印／跳過各 6 次、刷新半價、經驗 -10%', C.fate.a.ban === B.ban + 3 && C.fate.a.skip === B.skip + 3
   && C.fate.a.reroll === Math.round(B.reroll / 2) && near(C.fate.a.exp, B.exp - 0.1), JSON.stringify(C.fate.a));
 {
   const lost = Object.entries(C).filter(([, { a, b }]) => !(near(a.dmg, b.dmg) && near(a.cdr, b.cdr) && near(a.taken, b.taken)
     && near(a.gold, b.gold) && near(a.exp, b.exp) && a.pierce === b.pierce && near(a.spd, b.spd)));
-  ok('升級（重算 applyPassives）後規則卡效果仍在', lost.length === 0, lost.length ? lost.map(([id]) => id).join(',') : '6 張都保留');
+  ok('升級（重算 applyPassives）後規則卡效果仍在', lost.length === 0, lost.length ? lost.map(([id]) => id).join(',') : '7 張都保留');
 }
 ok('每日挑戰不套用規則卡', cards.dailyCard === null && near(cards.dailyDmg, cards.dailyBaseDmg), `${cards.dailyCard} ${cards.dailyDmg}`);
 

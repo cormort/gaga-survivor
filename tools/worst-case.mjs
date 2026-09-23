@@ -1,4 +1,4 @@
-// 最壞情境整合驗證：250 隻灼燒+中毒敵人 + 活火海 + 滿場敵方投射物 + 蓄能彈
+// 最壞情境整合驗證：450 隻（新的敵人上限）灼燒+中毒敵人 + 活火海 + 滿場敵方投射物 + 蓄能彈
 // 斷言：無 page error、敵人數 > 0、畫布有非空白像素，並印出每幀成本。
 const pw = (await import(process.env.PW_MODULE)).default;
 const URL = process.env.GAME_URL || 'http://127.0.0.1:8899/index.html';
@@ -30,10 +30,10 @@ const res = await page.evaluate(async () => {
   g.player.takeDamage = () => false;
   g.player.hp = 1e9; g.player.maxHp = 1e9;
 
-  // ── 250 隻灼燒 + 中毒 5 層 ──
+  // ── 450 隻（敵人上限）灼燒 + 中毒 5 層 ──
   const proto = g.enemies[0];
   g.enemies.length = 0;
-  for (let i = 0; i < 250; i++) {
+  for (let i = 0; i < 450; i++) {
     const e = Object.create(Object.getPrototypeOf(proto));
     Object.assign(e, proto);
     e.x = g.player.x + (Math.random() - 0.5) * 700;

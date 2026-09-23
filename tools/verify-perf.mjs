@@ -88,6 +88,29 @@ async function probe(deviceScaleFactor, query = '') {
   await ctx.close();
 }
 
+// 4b) 解析度已到底仍然太慢：先粒子減半、再把敵人上限降到低階值；變順時反序恢復（先敵人、再粒子）
+{
+  const { page, ctx } = await probe(1);   // dpr 1 = 本來就在最低階
+  const r = await page.evaluate(async () => {
+    const { MAX_ENEMIES, LOW_END_MAX_ENEMIES } = await import(new URL('js/systems/Spawner.js', document.baseURI).href);
+    const g = window.game;
+    const snap = () => `粒子 ${g.particles.cap}／敵人上限 ${g.spawner.maxEnemies}`;
+    const log = [snap()];
+    const full = { p: g.particles.cap, e: g.spawner.maxEnemies };
+    g._adaptDpr(15); log.push(snap()); const s1 = { p: g.particles.cap, e: g.spawner.maxEnemies };
+    g._adaptDpr(15); log.push(snap()); const s2 = { p: g.particles.cap, e: g.spawner.maxEnemies };
+    g._adaptDpr(6); log.push(snap()); const u1 = { p: g.particles.cap, e: g.spawner.maxEnemies };
+    g._adaptDpr(6); log.push(snap()); const u2 = { p: g.particles.cap, e: g.spawner.maxEnemies };
+    return { MAX_ENEMIES, LOW_END_MAX_ENEMIES, full, s1, s2, u1, u2, log, hatch: g.hatchCap() };
+  });
+  ok('敵人上限預設 450、孵化上限跟著推導（-10）', r.full.e === r.MAX_ENEMIES && r.MAX_ENEMIES === 450 && r.hatch === r.MAX_ENEMIES - 10,
+    `上限 ${r.full.e}、孵化 ${r.hatch}`);
+  ok('最低解析度仍太慢：第一次先粒子減半、第二次才把敵人上限降到 300', r.s1.p === r.full.p / 2 && r.s1.e === r.full.e
+    && r.s2.e === r.LOW_END_MAX_ENEMIES, r.log.join(' → '));
+  ok('變順時反序恢復：先恢復敵人上限、再恢復粒子', r.u1.e === r.full.e && r.u1.p === r.full.p / 2 && r.u2.p === r.full.p, r.log.join(' → '));
+  await ctx.close();
+}
+
 // 5) 幀耗時量測確實有在跑（自適應的判據）
 //    這裡直接驅動 loop()（rAF 的 callback）而不是等 requestAnimationFrame：
 //    批次連續跑多個 headless 頁面時 rAF 會被節流，等待式寫法會間歇性紅燈（實際發生過）。
