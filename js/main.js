@@ -46,6 +46,7 @@ import {
   drawExplodableProps,
   drawHazards,
   triggerPropExplosion,
+  placeHazard,
 } from './systems/Hazards.js';
 import {
   checkMilestones,
@@ -1278,6 +1279,18 @@ class Game {
           this.particles.createDeathParticles(e.x, e.y, '#9d4edd', 10);
         },
         onBlink: (e) => this.particles.createDeathParticles(e.x, e.y, '#2ec4b6', 8),
+        onMortar: (e) => {
+          // 瞄準特工「此刻」的位置；落點用既有的地雷預警圈畫法，fuse 秒後才爆
+          const m = e.mortar;
+          const p = this.player;
+          if ((p.x - e.x) ** 2 + (p.y - e.y) ** 2 > m.range ** 2) return;
+          placeHazard(this, { type: 'mine', radius: m.radius, fuse: m.fuse, dmg: m.dmg, color: m.color, source: `${e.name}・砲擊` }, p.x, p.y);
+          this.particles.createDeathParticles(e.x, e.y, m.color, 6);
+        },
+        onTrail: (e) => {
+          const t = e.trail;
+          placeHazard(this, { type: 'tar', radius: t.radius, dur: t.dur, color: t.color }, e.x, e.y);
+        },
         onSlam: (e, slam) => {
           // 攻城巨像踏地：範圍震波對特工造成傷害，也把周圍雜兵震開
           // (原本巨像只有「走得慢、血很厚」，沒有任何自己的節奏)
@@ -1970,6 +1983,12 @@ class Game {
 
         // 掉落經驗寶石或稀有道具
         this.spawnDropItem(enemy);
+
+        // 腐屍氣囊：死亡原地炸出毒池
+        if (enemy.deathZone) {
+          const z = enemy.deathZone;
+          placeHazard(this, { type: 'pool', radius: z.radius, dur: z.dur, dmg: z.dmg, color: z.color, source: `${enemy.name}・毒池` }, enemy.x, enemy.y);
+        }
 
         // 孢子母體死亡裂解成幼體 (沿用母體的血量成長係數)
         if (enemy.splitInto && this.enemies.length < HATCH_ENEMY_CAP) {

@@ -142,6 +142,11 @@ export class Enemy {
     this.healTimer = this.healAura ? this.healAura.every : 0;
     this.blink = config.blink || null;       // 虛空潛行者：瞬移貼近
     this.blinkTimer = this.blink ? Math.random() * this.blink.every : 0;
+    this.mortar = config.mortar || null;     // 迫擊砲蟲：朝特工落點拋射，地面先出現預警圈
+    this.mortarTimer = this.mortar ? this.mortar.every * (0.5 + Math.random() * 0.5) : 0;
+    this.trail = config.trail || null;       // 焦油蛞蝓：沿路留下減速泥沼
+    this.trailTimer = this.trail ? Math.random() * this.trail.every : 0;
+    this.deathZone = config.deathZone || null; // 腐屍氣囊：死亡時留下毒池
 
     // 精英詞綴 (由 Spawner 隨機賦予；Boss 不會有)
     this.isElite = false;
@@ -210,7 +215,7 @@ export class Enemy {
   }
 
   // target 是要追擊的對象：生存者模式為玩家，守塔模式的雜兵為基地核心 (兩者都有 x/y)
-  // cb: { onExplode, onBossSkill, onShoot, onHatch, onHeal, onBlink }，缺的就當作沒有
+  // cb: { onExplode, onBossSkill, onShoot, onHatch, onHeal, onBlink, onMortar, onTrail }，缺的就當作沒有
   update(dt, target, cb = {}) {
     if (this.isDead) return;
 
@@ -340,6 +345,21 @@ export class Enemy {
         this.x = target.x + Math.cos(a) * this.blink.dist;
         this.y = target.y + Math.sin(a) * this.blink.dist;
         cb.onBlink?.(this); // 落點特效
+      }
+    }
+
+    if (this.mortar && !disabled) {
+      this.mortarTimer -= dt;
+      if (this.mortarTimer <= 0) {
+        this.mortarTimer = this.mortar.every;
+        cb.onMortar?.(this);
+      }
+    }
+    if (this.trail && !disabled) {
+      this.trailTimer -= dt;
+      if (this.trailTimer <= 0) {
+        this.trailTimer = this.trail.every;
+        cb.onTrail?.(this);
       }
     }
 
@@ -506,7 +526,7 @@ export class Enemy {
   // 極寒脈衝減速：回傳當幀速度倍率 (0.5 = 半速；slowTimer 由遊戲時間倒數，暫停即凍結)
   speedFactor() {
     if (this.freezeTimer > 0 || this.stunTimer > 0) return 0; // 定身/眩暈 (擊退位移不受影響)
-    return this.slowTimer > 0 ? 0.5 : 1;
+    return (this.slowTimer > 0 ? 0.5 : 1) * (this.terrainSpeedMul || 1); // 泥沼／疾風地形
   }
 
   // Boss 狂暴階段：血量過半、剩四分之一各進一階。技能更密、衝鋒更頻、移動更快。

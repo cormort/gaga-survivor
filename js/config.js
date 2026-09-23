@@ -631,6 +631,42 @@ export const ENEMY_TYPES = {
     exp: 2,
     blink: { every: 4, min: 260, dist: 110 }, // 離目標太遠時瞬移到身邊
   },
+  mortar: {
+    name: '迫擊砲蟲',
+    ai: { kind: 'plod', kbResist: 0.3, animSpeed: 4.5, sepMul: 1.2 },
+    hp: 60,
+    speed: 45,
+    damage: 10,
+    color: '#fb8500',
+    radius: 18,
+    exp: 4,
+    // 朝特工「當下位置」拋射：地面先亮 fuse 秒預警圈才爆 —— 站著不動才會中
+    mortar: { every: 4.2, range: 560, radius: 70, fuse: 1.2, dmg: 18, color: '#fb8500' },
+  },
+  tar_slug: {
+    name: '焦油蛞蝓',
+    ai: { kind: 'shamble', wander: 0.15, animSpeed: 4, sepMul: 1.4 },
+    hp: 75,
+    speed: 55,
+    damage: 10,
+    color: '#5a3e2b',
+    radius: 18,
+    exp: 3,
+    // 沿路留下減速泥沼 (特工與怪物都會被拖慢)：把路線切碎，翻滾才是出路
+    trail: { every: 1.3, radius: 48, dur: 6, color: '#3d2b1f' },
+  },
+  bloater: {
+    name: '腐屍氣囊',
+    ai: { kind: 'plod', kbResist: 0.2, animSpeed: 6, sepMul: 1.1 },
+    hp: 45,
+    speed: 75,
+    damage: 10,
+    color: '#8ac926',
+    radius: 17,
+    exp: 3,
+    // 死亡時炸出毒池：近身擊殺要付代價，逼玩家用遠程武器或殺完就走
+    deathZone: { radius: 80, dur: 4, dmg: 6, color: '#8ac926' },
+  },
   boss: {
     name: '毀滅巨神‧暴君',
     ai: { kind: 'boss', animSpeed: 5, sepMul: 0 },

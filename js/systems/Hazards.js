@@ -19,6 +19,9 @@ function hexToRgba(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+// 會改變移動速度的地形 (玩家與敵人一視同仁) → 預設倍率
+const SPEED_ZONES = { tar: 0.55, gale: 1.45 };
+
 export function initExplodableProps(game) {
   game.explodableProps = [];
   const bounds = GAME_CONFIG.WORLD_BOUNDS;
@@ -266,7 +269,7 @@ export function updateHazards(game, dt) {
         const dy = p.y - h.y;
         const rr = h.r + p.radius;
         if (dx * dx + dy * dy < rr * rr) {
-          if (p.takeDamage(h.dmg, '地面毒池')) game.particles.createHurtText(p.x, p.y, h.dmg);
+          if (p.takeDamage(h.dmg, h.source || '地面毒池')) game.particles.createHurtText(p.x, p.y, h.dmg);
         }
       }
       if (h.t >= h.dur) game.hazards.splice(i, 1);
@@ -288,7 +291,44 @@ export function updateHazards(game, dt) {
         explodeHazard(game, h);
         game.hazards.splice(i, 1);
       }
+    } else if (h.kind === 'spring') {
+      // 回復泉：站在裡面持續回血，逼玩家在「去喝水」與「維持走位」之間取捨
+      h.tick -= dt;
+      if (h.tick <= 0) {
+        h.tick = 0.5;
+        const dx = p.x - h.x;
+        const dy = p.y - h.y;
+        if (dx * dx + dy * dy < h.r * h.r && p.hp < p.maxHp) p.heal(h.heal);
+      }
+      if (h.t >= h.dur) game.hazards.splice(i, 1);
+    } else if (h.kind === 'tar' || h.kind === 'gale') {
+      if (h.t >= h.dur) game.hazards.splice(i, 1);
     }
+  }
+
+  applySpeedZones(game);
+}
+
+// 泥沼減速／疾風加速：每幀重算玩家與敵人的地形速度倍率 (多區重疊時相乘)。
+// ponytail: 區域數 × 敵人數的 O(n·m) 掃描；區域同時最多個位數，250 隻怪可接受
+function applySpeedZones(game) {
+  const zones = game.hazards.filter((h) => h.speedMul);
+  if (!zones.length && !game._speedZonesActive) return;
+  game._speedZonesActive = zones.length > 0;
+  const mulAt = (x, y, r) => {
+    let m = 1;
+    for (const z of zones) {
+      const dx = x - z.x;
+      const dy = y - z.y;
+      const rr = z.r + r * 0.5;
+      if (dx * dx + dy * dy < rr * rr) m *= z.speedMul;
+    }
+    return m;
+  };
+  const p = game.player;
+  p.terrainSpeedMul = mulAt(p.x, p.y, p.radius);
+  for (const e of game.enemies) {
+    if (!e.isDead) e.terrainSpeedMul = e.isBoss ? 1 : mulAt(e.x, e.y, e.radius);
   }
 }
 
@@ -306,6 +346,12 @@ export function spawnHazard(game, mech) {
     sound.playEvoFanfare();
     return;
   }
+  placeHazard(game, mech, x, y);
+}
+
+// 在指定位置放一個地面區域。關卡機制與敵人 (迫擊砲、焦油拖痕、死亡毒池) 共用這一條，
+// 所以敵人造成的地形與關卡地形的判定、畫法、死亡結算來源完全一致。
+export function placeHazard(game, mech, x, y) {
   game.hazards.push({
     kind: mech.type,
     x, y,
@@ -317,6 +363,9 @@ export function spawnHazard(game, mech) {
     dur: mech.dur || mech.duration || 0,
     dmg: mech.dmg || 0,
     dmgEnemy: mech.dmgEnemy || 0,
+    heal: mech.heal || 0,                // 回復泉：每 0.5 秒回血量
+    speedMul: SPEED_ZONES[mech.type] ? (mech.speedMul || SPEED_ZONES[mech.type]) : 0,
+    source: mech.source || null,         // 死亡結算顯示的傷害來源
   });
 }
 
@@ -338,7 +387,7 @@ export function explodeHazard(game, h) {
     }
   }
   const pd = Math.hypot(game.player.x - h.x, game.player.y - h.y);
-  if (pd < rr + game.player.radius) game.player.takeDamage(h.dmg, h.kind === 'geyser' ? '地面噴發' : '地雷');
+  if (pd < rr + game.player.radius) game.player.takeDamage(h.dmg, h.source || (h.kind === 'geyser' ? '地面噴發' : '地雷'));
 }
 
 export function drawHazards(game, cam) {
@@ -411,6 +460,69 @@ export function drawHazards(game, cam) {
       ctx.arc(0, 0, 5 + prog * 13, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
+    } else if (h.kind === 'tar' || h.kind === 'spring' || h.kind === 'gale') {
+      const fadeIn = Math.min(1, h.t / 0.4);
+      const fadeOut = Math.min(1, (h.dur - h.t) / 0.6);
+      ctx.globalAlpha = Math.max(0, Math.min(fadeIn, fadeOut));
+      if (h.kind === 'tar') {
+        // 焦油泥沼：不透明的暗色黏液 + 冒泡，和半透明的毒池一眼分得出來
+        ctx.fillStyle = hexToRgba(h.color, 0.55);
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = hexToRgba(h.color, 0.9);
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.18)';
+        for (let i = 0; i < 4; i++) {
+          // 氣泡由小變大後破掉。x 取絕對值：負座標的 % 會是負數 → arc 半徑為負直接拋例外
+          const ph = (h.t * 0.8 + i * 0.37 + (Math.abs(h.x) % 7) * 0.1) % 1;
+          const a = i * 1.9 + h.x;
+          ctx.beginPath();
+          ctx.arc(Math.cos(a) * h.r * 0.5, Math.sin(a) * h.r * 0.5, 2 + ph * 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (h.kind === 'spring') {
+        // 回復泉：往外擴散的水波 + 中央十字
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, h.r);
+        g.addColorStop(0, hexToRgba(h.color, 0.32));
+        g.addColorStop(1, hexToRgba(h.color, 0.04));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = hexToRgba(h.color, 0.7);
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 2; i++) {
+          const ph = (h.t * 0.6 + i * 0.5) % 1;
+          ctx.beginPath();
+          ctx.arc(0, 0, h.r * ph, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = hexToRgba(h.color, 0.9);
+        ctx.fillRect(-3, -11, 6, 22);
+        ctx.fillRect(-11, -3, 22, 6);
+      } else {
+        // 疾風帶：旋轉的虛線圈 + 三道流線，表示「進來會變快」
+        ctx.strokeStyle = hexToRgba(h.color, 0.75);
+        ctx.lineWidth = 2;
+        ctx.setLineDash([16, 12]);
+        ctx.lineDashOffset = -h.t * 60;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = hexToRgba(h.color, 0.1);
+        ctx.fill();
+        ctx.rotate(h.t * 1.5);
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 3; i++) {
+          ctx.rotate((Math.PI * 2) / 3);
+          ctx.beginPath();
+          ctx.arc(0, 0, h.r * 0.55, 0, 0.9);
+          ctx.stroke();
+        }
+      }
     } else if (h.kind === 'safeZone') {
       // 安全高台：亮綠色光圈，站裡面才安全
       const wob = 1 + Math.sin(h.t * 2.5) * 0.03;

@@ -4935,6 +4935,148 @@ function mix(hex, other, t) {
 /* ==================== 對外介面 ==================== */
 
 
+
+/* ==================== 第三批新怪：迫擊砲蟲 / 焦油蛞蝓 / 腐屍氣囊 ==================== */
+// 迫擊砲蟲：沿用胞囊的肉身，背上加一門會後座的砲管 + 砲口餘火，剪影一眼認得出是「會開砲的」
+function drawMortar(x, t, r) {
+  x.filter = 'hue-rotate(25deg) saturate(1.6)';  // 胞囊的粉紅 → 砲火橘
+  drawHatcher(x, t, r);
+  x.filter = 'none';
+  const recoil = Math.max(0, Math.sin(t * Math.PI * 2)) * r * 0.12;
+  x.save();
+  x.translate(0, -r * 0.25);
+  x.rotate(-0.5);
+  // 砲座
+  x.fillStyle = sphere(x, '#6c757d', r * 0.42);
+  x.beginPath();
+  x.arc(0, 0, r * 0.42, 0, Math.PI * 2);
+  x.fill();
+  // 砲管
+  const len = r * 1.05 - recoil;
+  const bw = r * 0.34;
+  const g = x.createLinearGradient(-bw / 2, 0, bw / 2, 0);
+  g.addColorStop(0, '#343a40');
+  g.addColorStop(0.45, '#adb5bd');
+  g.addColorStop(1, '#212529');
+  x.fillStyle = g;
+  x.fillRect(-bw / 2, -len, bw, len);
+  x.strokeStyle = 'rgba(0,0,0,0.6)';
+  x.lineWidth = 1.5;
+  x.strokeRect(-bw / 2, -len, bw, len);
+  // 砲口箍環 + 餘火
+  x.fillStyle = '#495057';
+  x.fillRect(-bw * 0.62, -len - 2, bw * 1.24, 5);
+  const glow = x.createRadialGradient(0, -len - 3, 0, 0, -len - 3, bw);
+  glow.addColorStop(0, 'rgba(255,200,80,0.95)');
+  glow.addColorStop(1, 'rgba(251,133,0,0)');
+  x.fillStyle = glow;
+  x.beginPath();
+  x.arc(0, -len - 3, bw, 0, Math.PI * 2);
+  x.fill();
+  x.restore();
+}
+
+// 焦油蛞蝓：自己的剪影 (拉長的黏液身體 + 眼柄 + 反光 + 滴落物)，不是換色的人形怪
+function drawTarSlug(x, t, r) {
+  const p = t * Math.PI * 2;
+  const squish = 1 + Math.sin(p) * 0.08;   // 蠕動：前後伸縮
+  shadow(x, r * 1.15, r * 0.7);
+  x.save();
+  x.scale(squish, 2 - squish);
+  // 身體：兩段橢圓疊出前粗後細
+  x.fillStyle = sphere(x, '#5a3418', r * 1.1, 0, 0);
+  x.beginPath();
+  x.ellipse(0, r * 0.1, r * 1.15, r * 0.8, 0, 0, Math.PI * 2);
+  x.fill();
+  x.beginPath();
+  x.ellipse(0, -r * 0.45, r * 0.75, r * 0.6, 0, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = 'rgba(0,0,0,0.65)';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.ellipse(0, r * 0.1, r * 1.15, r * 0.8, 0, 0, Math.PI * 2);
+  x.stroke();
+  // 焦油反光 (讓它看起來是濕的)
+  x.strokeStyle = 'rgba(255,220,170,0.45)';
+  x.lineWidth = 2.5;
+  x.beginPath();
+  x.arc(-r * 0.25, -r * 0.1, r * 0.6, 3.6, 4.6);
+  x.stroke();
+  // 背上的氣泡
+  x.fillStyle = 'rgba(120,90,60,0.9)';
+  for (let i = 0; i < 3; i++) {
+    const ph = (t + i / 3) % 1;
+    x.beginPath();
+    x.arc((i - 1) * r * 0.45, r * 0.25, r * (0.08 + ph * 0.1), 0, Math.PI * 2);
+    x.fill();
+  }
+  x.restore();
+  // 眼柄 (隨蠕動晃)
+  for (const s of [-1, 1]) {
+    const sway = Math.sin(p + s) * r * 0.08;
+    x.strokeStyle = '#2b1d14';
+    x.lineWidth = 3;
+    x.beginPath();
+    x.moveTo(s * r * 0.3, -r * 0.8);
+    x.lineTo(s * r * 0.42 + sway, -r * 1.25);
+    x.stroke();
+    x.fillStyle = '#ffd166';
+    x.beginPath();
+    x.arc(s * r * 0.42 + sway, -r * 1.25, r * 0.16, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#000';
+    x.beginPath();
+    x.arc(s * r * 0.42 + sway, -r * 1.22, r * 0.07, 0, Math.PI * 2);
+    x.fill();
+  }
+  // 身體後方滴落的焦油
+  const drip = (t * 2) % 1;
+  x.fillStyle = '#2b1d14';
+  x.beginPath();
+  x.ellipse(r * 0.5, r * 0.85 + drip * r * 0.3, r * 0.1, r * 0.14 + drip * r * 0.1, 0, 0, Math.PI * 2);
+  x.fill();
+}
+
+// 腐屍氣囊：自爆蟲的身體換成病態綠，外加膿包、縫線與漏出的毒氣 —— 讀得出「打破會漏」
+function drawBloater(x, t, r) {
+  x.filter = 'hue-rotate(40deg) saturate(1.5)';
+  drawBoomer(x, t, r, false);
+  x.filter = 'none';
+  const p = t * Math.PI * 2;
+  // 膿包 (各自不同步地鼓動)
+  const blisters = [[-0.45, -0.35, 0.26], [0.5, -0.1, 0.22], [-0.1, 0.45, 0.2], [0.3, -0.6, 0.15]];
+  blisters.forEach(([bx, by, br], i) => {
+    const pr = r * br * (1 + Math.sin(p + i * 1.7) * 0.15);
+    x.fillStyle = sphere(x, '#b5e48c', pr, bx * r, by * r);
+    x.beginPath();
+    x.arc(bx * r, by * r, pr, 0, Math.PI * 2);
+    x.fill();
+    x.strokeStyle = 'rgba(40,70,10,0.7)';
+    x.lineWidth = 1.2;
+    x.stroke();
+  });
+  // 縫線
+  x.strokeStyle = 'rgba(30,40,10,0.8)';
+  x.lineWidth = 1.5;
+  x.beginPath();
+  x.moveTo(-r * 0.7, r * 0.1);
+  x.quadraticCurveTo(0, r * 0.35, r * 0.7, r * 0.05);
+  for (let i = -3; i <= 3; i++) {
+    const sx = i * r * 0.2;
+    x.moveTo(sx, r * 0.12);
+    x.lineTo(sx + 2, r * 0.32);
+  }
+  x.stroke();
+  // 漏出的毒氣
+  for (let i = 0; i < 3; i++) {
+    const ph = (t + i / 3) % 1;
+    x.fillStyle = `rgba(138,201,38,${0.45 * (1 - ph)})`;
+    x.beginPath();
+    x.arc(r * 0.35 + ph * r * 0.3, -r * 0.9 - ph * r * 0.6, r * (0.1 + ph * 0.18), 0, Math.PI * 2);
+    x.fill();
+  }
+}
+
 const BUILDERS = {
   duck:    { w: 64, h: 60, fn: (x, t) => drawDuck(x, t) },
   rabbit:  { w: 72, h: 64, fn: (x, t) => drawRabbit(x, t) },
@@ -4958,6 +5100,9 @@ const BUILDERS = {
   sniper:  { w: 68, h: 58, fn: (x, t) => { x.filter = 'hue-rotate(150deg)'; drawSpitter(x, t, 15); } },
   medic:   { w: 56, h: 52, fn: (x, t) => { x.filter = 'hue-rotate(200deg) saturate(1.4)'; drawWalker(x, t, 14); } },
   blinker: { w: 60, h: 48, fn: (x, t) => { x.filter = 'hue-rotate(110deg) brightness(1.2)'; drawBat(x, t, 11); } },
+  mortar:   { w: 72, h: 80, fn: (x, t) => drawMortar(x, t, 18) },
+  tar_slug: { w: 72, h: 72, fn: (x, t) => drawTarSlug(x, t, 18) },
+  bloater:  { w: 68, h: 80, fn: (x, t) => drawBloater(x, t, 17) },
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },

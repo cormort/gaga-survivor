@@ -135,7 +135,8 @@ export class Player {
 
   get speed() {
     const achillesBonus = 1 + (this.achillesSpeedStacks || 0) * 0.06;
-    return this.baseSpeed * this.speedMultiplier * achillesBonus;
+    // terrainSpeedMul：焦油泥沼減速／疾風帶加速，由 Hazards.js 每幀寫入
+    return this.baseSpeed * this.speedMultiplier * achillesBonus * (this.terrainSpeedMul || 1);
   }
 
   // 觸發戰術閃避翻滾
