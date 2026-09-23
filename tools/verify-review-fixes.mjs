@@ -288,6 +288,9 @@ const results = await page.evaluate(async () => {
   g.enemies.push(mTarget);
   g.weaponManager.projectiles.length = 0;
   g.weaponManager.fireWeapon('molotov', g.weaponManager.weapons.get('molotov'), WEAPONS.molotov, g.enemies, g.particles);
+  // 燃燒瓶是拋出去、落地才點燃：先讓瓶子飛完（最多 0.55 秒）
+  g.weaponManager.weapons.get('molotov').cooldownTimer = 1e9;
+  for (let i = 0; i < 40; i++) g.weaponManager.update(1 / 60, g.enemies, g.particles);
   const pool = g.weaponManager.projectiles.find((p) => p.type === 'fire_pool');
   ok('燃燒瓶跳頻來自型態資料', !!pool && Math.abs(pool.tickInterval - 0.175) < 0.001, pool ? pool.tickInterval : 'no pool');
 
@@ -336,6 +339,7 @@ const results = await page.evaluate(async () => {
     let imploded = false;
     let maxBounces = 0;
     let freezeSeen = 0;
+    let maxStacks = 0;   // 跑速加成只持續 4 秒：記錄過程中的最大值，不看結束那一刻
     let last = 0;
     for (let i = 0; i < 300; i++) {
       g.update(1 / 60);
@@ -351,10 +355,11 @@ const results = await page.evaluate(async () => {
         if (p.thanatosBounces >= 5) imploded = true;
       }
       freezeSeen = Math.max(freezeSeen, line.reduce((mx, e) => Math.max(mx, e.freezeTimer || 0), 0));
+      maxStacks = Math.max(maxStacks, g.player.achillesSpeedStacks || 0);
       const maxDmg = g.enemies.reduce((mx, e) => Math.max(mx, e.lastDamageTaken || 0), 0);
       if (maxDmg !== last) { seq.push(maxDmg); last = maxDmg; }
     }
-    return { seq, imploded, maxBounces, freezeSeen, stacks: g.player.achillesSpeedStacks };
+    return { seq, imploded, maxBounces, freezeSeen, stacks: maxStacks };
   };
   const th = soccerRun('thanatos');
   ok('塔納托斯每次命中傷害遞增', th.seq.length >= 2 && th.seq[1] > th.seq[0], th.seq.slice(0, 5).join('→'));

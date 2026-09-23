@@ -816,8 +816,9 @@ const results = await page.evaluate(async () => {
         W.delayed.length = 0;
         W.fireWeapon('molotov', item, WEAPONS.molotov, g.enemies, g.particles);
         item.cooldownTimer = 1e9;
-        // 只跑 weaponManager.update：火海落地後會把 sanctuaryTimer / 減傷值寫到玩家身上
-        for (let i = 0; i < 4; i++) W.update(1 / 60, g.enemies, g.particles);
+        // 只跑 weaponManager.update：瓶子飛完（≤ 0.55 秒）落地成火海後，
+        // 火海會把 sanctuaryTimer / 減傷值寫到玩家身上
+        for (let i = 0; i < 40; i++) W.update(1 / 60, g.enemies, g.particles);
         const pool = W.projectiles.find((p) => p.type === 'fire_pool');
         const hp0 = g.player.hp;
         g.player.invulnerableTimer = 0;

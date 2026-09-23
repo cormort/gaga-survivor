@@ -38,7 +38,11 @@ const out = await page.evaluate(async () => {
   const p = g.player;
   const give = (id, n = 1) => { p.pockets = [{ id, count: n }, null]; g._autoPocketTimer = 0; };
   const slot0 = () => p.pockets[0]?.id ?? null;
-  const step = (n = 1) => { for (let i = 0; i < n; i++) g.update(1 / 60); };
+  // 真實遊戲迴圈仍在背景跑：若剛好升級，state 會變成 LEVEL_UP，按鍵與 g.update 都被（正確地）
+  // 擋下 → 測試偶發失敗（實測修改前也會，約 1/8）。這裡驗的是口袋，不是升級流程，
+  // 所以每次操作前都把狀態固定回 PLAYING。
+  const playing = () => { g.pendingLevelUps = 0; g.state = 'PLAYING'; };
+  const step = (n = 1) => { for (let i = 0; i < n; i++) { playing(); g.update(1 / 60); } };
   const clear = () => { g.enemies = []; g.enemyProjectiles = []; g.dropItems = []; p.invulnerableTimer = 999; };
 
   clear(); give('potion'); p.hp = p.maxHp * 0.6; step(3);
@@ -92,10 +96,13 @@ const out = await page.evaluate(async () => {
   pick('ELIXIR');
   ok('兩格都被占滿時新道具即拾即用', p.hp === p.maxHp && hpBefore < p.maxHp && p.pockets.every((s) => s && s.id !== 'elixir'), `${hpBefore} → ${p.hp}`);
   const n1 = p.pockets[1].count;
+  playing();
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' }));
   ok('F 使用第 2 格、第 1 格不動', p.pockets[1]?.count === n1 - 1 && p.pockets[0]?.count === 1, JSON.stringify(p.pockets));
+  playing();
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }));
   ok('E 用完第 1 格後第 2 格不往前補位', p.pockets[0] === null && p.pockets[1]?.id === 'holy_water', JSON.stringify(p.pockets));
+  playing();
   document.querySelector('.pocket-slot[data-slot="1"]').click();
   ok('點擊第 2 格使用', p.pockets[1] === null, JSON.stringify(p.pockets));
   save.data.settings.autoPocket = true;

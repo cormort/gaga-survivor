@@ -1822,6 +1822,7 @@ class Game {
     const grid = this._buildEnemyGrid();
     for (const p of this.weaponManager.projectiles) {
       if (p.isDead || p.type === 'rocket') continue; // 火箭走自帶到達爆炸
+      if (p.noCollide) continue;                        // 純視覺實體（飛行中的燃燒瓶）
 
       const hitR = p.radius;
 
@@ -1984,13 +1985,92 @@ class Game {
           });
         }
 
+        // 依名稱重新設計的命中後行為：足球彈向下一個敵人、量子星雲球裂變
+        if (p.type === 'soccer') this._soccerRicochet(p, enemy, grid);
+        // 幽靈手裏劍：追到第一個目標後改直線穿透（不然會繞回怪群把穿透全部用完）
+        if (p.type === 'shuriken') { p.homing = 0; p.target = null; }
+
         p.pierce--;
         if (p.pierce <= 0) {
           p.isDead = true;
           return true;   // 穿透耗盡 → 結束走訪（等同原本的 break）
         }
+        // 相位飛刃：還有穿透就相位跳躍到下一個敵人（位置變了，這一幀不再往下掃）
+        if (p.phaseJump && p.phaseJumps > 0 && this._phaseJump(p, grid)) return true;
       });
     }
+  }
+
+  // 找 (x, y) 附近 range 內最近、且不在 exclude 裡的活敵人
+  _nearestEnemy(grid, x, y, range, exclude) {
+    let best = null;
+    let bestD = range * range;
+    this._forEachNearbyEnemy(grid, x, y, range + grid.maxR, (e) => {
+      if (e.isDead || (exclude && exclude.has(e))) return;
+      const d = (e.x - x) ** 2 + (e.y - y) ** 2;
+      if (d < bestD) { bestD = d; best = e; }
+    });
+    return best;
+  }
+
+  // 量子足球：命中後彈向附近下一個敵人（每彈一次消耗一次彈跳），
+  // 超武版本另外裂變出一顆子球（世代上限 maxSplitGen，場上子球數有上限）
+  _soccerRicochet(p, enemy, grid) {
+    const next = this._nearestEnemy(grid, p.x, p.y, 360, p.hitEnemies)
+      || this._nearestEnemy(grid, p.x, p.y, 360, new Set([enemy]));
+    const sp = Math.hypot(p.vx, p.vy) || 500;
+    if (next) {
+      const d = Math.hypot(next.x - p.x, next.y - p.y) || 1;
+      p.vx = ((next.x - p.x) / d) * sp;
+      p.vy = ((next.y - p.y) / d) * sp;
+    } else {
+      p.vx = -p.vx;
+      p.vy = -p.vy;
+    }
+    p.bounces--;
+    // 塔納托斯死球要撐到第 implosionAt 次命中引爆（由引爆本身結束），不因彈射次數用完而提早消失
+    if (p.bounces <= 0 && !(p.implosionAt > 0)) p.isDead = true;
+
+    if (p.splitGen < p.maxSplitGen) {
+      const W = this.weaponManager;
+      let kids = 0;
+      for (const q of W.projectiles) if (q.type === 'soccer' && q.splitGen > 0 && !q.isDead) kids++;
+      if (kids < 10) {
+        const a = Math.atan2(p.vy, p.vx) + (Math.random() < 0.5 ? 1 : -1) * (0.6 + Math.random() * 0.6);
+        const child = W.mkProjectile({
+          type: 'soccer', weaponId: p.weaponId, x: p.x, y: p.y,
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          damage: Math.round(p.damage * 0.6), radius: p.radius * 0.7,
+          bounces: Math.max(2, Math.ceil(p.bounces / 2)), pierce: 9999, life: 3,
+          isEvo: p.isEvo, knockback: p.knockback, rehit: p.rehit, charge: p.charge,
+          splitGen: p.splitGen + 1, maxSplitGen: p.maxSplitGen, afterimage: true,
+        }, p.isCrit);
+        child.hitEnemies.add(enemy);
+        W.projectiles.push(child);
+        this.particles.createShockwave(p.x, p.y, 26, '#00f59b');
+      }
+    }
+  }
+
+  // 相位飛刃：從命中點「相位跳躍」到 phaseJump 範圍內下一個沒打過的敵人面前，
+  // 並把方向對準它。回傳 true 表示有跳（呼叫端結束這一幀的掃描）。
+  _phaseJump(p, grid) {
+    const next = this._nearestEnemy(grid, p.x, p.y, p.phaseJump, p.hitEnemies);
+    if (!next) return false;
+    p.phaseJumps--;
+    const dx = next.x - p.x;
+    const dy = next.y - p.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const back = next.radius + p.radius + 6;
+    const ox = p.x;
+    const oy = p.y;
+    p.x = next.x - (dx / d) * back;
+    p.y = next.y - (dy / d) * back;
+    const sp = Math.hypot(p.vx, p.vy) || 560;
+    p.vx = (dx / d) * sp;
+    p.vy = (dy / d) * sp;
+    this.particles.createArc(ox, oy, p.x, p.y, p.isEvo ? '#e0aaff' : '#7df8ff');
+    return true;
   }
 
   cleanupDeadEnemies() {

@@ -56,16 +56,17 @@ export const WEAPONS = {
     id: 'rocket',
     name: '高爆火箭',
     icon: '🚀',
-    description: '發射鎖定高爆飛彈，命中造成巨大範圍破片爆炸。每 3 發蓄能射出毒氣彈。',
+    description: '發射會轉彎追蹤的鎖定飛彈，撞上目標引發範圍破片爆炸。每 3 發蓄能射出毒氣彈。',
     isEvo: false,
     evoTarget: 'shark_torpedo',
     pairPassive: 'magnet',        // 爆炸清場 → 自動吸寶 (原 range_fuel)
     maxLevel: 5,
-    baseDamage: 45,
-    damageGrowth: 18,
+    baseDamage: 35,                // 鎖定追蹤後幾乎發發命中，單發傷害比直線版低
+    damageGrowth: 13,
     baseCooldown: 2.5,
     cooldownGrowth: -0.2,
     speed: 380,
+    homing: 5.0,                   // 每秒最大轉向（弧度）：鎖定目標、轉彎追上
     explosionRadius: [70, 85, 95, 110, 130],
     count: [1, 1, 2, 2, 3],
     charge: { every: 3, effect: 'poison' }, // 每 3 發射出毒氣彈，爆炸範圍內全部中毒
@@ -74,7 +75,7 @@ export const WEAPONS = {
     id: 'molotov',
     name: '特工燃燒瓶',
     icon: '🍾',
-    description: '投擲燃燒瓶在地面鋪展持續灼燒的烈火之海。',
+    description: '拋出燃燒瓶，瓶子落地摔碎後鋪開持續灼燒的烈火之海。',
     isEvo: false,
     evoTarget: 'napalm_sea',
     pairPassive: 'range_fuel',    // 火海範圍加大 (原 speed_shoes)
@@ -90,22 +91,24 @@ export const WEAPONS = {
     id: 'lightning',
     name: '雷電矩陣',
     icon: '⚡',
-    description: '召喚天頂落雷，定點重創隨機敵人。',
+    description: '落雷依序劈中不同敵人，落點之間拉起電網，被電網掃過的敵人一併受創。',
     isEvo: false,
     evoTarget: 'plasma_storm',
     pairPassive: 'cdr_battery',
     maxLevel: 5,
-    baseDamage: 36,
-    damageGrowth: 14,
+    baseDamage: 32,                // 落點不再重複、又多了電網，單發比舊版略低
+    damageGrowth: 12,
     baseCooldown: 1.8,
     cooldownGrowth: -0.15,
     strikes: [1, 2, 2, 3, 4],
+    linkDamageMul: 0.15,           // 電網線段的傷害倍率
+    linkWidth: 18,
   },
   soccer: {
     id: 'soccer',
     name: '量子足球',
     icon: '⚽',
-    description: '踢出高彈力金屬足球，在怪群與空間中高速彈射。每 3 顆蓄能射出冰凍球。',
+    description: '朝敵人踢出高彈力足球，命中後彈向下一個敵人、撞到畫面邊緣也會反彈。每 3 顆蓄能射出冰凍球。',
     isEvo: false,
     evoTarget: 'quantum_sphere',
     pairPassive: 'speed_shoes',   // 走位控球/追球 (原 max_hp_vest)
@@ -114,7 +117,7 @@ export const WEAPONS = {
     damageGrowth: 10,
     baseCooldown: 3.2,
     speed: 520,
-    bounces: [5, 7, 9, 12, 16],
+    bounces: [4, 5, 6, 7, 8],      // 彈射次數（命中彈向下一個敵人、撞畫面邊緣都算一次）
     count: [1, 1, 2, 2, 3],
     charge: { every: 3, effect: 'freeze' }, // 每 3 顆射出冰凍球
   },
@@ -124,7 +127,7 @@ export const WEAPONS = {
     id: 'ghost_shuriken',
     name: '幽靈手裏劍 (超武)',
     icon: '✨🗡️',
-    description: '無需停歇！極限暴風加特林式連續全自動追蹤發射，每 6 發挾帶燃燒彈。',
+    description: '半透明的幽靈手裏劍高速旋轉連發，會轉彎追蹤目標、穿透敵群，每 6 發挾帶燃燒彈。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
@@ -135,12 +138,14 @@ export const WEAPONS = {
     projectiles: 1,
     pierce: 5,
     charge: { every: 6, effect: 'burn' }, // 射速快，間隔拉長
+    projType: 'shuriken',
+    homing: 6.0,
   },
   eternal_domain: {
     id: 'eternal_domain',
     name: '永恆守護力場 (超武)',
     icon: '🌌🛡️',
-    description: '守護輪盤永不收回！形成絕對防禦圈並產生擊退風暴。',
+    description: '輪盤化為常駐的金色力場，範圍內的敵人持續受創，並定時放出擊退風暴。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
@@ -151,12 +156,14 @@ export const WEAPONS = {
     spinSpeed: 5.5,
     count: 6,
     radius: 110,
+    forceField: true,              // 力場：跟著玩家的圓形領域（WeaponManager.fireForceField）
+    stormEvery: 2.0,               // 擊退風暴間隔（秒）
   },
   shark_torpedo: {
     id: 'shark_torpedo',
     name: '鯊魚核彈 (超武)',
     icon: '🦈💣',
-    description: '發射全螢幕震顫核聚變魚雷，毀天滅地級大範圍爆破，每 2 發挾帶劇毒。',
+    description: '放出擺尾獵殺的鯊魚魚雷，一路追咬目標，撞上即核爆震動全畫面，每 2 發挾帶劇毒。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
@@ -164,6 +171,8 @@ export const WEAPONS = {
     baseDamage: 150,
     baseCooldown: 1.2,  // 1.8 時單體 DPS 反而低於滿級火箭
     speed: 460,
+    homing: 3.2,                   // 鯊魚轉彎比飛彈鈍，但會一直追
+    swim: true,
     explosionRadius: 220,
     count: 2,
     charge: { every: 2, effect: 'poison' },
@@ -172,7 +181,7 @@ export const WEAPONS = {
     id: 'napalm_sea',
     name: '燃油煉獄 (超武)',
     icon: '🔥🌊',
-    description: '藍色高溫烈火將地面覆蓋成火海，擴散並迅速融化怪群。',
+    description: '拋出藍焰燃油彈，落地後火海沿地面持續擴散，迅速融化怪群。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
@@ -182,35 +191,43 @@ export const WEAPONS = {
     duration: 5.5,
     radius: 140,
     count: 3,
+    spreadFrom: 0.6,               // 火海半徑從 60% 擴散到 130%（2.5 秒內）
+    spreadTo: 1.3,
+    spreadTime: 2.5,
   },
   plasma_storm: {
     id: 'plasma_storm',
     name: '狂雷星暴 (超武)',
     icon: '🌩️💥',
-    description: '漫天落雷連環轟炸，落點更密、單發威力翻倍。',
+    description: '中心一記巨雷，外圈落雷呈星形爆開，並以電光射線連回中心。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'lightning',
     baseDamage: 75,
     baseCooldown: 1.1,
-    strikes: 6,
+    strikes: 6,                    // 中心 1 + 外圈 5
+    starBurst: true,
+    starRadius: 80,
+    linkDamageMul: 0.2,
+    linkWidth: 20,
   },
   quantum_sphere: {
     id: 'quantum_sphere',
     name: '量子星雲球 (超武)',
     icon: '⚛️⚽',
-    description: '多顆超光速量子球體裂變，留下能量粒子殘影瘋狂彈射，每 4 顆挾帶冰凍。',
+    description: '量子球在敵群間彈射，每次命中裂變出一顆子球，拖著能量殘影，每 4 顆挾帶冰凍。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'soccer',
-    baseDamage: 55,
+    baseDamage: 45,                // 命中裂變 + 敵間彈射，命中數遠多於舊版飛出畫面的球
     baseCooldown: 2.2,
     speed: 700,
-    bounces: 24,
+    bounces: 10,
     count: 4,
     charge: { every: 4, effect: 'freeze' },
+    splitGen: 1,                   // 命中裂變的世代上限（子球不再裂變）
   },
 
   // 新增武器 (內容擴充批)：開路穿透型 ─ 相位飛刃
@@ -300,27 +317,29 @@ export const WEAPONS = {
     id: 'phase_blade',
     name: '相位飛刃',
     icon: '💠',
-    description: '朝最近敵人擲出高速相位刃，貫穿成群敵人。每 4 發蓄能射出電弧刃。與苦無可合體為超武。',
+    description: '相位刃命中後會相位跳躍到附近下一個敵人面前繼續切割。每 4 發蓄能射出電弧刃。與苦無可合體為超武。',
     isEvo: false,
     evoTarget: 'phase_storm',
     pairPassive: 'kunai',          // 武器+武器合成 (VS 黑白鴿精神)
     maxLevel: 5,
-    baseDamage: 34,
-    damageGrowth: 12,
+    baseDamage: 22,                // 相位跳躍讓命中率大增，單發傷害相應調低
+    damageGrowth: 7,
     baseCooldown: 1.4,
     cooldownGrowth: -0.08,
     speed: 560,
     projectiles: [1, 1, 1, 2, 2],
-    pierce: [3, 4, 5, 6, 8],
+    pierce: [2, 2, 3, 4, 5],       // 相位跳躍保證第二刀命中，穿透比直線飛行時少
     charge: { every: 4, effect: 'chain' }, // 每 4 發射出一枚電弧刃
     projType: 'drill',
+    phaseJump: 200,                // 相位跳躍搜尋半徑
+    phaseJumps: 1,                 // 每發最多跳幾次
   },
   // 新增武器 (內容擴充批)：護身環繞型 ─ 重力環鋸
   orbit_saw: {
     id: 'orbit_saw',
     name: '重力環鋸',
     icon: '🪚',
-    description: '兩把高速環鋸繞體旋轉，割裂所有靠近的敵人。',
+    description: '環鋸繞體旋轉並產生重力場，把附近的敵人吸向鋸環切割。',
     isEvo: false,
     evoTarget: 'singularity_ring',
     pairPassive: 'cdr_battery',
@@ -334,6 +353,8 @@ export const WEAPONS = {
     // 貼身護體軌道：緊貼角色旋轉，與守護輪盤的寬軌道明顯區隔
     radius: [34, 40, 46, 52, 58],
     projType: 'saw',
+    pullRadius: 110,               // 重力場：鋸環外 110px 內的雜兵被往內拉
+    pullSpeed: 55,
   },
 
   // 雙武合體超武：相位風暴 (消耗 相位飛刃 + 苦無)
@@ -341,25 +362,28 @@ export const WEAPONS = {
     id: 'phase_storm',
     name: '相位風暴 (超武)',
     icon: '🌀💠',
-    description: '雙武合體！相位飛刃與苦無融合成不間斷的全自動相位風暴，每 8 發挾帶電弧刃。',
+    description: '雙武合體！飛刃從特工周圍的相位裂隙不斷射出，命中後連續相位跳躍，每 8 發挾帶電弧刃。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
     baseWeapon: 'phase_blade',
-    baseDamage: 55,
-    baseCooldown: 0.15,
+    baseDamage: 45,
+    baseCooldown: 0.3,             // 裂隙射出 + 相位跳躍，命中率高，射速相應放慢
     speed: 720,
     projectiles: 1,
-    pierce: 6,
+    pierce: 3,
     charge: { every: 8, effect: 'chain' }, // 合體超武射速極快，間隔再拉長
     projType: 'drill',
+    phaseJump: 240,
+    phaseJumps: 1,
+    riftRadius: 70,                // 相位裂隙：出生點在玩家周圍 70px 的圓上
   },
   // 護身超武：重力奇點環 (重力環鋸的永續型態)
   singularity_ring: {
     id: 'singularity_ring',
     name: '重力奇點環 (超武)',
     icon: '🌌🪚',
-    description: '環鋸化為永續運轉的奇點軌道，範圍更大、轉速更快，切割一切近身之物。',
+    description: '特工身邊生成黑洞奇點，強大引力把大範圍的敵人吸進永續運轉的鋸環。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
@@ -371,6 +395,8 @@ export const WEAPONS = {
     count: 6,
     radius: 62,
     projType: 'saw',
+    pullRadius: 200,
+    pullSpeed: 110,
   },
 
   // ── 第三輪擴充：兩把新基礎武器 ──────────────────────────────────────

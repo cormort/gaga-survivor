@@ -23,6 +23,9 @@ const FX = {
   boomerang: { color: '#ffd166', glow: 1.6, trail: 0.035 },
   rail_beam: { color: '#7df8ff', glow: 2.2, trail: 0 },
   pellet:    { color: '#ffb347', glow: 1.7, trail: 0.03 },
+  shuriken:  { color: '#b98cff', glow: 1.9, trail: 0.05 },
+  bottle:    { color: '#ffb703', glow: 1.2, trail: 0 },
+  force_field: { color: '#ffd166', glow: 0, trail: 0 },
 };
 const FX_DEFAULT = { color: '#ffffff', glow: 1.8, trail: 0.05 };
 // 拖尾只在「真的在飛」時畫：環繞刀刃與地面积火是慢速/靜止實體
@@ -172,6 +175,53 @@ export class Projectile {
     this.lavaDuration = options.lavaDuration || 0;
     this.lavaRadius = options.lavaRadius || 0;
     this.lavaDamageMul = options.lavaDamageMul || 0;
+
+    // ── 依名稱重新設計的武器行為 ──
+    // 追蹤：homing = 每秒最大轉向（弧度），target 由 WeaponManager 維護（目標死了就換最近的）
+    this.homing = options.homing || 0;
+    this.target = options.target || null;
+    // 鯊魚核彈：魚雷左右擺尾前進（純視覺偏移，不影響命中判定的中心）
+    this.swim = !!options.swim;
+    // 純視覺實體：不參與碰撞（燃燒瓶飛行中的瓶子）
+    this.noCollide = !!options.noCollide;
+    // 相位飛刃：命中後相位跳躍到下一個敵人
+    this.phaseJump = options.phaseJump || 0;
+    this.phaseJumps = options.phaseJumps || 0;   // 還能跳幾次
+    // 量子星雲球：命中裂變（世代上限，避免無限分裂）
+    this.splitGen = options.splitGen || 0;
+    this.maxSplitGen = options.maxSplitGen || 0;
+    // 殘影：記錄最近幾個位置（量子星雲球／相位飛刃）
+    this.afterimage = !!options.afterimage;
+    this.trailPts = [];
+    // 燃燒瓶：拋物線飛行（起點、終點、滯空秒數、弧高）
+    this.fromX = this.x; this.fromY = this.y;
+    this.toX = options.toX ?? this.x; this.toY = options.toY ?? this.y;
+    this.flight = options.flight || 0;
+    this.arcHeight = options.arcHeight || 0;
+    this.age = 0;
+    // 燃油煉獄：火海隨時間擴散（半徑從 growFrom 倍長到 growTo 倍）
+    this.baseRadius = this.radius;
+    this.growFrom = options.growFrom || 0;
+    this.growTo = options.growTo || 0;
+    this.growTime = options.growTime || 0;
+    // 永恆守護力場：跟著玩家的領域
+    this.followPlayer = !!options.followPlayer;
+  }
+
+  // 朝 target 轉向（每秒最多 homing 弧度），速度大小不變
+  steer(dt) {
+    const t = this.target;
+    if (!this.homing || !t || t.isDead) return;
+    const want = Math.atan2(t.y - this.y, t.x - this.x);
+    const cur = Math.atan2(this.vy, this.vx);
+    let diff = want - cur;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    const maxTurn = this.homing * dt;
+    const a = cur + Math.max(-maxTurn, Math.min(maxTurn, diff));
+    const sp = Math.hypot(this.vx, this.vy);
+    this.vx = Math.cos(a) * sp;
+    this.vy = Math.sin(a) * sp;
   }
 
   update(dt, player, onExplosion = null) {
@@ -185,11 +235,40 @@ export class Projectile {
       return;
     }
 
+    this.age += dt;
+    this.steer(dt);
+    if (this.afterimage) {
+      this.trailPts.push(this.x, this.y);
+      if (this.trailPts.length > 12) this.trailPts.splice(0, 2);
+    }
+
     switch (this.type) {
       case 'kunai':
       case 'merc':
         this.x += this.vx * dt;
         this.y += this.vy * dt;
+        break;
+
+      case 'shuriken':
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.spin += dt * 22;
+        break;
+
+      case 'bottle': {
+        // 拋物線：水平等速從起點到落點，垂直加一段 sin 弧（畫面上的「往上拋」）
+        const k = Math.min(1, this.age / (this.flight || 0.4));
+        this.x = this.fromX + (this.toX - this.fromX) * k;
+        this.y = this.fromY + (this.toY - this.fromY) * k;
+        this.lift = Math.sin(Math.PI * k) * this.arcHeight;
+        this.spin += dt * 14;
+        break;
+      }
+
+      case 'force_field':
+        if (player) { this.x = player.x; this.y = player.y; }
+        this.spin += dt * 0.8;
+        this.tickRehit(dt);
         break;
 
       case 'guardian':
@@ -240,9 +319,25 @@ export class Projectile {
       case 'rocket':
         this.x += this.vx * dt;
         this.y += this.vy * dt;
+        this.spin += dt;
+        // 鎖定飛彈：碰到目標就引爆（不再只在壽命結束的落點爆）
+        if (this.target && !this.target.isDead && onExplosion) {
+          const rr = this.radius + this.target.radius;
+          const dx = this.target.x - this.x;
+          const dy = this.target.y - this.y;
+          if (dx * dx + dy * dy <= rr * rr) {
+            onExplosion(this);
+            this.isDead = true;
+          }
+        }
         break;
 
       case 'fire_pool':
+        // 燃油煉獄：火海沿地面擴散
+        if (this.growTime > 0) {
+          const k = Math.min(1, this.age / this.growTime);
+          this.radius = this.baseRadius * (this.growFrom + (this.growTo - this.growFrom) * k);
+        }
         // 地面積火固定在原處，定時跳傷害
         this.tickTimer += dt;
         if (this.isSanctuary && player) {
@@ -266,13 +361,20 @@ export class Projectile {
         this.y += this.vy * dt;
         this.tickRehit(dt); // 不重置的話，一顆球對同一隻怪一輩子只能打一次，彈跳次數等於白給
 
-        // 螢幕與世界邊界反彈
+        // 螢幕邊界反彈：先前只撞世界邊界（±2000px），球等於一路飛出畫面不再回來。
+        // 改用「以玩家為中心的視野框」，球會在畫面裡來回彈（世界邊界仍是最外層保險）
         const bounds = GAME_CONFIG.WORLD_BOUNDS;
-        if (this.x < bounds.minX || this.x > bounds.maxX) {
+        const hw = player ? (window.innerWidth || 1280) / 2 - this.radius : Infinity;
+        const hh = player ? (window.innerHeight || 720) / 2 - this.radius : Infinity;
+        const minX = Math.max(bounds.minX, player ? player.x - hw : -Infinity);
+        const maxX = Math.min(bounds.maxX, player ? player.x + hw : Infinity);
+        const minY = Math.max(bounds.minY, player ? player.y - hh : -Infinity);
+        const maxY = Math.min(bounds.maxY, player ? player.y + hh : Infinity);
+        if ((this.x < minX && this.vx < 0) || (this.x > maxX && this.vx > 0)) {
           this.vx *= -1;
           this.bounces--;
         }
-        if (this.y < bounds.minY || this.y > bounds.maxY) {
+        if ((this.y < minY && this.vy < 0) || (this.y > maxY && this.vy > 0)) {
           this.vy *= -1;
           this.bounces--;
         }
@@ -308,6 +410,22 @@ export class Projectile {
     if (screenX < -150 || screenX > window.innerWidth + 150 ||
         screenY < -150 || screenY > window.innerHeight + 150) {
       return;
+    }
+
+    // 殘影：在本體之前畫（世界座標 → 螢幕座標），越舊越淡
+    if (this.afterimage && this.trailPts.length >= 4) {
+      const n = this.trailPts.length / 2;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = this.type === 'soccer' ? '#00f59b' : '#c77dff';
+      for (let i = 0; i < n - 1; i++) {
+        ctx.globalAlpha = 0.08 + 0.3 * (i / n);
+        ctx.beginPath();
+        ctx.arc(this.trailPts[i * 2] - camera.x, this.trailPts[i * 2 + 1] - camera.y,
+          this.radius * (0.5 + 0.5 * i / n), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
     ctx.save();
@@ -384,6 +502,18 @@ export class Projectile {
         this.drawPellet(ctx);
         break;
 
+      case 'shuriken':
+        this.drawShuriken(ctx);
+        break;
+
+      case 'bottle':
+        this.drawBottle(ctx);
+        break;
+
+      case 'force_field':
+        this.drawForceField(ctx);
+        break;
+
       default:
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
@@ -392,6 +522,100 @@ export class Projectile {
         break;
     }
 
+    ctx.restore();
+  }
+
+  // 幽靈手裏劍：半透明、旋轉的四角星（外圈淡紫幽光）
+  drawShuriken(ctx) {
+    const r = this.radius * 1.8;
+    ctx.rotate(this.spin);
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#e0d4ff';
+    ctx.shadowColor = '#b98cff';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      const rr = i % 2 === 0 ? r : r * 0.32;
+      ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#2b1d4a';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 燃燒瓶：沿拋物線旋轉飛行的玻璃瓶，地面有落點預告圈與影子
+  drawBottle(ctx) {
+    const lift = this.lift || 0;
+    const k = Math.min(1, this.age / (this.flight || 0.4));
+    // 落點預告（隨飛行進度收縮）與瓶子影子
+    ctx.save();
+    ctx.translate(this.toX - this.x, this.toY - this.y);
+    ctx.strokeStyle = this.isEvo ? 'rgba(80,160,255,0.55)' : 'rgba(255,140,40,0.55)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.arc(0, 0, 10 + 26 * (1 - k), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 7, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.translate(0, -lift);
+    ctx.rotate(this.spin);
+    ctx.fillStyle = this.isEvo ? '#4cc9f0' : '#7cb518';
+    ctx.beginPath();
+    ctx.roundRect(-4, -6, 8, 12, 3);
+    ctx.fill();
+    ctx.fillStyle = '#e9ecef';
+    ctx.fillRect(-1.6, -11, 3.2, 5);
+    // 瓶口的火布
+    ctx.fillStyle = this.isEvo ? '#90e0ff' : '#ffb703';
+    ctx.beginPath();
+    ctx.arc(0, -12, 2.6 + Math.sin(this.spin * 3) * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 永恆守護力場：金色光罩 + 旋轉的六角符文環
+  drawForceField(ctx) {
+    const r = this.radius;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(0, 0, r * 0.35, 0, 0, r);
+    g.addColorStop(0, 'rgba(255,209,102,0)');
+    g.addColorStop(0.8, 'rgba(255,209,102,0.10)');
+    g.addColorStop(1, 'rgba(255,230,140,0.35)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,224,102,0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.rotate(this.spin);
+    ctx.strokeStyle = 'rgba(255,224,102,0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 6; i++) {
+      const a = (i * Math.PI) / 3;
+      ctx.lineTo(Math.cos(a) * r * 0.82, Math.sin(a) * r * 0.82);
+    }
+    ctx.stroke();
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3;
+      ctx.fillStyle = 'rgba(255,240,180,0.9)';
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r * 0.82, Math.sin(a) * r * 0.82, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -546,9 +770,62 @@ export class Projectile {
     }
   }
 
+  // 鯊魚核彈：擺尾的鯊魚魚雷（背鰭、尾鰭、眼睛、核彈警示紋）
+  drawShark(ctx) {
+    const wag = Math.sin(this.age * 16) * 0.35;
+    ctx.translate(0, Math.sin(this.age * 8) * 3);
+    ctx.shadowColor = '#4cc9f0';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#5c7c99';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 20, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // 尾鰭（擺動）
+    ctx.save();
+    ctx.translate(-18, 0);
+    ctx.rotate(wag);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-11, -9);
+    ctx.lineTo(-7, 0);
+    ctx.lineTo(-11, 9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // 背鰭
+    ctx.fillStyle = '#3d5a73';
+    ctx.beginPath();
+    ctx.moveTo(-2, -6);
+    ctx.lineTo(-10, -15);
+    ctx.lineTo(-10, -5);
+    ctx.closePath();
+    ctx.fill();
+    // 肚子與眼睛
+    ctx.fillStyle = '#dbe7f0';
+    ctx.beginPath();
+    ctx.ellipse(4, 3.5, 13, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ff0055';
+    ctx.beginPath();
+    ctx.arc(12, -2.5, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    // 核彈警示環
+    ctx.strokeStyle = '#ffe066';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-6, -7.5);
+    ctx.lineTo(-6, 7.5);
+    ctx.stroke();
+  }
+
   drawRocket(ctx) {
     const angle = Math.atan2(this.vy, this.vx);
     ctx.rotate(angle);
+    if (this.swim) {
+      this.drawShark(ctx);
+      return;
+    }
 
     if (this.isEvo) {
       // 鯊魚核彈
