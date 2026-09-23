@@ -200,6 +200,19 @@
       </div>
     </div>
 
+    <!-- 特工等級彈窗 -->
+    <div id="char-level-modal" class="overlay hidden">
+      <div class="modal-content talent-content">
+        <div class="modal-header">
+          <h2 class="glow-text">特工等級 🆙</h2>
+          <p class="subtitle">消耗金幣＋DNA 提升特工基礎數值 — 只對該特工生效，挑戰更高難度的底氣</p>
+        </div>
+        <div id="char-level-wallet" class="talent-dna">🪙 0　🧬 0</div>
+        <div id="char-level-list" class="talent-list"></div>
+        <button id="btn-close-char-levels" class="game-btn secondary-btn">關閉</button>
+      </div>
+    </div>
+
     <!-- 裝備倉庫彈窗 -->
     <div id="gear-modal" class="overlay hidden">
       <div class="modal-content gear-content">
@@ -340,6 +353,7 @@
         <details id="base-hub" class="base-hub">
           <summary class="game-btn talent-btn base-hub-toggle">🏠 養成基地</summary>
           <div class="menu-meta base-hub-grid">
+            <button id="btn-char-levels" class="game-btn talent-btn">🆙 特工等級</button>
             <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
             <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
             <button id="btn-shop" class="game-btn talent-btn shop-btn">🛒 特工黑市</button>
@@ -351,6 +365,7 @@
           <div class="audio-row">
             <label class="vol-item">🔊<input id="sfx-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音效音量"></label>
             <label class="vol-item">🎵<input id="bgm-vol" class="vol-slider" type="range" min="0" max="100" value="80" aria-label="音樂音量"></label>
+            <label class="vol-item" title="口袋道具在危急時自動使用（按 E 仍可手動使用）"><input id="auto-pocket" type="checkbox" checked> 🎒 道具自動使用</label>
           </div>
         </details>
         <div class="start-actions">

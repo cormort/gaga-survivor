@@ -785,6 +785,7 @@ body, html {
    兩者同為 .overlay (z-index 100)，DOM 順序在後的開始畫面會蓋掉先宣告的彈窗，
    結果就是點「基因強化 / 裝備倉庫」看起來沒反應。 */
 #talent-modal,
+#char-level-modal,
 #gear-modal,
 #recipe-modal,
 #shop-modal {
@@ -2727,6 +2728,23 @@ body, html {
   line-height: 1;
 }
 
+/* 道具自動使用開啟時，口袋底部掛一個 AUTO 標籤 */
+.pocket-slot.auto::after {
+  content: 'AUTO';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #0b0f17;
+  background: #00f59b;
+  border-radius: 4px;
+  padding: 0 3px;
+  line-height: 11px;
+}
+
 .pocket-badge {
   position: absolute;
   top: -4px;
@@ -3077,4 +3095,24 @@ body, html {
   .start-actions { margin: 6px -14px -14px; padding: 12px 14px 16px; }
   #difficulty-select { min-height: 44px; font-size: 14px; }
   .difficulty-label { letter-spacing: 2px; }
+}
+
+/* ===== 特工等級 ===== */
+.char-level-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.char-level-btns .talent-up {
+  white-space: nowrap;
+}
+.char-lv {
+  font-size: 11px;
+  font-weight: 800;
+  color: #0c1017;
+  background: var(--accent, #00e5ff);
+  border-radius: 6px;
+  padding: 0 5px;
+  margin-left: 4px;
+  vertical-align: middle;
 }

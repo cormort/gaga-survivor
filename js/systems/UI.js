@@ -9,7 +9,8 @@ import {
   CONSUMABLE_ITEMS,
   WEAPON_ASPECTS,
 } from '../config.js';
-import { TALENTS, TALENT_ORDER, talentCost, talentInvested, talentTreeCost, talentValueAt, upgradeKeyOf } from '../meta.js';
+import { TALENTS, TALENT_ORDER, talentCost, talentInvested, talentTreeCost, talentValueAt, upgradeKeyOf, CHAR_LEVEL, charLevelBonuses, charLevelCost } from '../meta.js';
+import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
 import {
   RARITIES,
   SLOTS,
@@ -333,7 +334,7 @@ export class UIManager {
         <canvas class="char-portrait" width="128" height="120"></canvas>
         <div class="char-class-badge" style="background:${classColor}; color:#0c1017;">${heroClass}</div>
         ${unlocked ? '' : `<div class="char-lock-badge">🔒 ${cost} 🧬</div>`}
-        <div class="char-codename">${c.codename}${unlocked ? '' : ' <span class="lock-hint">未解鎖</span>'}</div>
+        <div class="char-codename">${c.codename}${unlocked ? ` <span class="char-lv">Lv ${save.charLevel(id)}</span>` : ' <span class="lock-hint">未解鎖</span>'}</div>
         <div class="char-title">${c.title} <span class="char-class-tag" style="color:${classColor};">(${heroClass})</span></div>
         <div class="char-trait"><strong>${c.traitName}</strong>${c.traitDesc}</div>
         ${aspectHtml}
@@ -382,6 +383,50 @@ export class UIManager {
         ctx.restore();
       });
     });
+  }
+
+  // 特工等級彈窗：每位已解鎖特工一列，「升 1 級」與「全部升」(花到資源不夠或滿級)
+  openCharLevelModal(save, onLevelUp) {
+    this._onCharLevelUp = onLevelUp;
+    this.rebuildCharLevelView(save);
+    document.getElementById('char-level-modal')?.classList.remove('hidden');
+  }
+
+  rebuildCharLevelView(save) {
+    const list = document.getElementById('char-level-list');
+    if (!list) return;
+    const { gold, dna } = save.data;
+    document.getElementById('char-level-wallet').textContent = `🪙 ${gold}　🧬 ${dna}`;
+    const pct = (v) => `${Math.round(v * 1000) / 10}%`;
+    list.innerHTML = '';
+    for (const id of CHARACTER_ORDER) {
+      if (!save.characterUnlocked(id)) continue;
+      const c = CHARACTERS[id];
+      const lvl = save.charLevel(id);
+      const maxed = lvl >= CHAR_LEVEL.max;
+      const now = charLevelBonuses(lvl);
+      const next = charLevelBonuses(lvl + 1);
+      const cost = charLevelCost(lvl);
+      const affordable = !maxed && gold >= cost.gold && dna >= cost.dna;
+      const row = document.createElement('div');
+      row.className = 'talent-row' + (maxed ? ' maxed' : '');
+      row.innerHTML = `
+        <span class="talent-icon" style="color:${c.accent}">★</span>
+        <div class="talent-info">
+          <div class="talent-name">${c.codename}<span class="talent-lv">LV ${lvl}/${CHAR_LEVEL.max}</span></div>
+          <div class="talent-desc">傷害 +${pct(now.dmg)}・生命 +${now.hp}・減傷 +${pct(now.armor)}${maxed ? '（已滿）' : `
+            <span class="talent-next">下一級 → +${pct(next.dmg)} / +${next.hp} / +${pct(next.armor)}</span>`}</div>
+        </div>
+        <div class="char-level-btns">
+          <button class="talent-up${affordable ? ' affordable' : ''}" data-times="1"${maxed ? ' disabled' : ''}>${maxed ? 'MAX' : `升級 ${cost.gold}🪙 ${cost.dna}🧬`}</button>
+          ${maxed ? '' : `<button class="talent-up${affordable ? ' affordable' : ''}" data-times="all">全部升</button>`}
+        </div>
+      `;
+      row.querySelectorAll('button[data-times]').forEach((b) => b.addEventListener('click', () => {
+        this._onCharLevelUp?.(id, b.dataset.times === 'all' ? Infinity : 1);
+      }));
+      list.appendChild(row);
+    }
   }
 
   // 基因強化 (天賦樹) 彈窗
@@ -1272,8 +1317,9 @@ export class UIManager {
     if (!conf) return;
 
     if (pocketSlot) {
-      pocketSlot.className = 'pocket-slot filled';
-      pocketSlot.title = `【${conf.name}】${conf.desc} (按 E 或點擊使用)`;
+      const auto = save.data.settings.autoPocket !== false;
+      pocketSlot.className = `pocket-slot filled${auto ? ' auto' : ''}`;
+      pocketSlot.title = `【${conf.name}】${conf.desc}${auto ? `\n自動使用：${conf.auto}` : ''} (按 E 或點擊使用)`;
     }
     if (pocketIcon) pocketIcon.textContent = conf.icon;
     if (pocketBadge) {

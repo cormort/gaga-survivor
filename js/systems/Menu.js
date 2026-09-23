@@ -81,6 +81,15 @@ export function bindEvents(game) {
     });
   });
 
+  // 特工等級
+  document.getElementById('btn-char-levels').addEventListener('click', () => {
+    sound.playGem();
+    game.ui.openCharLevelModal(save, (id, times) => levelUpCharacter(game, id, times));
+  });
+  document.getElementById('btn-close-char-levels').addEventListener('click', () => {
+    document.getElementById('char-level-modal').classList.add('hidden');
+  });
+
   // 基因強化 (天賦樹)
   document.getElementById('btn-talents').addEventListener('click', () => {
     sound.playGem();
@@ -153,7 +162,8 @@ export function bindEvents(game) {
   const bgmVol = document.getElementById('bgm-vol');
   if (sfxVol && bgmVol) {
     const applyVol = () => {
-      const settings = { sfx: sfxVol.value / 100, bgm: bgmVol.value / 100 };
+      // 合併而不是整份覆寫：settings 裡還有其他開關 (autoPocket)，覆寫會把它們洗掉
+      const settings = { ...save.data.settings, sfx: sfxVol.value / 100, bgm: bgmVol.value / 100 };
       save.set({ settings });
       sound.setVolumes(settings.sfx, settings.bgm);
     };
@@ -162,6 +172,15 @@ export function bindEvents(game) {
     sfxVol.addEventListener('input', applyVol);
     bgmVol.addEventListener('input', applyVol);
     sound.setVolumes(save.data.settings.sfx || 1, save.data.settings.bgm || 0.8);
+  }
+
+  // 口袋道具自動使用開關
+  const autoPocket = document.getElementById('auto-pocket');
+  if (autoPocket) {
+    autoPocket.checked = save.data.settings.autoPocket !== false;
+    autoPocket.addEventListener('change', () => {
+      save.set({ settings: { ...save.data.settings, autoPocket: autoPocket.checked } });
+    });
   }
 
   // 開始遊戲按鈕
@@ -360,6 +379,20 @@ export function investTalent(game, id) {
   game.ui.rebuildTalentView(save);
   game.ui.sayStatus(`天賦強化成功 (花費 ${res.cost} 🧬)`);
   sound.playGem();
+}
+
+export function levelUpCharacter(game, id, times) {
+  const res = save.levelUpChar(id, times);
+  if (!res.ok) {
+    game.ui.sayStatus(res.reason, true);
+    sound.playHurt();
+    return;
+  }
+  game.ui.updateDnaChip(save.data.dna, save.data.gold);
+  game.ui.rebuildCharLevelView(save);
+  refreshCharSelect(game);
+  game.ui.sayStatus(`${CHARACTERS[id].codename} 升到 Lv ${res.level}（+${res.gained} 級，花費 ${res.gold} 🪙 + ${res.dna} 🧬）`);
+  sound.playLevelUp();
 }
 
 export function returnToMenu(game) {

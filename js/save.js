@@ -1,6 +1,6 @@
 // 局外存檔層：整份進度存在單一 localStorage key，其他系統一律走這裡讀寫。
 
-import { TALENTS, talentCost } from './meta.js';
+import { TALENTS, talentCost, CHAR_LEVEL, charLevelCost } from './meta.js';
 import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes, FUSION_COST, fuseItems } from './items.js';
 // 疊加上限住在黑市商品表旁邊（那裡才是「可以帶幾劑」的定義），存檔只負責執行
 import { MAX_BOOSTER_STACK } from './shop.js';
@@ -24,6 +24,7 @@ function blank() {
     boosters: [],           // 下局出擊前啟用的戰術興奮劑清單
     stashCap: STASH_CAP,    // 倉庫容量上限 (可於黑市升級擴充)
     talents: {},            // 天賦樹等級 (基因強化)
+    charLevels: {},         // 特工等級 { charId: level }，沒有記錄 = Lv1
     stash: [],              // 打寶倉庫 (最多 stashCap 件)
     equipped: {},           // 已穿裝備 { slotKey: itemId }
     unlocked: { survivor: ['street'], defense: ['street'] }, // 已解鎖關卡 (依模式)
@@ -31,7 +32,7 @@ function blank() {
     best: { survivor: {}, defense: {} }, // { modeId: { levelId: { time, kills, cleared } } }
     character: 'duck',
     mode: 'survivor',       // 上次選的模式
-    settings: { sfx: 1, bgm: 0.8 }, // 音量 (主選單滑桿)
+    settings: { sfx: 1, bgm: 0.8, autoPocket: true }, // 音量 (主選單滑桿)、口袋道具自動使用
     daily: { date: '', bestTime: 0, completed: false },
     evolvedEver: [],            // 歷史上合成過的超武 id (合成圖鑑打勾用)
     weaponAspects: {            // Hades 武器型態配置
@@ -98,6 +99,7 @@ function ensureDefaults(d) {
   // 舊存檔已選了某特工 → 視為已擁有，避免改版後被鎖住
   if (d.character && !d.unlockedChars.includes(d.character)) d.unlockedChars.push(d.character);
   if (!d.talents || typeof d.talents !== 'object') d.talents = {};
+  if (!d.charLevels || typeof d.charLevels !== 'object') d.charLevels = {};
   if (!Array.isArray(d.stash)) d.stash = [];
   if (!d.equipped || typeof d.equipped !== 'object') d.equipped = {};
   if (!d.daily || typeof d.daily !== 'object') d.daily = { date: '', bestTime: 0, completed: false };
@@ -110,7 +112,7 @@ function ensureDefaults(d) {
   if (!Array.isArray(d.boosters)) d.boosters = [];
   if (typeof d.stashCap !== 'number') d.stashCap = STASH_CAP;
   if (!d.settings || typeof d.settings !== 'object') d.settings = {};
-  d.settings = { sfx: 1, bgm: 0.8, ...d.settings };
+  d.settings = { sfx: 1, bgm: 0.8, autoPocket: true, ...d.settings };
 
   if (!d.weaponAspects || typeof d.weaponAspects !== 'object') {    d.weaponAspects = {
       kunai: 'zagreus',
@@ -191,6 +193,36 @@ export const save = {
     this.data.talents[id] = lvl + 1;
     this.flush();
     return { ok: true, cost, level: lvl + 1 };
+  },
+
+  // ----- 特工等級 -----
+  charLevel(id) {
+    return Math.max(1, Math.min(CHAR_LEVEL.max, this.data.charLevels[id] || 1));
+  },
+
+  // 升級一名特工；times = Infinity 時一路升到錢不夠或滿級為止 (「全部升」按鈕)
+  levelUpChar(id, times = 1) {
+    if (!this.characterUnlocked(id)) return { ok: false, reason: '特工尚未解鎖' };
+    let lvl = this.charLevel(id);
+    if (lvl >= CHAR_LEVEL.max) return { ok: false, reason: '已達最高等級' };
+    let gold = 0, dna = 0, gained = 0;
+    while (gained < times && lvl < CHAR_LEVEL.max) {
+      const c = charLevelCost(lvl);
+      if (this.data.gold < c.gold || this.data.dna < c.dna) break;
+      this.data.gold -= c.gold;
+      this.data.dna -= c.dna;
+      gold += c.gold;
+      dna += c.dna;
+      lvl++;
+      gained++;
+    }
+    if (!gained) {
+      const c = charLevelCost(lvl);
+      return { ok: false, reason: `資源不足 (需要 ${c.gold} 🪙 + ${c.dna} 🧬)` };
+    }
+    this.data.charLevels[id] = lvl;
+    this.flush();
+    return { ok: true, level: lvl, gained, gold, dna };
   },
 
   // ----- 特工解鎖 -----

@@ -74,7 +74,7 @@ import {
   drawMerchant,
 } from './systems/Merchant.js';
 import { bindEvents, returnToMenu } from './systems/Menu.js';
-import { metaBonuses, upgradeKeyOf } from './meta.js';
+import { metaBonuses, upgradeKeyOf, charLevelBonuses } from './meta.js';
 import { SHOP_BOOSTERS } from './shop.js';
 import {
   rollItem,
@@ -102,6 +102,19 @@ const ELITE_HITSTOP_GAP = 0.5;
 
 // 局內待回收裝備的上限，超出的自動分解成金幣 (原本無上限，實測 23 分鐘累積數百件)
 const PENDING_GEAR_CAP = 40;
+
+// 道具自動使用的觸發條件 (c = autoUseContext())。說明文字在 config.js 的 CONSUMABLE_ITEMS[].auto
+const AUTO_USE = {
+  potion:        (c) => c.hp < 0.45,
+  elixir:        (c) => c.hp < 0.30,
+  shield_potion: (c) => c.hp < 0.60 && (c.near220 >= 8 || c.bossNear),
+  stopwatch:     (c) => (c.hp < 0.35 && c.near260 >= 6) || c.bullets >= 6,
+  holy_water:    (c) => c.near260 >= 12 || (c.hp < 0.4 && c.near260 >= 5),
+  atk_potion:    (c) => c.bossNear || c.near400 >= 25,
+  manna_prism:   (c) => c.bossNear || c.near400 >= 25,
+  luck_potion:   (c) => c.near500 >= 15,
+  magic_ticket:  (c) => c.drops >= 25,
+};
 
 // ── 自適應解析度 (DPR) ─────────────────────────────────────────
 // 為什麼需要：原本畫布解析度寫死 `Math.min(devicePixelRatio, 1.5)`，而現在的手機
@@ -490,13 +503,16 @@ class Game {
     if (!cDef) return;
 
     switch (id) {
-      case 'potion':
-        this.player.heal(80);
+      case 'potion': {
+        // 比例回血：固定 80 在後期 (天賦/裝備堆高最大生命) 只剩一小口
+        const amt = Math.max(cDef.value, Math.round(this.player.maxHp * 0.35));
+        this.player.heal(amt);
         sound.playGem();
         this.particles.createShockwave(this.player.x, this.player.y, 110, '#ff3366');
-        this.particles.createDamageText(this.player.x, this.player.y, '+80 HP', false);
-        this.ui.say('🍷 恢復藥水：生命恢復 +80！', '#ff3366', 2.0);
+        this.particles.createDamageText(this.player.x, this.player.y, `+${amt} HP`, false);
+        this.ui.say(`🍷 恢復藥水：生命恢復 +${amt}！`, '#ff3366', 2.0);
         break;
+      }
 
       case 'elixir':
         this.player.heal(this.player.maxHp);
@@ -543,7 +559,9 @@ class Game {
         break;
       }
 
-      case 'holy_water':
+      case 'holy_water': {
+        // 傷害跟雜兵血量曲線走：固定 260 在 8 分鐘 (血量 ×8) 之後連一隻步兵都清不掉
+        const dmg = Math.round(cDef.value * enemyScale(this.gameTime, this.level, this.rules).hp);
         sound.playExplosion();
         this.camera.shake = Math.max(this.camera.shake, 12);
         this.particles.createExplosion(this.player.x, this.player.y, 240, true);
@@ -551,12 +569,13 @@ class Game {
         for (const e of this.enemies) {
           const d = Math.hypot(e.x - this.player.x, e.y - this.player.y);
           if (d <= 240 + e.radius) {
-            e.takeDamage(260, 12, this.player.x, this.player.y);
-            this.particles.createDamageText(e.x, e.y, 260, true);
+            e.takeDamage(dmg, 12, this.player.x, this.player.y);
+            this.particles.createDamageText(e.x, e.y, dmg, true);
           }
         }
         this.ui.say('🍶 聖水淨化：惡靈全數退散！', '#b3ecff', 2.5);
         break;
+      }
 
       case 'manna_prism':
         sound.playEvoFanfare();
@@ -569,18 +588,53 @@ class Game {
         this.ui.say('💎 曼納稜晶：全武裝冷卻歸零，立即重置！', '#d966ff', 2.5);
         break;
 
-      case 'magic_ticket':
+      case 'magic_ticket': {
         sound.playGem();
         sound.playEvoFanfare();
         for (const d of this.dropItems) {
           d.isAttracted = true;
         }
-        this.gold += Math.round(100 * facilityGoldMul(this));
+        const gold = Math.round((cDef.value + (this.gameTime / 60) * 25) * facilityGoldMul(this)); // 每分鐘 +25
+        this.gold += gold;
         this.particles.createShockwave(this.player.x, this.player.y, 220, '#ffcc00');
-        this.particles.createDamageText(this.player.x, this.player.y, '+100 🪙', false);
-        this.ui.say('🎫 魔法門票：全圖寶石磁吸 + 100 🪙！', '#ffcc00', 2.5);
+        this.particles.createDamageText(this.player.x, this.player.y, `+${gold} 🪙`, false);
+        this.ui.say(`🎫 魔法門票：全圖寶石磁吸 + ${gold} 🪙！`, '#ffcc00', 2.5);
         break;
+      }
     }
+  }
+
+  // 道具自動使用：每 0.25 秒檢查一次口袋道具的觸發條件 (條件說明寫在 CONSUMABLE_ITEMS[].auto)。
+  // 用過之後冷卻 1.5 秒，避免同款兩瓶在同一個危機裡連灌。
+  updateAutoPocket(dt) {
+    const p = this.player;
+    if (!p.pocketItem || save.data.settings.autoPocket === false) return;
+    this._autoPocketTimer = (this._autoPocketTimer || 0) - dt;
+    if (this._autoPocketTimer > 0) return;
+    this._autoPocketTimer = 0.25;
+    const rule = AUTO_USE[p.pocketItem];
+    if (rule && rule(this.autoUseContext())) {
+      this.usePocketItem();
+      this._autoPocketTimer = 1.5;
+    }
+  }
+
+  // ponytail: 每次檢查掃一遍全場敵人 (0.25 秒一次、最多 250 隻)，不必動用碰撞網格
+  autoUseContext() {
+    const p = this.player;
+    let near220 = 0, near260 = 0, near400 = 0, near500 = 0, bossNear = false;
+    for (const e of this.enemies) {
+      if (e.isDead) continue;
+      const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+      if (e.isBoss && d2 < 600 * 600) bossNear = true;
+      if (d2 < 500 * 500) near500++; else continue;
+      if (d2 < 400 * 400) near400++;
+      if (d2 < 260 * 260) near260++;
+      if (d2 < 220 * 220) near220++;
+    }
+    let bullets = 0;
+    for (const b of this.enemyProjectiles) if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 < 200 * 200) bullets++;
+    return { hp: p.hp / p.maxHp, near220, near260, near400, near500, bossNear, bullets, drops: this.dropItems.length };
   }
 
   usePocketItem() {
@@ -684,20 +738,21 @@ class Game {
   applyMetaTalents() {
     const t = metaBonuses(save.data.talents);
     const g = gearBonuses(save.data.stash, save.data.equipped);
+    const c = charLevelBonuses(save.charLevel(this.characterId)); // 特工等級 (每位特工各自)
     // 角色的基礎移速／磁力先存成獨立欄位：applyPassives 每次都用它重算，
     // 所以 meta 加成不會在每次升級時被疊第二次。
     const p = this.player;
     p.runMuls = { speed: 1, magnet: 1 };
     p.meta = {
-      dmg: t.dmg + g.dmg,
-      hp: t.hp + g.hp,
+      dmg: t.dmg + g.dmg + c.dmg,
+      hp: t.hp + g.hp + c.hp,
       speed: t.speed + g.speed,
       magnet: t.magnet + g.magnet,
       gold: t.gold + g.gold,
       cdr: g.cdr,
       crit: g.crit,
       critdmg: g.critdmg,
-      armor: g.armor,
+      armor: g.armor + c.armor,
       exp: g.exp,
     };
     // 傳奇特效的屬性加成（音速突進／引力漩渦／極限超頻）走另一桶：
@@ -866,6 +921,7 @@ class Game {
     // 戰術口袋與武器型態重設
     this.player.pocketItem = null;
     this.player.pocketItemCount = 0;
+    this._autoPocketTimer = 0;
     this.player.weaponAspects = { ...(save.data.weaponAspects || {}) };
     this.ui.updatePocketItem(null, 0);
 
@@ -1424,6 +1480,7 @@ class Game {
 
     // 4.6 關卡地形機制 (毒霧/地雷/噴發/空投)
     updateHazards(this, dt);
+    this.updateAutoPocket(dt);
 
     // 4.7 可引爆物件受傷閃白更新
     for (const prop of this.explodableProps) {
@@ -2309,7 +2366,9 @@ class Game {
         this.player.pocketItem = item.subType;
         this.player.pocketItemCount = 1;
         this.ui.updatePocketItem(item.subType, 1);
-        this.ui.say(`獲得道具【${cDef.name}】！[E] 鍵使用`, cDef.color, 2.2);
+        this.ui.say(save.data.settings.autoPocket === false
+          ? `獲得道具【${cDef.name}】！[E] 鍵使用`
+          : `獲得道具【${cDef.name}】！自動使用：${cDef.auto}`, cDef.color, 2.2);
       } else if (this.player.pocketItem === item.subType && this.player.pocketItemCount < 2) {
         this.player.pocketItemCount++;
         this.ui.updatePocketItem(item.subType, this.player.pocketItemCount);

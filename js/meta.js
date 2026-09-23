@@ -111,3 +111,24 @@ export function metaBonuses(talents = {}) {
   }
   return m;
 }
+
+// ── 特工等級：每位特工各自養成，消耗金幣＋DNA 提升基礎數值 ──
+// 為什麼要有：天賦樹 2350 🧬 就畢業、黑市箱子是賭運氣，後期累積的金幣與 DNA 沒有
+// 穩定的出口；而困難以上 (怪血 ×1.4~2、受傷 ×1.3~1.7) 需要「確定會變強」的長線養成。
+// 成本線性成長 (Lv L → L+1：200L 🪙 + 20L 🧬)，單一特工 Lv1 → 30 共 87,000 🪙 + 8,700 🧬。
+export const CHAR_LEVEL = {
+  max: 30,
+  dmg: 0.04,     // 每級全傷害 +4%
+  hp: 10,        // 每級最大生命 +10
+  armor: 0.006,  // 每級減傷 +0.6% (與裝備共用 50% 上限)
+};
+
+export function charLevelCost(level) {
+  return { gold: 200 * level, dna: 20 * level };
+}
+
+// 等級 1 = 沒有加成；回傳格式與 metaBonuses 相同的欄位，直接疊進 player.meta
+export function charLevelBonuses(level = 1) {
+  const n = Math.max(0, Math.min(CHAR_LEVEL.max, level) - 1);
+  return { dmg: n * CHAR_LEVEL.dmg, hp: n * CHAR_LEVEL.hp, armor: n * CHAR_LEVEL.armor };
+}

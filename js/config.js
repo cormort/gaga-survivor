@@ -715,16 +715,18 @@ export const DROP_TYPES = {
 };
 
 // ── 惡魔城經典消費道具定義 (Consumable Items) ──
+// color：拾取／使用提示的字色 (原本沒有這欄，提示一律吃到 undefined)。
+// auto：「道具自動使用」開啟時的觸發時機說明；條件本身在 main.js 的 AUTO_USE，兩邊要一致。
 export const CONSUMABLE_ITEMS = {
-  potion:        { name: '恢復藥水', icon: '🍷', kind: 'heal',    value: 80,   desc: '立即回復 80 點生命值' },
-  elixir:        { name: '高級萬靈藥', icon: '✨', kind: 'fullHeal', value: 100, desc: '完全回滿生命值，並額外獲得 100 點能量護盾' },
-  atk_potion:    { name: '力量藥水', icon: '⚔️', kind: 'buff', duration: 15, desc: '15 秒內全武器攻擊力 +40%' },
-  shield_potion: { name: '鐵壁藥水', icon: '🛡️', kind: 'buff', duration: 15, desc: '15 秒內受到傷害減免 50%' },
-  luck_potion:   { name: '幸運藥水', icon: '🍀', kind: 'buff', duration: 20, desc: '20 秒內暴擊率 +25%、金幣掉落翻倍' },
-  stopwatch:     { name: '時停懷錶', icon: '⏱️', kind: 'cc',   duration: 5,  desc: '凍結全場敵人與敵方子彈 5 秒' },
-  holy_water:    { name: '聖水',     icon: '🍶', kind: 'aoe',  value: 260,  desc: '在特工周圍引爆神聖淨化光環，造成 260 點範圍傷害並擊退敵人' },
-  manna_prism:   { name: '曼納稜晶', icon: '💎', kind: 'cd',   value: 0,    desc: '所有武器與閃避冷卻立即歸零，瞬間觸發全彈齊發' },
-  magic_ticket:  { name: '魔法門票', icon: '🎫', kind: 'magnet', value: 100, desc: '引導神秘信標，瞬間全圖磁吸所有掉落物，並額外獲得 100 金幣' },
+  potion:        { name: '恢復藥水', icon: '🍷', kind: 'heal',    value: 80, color: '#ff3366', desc: '立即回復 35% 生命值（至少 80 點）', auto: '生命低於 45%' },
+  elixir:        { name: '高級萬靈藥', icon: '✨', kind: 'fullHeal', value: 100, color: '#ffd700', desc: '完全回滿生命值，並額外獲得 100 點能量護盾', auto: '生命低於 30%' },
+  atk_potion:    { name: '力量藥水', icon: '⚔️', kind: 'buff', duration: 15, color: '#ff4d4d', desc: '15 秒內全武器攻擊力 +40%', auto: 'Boss 在附近或被大群包圍' },
+  shield_potion: { name: '鐵壁藥水', icon: '🛡️', kind: 'buff', duration: 15, color: '#4da6ff', desc: '15 秒內受到傷害減免 50%', auto: '生命低於 60% 且被包圍或 Boss 在附近' },
+  luck_potion:   { name: '幸運藥水', icon: '🍀', kind: 'buff', duration: 20, color: '#33ff99', desc: '20 秒內暴擊率 +25%、金幣掉落翻倍', auto: '畫面上怪物夠多時' },
+  stopwatch:     { name: '時停懷錶', icon: '⏱️', kind: 'cc',   duration: 5, color: '#00ffff', desc: '凍結全場敵人與敵方子彈 5 秒', auto: '生命低於 35% 且被包圍，或彈幕逼近' },
+  holy_water:    { name: '聖水',     icon: '🍶', kind: 'aoe',  value: 260, color: '#b3ecff', desc: '在特工周圍引爆淨化光環，造成隨時間成長的範圍傷害（足以清掉同期雜兵）並擊退敵人', auto: '身邊擠滿怪物時' },
+  manna_prism:   { name: '曼納稜晶', icon: '💎', kind: 'cd',   value: 0, color: '#d966ff', desc: '所有武器與閃避冷卻立即歸零，瞬間觸發全彈齊發', auto: 'Boss 在附近或被大群包圍' },
+  magic_ticket:  { name: '魔法門票', icon: '🎫', kind: 'magnet', value: 100, color: '#ffcc00', desc: '瞬間全圖磁吸所有掉落物，並獲得金幣（隨時間成長，基礎 100）', auto: '場上掉落物堆積時' },
 };
 
 export const WEAPON_ASPECTS = {
