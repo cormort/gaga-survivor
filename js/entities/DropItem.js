@@ -2,6 +2,7 @@
 
 import { DROP_TYPES } from '../config.js';
 import { RARITIES } from '../items.js';
+import { JEWELS } from '../jewels.js';
 import { getSprite, blit } from '../sprites.js';
 
 // 經驗水晶 → 烘焙 sprite。水晶是場上數量最多的東西 (實測 7:50 有 126 顆佔掉落物 91%)，
@@ -39,6 +40,13 @@ export class DropItem {
     this.item = payload;
     if (this.type === 'gear' && payload) {
       this.color = RARITIES[payload.rarity].color;
+    }
+    // 珠寶：payload 是珠寶 id，圖示與光暈顏色跟著種類
+    if (this.type === 'jewel') {
+      const j = JEWELS[payload] || JEWELS.quartz;
+      this.item = j.id;
+      this.icon = j.icon;
+      this.color = j.color;
     }
 
     // 吸附飛行狀態
@@ -168,7 +176,7 @@ export class DropItem {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(this.icon || '🧰', 0, 0);
-    } else if (this.type === 'consumable') {
+    } else if (this.type === 'consumable' || this.type === 'jewel') {
       // 惡魔城風格消費道具：絢麗光暈與旋轉星環
       const g = ctx.createRadialGradient(0, 0, 2, 0, 0, this.radius * 2.8);
       g.addColorStop(0, this.color || '#00f59b');

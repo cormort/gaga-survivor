@@ -309,6 +309,15 @@ export function salvageValue(item) {
   return Math.max(1, Math.round(base * (0.6 + (item.ilvl || 1) * 0.4)));
 }
 
+// 分解回收的金幣：分解也是「賺升級錢」的途徑（特工等級要金幣＋DNA，先前分解只給 DNA）。
+// 基礎值約為 DNA 的 10 倍，同樣隨物品等級成長；取整到 5。
+const SALVAGE_GOLD_BASE = { common: 20, rare: 55, epic: 150, legendary: 360, mythic: 900 };
+
+export function salvageGold(item) {
+  const base = SALVAGE_GOLD_BASE[item.rarity] || 55;
+  return Math.max(5, Math.round((base * (0.6 + (item.ilvl || 1) * 0.4)) / 5) * 5);
+}
+
 // 已穿裝備 → 加成總和 (含套裝效果、傳奇特效屬性加成與特效清單)
 //
 // 回傳值分兩桶：

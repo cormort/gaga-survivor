@@ -24,12 +24,14 @@ import {
   AFFIX_ORDER,
   LEGENDARY_EFFECTS,
   salvageValue,
+  salvageGold,
   reforgeCost,
   SETS,
   legendaryEffectText,
   FUSION_COST,
   fuseItems,
 } from '../items.js';
+import { JEWELS, JEWEL_ORDER, jewelValue } from '../jewels.js';
 import { save, STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
 import {
@@ -514,6 +516,37 @@ export class UIManager {
         ${isMax ? '<div class="booster-equipped-badge">已達最高等級 (MAX)</div>' : group('expand-stash', 'stash', stashExpandCost(stashCap), isMax)}
       `;
       grid.appendChild(card);
+    } else if (this._currentShopTab === 'jewels') {
+      // 珠寶收購：局內撿到的珠寶（陣亡也保留）在這裡換成金幣＋DNA
+      const bag = save.data.jewels || {};
+      const total = jewelValue(bag);
+      const totalN = Object.values(bag).reduce((a, b) => a + b, 0);
+      const head = document.createElement('div');
+      head.className = 'shop-card jewel-sell-all';
+      head.innerHTML = `
+        <div class="shop-card-icon">💰</div>
+        <div class="shop-card-title" style="color:#ffd166">整袋賣出</div>
+        <div class="shop-card-desc">珠寶在局內撿到當下就收進珠寶袋，<strong>陣亡、放棄任務也不會遺失</strong>。<br>
+          目前 ${totalN} 顆，總值 <strong>${total.gold} 🪙 + ${total.dna} 🧬</strong></div>
+        <button class="shop-buy-btn" data-sell-jewel="*" ${totalN > 0 ? '' : 'disabled'}>全部賣出</button>
+      `;
+      grid.appendChild(head);
+      for (const id of JEWEL_ORDER) {
+        const j = JEWELS[id];
+        const n = bag[id] || 0;
+        const card = document.createElement('div');
+        card.className = 'shop-card' + (n > 0 ? '' : ' jewel-empty');
+        card.innerHTML = `
+          <div class="shop-card-icon">${j.icon}</div>
+          <div class="shop-card-title" style="color:${j.color}">${j.name}</div>
+          <div class="shop-card-desc">收購價 ${j.gold} 🪙 + ${j.dna} 🧬<br>持有 <strong>${n}</strong> 顆</div>
+          <div class="shop-btn-group">
+            <button class="shop-buy-btn" data-sell-jewel="${id}" data-count="1" ${n > 0 ? '' : 'disabled'}>賣 1 顆</button>
+            <button class="shop-buy-btn" data-sell-jewel="${id}" ${n > 1 ? '' : 'disabled'}>全賣 ×${n}</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      }
     }
 
     this.shopBody.appendChild(grid);
@@ -534,6 +567,13 @@ export class UIManager {
     grid.querySelectorAll('[data-expand-stash]').forEach((btn) => {
       btn.addEventListener('click', () => {
         this._shopHandlers?.onExpandStash(btn.dataset.currency);
+      });
+    });
+
+    grid.querySelectorAll('[data-sell-jewel]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.sellJewel === '*' ? null : btn.dataset.sellJewel;
+        this._shopHandlers?.onSellJewels(id, btn.dataset.count ? Number(btn.dataset.count) : Infinity);
       });
     });
   }
@@ -820,7 +860,7 @@ export class UIManager {
               ${isOn
                 ? (reforge === null ? '<span class="gear-locked-hint">脫下才能分解</span>' : '')
                 : `<button class="gear-mini-btn equip" data-equip="${item.id}">裝備</button>
-                   <button class="gear-mini-btn drop" data-salvage="${item.id}">分解 +${salvageValue(item)} 🧬</button>`}
+                   <button class="gear-mini-btn drop" data-salvage="${item.id}">分解 +${salvageGold(item)}🪙 +${salvageValue(item)}🧬</button>`}
             `}
         </div>
       `;
@@ -1744,7 +1784,7 @@ export class UIManager {
     if (gearBox && gearStatus && gearItems) {
       const saved = gearSummary?.savedGear || [];
       const lost = gearSummary?.lostGear || [];
-      const salvaged = gearSummary?.salvagedGear || []; // 倉庫滿，自動分解換 DNA
+      const salvaged = gearSummary?.salvagedGear || []; // 倉庫滿，自動分解換金幣＋DNA
       if (saved.length > 0 || lost.length > 0 || salvaged.length > 0) {
         gearBox.classList.remove('hidden');
         const parts = [`入庫 ${saved.length} 件`];
@@ -1764,6 +1804,30 @@ export class UIManager {
         lost.forEach((it) => addChip(it, '✕', 'gear-chip-mini lost'));
       } else {
         gearBox.classList.add('hidden');
+      }
+    }
+
+    // 本局珠寶（撿到當下已入存檔）：列出數量與可換得的金幣／DNA
+    const jBox = document.getElementById('game-over-jewel-box');
+    const jStatus = document.getElementById('game-over-jewel-status');
+    const jItems = document.getElementById('game-over-jewel-items');
+    if (jBox && jStatus && jItems) {
+      const bag = gearSummary?.jewels || {};
+      const ids = JEWEL_ORDER.filter((id) => bag[id] > 0);
+      if (ids.length > 0) {
+        const v = jewelValue(bag);
+        jBox.classList.remove('hidden');
+        jStatus.textContent = `價值 ${v.gold} 🪙 + ${v.dna} 🧬`;
+        jItems.innerHTML = '';
+        for (const id of ids) {
+          const chip = document.createElement('span');
+          chip.className = 'gear-chip-mini';
+          chip.style.setProperty('--chip-color', JEWELS[id].color);
+          chip.textContent = `${JEWELS[id].icon} ${JEWELS[id].name} ×${bag[id]}`;
+          jItems.appendChild(chip);
+        }
+      } else {
+        jBox.classList.add('hidden');
       }
     }
 

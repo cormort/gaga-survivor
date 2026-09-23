@@ -2119,6 +2119,7 @@ body, html {
 
 .shop-tabs {
   display: flex;
+  flex-wrap: wrap;   /* 四個分頁：手機寬度換行，不擠成一團 */
   gap: 8px;
   margin-bottom: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -2161,6 +2162,10 @@ body, html {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
+
+/* 珠寶收購：整袋賣出橫跨整列、沒持有的珠寶淡出 */
+.shop-card.jewel-sell-all { grid-column: 1 / -1; }
+.shop-card.jewel-empty { opacity: 0.45; }
 
 .shop-card {
   background: rgba(255, 255, 255, 0.04);

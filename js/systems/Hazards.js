@@ -11,6 +11,7 @@
 import { GAME_CONFIG, FX } from '../config.js';
 import { LEVELS } from '../levels.js';
 import { DropItem, DestructibleCrate } from '../entities/DropItem.js';
+import { JEWEL_DROP, rollJewel } from '../jewels.js';
 import { sound } from '../audio.js';
 
 // '#rrggbb' + alpha → 'rgba(...)'（原本是 main.js 的模組層函式，只有這裡在用）
@@ -184,6 +185,8 @@ export function spawnSingleDestructible(game) {
 }
 
 export function dropCrateLoot(game, x, y, kind = 'crate') {
+  // 額外機率掉一顆珠寶（不佔下面的掉落表）
+  if (Math.random() < JEWEL_DROP.crate) game.dropItems.push(new DropItem(x + 14, y - 10, 'JEWEL', rollJewel()));
   const r = Math.random();
   // 55% 掉落惡魔城式戰術消費道具、25% 金幣、10% 烤雞回血、10% 紫色經驗
   if (r < 0.55) {

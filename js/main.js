@@ -83,9 +83,11 @@ import {
   itemName,
   gearBonuses,
   salvageValue,
+  salvageGold,
   RARITIES,
 } from './items.js';
 import { MODES, getMode } from './modes.js';
+import { JEWELS, JEWEL_DROP, rollJewel } from './jewels.js';
 import { Core } from './entities/Core.js';
 
 
@@ -919,6 +921,7 @@ class Game {
     this._milestoneIdx = 0;
     this.pendingGear = [];       // 局內拾獲待回收裝備 (暫存區)
     this.ui.updatePendingGear(0);
+    this.runJewels = {};         // 本局撿到的珠寶（撿到當下已入存檔，這裡只給結算畫面列出）
 
     // 戰術口袋與武器型態重設
     this.player.pockets = [null, null];
@@ -1551,6 +1554,7 @@ class Game {
               for (const it of this.pendingGear) {
                 if (!save.addItem(it)) {
                   save.data.dna += salvageValue(it);
+                  save.data.gold = (save.data.gold || 0) + salvageGold(it);
                 }
               }
               this.pendingGear = [];
@@ -2273,6 +2277,28 @@ class Game {
 
     this.dropItems.push(new DropItem(enemy.x, enemy.y, kind));
     this.rollGearDrop(enemy);
+    this.rollJewelDrop(enemy);
+  }
+
+  // 珠寶掉落：Boss 必掉（稀有度偏高），精英 20%、雜兵 0.4%
+  rollJewelDrop(enemy) {
+    let n = 0;
+    let boost = 0;
+    if (enemy.isFinal) { n = JEWEL_DROP.finalBoss; boost = 1.5; }
+    else if (enemy.isBoss) { n = JEWEL_DROP.boss; boost = 1.0; }
+    else if (enemy.isElite) { n = Math.random() < JEWEL_DROP.elite ? 1 : 0; boost = 0.3; }
+    else n = Math.random() < JEWEL_DROP.normal ? 1 : 0;
+    for (let i = 0; i < n; i++) {
+      const id = rollJewel(boost);
+      // 終極首領一倒就直接勝利結算、地上的東西撿不到 —— 直接收進珠寶袋
+      if (enemy.isFinal) {
+        save.addJewel(id);
+        this.runJewels[id] = (this.runJewels[id] || 0) + 1;
+        continue;
+      }
+      const a = Math.random() * Math.PI * 2;
+      this.dropItems.push(new DropItem(enemy.x + Math.cos(a) * 30, enemy.y + Math.sin(a) * 30, 'JEWEL', id));
+    }
   }
 
   // 打寶掉落：只有精英與 Boss 會噴裝備 (雜兵噴裝會讓倉庫瞬間爆掉且毫無驚喜感)
@@ -2408,6 +2434,16 @@ class Game {
       this.gold += Math.round(item.value * facilityGoldMul(this));
     } else if (item.type === 'chest') {
       this.openLuckyChest();
+    } else if (item.type === 'jewel') {
+      // 撿到當下就寫進存檔：陣亡、放棄任務、甚至直接關掉網頁都不會丟
+      const j = JEWELS[item.item];
+      if (!j) return;
+      save.addJewel(j.id);
+      this.runJewels[j.id] = (this.runJewels[j.id] || 0) + 1;
+      sound.playGem();
+      this.particles.createShockwave(this.player.x, this.player.y, 70, j.color);
+      this.particles.createDamageText(this.player.x, this.player.y - 20, `${j.icon} ${j.name}`, false);
+      this.ui.say(`${j.icon} 撿到${j.name}！已收進珠寶袋（陣亡也會保留）`, j.color, 1.8);
     } else if (item.type === 'gear') {
       const gear = item.item;
       if (!gear) return;
@@ -2418,7 +2454,7 @@ class Game {
       let autoSalvaged = 0;
       while (this.pendingGear.length > PENDING_GEAR_CAP) {
         const old = this.pendingGear.shift();
-        this.gold += salvageValue(old);
+        this.gold += salvageGold(old);
         autoSalvaged++;
       }
       if (autoSalvaged > 0) {
@@ -2649,6 +2685,7 @@ class Game {
       if (save.addItem(it)) savedGear.push(it);
       else {
         save.data.dna += salvageValue(it);
+        save.data.gold = (save.data.gold || 0) + salvageGold(it);
         salvagedGear.push(it);
       }
     };
@@ -2696,7 +2733,7 @@ class Game {
         deathRecap: isVictory ? null : this.deathRecap(),
       },
       this.weaponManager,
-      { savedGear, lostGear, salvagedGear }
+      { savedGear, lostGear, salvagedGear, jewels: this.runJewels }
     );
 
     // 解鎖新關卡後，選單要立刻反映

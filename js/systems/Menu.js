@@ -79,6 +79,18 @@ export function bindEvents(game) {
           game.ui.sayStatus(`特工倉庫擴充成功！當前容量上限：${save.getStashCap()}`);
         });
       },
+      onSellJewels: (id, count) => {
+        const res = save.sellJewels(id, count);
+        if (!res.ok) {
+          game.ui.sayStatus(res.reason, true);
+          sound.playHurt();
+          return;
+        }
+        sound.playEvoFanfare();
+        game.ui.sayStatus(`賣出 ${res.count} 顆珠寶，獲得 ${res.gold} 🪙 + ${res.dna} 🧬`);
+        game.ui.updateDnaChip(save.data.dna, save.data.gold);
+        game.ui.rebuildShopView(save);
+      },
     });
   });
 
@@ -112,14 +124,14 @@ export function bindEvents(game) {
         game.ui.rebuildGearView(save);
       },
       onSalvage: (id) => {
-        const dna = save.salvageItem(id);
-        if (dna < 0) {
-          game.ui.sayStatus('這件正穿在身上，要先脫下才能分解', true);
+        const res = save.salvageItem(id);
+        if (!res.ok) {
+          game.ui.sayStatus(res.reason, true);
           sound.playHurt();
           return;
         }
         sound.playGem();
-        game.ui.sayStatus(`分解完成，回收 ${dna} 🧬`);
+        game.ui.sayStatus(`分解完成，回收 ${res.gold} 🪙 + ${res.dna} 🧬`);
         game.ui.updateDnaChip(save.data.dna);
         game.ui.rebuildGearView(save);
       },
@@ -139,7 +151,7 @@ export function bindEvents(game) {
         const res = save.salvageAll(rarity);
         if (res.count === 0) return;
         sound.playEvoFanfare();
-        game.ui.sayStatus(`分解 ${res.count} 件，回收 ${res.dna} 🧬`);
+        game.ui.sayStatus(`分解 ${res.count} 件，回收 ${res.gold} 🪙 + ${res.dna} 🧬`);
         game.ui.updateDnaChip(save.data.dna);
         game.ui.rebuildGearView(save);
       },

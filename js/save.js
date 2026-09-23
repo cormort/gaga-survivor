@@ -1,12 +1,14 @@
 // 局外存檔層：整份進度存在單一 localStorage key，其他系統一律走這裡讀寫。
 
 import { TALENTS, talentCost, CHAR_LEVEL, charLevelCost } from './meta.js';
-import { SLOT_ORDER, salvageValue, reforgeCost, rerollAffixes, FUSION_COST, fuseItems } from './items.js';
+import { SLOT_ORDER, salvageValue, salvageGold, reforgeCost, rerollAffixes, FUSION_COST, fuseItems } from './items.js';
 // 疊加上限住在黑市商品表旁邊（那裡才是「可以帶幾劑」的定義），存檔只負責執行
 // 倉庫基礎容量也住在黑市（擴建成本要從它算第幾次擴建），這裡再匯出給既有的讀者
 import { MAX_BOOSTER_STACK, STASH_CAP } from './shop.js';
 // 舊存檔的解鎖鏈修補需要關卡表（levels.js 是純資料、不 import 任何模組，不會循環）
 import { LEVELS } from './levels.js';
+// 珠寶是純資料檔（不 import 任何模組），不會循環
+import { JEWELS, jewelValue } from './jewels.js';
 
 export { STASH_CAP };
 
@@ -27,6 +29,7 @@ function blank() {
     talents: {},            // 天賦樹等級 (基因強化)
     charLevels: {},         // 特工等級 { charId: level }，沒有記錄 = Lv1
     stash: [],              // 打寶倉庫 (最多 stashCap 件)
+    jewels: {},             // 珠寶袋 { jewelId: 數量 }：撿到當下就入袋，陣亡也保留
     equipped: {},           // 已穿裝備 { slotKey: itemId }
     unlocked: { survivor: ['street'], defense: ['street'] }, // 已解鎖關卡 (依模式)
     unlockedChars: ['duck'], // 已解鎖特工
@@ -102,6 +105,7 @@ function ensureDefaults(d) {
   if (!d.talents || typeof d.talents !== 'object') d.talents = {};
   if (!d.charLevels || typeof d.charLevels !== 'object') d.charLevels = {};
   if (!Array.isArray(d.stash)) d.stash = [];
+  if (!d.jewels || typeof d.jewels !== 'object') d.jewels = {};
   if (!d.equipped || typeof d.equipped !== 'object') d.equipped = {};
   if (!d.daily || typeof d.daily !== 'object') d.daily = { date: '', bestTime: 0, completed: false };
   if (!Array.isArray(d.evolvedEver)) d.evolvedEver = [];
@@ -322,17 +326,57 @@ export const save = {
     return true;
   },
 
-  // 分解單件：換 DNA。正穿著的要先脫下，避免手滑把主力裝拆了
-  salvageItem(id) {
-    const item = this.data.stash.find((it) => it.id === id);
-    if (!item) return 0;
-    if (Object.values(this.data.equipped).includes(id)) return -1;
+  // ----- 珠寶袋 -----
+  // 局內撿到就呼叫：立刻寫進 localStorage，之後陣亡／放棄任務／關閉網頁都不會丟
+  addJewel(id, n = 1) {
+    if (!JEWELS[id] || !(n > 0)) return false;
+    this.data.jewels[id] = (this.data.jewels[id] || 0) + n;
+    this.flush();
+    return true;
+  },
 
-    const dna = salvageValue(item);
-    this.data.stash = this.data.stash.filter((it) => it.id !== id);
+  jewelCount(id) {
+    return this.data.jewels[id] || 0;
+  },
+
+  // 賣出：id 為 null 時整袋賣掉；count 省略時賣掉該種全部。回傳 { ok, count, gold, dna }
+  sellJewels(id = null, count = Infinity) {
+    const bag = {};
+    const ids = id ? [id] : Object.keys(this.data.jewels);
+    for (const k of ids) {
+      const have = this.data.jewels[k] || 0;
+      const n = Math.min(have, count);
+      if (JEWELS[k] && n > 0) bag[k] = n;
+    }
+    const sold = Object.values(bag).reduce((a, b) => a + b, 0);
+    if (sold === 0) return { ok: false, reason: '沒有可以賣的珠寶', count: 0, gold: 0, dna: 0 };
+    const { gold, dna } = jewelValue(bag);
+    for (const [k, n] of Object.entries(bag)) {
+      this.data.jewels[k] -= n;
+      if (this.data.jewels[k] <= 0) delete this.data.jewels[k];
+    }
+    this.data.gold = (this.data.gold || 0) + gold;
     this.data.dna += dna;
     this.flush();
-    return dna;
+    return { ok: true, count: sold, gold, dna };
+  },
+
+  // 分解單件：換 DNA＋金幣。正穿著的要先脫下，避免手滑把主力裝拆了
+  // 回傳 { ok, gold, dna }；ok:false 時 reason 說明原因
+  salvageItem(id) {
+    const item = this.data.stash.find((it) => it.id === id);
+    if (!item) return { ok: false, reason: '物品不存在', gold: 0, dna: 0 };
+    if (Object.values(this.data.equipped).includes(id)) {
+      return { ok: false, reason: '這件正穿在身上，要先脫下才能分解', gold: 0, dna: 0 };
+    }
+
+    const dna = salvageValue(item);
+    const gold = salvageGold(item);
+    this.data.stash = this.data.stash.filter((it) => it.id !== id);
+    this.data.dna += dna;
+    this.data.gold = (this.data.gold || 0) + gold;
+    this.flush();
+    return { ok: true, gold, dna };
   },
 
   // 重鑄：花 DNA 把一件裝備的詞條整組重骰 (穿在身上也可以，下一場生效)
@@ -352,14 +396,16 @@ export const save = {
   salvageAll(rarity) {
     const worn = new Set(Object.values(this.data.equipped));
     const targets = this.data.stash.filter((it) => it.rarity === rarity && !worn.has(it.id));
-    if (targets.length === 0) return { count: 0, dna: 0 };
+    if (targets.length === 0) return { count: 0, dna: 0, gold: 0 };
 
     const dna = targets.reduce((sum, it) => sum + salvageValue(it), 0);
+    const gold = targets.reduce((sum, it) => sum + salvageGold(it), 0);
     const ids = new Set(targets.map((it) => it.id));
     this.data.stash = this.data.stash.filter((it) => !ids.has(it.id));
     this.data.dna += dna;
+    this.data.gold = (this.data.gold || 0) + gold;
     this.flush();
-    return { count: targets.length, dna };
+    return { count: targets.length, dna, gold };
   },
 
   // 三合一升階：消耗 DNA 將 3 件同部位同稀有度裝備合成為高一階裝備

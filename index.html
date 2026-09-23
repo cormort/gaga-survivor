@@ -286,6 +286,7 @@
           <button class="shop-tab active" data-tab="crates">📦 軍備補給箱</button>
           <button class="shop-tab" data-tab="boosters">💉 戰術興奮劑</button>
           <button class="shop-tab" data-tab="facilities">🏢 後勤設施</button>
+          <button class="shop-tab" data-tab="jewels">💎 珠寶收購</button>
         </div>
         <div id="shop-body" class="shop-body"></div>
         <button id="btn-close-shop" class="game-btn secondary-btn">關閉黑市</button>
@@ -448,6 +449,14 @@
             <span id="game-over-gear-status"></span>
           </div>
           <div id="game-over-gear-items" class="game-over-gear-items"></div>
+        </div>
+        <!-- 本局珠寶：撿到當下已入袋，陣亡也保留；回主選單到黑市收購 -->
+        <div id="game-over-jewel-box" class="game-over-gear-box hidden">
+          <div class="game-over-gear-title">
+            <span>💎 本局珠寶（已入袋，陣亡也保留）</span>
+            <span id="game-over-jewel-status"></span>
+          </div>
+          <div id="game-over-jewel-items" class="game-over-gear-items"></div>
         </div>
 
         <div id="game-over-achievements-box" class="game-over-achievements-box hidden">
