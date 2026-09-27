@@ -4,6 +4,7 @@ import {
   GAME_CONFIG,
   ENEMY_TYPES,
   WEAPONS,
+  ELITE_AFFIXES,
   FX,
   CHARGE,
   CONSUMABLE_ITEMS,
@@ -1106,6 +1107,62 @@ class Game {
     this.particles.createDamageText(enemy.x, enemy.y, applied, false);
   }
 
+  // 封印精英：靠近特工時鎖住一把武器，死亡（或被回收）就解封。至少留一把能用的武器。
+  updateSeals() {
+    const wm = this.weaponManager;
+    const p = this.player;
+    if (!wm || !p) return;
+    let changed = false;
+    for (const [id, item] of wm.weapons.entries()) {
+      const e = item.sealedBy;
+      if (e && (e.isDead || !this.enemies.includes(e))) {
+        item.sealedBy = null;
+        changed = true;
+        this.particles.createShockwave(p.x, p.y, 90, '#9d4edd');
+        this.ui.say(`🔓 ${WEAPONS[id].name} 解除封印！`, '#c77dff', 1.8);
+      }
+    }
+    for (const e of this.enemies) {
+      if (e.isDead || e.affixKey !== 'sealer' || e.sealedWeapon) continue;
+      const seal = ELITE_AFFIXES.sealer.seal;
+      const dx = e.x - p.x;
+      const dy = e.y - p.y;
+      if (dx * dx + dy * dy > seal.range * seal.range) continue;
+      const free = [...wm.weapons.entries()].filter(([, it]) => !it.sealedBy);
+      if (free.length < 2) break;   // 永遠留一把能用
+      const [id, item] = free[Math.floor(Math.random() * free.length)];
+      item.sealedBy = e;
+      e.sealedWeapon = id;
+      changed = true;
+      sound.playHurt();
+      this.particles.createShockwave(e.x, e.y, 80, '#9d4edd');
+      this.ui.say(`🔒 ${WEAPONS[id].name} 被封印！擊殺紫色【封印】精英解封`, '#c77dff', 2.4);
+    }
+    if (changed) this.ui.updateSkillSlots(wm);
+  }
+
+  // 封印鎖鏈：從封印者連到特工的紫色鏈條
+  drawSealChains(cam) {
+    const p = this.player;
+    if (!p) return;
+    const ctx = this.ctx;
+    for (const item of this.weaponManager.weapons.values()) {
+      const e = item.sealedBy;
+      if (!e || e.isDead) continue;
+      const ax = e.x - cam.x, ay = e.y - cam.y, bx = p.x - cam.x, by = p.y - cam.y;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(157,78,221,0.8)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 6]);
+      ctx.lineDashOffset = -this.gameTime * 30;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   // Boss 專屬技能效果 (由 Enemy.updateBoss 依冷卻觸發)
   handleBossSkill(boss, act) {
     // Boss 大招紅閃 (Soulstone 風格：施法瞬間畫面邊緣泛紅；召喚較輕)
@@ -1619,6 +1676,7 @@ class Game {
 
     // 4.6 傭兵 AI (跟隨/索敵/被啃)
     updateMercenaries(this, dt);
+    this.updateSeals();
 
     // 開局送的那一座之外，玩家還是不知道自己「可以再蓋」。金幣第一次夠的時候
     // 提示一次就好 —— 實測整場只蓋一座 (就是預置的那座)，主線仍然沒被使用。
@@ -3162,6 +3220,7 @@ class Game {
     for (const enemy of this.enemies) {
       enemy.draw(this.ctx, renderCam);
     }
+    this.drawSealChains(renderCam);
 
     // 繪製敵方投射物
     for (const ep of this.enemyProjectiles) {

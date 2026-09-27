@@ -909,6 +909,8 @@ export const ELITE_AFFIXES = {
   armored: { name: '裝甲', color: '#9fb3c8', hpMul: 1.6, damageTakenMul: 0.5, expMul: 2.5 },
   giant:   { name: '巨獸', color: '#ffb703', hpMul: 2.5, radiusMul: 1.45, damageMul: 1.35, expMul: 3 },
   toxic:   { name: '劇毒', color: '#b5179e', hpMul: 1.2, speedMul: 1.2, damageMul: 1.25, expMul: 2 },
+  // 封印：靠近特工時用鎖鏈封住一把武器（停止攻擊），擊殺牠才解封
+  sealer:  { name: '封印', color: '#9d4edd', hpMul: 1.8, expMul: 3, seal: { range: 360 } },
 };
 
 // 掉落道具類型
