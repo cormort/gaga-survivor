@@ -720,7 +720,9 @@ export class WeaponManager {
     const count = def.isEvo ? def.count : def.count[item.level - 1];
     const r = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier * (stats.radiusMul || 1);
 
-    for (let i = 0; i < count; i++) {
+    // 逐個丟出：每瓶間隔 throwGap 秒 (超武較密)，落點在丟出當下才挑
+    const throwGap = def.isEvo ? 0.12 : 0.28;
+    for (let i = 0; i < count; i++) this.schedule(i * throwGap, () => {
       const target = this.getRandomEnemy(enemies);
       const targetX = target ? target.x + (Math.random() * 40 - 20) : this.player.x + (Math.random() * 160 - 80);
       const targetY = target ? target.y + (Math.random() * 40 - 20) : this.player.y + (Math.random() * 160 - 80);
@@ -740,7 +742,7 @@ export class WeaponManager {
       );
 
       this.schedule(flight, () => this.landMolotov(def, stats, damage, r, targetX, targetY, enemies, crit));
-    }
+    });
   }
 
   // 燃燒瓶落地：玻璃碎裂 → 火海（燃油煉獄的火海會沿地面擴散）
@@ -887,7 +889,7 @@ export class WeaponManager {
       }
     };
 
-    const gap = def.isEvo ? 0.06 : 0.12;
+    const gap = def.isEvo ? 0.12 : 0.3;   // 逐道劈下 (原本 0.12 秒看起來像同時落下)
     nodes.forEach((node, i) => {
       this.schedule(i * gap, () => {
         strike(node);
