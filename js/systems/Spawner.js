@@ -126,8 +126,8 @@ export class Spawner {
 
     // 生成密度：直接縮短間隔 (關卡規則 / 每日詞綴共用)
     interval /= rules.spawnMul;
-    // 開局怪少：前期拉長生成間隔（無盡模式照舊）
-    if (level.id !== 'endless') interval *= 1 + (OPENING.sparse - 1) * openingFactor(gameTime);
+    // 開局怪少：前期拉長生成間隔（所有關卡含無盡模式）
+    interval *= 1 + (OPENING.sparse - 1) * openingFactor(gameTime);
 
     if (this.spawnTimer < interval) return;
     this.spawnTimer = 0;
