@@ -351,6 +351,7 @@ class Game {
       `敵 ${n(this.enemies)}  投射 ${n(this.weaponManager?.projectiles)}  敵彈 ${n(this.enemyProjectiles)}`,
       `掉落 ${n(this.dropItems)}  粒子 ${n(this.particles?.particles)}  殘跡 ${n(this.decals)}`,
       `砲塔 ${n(this.turrets)}  傭兵 ${n(this.mercenaries)}  待升級 ${this.pendingLevelUps}`,
+      `動態難度 血量 ×${this.spawner.adaptiveHpMul.toFixed(2)}  平均存活 ${this.spawner._lifeAvg.toFixed(1)}s`,
       `狀態 ${this.state}`,
       ...(this.frameErrorCount ? [
         `\n✖ 每幀例外 ×${this.frameErrorCount}`,
@@ -1126,6 +1127,7 @@ class Game {
         const pool = currentWave(this.level || LEVELS.street, this.gameTime).pool;
         const scale = enemyScale(this.gameTime, this.level, this.rules);
         scale.hp = (1 + this.gameTime / 90) * (this.level ? this.level.hpScale : 1) * 0.6; // 召喚怪刻意壓低
+        scale.hp *= this.spawner.adaptiveHpMul;   // 動態難度同樣套用在召喚小怪
         for (let i = 0; i < 3; i++) {
           const ang = Math.random() * Math.PI * 2;
           this.enemies.push(new Enemy(
@@ -2304,6 +2306,7 @@ class Game {
           this.triggerHitstop(0.035);
         }
         this.player.character.onKill?.(enemy, this);
+        this.spawner.reportDeath(enemy, this.gameTime);   // 動態難度：量雜兵存活時間
         // 任何擊殺都分一點經驗給隨行傭兵 (跨局累積)
         for (const m of this.mercenaries) m.gainExp((enemy.exp || 1) * MERC.shareExpMul);
         this.particles.createDeathParticles(enemy.x, enemy.y, enemy.color, enemy.isBoss ? 28 : 8);
@@ -2409,6 +2412,7 @@ class Game {
   spawnHatchling(hatcher) {
     if (this.enemies.length + this._pendingSpawns.length >= this.hatchCap()) return;
     const scale = enemyScale(this.gameTime, this.level, this.rules);
+    scale.hp *= this.spawner.adaptiveHpMul;   // 動態難度同樣套用在孵化小怪
     for (let i = 0; i < (hatcher.hatchCount || 1); i++) {
       const ang = Math.random() * Math.PI * 2;
       // 不能直接 push 進 this.enemies：孵化是在敵人 update 迴圈裡觸發的，
