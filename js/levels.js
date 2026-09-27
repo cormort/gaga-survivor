@@ -675,12 +675,12 @@ export const LEVELS = {
     ],
     // 全部是水墨妖獸：狼群先到，山豬衝陣、狐妖放火，後期山魈與妖王壓場
     waves: [
-      { until: 40, pool: [['ink_wolf', 0.5], ['ink_crow', 0.3], ['ink_gale_wolf', 0.2]], interval: 0.5, batch: 2 },
-      { until: 120, pool: [['ink_wolf', 0.3], ['ink_gale_wolf', 0.12], ['ink_crow', 0.18], ['ink_boar', 0.18], ['ink_fox', 0.14], ['ink_gas_boar', 0.08]], interval: 0.42, batch: 2 },
-      { until: 240, pool: [['ink_wolf', 0.22], ['ink_gale_wolf', 0.1], ['ink_crow', 0.12], ['ink_shadow_crow', 0.08], ['ink_boar', 0.14], ['ink_gas_boar', 0.06], ['ink_fox', 0.16], ['ink_fox_guard', 0.06], ['ink_ape', 0.06]], interval: 0.34, batch: 3 },
-      { until: 360, pool: [['ink_wolf', 0.18], ['ink_gale_wolf', 0.1], ['ink_crow', 0.1], ['ink_shadow_crow', 0.08], ['ink_boar', 0.12], ['ink_boar_king', 0.05], ['ink_gas_boar', 0.06], ['ink_fox', 0.13], ['ink_fox_guard', 0.07], ['ink_fox_spirit', 0.04], ['ink_ape', 0.05], ['ink_ape_mother', 0.02]], interval: 0.26, batch: 3 },
-      { until: LEVEL_DURATION, pool: [['ink_wolf', 0.16], ['ink_gale_wolf', 0.1], ['ink_crow', 0.1], ['ink_shadow_crow', 0.08], ['ink_boar', 0.1], ['ink_boar_king', 0.06], ['ink_gas_boar', 0.06], ['ink_fox', 0.12], ['ink_fox_guard', 0.08], ['ink_fox_spirit', 0.05], ['ink_ape', 0.06], ['ink_ape_mother', 0.03]], interval: 0.2, batch: 4 },
-      { until: 9999, pool: [['ink_wolf', 0.15], ['ink_gale_wolf', 0.1], ['ink_crow', 0.1], ['ink_shadow_crow', 0.08], ['ink_boar', 0.1], ['ink_boar_king', 0.06], ['ink_gas_boar', 0.06], ['ink_fox', 0.12], ['ink_fox_guard', 0.08], ['ink_fox_spirit', 0.05], ['ink_ape', 0.07], ['ink_ape_mother', 0.03]], interval: 0.17, batch: 5 },
+      { until: 40, pool: [['ink_wolf', 0.42], ['ink_crow', 0.25], ['ink_gale_wolf', 0.15], ['ink_fox', 0.18]], interval: 0.5, batch: 2 },
+      { until: 120, pool: [['ink_wolf', 0.26], ['ink_gale_wolf', 0.1], ['ink_crow', 0.16], ['ink_boar', 0.18], ['ink_fox', 0.22], ['ink_gas_boar', 0.08]], interval: 0.42, batch: 2 },
+      { until: 240, pool: [['ink_wolf', 0.18], ['ink_gale_wolf', 0.1], ['ink_crow', 0.1], ['ink_shadow_crow', 0.08], ['ink_boar', 0.14], ['ink_gas_boar', 0.06], ['ink_fox', 0.22], ['ink_fox_guard', 0.06], ['ink_ape', 0.06]], interval: 0.34, batch: 3 },
+      { until: 360, pool: [['ink_wolf', 0.1], ['ink_gale_wolf', 0.1], ['ink_crow', 0.1], ['ink_shadow_crow', 0.08], ['ink_boar', 0.12], ['ink_boar_king', 0.05], ['ink_gas_boar', 0.06], ['ink_fox', 0.21], ['ink_fox_guard', 0.07], ['ink_fox_spirit', 0.04], ['ink_ape', 0.05], ['ink_ape_mother', 0.02]], interval: 0.26, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['ink_wolf', 0.07], ['ink_gale_wolf', 0.1], ['ink_crow', 0.1], ['ink_shadow_crow', 0.08], ['ink_boar', 0.1], ['ink_boar_king', 0.06], ['ink_gas_boar', 0.06], ['ink_fox', 0.21], ['ink_fox_guard', 0.08], ['ink_fox_spirit', 0.05], ['ink_ape', 0.06], ['ink_ape_mother', 0.03]], interval: 0.2, batch: 4 },
+      { until: 9999, pool: [['ink_wolf', 0.06], ['ink_gale_wolf', 0.1], ['ink_crow', 0.1], ['ink_shadow_crow', 0.08], ['ink_boar', 0.1], ['ink_boar_king', 0.06], ['ink_gas_boar', 0.06], ['ink_fox', 0.21], ['ink_fox_guard', 0.08], ['ink_fox_spirit', 0.05], ['ink_ape', 0.07], ['ink_ape_mother', 0.03]], interval: 0.17, batch: 5 },
     ],
     bosses: [
       { at: 120, hp: 42000, name: '山魈妖王', speed: 100, damage: 40, behaviors: ['rockfall', 'barrage', 'summon'], skin: 'boss_inkape' },

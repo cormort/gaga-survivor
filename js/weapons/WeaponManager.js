@@ -314,7 +314,7 @@ export class WeaponManager {
 
       // 檢查冷卻完畢
       if (item.cooldownTimer <= 0) {
-        this.fireWeapon(id, item, def, enemies, particleSystem);
+        const fired = this.fireWeapon(id, item, def, enemies, particleSystem);
 
         // 重置冷卻時間 (套用玩家冷卻縮減 cdrMultiplier 與型態的 cdMul)
         const baseCd = def.baseCooldown + (def.cooldownGrowth ? def.cooldownGrowth * (item.level - 1) : 0);
@@ -323,7 +323,23 @@ export class WeaponManager {
         // 這兩個數字先前都沒有任何讀者。
         const aspectCd = this.aspectOf(id).stats.cdMul || 1;
         item.cooldownTimer = Math.max(0.08, baseCd * this.player.cdrMultiplier * overload * aspectCd);
+
+        // 彈匣武器 (霰彈槍)：打完一匣進入換彈卡頓；沒目標沒開火就不扣彈
+        if (def.magazine && fired !== false) {
+          if (item.ammo == null) item.ammo = def.magazine;
+          item.ammo--;
+          if (item.ammo <= 0) {
+            const lvl = Math.min(item.level, def.maxLevel) - 1;
+            const reload = Array.isArray(def.reload) ? def.reload[lvl] : def.reload;
+            item.ammo = def.magazine;
+            item.reloadTime = Math.max(0.3, reload * this.player.cdrMultiplier);
+            item.reloading = item.reloadTime;
+            item.cooldownTimer = item.reloadTime;
+            item.recoil = 1;   // 打完最後一發的槍身甩動，接著進入換彈
+          }
+        }
       }
+      if (item.reloading > 0) item.reloading = Math.max(0, item.reloading - dt);
     }
 
     // 追蹤彈的目標死了就換離彈體最近的敵人（鎖定飛彈／幽靈手裏劍／鯊魚魚雷）
@@ -365,7 +381,7 @@ export class WeaponManager {
   fireWeapon(id, item, def, enemies, particleSystem) {
     // 環繞型武器沒有敵人也要維持旋轉
     if (enemies.length === 0 && id !== 'guardian' && id !== 'eternal_domain' &&
-        id !== 'orbit_saw' && id !== 'singularity_ring') return;
+        id !== 'orbit_saw' && id !== 'singularity_ring') return false;
 
     // 覺醒：超武進化後仍可繼續升級（每級 +evoGrowth × 基礎傷害）。
     // 為什麼要這個：超武先前 `level` 永遠停在 1、也不會出現在升級卡裡 ——
@@ -441,8 +457,7 @@ export class WeaponManager {
 
       case 'shotgun':
       case 'dragon_breath':
-        this.fireShotgun(def, item, finalDamage, enemies, crit);
-        break;
+        return this.fireShotgun(def, item, finalDamage, enemies, crit);
     }
   }
 
@@ -705,7 +720,9 @@ export class WeaponManager {
     const count = def.isEvo ? def.count : def.count[item.level - 1];
     const r = (def.isEvo ? def.radius : def.radius[item.level - 1]) * this.player.rangeMultiplier * (stats.radiusMul || 1);
 
-    for (let i = 0; i < count; i++) {
+    // 逐個丟出：每瓶間隔 throwGap 秒 (超武較密)，落點在丟出當下才挑
+    const throwGap = def.isEvo ? 0.12 : 0.28;
+    for (let i = 0; i < count; i++) this.schedule(i * throwGap, () => {
       const target = this.getRandomEnemy(enemies);
       const targetX = target ? target.x + (Math.random() * 40 - 20) : this.player.x + (Math.random() * 160 - 80);
       const targetY = target ? target.y + (Math.random() * 40 - 20) : this.player.y + (Math.random() * 160 - 80);
@@ -725,7 +742,7 @@ export class WeaponManager {
       );
 
       this.schedule(flight, () => this.landMolotov(def, stats, damage, r, targetX, targetY, enemies, crit));
-    }
+    });
   }
 
   // 燃燒瓶落地：玻璃碎裂 → 火海（燃油煉獄的火海會沿地面擴散）
@@ -872,7 +889,7 @@ export class WeaponManager {
       }
     };
 
-    const gap = def.isEvo ? 0.06 : 0.12;
+    const gap = def.isEvo ? 0.12 : 0.3;   // 逐道劈下 (原本 0.12 秒看起來像同時落下)
     nodes.forEach((node, i) => {
       this.schedule(i * gap, () => {
         strike(node);
@@ -1068,7 +1085,7 @@ export class WeaponManager {
   // 霰彈槍：朝最近敵人扇形噴出多顆短射程彈丸（射程 = 彈速 × 壽命）
   fireShotgun(def, item, damage, enemies, crit = false) {
     const target = this.getClosestEnemy(enemies);
-    if (!target) return;
+    if (!target) return false;
 
     const { stats } = this.aspectOf(def.id);
     const lvl = Math.min(item.level, def.maxLevel) - 1;
@@ -1105,6 +1122,7 @@ export class WeaponManager {
       );
     }
     sound.playShoot('shotgun');
+    return true;
   }
 
   // 火箭爆炸處理
@@ -1336,6 +1354,34 @@ export class WeaponManager {
         facing: p.facing,
         time: now,
       });
+    }
+
+    // 換彈中：頭頂轉圈進度 + 「換彈」字樣 (霰彈槍打完一匣的卡頓)
+    if (layer !== 'front') return;
+    for (const item of this.weapons.values()) {
+      if (!(item.reloading > 0) || !item.reloadTime) continue;
+      const prog = 1 - item.reloading / item.reloadTime;
+      const cy = sy - 46;
+      ctx.save();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.beginPath();
+      ctx.arc(sx, cy, 9, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffb347';
+      ctx.beginPath();
+      ctx.arc(sx, cy, 9, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+      ctx.stroke();
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.strokeText('換彈', sx, cy - 11);
+      ctx.fillStyle = '#ffb347';
+      ctx.fillText('換彈', sx, cy - 11);
+      ctx.restore();
+      break;
     }
   }
 }
