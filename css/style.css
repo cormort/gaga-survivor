@@ -272,6 +272,8 @@ body, html {
   background: rgba(0, 229, 255, 0.12);
 }
 
+.skill-slot.sealed { filter: grayscale(1) brightness(0.55); box-shadow: 0 0 0 2px #9d4edd inset; }
+.skill-slot .slot-seal { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; filter: none; z-index: 2; }
 .skill-slot.evo {
   border: 1.5px solid var(--color-gold);
   background: rgba(255, 183, 3, 0.2);

@@ -312,6 +312,9 @@ export class WeaponManager {
       if (item.recoil > 0) item.recoil = Math.max(0, item.recoil - dt * 5.5);
       if (item.muzzle > 0) item.muzzle = Math.max(0, item.muzzle - dt * 8);
 
+      // 被封印精英鎖住的武器不攻擊（擊殺封印者才解封，見 main.js updateSeals）
+      if (item.sealedBy) continue;
+
       // 檢查冷卻完畢
       if (item.cooldownTimer <= 0) {
         const fired = this.fireWeapon(id, item, def, enemies, particleSystem);

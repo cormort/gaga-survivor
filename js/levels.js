@@ -829,7 +829,7 @@ export const ENEMY_SPEED_BASE = 1.6;
 // 影格，後期雜兵的最大輸出只有約 28 DPS，而此時玩家有 100+ 血＋減傷＋回復。
 // 第二次改為斜率 0.16、封頂 6.0，並補上 10 分鐘後的二次項（與血量同一手法），
 // 讓「撐得越久」這件事重新有代價。10 分鐘前完全不受影響。
-// 開局階段（純時間參數，不動任何關卡的波次或個別怪物）：一開始怪少但皮厚，
+// 開局階段（純時間參數，所有關卡含無盡模式，不動任何波次或個別怪物）：一開始怪少但皮厚，
 // 讓玩家先被幾隻追著跑；dur 秒內線性淡出。血量乘在 enemyScale（所有生成路徑共用），
 // 生成間隔由 Spawner 讀 OPENING.sparse。
 export const OPENING = {
@@ -864,8 +864,8 @@ export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
         * (endless ? 1 + gameTime / 300 : 1) * rules.enemyHpMul
         // 後期二次項：10 分鐘前不動（維持「多而脆」的節奏），之後才加速追上輸出曲線。
         * (1 + Math.pow(Math.max(0, gameTime / 60 - 10), 2) * 0.012)
-        // 開局皮厚（無盡模式不套用）
-        * (endless ? 1 : 1 + (OPENING.hpMul - 1) * openingFactor(gameTime)),
+        // 開局皮厚（所有關卡含無盡模式）
+        * (1 + (OPENING.hpMul - 1) * openingFactor(gameTime)),
     // 敵人傷害隨時間的成長（dmg 上限 12 倍，見下方註解）
     dmg: Math.min(
       12,

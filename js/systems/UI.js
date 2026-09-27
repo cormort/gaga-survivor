@@ -1307,8 +1307,9 @@ export class UIManager {
       const asp = aspectList?.find((a) => a.id === aspectId);
       const aspectBadge = asp ? `<span class="slot-aspect-badge" title="${asp.name}: ${asp.desc}">${asp.icon}</span>` : '';
 
-      slot.className = `skill-slot filled ${item.isEvo ? 'evo' : ''}`;
+      slot.className = `skill-slot filled ${item.isEvo ? 'evo' : ''} ${item.sealedBy ? 'sealed' : ''}`;
       slot.innerHTML = `
+        ${item.sealedBy ? '<span class="slot-seal" title="被封印：擊殺封印精英解封">🔒</span>' : ''}
         <span class="slot-emoji">${def.icon.split(' ')[0]}</span>
         <span class="slot-stars">${item.isEvo ? 'MAX' : '★'.repeat(item.level)}</span>
         ${aspectBadge}
