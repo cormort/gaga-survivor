@@ -578,7 +578,7 @@ export const LEVELS = {
     desc: '無盡深淵前的最後一段裂道，虛空腐蝕沿著裂縫蔓延，密度與速度同時拉滿。',
     difficulty: 10,
     dnaMult: 5.6,
-    next: 'endless',
+    next: 'inkmount',
     theme: {
       top: '#1a1030', mid: '#0e0820', bottom: '#05030c',
       grid: 'rgba(160,220,255,0.04)', major: 'rgba(120,255,235,0.13)',
@@ -629,13 +629,72 @@ export const LEVELS = {
     ],
   },
 
+  // 水墨仙山：參考《半夜別修仙》的宣紙水墨風 —— 米白紙底、淡墨暈染、橙紅楓林與山石。
+  // 全系列唯一的「亮底」關卡，靠 material:snow 的淺色顆粒當宣紙纖維。
+  inkmount: {
+    id: 'inkmount',
+    name: '水墨仙山',
+    sub: '渡劫飛昇',
+    icon: '🏔️',
+    desc: '宣紙上暈開的仙山楓林，妖獸成群下山。斬妖煉器、渡過天劫，方能踏入無盡深淵。',
+    difficulty: 11,
+    dnaMult: 6.0,
+    next: 'endless',
+    theme: {
+      top: '#dfe4d8', mid: '#d6dccd', bottom: '#c3cbbd',
+      grid: 'rgba(40,50,45,0.035)', major: 'rgba(40,50,45,0.07)',
+      gridStyle: { size: 96, major: 5, dash: 18 },  // 淡墨界格
+      bounds: 'rgba(200,60,40,0.55)',               // 朱砂邊界
+      grade: { c1: '255,240,210', a1: 0.05, c2: '40,60,60', a2: 0.06 },
+      vignette: 0.55,
+      ground: {
+        patches: [{ c: '40,55,50', a: 0.05 }, { c: '230,140,50', a: 0.04 }],
+        material: 'snow',      // 淺色細顆粒 → 宣紙纖維
+        motif: 'crack',        // 乾筆皴擦
+        motifColor: 'rgba(40,50,45,0.16)',
+        accent: 'rgba(225,120,40,0.22)',
+        density: { stain: 0.55, stainRadius: 1.5, motif: 1.3, grain: 0.8, accents: 1, base: 0.6 },
+        macro: {
+          kind: 'rifts', cell: 1000,
+          base: 'rgba(60,80,75,0.10)', line: 'rgba(30,40,38,0.16)', accent: 'rgba(225,120,40,0.30)',
+          landmark: ['runecircle', 'icespire'], landmarkCell: 1150, landmarkChance: 0.55,
+          escalate: { rgb: '225,120,40', count: 24 },   // 越後期楓葉越多
+        },
+      },
+    },
+    decor: ['ink_maple', 'ink_rock', 'ink_maple', 'ink_pine'],
+    decorDensity: 0.5,
+    hpScale: 4.6,
+    rules: {
+      label: '天劫法則', desc: '變異體出現率 ×1.6、生成 +30%；經驗 +40%、金幣 +200%',
+      eliteChanceMul: 1.6, spawnMul: 1.3, expMul: 1.4, goldMul: 3.0,
+    },
+    mechs: [
+      { type: 'spring', interval: 32, jitter: 10, radius: 100, dur: 7, heal: 4, color: '#e0782a' },
+      { type: 'supply', interval: 40, jitter: 14 },
+    ],
+    waves: [
+      { until: 40, pool: [['hound', 0.45], ['runner', 0.3], ['bat', 0.25]], interval: 0.5, batch: 2 },
+      { until: 120, pool: [['hound', 0.35], ['runner', 0.25], ['brute', 0.15], ['bat', 0.15], ['spitter', 0.1]], interval: 0.42, batch: 2 },
+      { until: 240, pool: [['hound', 0.25], ['chimera', 0.15], ['brute', 0.15], ['runner', 0.15], ['spitter', 0.2], ['blinker', 0.1]], interval: 0.34, batch: 3 },
+      { until: 360, pool: [['hound', 0.2], ['chimera', 0.18], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.2], ['medic', 0.06], ['mortar', 0.07], ['blinker', 0.07]], interval: 0.26, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['hound', 0.18], ['chimera', 0.18], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.22], ['medic', 0.06], ['mortar', 0.07], ['bloater', 0.07]], interval: 0.2, batch: 4 },
+      { until: 9999, pool: [['hound', 0.16], ['chimera', 0.18], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.26], ['medic', 0.06], ['mortar', 0.06], ['bloater', 0.06]], interval: 0.17, batch: 5 },
+    ],
+    bosses: [
+      { at: 120, hp: 42000, name: '山魈妖王', speed: 100, damage: 40, behaviors: ['barrage', 'summon'], skin: 'boss_storm' },
+      { at: 300, hp: 95000, name: '九尾墨狐', speed: 96, damage: 44, behaviors: ['nova', 'vortex'], skin: 'boss_swamp' },
+      { at: LEVEL_DURATION, hp: 290000, name: '天劫雷尊‧渡劫', speed: 86, damage: 50, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_frostvoid' },
+    ],
+  },
+
   endless: {
     id: 'endless',
     name: '深淵無盡戰',
     sub: '極限生存',
     icon: '🌀',
-    desc: '擊敗虛空裂道的終焉行者後解鎖。無限波次、Boss 每 90 秒輪播降臨，撐得越久拿得越多。',
-    difficulty: 11,
+    desc: '擊敗水墨仙山的天劫雷尊後解鎖。無限波次、Boss 每 90 秒輪播降臨，撐得越久拿得越多。',
+    difficulty: 12,
     dnaMult: 6.4,
     next: null,
     theme: {
@@ -682,13 +741,13 @@ export const LEVELS = {
 };
 
 export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'subway', 'swamp', 'storm',
-  'foundry', 'frostvoid', 'voidroad', 'endless'];
+  'foundry', 'frostvoid', 'voidroad', 'inkmount', 'endless'];
 
 // 無盡模式輪播的 Boss 池 (四關 Boss 全收錄)
 export const ENDLESS_BOSS_CYCLE = []
   .concat(LEVELS.street.bosses, LEVELS.lab.bosses, LEVELS.frost.bosses, LEVELS.core.bosses,
     LEVELS.subway.bosses, LEVELS.swamp.bosses, LEVELS.storm.bosses,
-    LEVELS.foundry.bosses, LEVELS.frostvoid.bosses, LEVELS.voidroad.bosses)
+    LEVELS.foundry.bosses, LEVELS.frostvoid.bosses, LEVELS.voidroad.bosses, LEVELS.inkmount.bosses)
   .map((b) => ({ ...b }));
 
 export const ENDLESS_BOSS_INTERVAL = 90;

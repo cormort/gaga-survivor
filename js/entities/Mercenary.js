@@ -1,4 +1,5 @@
-// 傭兵 (局內 AI 幫手)：花金幣僱傭，跟隨特工自動索敵射擊；擊殺升級、會被咬死要重雇。
+// 傭兵 (局內 AI 幫手)：花金幣僱傭的修仙弟子，跟隨特工自動索敵、御劍攻擊；
+// 擊殺提升境界 (煉氣→化神)、會被咬死要重雇。
 // 像「會移動的砲塔」：不吃武器槽、不進升級三選一，純局內消耗金幣的戰力。
 
 import { worldBounds } from '../config.js';
@@ -16,6 +17,57 @@ export const MERC = {
   followSpeed: 250,
   bulletSpeed: 540,
 };
+
+// 境界：參考修仙境界表，傭兵等級 1~5 對應凡人階段前五境
+export const REALM = ['煉氣期', '築基期', '金丹期', '元嬰期', '化神期'];
+const REALM_COLOR = ['#ff6b5e', '#6ea8ff', '#ffd166', '#ffe45e', '#e8e8e8'];
+
+// 三名弟子各一套道袍配色 (主色 / 滾邊 / 劍氣)
+const ROBE = [
+  { main: '#f2efe6', trim: '#3a7d74', qi: '#7fe0d0' },
+  { main: '#c9443a', trim: '#f2d27a', qi: '#ffb46b' },
+  { main: '#3d4a6b', trim: '#c9d4ff', qi: '#a9c4ff' },
+];
+
+// 本命飛劍 (傭兵手上懸浮的與射出去的共用同一把)：劍尖朝 +x
+export function drawFlyingSword(ctx, k, qi, glow = 1) {
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.shadowColor = qi;
+  ctx.shadowBlur = 10 * glow;
+  // 劍身
+  ctx.fillStyle = '#eef3f5';
+  ctx.strokeStyle = '#4b5a60';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(16, 0);
+  ctx.lineTo(4, -2.4);
+  ctx.lineTo(-6, -2.2);
+  ctx.lineTo(-6, 2.2);
+  ctx.lineTo(4, 2.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // 劍脊
+  ctx.strokeStyle = qi;
+  ctx.globalAlpha = 0.5 + 0.5 * glow;
+  ctx.beginPath();
+  ctx.moveTo(13, 0); ctx.lineTo(-5, 0);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  // 護手 + 劍柄 + 劍穗
+  ctx.fillStyle = '#c9a44a';
+  ctx.fillRect(-8, -4, 2.2, 8);
+  ctx.fillStyle = '#3a2a22';
+  ctx.fillRect(-14, -1.4, 6, 2.8);
+  ctx.strokeStyle = '#c9443a';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(-14, 0); ctx.quadraticCurveTo(-18, 2, -20, 5);
+  ctx.stroke();
+  ctx.restore();
+}
 
 // 三種隊形站位 (以玩家為中心)
 const FORMATION = [
@@ -42,6 +94,10 @@ export class Mercenary {
 
   get damage() {
     return MERC.damagePerLevel[this.level - 1] || MERC.damagePerLevel[MERC.damagePerLevel.length - 1];
+  }
+
+  get qiColor() {
+    return ROBE[this.index % ROBE.length].qi;
   }
 
   get cooldown() {
@@ -127,70 +183,102 @@ export class Mercenary {
     const sy = this.y - camera.y;
     if (sx < -60 || sx > window.innerWidth + 60 || sy < -60 || sy > window.innerHeight + 60) return;
 
+    const robe = ROBE[this.index % ROBE.length];
+    const bob = Math.sin(this.sway * 2) * 1.2;   // 御氣懸浮的上下起伏
+    const face = Math.cos(this.angle) >= 0 ? 1 : -1;
+
     ctx.save();
     ctx.translate(sx, sy);
 
     // 陰影
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath();
-    ctx.ellipse(0, 10, 11, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 12, 10, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 槍管 (朝向索敵方向)
+    // 本命飛劍：懸浮在身後、劍尖指向目標 (冷卻快好時劍光變亮)
+    const ready = 1 - Math.max(0, this.fireCd) / this.cooldown;
     ctx.save();
+    ctx.translate(-face * 12, -10 + bob);
     ctx.rotate(this.angle);
-    ctx.fillStyle = '#3a4756';
-    ctx.strokeStyle = '#141b26';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.roundRect(2, -2.6, 16, 5.2, 2.5);
-    ctx.fill();
-    ctx.stroke();
+    drawFlyingSword(ctx, 0.75, robe.qi, 0.3 + ready * 0.7);
     ctx.restore();
 
-    // 身體 (迷彩綠圓身)
-    ctx.fillStyle = this.flashTimer > 0 ? '#ffffff' : '#4a7c3f';
-    ctx.strokeStyle = '#1f3b1d';
-    ctx.lineWidth = 2;
+    ctx.translate(0, bob);
+    ctx.scale(face, 1);
+
+    // 長袍 (下寬上窄的梯形 + 腰帶)
+    ctx.fillStyle = this.flashTimer > 0 ? '#ffffff' : robe.main;
+    ctx.strokeStyle = '#2a2622';
+    ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.moveTo(-5, -4);
+    ctx.lineTo(5, -4);
+    ctx.quadraticCurveTo(9, 6, 10, 11);
+    ctx.lineTo(-10, 11);
+    ctx.quadraticCurveTo(-9, 6, -5, -4);
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
-
-    // 貝雷帽
-    ctx.fillStyle = '#2f5d2a';
+    ctx.fillStyle = robe.trim;
+    ctx.fillRect(-6, 1, 12, 2.2);
+    // 交領
+    ctx.strokeStyle = robe.trim;
+    ctx.lineWidth = 1.3;
     ctx.beginPath();
-    ctx.arc(-1, -5, 6.5, Math.PI, 0);
-    ctx.fill();
-    ctx.fillStyle = '#ffd60a';
-    ctx.beginPath();
-    ctx.arc(3.5, -8.5, 1.6, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(-4, -4); ctx.lineTo(1, 1);
+    ctx.moveTo(4, -4); ctx.lineTo(-1, 1);
+    ctx.stroke();
 
+    // 頭 + 黑髮 + 髮髻 + 飄帶
+    ctx.fillStyle = '#f6dcc4';
+    ctx.strokeStyle = '#2a2622';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(0, -9, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#1b1818';
+    ctx.beginPath();
+    ctx.arc(-0.5, -10.5, 5.8, Math.PI * 1.05, Math.PI * 2.05);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-1, -16, 2.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = robe.qi;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-3, -15);
+    ctx.quadraticCurveTo(-9, -14 + Math.sin(this.sway * 3) * 2, -12, -9);
+    ctx.stroke();
     // 眼睛
-    ctx.fillStyle = '#0a0f19';
+    ctx.fillStyle = '#1b1818';
     ctx.beginPath();
-    ctx.arc(2, 0, 1.8, 0, Math.PI * 2);
+    ctx.arc(2.4, -8.5, 0.9, 0, Math.PI * 2);
     ctx.fill();
 
-    // 血條 + 等級
+    ctx.scale(face, 1);
+
+    // 血條 + 境界
     const barW = 26;
     const pct = Math.max(0, this.hp / this.maxHp);
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
     ctx.beginPath();
-    ctx.roundRect(-barW / 2 - 1, -19, barW + 2, 5, 2.5);
+    ctx.roundRect(-barW / 2 - 1, -26, barW + 2, 5, 2.5);
     ctx.fill();
     ctx.fillStyle = pct > 0.35 ? '#3ddc84' : '#ff5e5e';
     ctx.beginPath();
-    ctx.roundRect(-barW / 2, -18, barW * pct, 3, 1.5);
+    ctx.roundRect(-barW / 2, -25, barW * pct, 3, 1.5);
     ctx.fill();
-    if (this.level > 1) {
-      ctx.fillStyle = '#ffd60a';
-      ctx.font = 'bold 8px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText(`Lv${this.level}`, 0, -22);
-    }
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    const label = REALM[this.level - 1] || REALM[REALM.length - 1];
+    ctx.strokeText(label, 0, -28);
+    ctx.fillStyle = REALM_COLOR[this.level - 1] || '#ffd60a';
+    ctx.fillText(label, 0, -28);
 
     ctx.restore();
   }

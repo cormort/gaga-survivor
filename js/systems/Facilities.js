@@ -175,7 +175,7 @@ export function hireMercenary(game) {
   game.mercenaries.push(m);
   game.particles.createShockwave(game.player.x, game.player.y, 90, '#3ddc84');
   sound.playEvoFanfare();
-  game.ui.say(`💂 傭兵報到！(${cost} 🪙) 擊殺敵人可升級`, '#3ddc84', 2.4);
+  game.ui.say(`🗡️ 修仙弟子報到！(${cost} 🪙) 斬妖可提升境界`, '#3ddc84', 2.4);
   game.ui.updateHUD(game.player, game.gameTime, game.kills, game.gold);
   game.ui.updateBuildBtn(game.gold, game.turretCost);
   // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)
@@ -203,6 +203,7 @@ export function updateMercenaries(game, dt) {
         life: 1.7,
         knockback: 1,
         mercOwner: merc,
+        qiColor: merc.qiColor,
       }));
       sound.playShoot();
     });
@@ -223,9 +224,9 @@ export function updateMercenaries(game, dt) {
 
     if (m.isDead) {
       game.particles.createExplosion(m.x, m.y, 40);
-      game.particles.createShockwave(m.x, m.y, 80, '#4a7c3f');
+      game.particles.createShockwave(m.x, m.y, 80, m.qiColor);
       sound.playHurt();
-      game.ui.say('💂 傭兵陣亡！重新僱傭一位吧', '#ff5e5e', 2.2);
+      game.ui.say('🗡️ 弟子兵解！重新僱傭一位吧', '#ff5e5e', 2.2);
       game.mercenaries.splice(i, 1);
       game.ui.updateHireBtn(game.mercCost, game.gold >= (game.mercCost || 1e9));
     }

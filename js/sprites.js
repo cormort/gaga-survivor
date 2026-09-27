@@ -4069,6 +4069,93 @@ function drawIceSpike(x) {
   x.fill();
 }
 
+// ===== 水墨仙山裝飾：淡墨山石 + 橙紅楓樹 + 墨松 (參考宣紙水墨畫) =====
+function inkShadow(x, rx, y) {
+  x.fillStyle = 'rgba(40,55,50,0.18)';
+  x.beginPath();
+  x.ellipse(0, y, rx, rx * 0.3, 0, 0, Math.PI * 2);
+  x.fill();
+}
+
+function inkRockBody(x, w, h, y) {
+  // 墨色由上往下漸淡，像濕筆在紙上暈開
+  const g = x.createLinearGradient(0, y - h, 0, y);
+  g.addColorStop(0, 'rgba(38,52,50,0.92)');
+  g.addColorStop(1, 'rgba(90,112,105,0.55)');
+  x.fillStyle = g;
+  x.beginPath();
+  x.moveTo(-w, y);
+  x.quadraticCurveTo(-w * 0.9, y - h * 0.8, -w * 0.3, y - h);
+  x.quadraticCurveTo(w * 0.2, y - h * 1.1, w * 0.7, y - h * 0.6);
+  x.quadraticCurveTo(w, y - h * 0.3, w, y);
+  x.closePath();
+  x.fill();
+  // 皴法：幾道乾筆
+  x.strokeStyle = 'rgba(20,28,26,0.55)';
+  x.lineWidth = 1.2;
+  x.beginPath();
+  x.moveTo(-w * 0.4, y - h * 0.85); x.quadraticCurveTo(-w * 0.2, y - h * 0.4, -w * 0.45, y - 2);
+  x.moveTo(w * 0.25, y - h * 0.7); x.quadraticCurveTo(w * 0.45, y - h * 0.35, w * 0.3, y - 2);
+  x.stroke();
+}
+
+function drawInkRock(x) {
+  inkShadow(x, 24, 14);
+  inkRockBody(x, 22, 26, 14);
+  // 青綠苔點
+  x.fillStyle = 'rgba(40,120,110,0.55)';
+  for (const [dx, dy] of [[-8, -8], [4, -12], [10, -4]]) {
+    x.beginPath(); x.arc(dx, dy, 2.2, 0, Math.PI * 2); x.fill();
+  }
+}
+
+function inkFoliage(x, cx, cy, r, core, edge) {
+  // 點葉法：一團團半透明色點疊出樹冠
+  const blobs = [[0, 0, 1], [-0.7, 0.2, 0.75], [0.7, 0.15, 0.8], [-0.3, -0.55, 0.7], [0.35, -0.5, 0.65], [0, 0.45, 0.7]];
+  for (const [dx, dy, k] of blobs) {
+    x.fillStyle = edge;
+    x.beginPath(); x.arc(cx + dx * r, cy + dy * r, r * k * 0.62, 0, Math.PI * 2); x.fill();
+  }
+  for (const [dx, dy, k] of blobs) {
+    x.fillStyle = core;
+    x.beginPath(); x.arc(cx + dx * r * 0.9, cy + dy * r * 0.9 - 1.5, r * k * 0.42, 0, Math.PI * 2); x.fill();
+  }
+}
+
+function drawInkMaple(x) {
+  inkShadow(x, 26, 26);
+  inkRockBody(x, 20, 16, 26);
+  // 墨色枝幹
+  x.strokeStyle = 'rgba(35,40,38,0.9)';
+  x.lineCap = 'round';
+  x.lineWidth = 3.2;
+  x.beginPath();
+  x.moveTo(-2, 14); x.quadraticCurveTo(-4, 0, 2, -10);
+  x.moveTo(0, 2); x.quadraticCurveTo(8, -2, 14, -10);
+  x.moveTo(-2, 4); x.quadraticCurveTo(-10, -2, -16, -8);
+  x.stroke();
+  inkFoliage(x, 0, -16, 16, 'rgba(245,160,50,0.9)', 'rgba(215,110,35,0.55)');
+  inkFoliage(x, -15, -10, 9, 'rgba(250,180,70,0.85)', 'rgba(210,100,30,0.5)');
+  inkFoliage(x, 15, -12, 10, 'rgba(240,150,45,0.85)', 'rgba(200,95,30,0.5)');
+}
+
+function drawInkPine(x) {
+  inkShadow(x, 14, 26);
+  x.strokeStyle = 'rgba(40,36,32,0.9)';
+  x.lineCap = 'round';
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(2, 26); x.quadraticCurveTo(-4, 6, 3, -20);
+  x.stroke();
+  // 層層松針：扁平墨團
+  for (const [dy, w] of [[-20, 9], [-10, 14], [0, 17], [10, 13]]) {
+    x.fillStyle = 'rgba(30,70,62,0.55)';
+    x.beginPath(); x.ellipse(0, dy, w, 4.5, -0.1, 0, Math.PI * 2); x.fill();
+    x.fillStyle = 'rgba(20,40,36,0.7)';
+    x.beginPath(); x.ellipse(-1, dy - 1, w * 0.6, 2.6, -0.1, 0, Math.PI * 2); x.fill();
+  }
+}
+
 function drawSnowMound(x) {
   x.fillStyle = 'rgba(200,230,255,0.22)';
   x.beginPath();
@@ -5128,6 +5215,9 @@ const BUILDERS = {
   gear:       { w: 42, h: 42, static: true, fn: drawGear },
   void_crystal: { w: 44, h: 52, static: true, fn: drawVoidCrystal },
   void_obelisk: { w: 40, h: 52, static: true, fn: drawVoidObelisk },
+  ink_rock:   { w: 52, h: 46, static: true, fn: drawInkRock },
+  ink_maple:  { w: 64, h: 70, static: true, fn: drawInkMaple },
+  ink_pine:   { w: 40, h: 64, static: true, fn: drawInkPine },
 };
 
 // 關卡主題 Boss：10 主題 × (一般/最終) × (待機/衝鋒)，尺寸與半徑照最終形放大
