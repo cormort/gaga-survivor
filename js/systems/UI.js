@@ -62,7 +62,7 @@ const HUD_HINT_MAX_SECONDS = 2.5;
 // 升級卡的實際數值變化：和 WeaponManager 開火時讀的是同一份 config，改平衡時卡面自動跟著變
 const LEVEL_STAT_LABELS = {
   projectiles: '發射數', count: '數量', pierce: '穿透', radius: '範圍', explosionRadius: '爆炸半徑',
-  strikes: '落雷數', bounces: '彈跳', outTime: '飛行時間', width: '光束寬',
+  strikes: '落雷數', bounces: '彈跳', outTime: '飛行時間', width: '光束寬', reload: '換彈秒數',
 };
 export function weaponLevelDiff(def, level) {
   const parts = [];

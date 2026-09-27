@@ -443,20 +443,20 @@ export const WEAPONS = {
     id: 'shotgun',
     name: '特工霰彈槍',
     icon: '💥',
-    description: '朝最近敵人轟出扇形霰彈，射程短但彈丸多、擊退強，越貼近越痛。',
+    description: '朝最近敵人轟出扇形霰彈，射程短但彈丸多、擊退強。每打完一匣 3 發要停下來換彈；升級縮短換彈時間。',
     isEvo: false,
     evoTarget: 'dragon_breath',
     pairPassive: 'max_hp_vest',    // 近戰距離武器 ↔ 生存配件
     maxLevel: 5,
-    baseDamage: 17,                // 單顆彈丸
-    damageGrowth: 6,
-    baseCooldown: 1.15,
-    cooldownGrowth: -0.07,
+    baseDamage: 17,                // 單顆彈丸（升級不加傷害，超武才提高攻擊力）
+    baseCooldown: 0.42,            // 同一匣內的連發間隔
+    magazine: 3,                   // 一匣發數，打完進入換彈卡頓
+    reload: [2.2, 1.85, 1.5, 1.2, 0.9],   // 換彈秒數：升級的主要收益
     speed: 720,
     projType: 'pellet',
-    pellets: [4, 5, 6, 7, 8],
+    pellets: [6, 6, 6, 6, 6],
     spread: 0.8,                   // 扇形總角度（弧度）
-    range: 240,
+    range: 165,                    // 240 → 165：真正的貼臉武器
     pierce: [1, 1, 1, 2, 2],
   },
 
@@ -479,18 +479,20 @@ export const WEAPONS = {
     id: 'dragon_breath',
     name: '龍息霰彈 (超武)',
     icon: '🐲',
-    description: '霰彈化為龍息烈焰，一次噴出 12 顆燃燒彈丸，貫穿並點燃整片怪群。',
+    description: '霰彈化為龍息烈焰，一次噴出 12 顆燃燒彈丸，貫穿並點燃整片怪群。攻擊力大幅提升，仍需換彈。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,
+    evoGrowth: 0.25,               // 超武覺醒每級 +25% 基礎傷害（主打攻擊力）
     baseWeapon: 'shotgun',
-    baseDamage: 32,
-    baseCooldown: 0.5,
+    baseDamage: 48,                // 32 → 48
+    baseCooldown: 0.36,
+    magazine: 3,
+    reload: 0.9,                   // 繼承霰彈槍滿級的換彈時間
     speed: 780,
     projType: 'pellet',
     pellets: 12,
     spread: 1.0,
-    range: 300,
+    range: 210,                    // 300 → 210
     pierce: 3,
     burnOnHit: 6,
   },
