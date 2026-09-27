@@ -4,6 +4,7 @@
 
 import { worldBounds } from '../config.js';
 import { sound } from '../audio.js';
+import { getSprite, blit } from '../sprites.js';
 
 export const MERC = {
   baseCost: 80,     // 首名費用
@@ -22,11 +23,14 @@ export const MERC = {
 export const REALM = ['煉氣期', '築基期', '金丹期', '元嬰期', '化神期'];
 const REALM_COLOR = ['#ff6b5e', '#6ea8ff', '#ffd166', '#ffe45e', '#e8e8e8'];
 
-// 三名弟子各一套道袍配色 (主色 / 滾邊 / 劍氣)
-const ROBE = [
-  { main: '#f2efe6', trim: '#3a7d74', qi: '#7fe0d0' },
-  { main: '#c9443a', trim: '#f2d27a', qi: '#ffb46b' },
-  { main: '#3d4a6b', trim: '#c9d4ff', qi: '#a9c4ff' },
+// 六脈弟子 (貼圖 = 修仙角色)，雇用時隨機抽一脈；qi = 劍氣顏色
+const SECTS = [
+  { sprite: 'xian_sword', qi: '#6ea8ff' },
+  { sprite: 'xian_talisman', qi: '#ff6b5e' },
+  { sprite: 'xian_mage', qi: '#e8f0ff' },
+  { sprite: 'xian_alchemy', qi: '#3ddc84' },
+  { sprite: 'xian_zen', qi: '#ffd166' },
+  { sprite: 'xian_demon', qi: '#b388ff' },
 ];
 
 // 本命飛劍 (傭兵手上懸浮的與射出去的共用同一把)：劍尖朝 +x
@@ -90,6 +94,7 @@ export class Mercenary {
     this.flashTimer = 0;
     this.sway = Math.random() * Math.PI * 2;
     this.isDead = false;
+    this.sect = SECTS[Math.floor(Math.random() * SECTS.length)];
   }
 
   get damage() {
@@ -97,7 +102,7 @@ export class Mercenary {
   }
 
   get qiColor() {
-    return ROBE[this.index % ROBE.length].qi;
+    return this.sect.qi;
   }
 
   get cooldown() {
@@ -183,92 +188,37 @@ export class Mercenary {
     const sy = this.y - camera.y;
     if (sx < -60 || sx > window.innerWidth + 60 || sy < -60 || sy > window.innerHeight + 60) return;
 
-    const robe = ROBE[this.index % ROBE.length];
     const bob = Math.sin(this.sway * 2) * 1.2;   // 御氣懸浮的上下起伏
     const face = Math.cos(this.angle) >= 0 ? 1 : -1;
 
     ctx.save();
     ctx.translate(sx, sy);
 
-    // 陰影
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(0, 12, 10, 3.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
     // 本命飛劍：懸浮在身後、劍尖指向目標 (冷卻快好時劍光變亮)
     const ready = 1 - Math.max(0, this.fireCd) / this.cooldown;
     ctx.save();
-    ctx.translate(-face * 12, -10 + bob);
+    ctx.translate(-face * 14, -14 + bob);
     ctx.rotate(this.angle);
-    drawFlyingSword(ctx, 0.75, robe.qi, 0.3 + ready * 0.7);
+    drawFlyingSword(ctx, 0.75, this.sect.qi, 0.3 + ready * 0.7);
     ctx.restore();
 
-    ctx.translate(0, bob);
-    ctx.scale(face, 1);
-
-    // 長袍 (下寬上窄的梯形 + 腰帶)
-    ctx.fillStyle = this.flashTimer > 0 ? '#ffffff' : robe.main;
-    ctx.strokeStyle = '#2a2622';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(-5, -4);
-    ctx.lineTo(5, -4);
-    ctx.quadraticCurveTo(9, 6, 10, 11);
-    ctx.lineTo(-10, 11);
-    ctx.quadraticCurveTo(-9, 6, -5, -4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = robe.trim;
-    ctx.fillRect(-6, 1, 12, 2.2);
-    // 交領
-    ctx.strokeStyle = robe.trim;
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.moveTo(-4, -4); ctx.lineTo(1, 1);
-    ctx.moveTo(4, -4); ctx.lineTo(-1, 1);
-    ctx.stroke();
-
-    // 頭 + 黑髮 + 髮髻 + 飄帶
-    ctx.fillStyle = '#f6dcc4';
-    ctx.strokeStyle = '#2a2622';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(0, -9, 5.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#1b1818';
-    ctx.beginPath();
-    ctx.arc(-0.5, -10.5, 5.8, Math.PI * 1.05, Math.PI * 2.05);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(-1, -16, 2.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = robe.qi;
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-3, -15);
-    ctx.quadraticCurveTo(-9, -14 + Math.sin(this.sway * 3) * 2, -12, -9);
-    ctx.stroke();
-    // 眼睛
-    ctx.fillStyle = '#1b1818';
-    ctx.beginPath();
-    ctx.arc(2.4, -8.5, 0.9, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.scale(face, 1);
+    // 弟子本體：縮小版修仙角色貼圖 (傭兵比玩家小一號)
+    ctx.save();
+    ctx.translate(0, bob - 6);
+    ctx.scale(face * 0.62, 0.62);
+    blit(ctx, getSprite(this.sect.sprite), 0, 0, 0, this.flashTimer > 0);
+    ctx.restore();
 
     // 血條 + 境界
     const barW = 26;
     const pct = Math.max(0, this.hp / this.maxHp);
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
     ctx.beginPath();
-    ctx.roundRect(-barW / 2 - 1, -26, barW + 2, 5, 2.5);
+    ctx.roundRect(-barW / 2 - 1, -34, barW + 2, 5, 2.5);
     ctx.fill();
     ctx.fillStyle = pct > 0.35 ? '#3ddc84' : '#ff5e5e';
     ctx.beginPath();
-    ctx.roundRect(-barW / 2, -25, barW * pct, 3, 1.5);
+    ctx.roundRect(-barW / 2, -33, barW * pct, 3, 1.5);
     ctx.fill();
     ctx.font = 'bold 9px sans-serif';
     ctx.textAlign = 'center';
@@ -276,9 +226,9 @@ export class Mercenary {
     ctx.lineWidth = 2.5;
     ctx.strokeStyle = 'rgba(0,0,0,0.7)';
     const label = REALM[this.level - 1] || REALM[REALM.length - 1];
-    ctx.strokeText(label, 0, -28);
+    ctx.strokeText(label, 0, -36);
     ctx.fillStyle = REALM_COLOR[this.level - 1] || '#ffd60a';
-    ctx.fillText(label, 0, -28);
+    ctx.fillText(label, 0, -36);
 
     ctx.restore();
   }

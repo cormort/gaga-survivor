@@ -824,7 +824,7 @@ export const ENEMY_TYPES = {
     exp: 1,
   },
   ink_fox: {
-    name: '狐妖',
+    name: '狐火妖',
     // 狐火三連：一次噴出扇形三團狐火，站在正前方最危險
     ai: { kind: 'kite', windup: 0.5, animSpeed: 7, sepMul: 0.9 },
     hp: 90,
@@ -847,6 +847,55 @@ export const ENEMY_TYPES = {
     exp: 7,
     damageTakenMul: 0.7,
     mortar: { every: 5, range: 520, radius: 64, fuse: 1.1, dmg: 16, color: '#8a7a66' },
+  },
+  ink_gale_wolf: {
+    name: '疾風狼妖',
+    // 風遁：直線狂奔撲殺，連撲間隔短
+    ai: { kind: 'lunge', lunge: { every: 2.2, windup: 0.3, dur: 0.5, mul: 3.8 }, animSpeed: 13, sepMul: 0.6 },
+    hp: 34, speed: 125, damage: 11, color: '#7b6cff', radius: 13, exp: 2,
+  },
+  ink_boar_king: {
+    name: '鐵鬃豬王',
+    // 正面鐵鬃擋傷 + 長預警衝撞：要繞到背後打
+    ai: { kind: 'shield', shieldArc: 1.6, shieldMul: 0.45, kbResist: 0.7, lunge: { every: 4.6, windup: 0.9, dur: 1.0, mul: 4.2 }, animSpeed: 5, sepMul: 1.6 },
+    hp: 220, speed: 54, damage: 22, color: '#b3261e', radius: 23, exp: 6,
+  },
+  ink_gas_boar: {
+    name: '脹氣豬妖',
+    // 死後炸出瘴氣池
+    ai: { kind: 'plod', kbResist: 0.3, animSpeed: 6, sepMul: 1.1 },
+    hp: 60, speed: 72, damage: 12, color: '#a3b84a', radius: 18, exp: 3,
+    deathZone: { radius: 85, dur: 4, dmg: 7, color: '#a3b84a' },
+  },
+  ink_shadow_crow: {
+    name: '遁影鴉',
+    // 影遁：離太遠就瞬移到身邊
+    ai: { kind: 'weave', weaveAmp: 40, weaveFreq: 4, hoverAmp: 0.3, hoverFreq: 2.4, animSpeed: 14, sepMul: 0.5 },
+    hp: 26, speed: 120, damage: 12, color: '#7a3cff', radius: 12, exp: 2,
+    blink: { every: 3.6, min: 240, dist: 100 },
+  },
+  ink_fox_guard: {
+    name: '玄狐衛士',
+    // 狐火落雷：朝特工腳下拋出狐火，地面先亮預警圈
+    ai: { kind: 'plod', kbResist: 0.3, animSpeed: 5, sepMul: 1.2 },
+    hp: 80, speed: 50, damage: 10, color: '#4a6cff', radius: 17, exp: 4,
+    mortar: { every: 3.8, range: 560, radius: 72, fuse: 1.1, dmg: 18, color: '#5b8cff' },
+  },
+  ink_fox_spirit: {
+    name: '青丘靈狐',
+    // 九尾靈氣：定時替周圍妖獸回血，優先擊殺
+    ai: { kind: 'shamble', wander: 0.2, animSpeed: 7, sepMul: 1.0 },
+    hp: 70, speed: 68, damage: 8, color: '#9fc0ff', radius: 16, exp: 5,
+    healAura: { radius: 170, every: 2.4, pct: 0.15 },
+  },
+  ink_ape_mother: {
+    name: '育魈母',
+    // 妖巢之母：定時產下墨鴉，死後裂出兩隻山魈幼崽 (墨狼)
+    ai: { kind: 'rooted', kbResist: 0.7, animSpeed: 3.5, sepMul: 2.5 },
+    hp: 200, speed: 20, damage: 14, color: '#e0b0c0', radius: 26, exp: 7,
+    damageTakenMul: 0.8,
+    hatchMinion: 'ink_crow', hatchInterval: 6, hatchCount: 2,
+    splitInto: 'ink_wolf', splitCount: 2,
   },
   boss: {
     name: '毀滅巨神‧暴君',

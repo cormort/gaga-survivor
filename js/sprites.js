@@ -92,7 +92,7 @@ const BOSS_ACCENT = [
 ];
 
 function accentFor(key, b) {
-  if (b.static) return null;         // 場景裝飾維持平面：它們本來就是貼在地上的圖
+  if (b.static || b.image) return null;   // 貼圖本身已有完整光影         // 場景裝飾維持平面：它們本來就是貼在地上的圖
   const m = key.match(/^([^:]+)/);
   const base = m ? m[1] : key;
   if (FIXED_ACCENT[base]) return FIXED_ACCENT[base];
@@ -5405,6 +5405,14 @@ const BUILDERS = {
   ink_crow: { w: 64, h: 60, fn: (x, t) => drawInkCrow(x, t, 12) },
   ink_fox:  { w: 76, h: 62, fn: (x, t) => drawInkFox(x, t, 15) },
   ink_ape:  { w: 90, h: 84, fn: (x, t) => drawInkApe(x, t, 27) },
+  // 以下在貼圖載入前的程式繪圖備援
+  ink_gale_wolf:   { w: 84, h: 56, fn: (x, t) => drawInkWolf(x, t, 14) },
+  ink_boar_king:   { w: 90, h: 76, fn: (x, t) => drawInkBoar(x, t, 23) },
+  ink_gas_boar:    { w: 76, h: 64, fn: (x, t) => drawInkBoar(x, t, 18) },
+  ink_shadow_crow: { w: 64, h: 60, fn: (x, t) => drawInkCrow(x, t, 12) },
+  ink_fox_guard:   { w: 76, h: 62, fn: (x, t) => drawInkFox(x, t, 16) },
+  ink_fox_spirit:  { w: 76, h: 62, fn: (x, t) => drawInkFox(x, t, 16) },
+  ink_ape_mother:  { w: 90, h: 84, fn: (x, t) => drawInkApe(x, t, 26) },
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },
@@ -5448,6 +5456,57 @@ for (const [theme, fn] of Object.entries({
     }
   }
 }
+
+// ===== 修仙貼圖 (assets/xian/*.png，由 tools/cut_xian_sprites.py 從設定圖裁出) =====
+// 圖片非同步載入；載好之前沿用原本的程式繪圖，載好後替換 BUILDERS 並清掉已烘焙的快取。
+// 數值為遊戲內顯示高度 (px)。
+const IMAGE_SPRITES = {
+  hound: 50, runner: 50, ink_wolf: 54, ink_gale_wolf: 56, brute: 66, warden: 64, bloater: 60,
+  ink_boar: 54, ink_boar_king: 62, ink_gas_boar: 56, bat: 40, blinker: 42, ink_crow: 44, ink_shadow_crow: 46,
+  spitter: 50, mortar: 54, medic: 54, ink_fox: 48, ink_fox_guard: 58, ink_fox_spirit: 60,
+  chimera: 86, hatcher: 62, ink_ape: 74, ink_ape_mother: 80,
+  xian_sword: 62, xian_talisman: 62, xian_mage: 62, xian_alchemy: 62, xian_zen: 60, xian_demon: 62,
+};
+
+function imageBuilder(img, height, still) {
+  const k = height / img.height;
+  const w = img.width * k;
+  return {
+    w: w + 10, h: height + 12, image: true,
+    fn: (x, t) => {
+      const p = t * Math.PI * 2;
+      // 角色 (xian_*) 由 Player 自己做步伐擠壓，這裡只有怪物加跳動
+      const hop = still ? 0 : Math.abs(Math.sin(p)) * 2.6;
+      const sq = still ? 1 : 1 + Math.sin(p * 2) * 0.035;
+      const foot = height / 2 + 2;
+      x.fillStyle = 'rgba(0,0,0,0.28)';
+      x.beginPath();
+      x.ellipse(0, foot, w * 0.32, w * 0.09, 0, 0, Math.PI * 2);
+      x.fill();
+      x.save();
+      x.translate(0, foot - hop);
+      x.scale(1 / sq, sq);
+      x.drawImage(img, -w / 2, -height, w, height);
+      x.restore();
+    },
+  };
+}
+
+export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve() : Promise.all(
+  Object.entries(IMAGE_SPRITES).map(([key, height]) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      BUILDERS[key] = imageBuilder(img, height, key.startsWith('xian_'));
+      for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
+      resolve();
+    };
+    img.onerror = () => {
+      console.warn(`[sprites] 貼圖載入失敗，沿用程式繪圖：${key}`);
+      resolve();
+    };
+    img.src = `./assets/xian/${key}.png`;
+  })),
+);
 
 // 查詢 sprite key 是否真的存在。getSprite 對未知 key 會靜默退回 walker，
 // 裝飾物 key 打錯就會在場景裡畫出一隻殭屍而完全沒有錯誤訊息 —— 這個查詢讓

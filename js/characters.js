@@ -238,6 +238,168 @@ export const CHARACTERS = {
       game.ui.say('🔧 工事大師：開局贈送一座機槍砲台（耐久 ×2）', '#00f59b', 4);
     },
   },
+  // ── 修仙六脈 (貼圖來自 assets/xian/，攻擊沿用對應武器) ────────────────
+  xian_sword: {
+    id: 'xian_sword', sprite: 'xian_sword',
+    codename: '劍修', title: '御劍劍修',
+    role: '飛劍穿梭 / 移動暴擊',
+    heroClass: '劍修', classColor: '#6ea8ff', classTitle: '人劍合一 / 快劍點殺',
+    traitName: '劍心通明',
+    traitDesc: '常駐 +20% 暴擊率，移動中再 +20%；移速 +10%',
+    startWeapon: 'phase_blade', unlockCost: 200, accent: '#6ea8ff',
+    lines: {
+      start: '三尺青鋒出鞘，今夜斬妖除魔。',
+      levelup: '劍意又進一層，再來！',
+      evolve: '萬劍歸宗！',
+      lowhp: '劍心未亂，還能再戰。',
+      boss: '妖王？正好試我新劍。',
+      win: '收劍歸鞘，此山已清。',
+      death: '劍……折了……',
+    },
+    init(player) { player.baseSpeedMul = 1.1; },
+    tick(dt, game) {
+      const p = game.player;
+      p.critChance = 0.2 + (p.walkCycle > 0 ? 0.2 : 0);
+    },
+  },
+
+  xian_talisman: {
+    id: 'xian_talisman', sprite: 'xian_talisman',
+    codename: '符修', title: '符籙真人',
+    role: '飛符連發 / 爆發傷害',
+    heroClass: '符修', classColor: '#ff6b5e', classTitle: '符火連環 / 爆發輸出',
+    traitName: '符火燎原',
+    traitDesc: '全傷害 +15%；每 30 殺引燃一次符火，周圍妖獸受到 40 + 20% 最大生命的傷害',
+    startWeapon: 'kunai', unlockCost: 220, accent: '#ff6b5e',
+    lines: {
+      start: '一紙符籙，敕令天火！',
+      levelup: '再畫一道新符。',
+      evolve: '天火符陣，急急如律令！',
+      lowhp: '符紙快用完了……',
+      boss: '大妖？就用爆炎符招呼你！',
+      win: '符散火熄，妖邪退散。',
+      death: '符……燒盡了……',
+    },
+    init(player) { player.talismanKills = 0; },
+    tick(dt, game) { game.player.traitDmgMul = 1.15; },
+    onKill(enemy, game) {
+      const p = game.player;
+      p.talismanKills = (p.talismanKills || 0) + 1;
+      if (p.talismanKills < 30) return;
+      p.talismanKills = 0;
+      game.particles.createShockwave(p.x, p.y, 200, '#ff6b5e');
+      const dmg = Math.round(40 + p.maxHp * 0.2);
+      for (const e of game.enemies) {
+        if (!e.isDead && Math.hypot(e.x - p.x, e.y - p.y) < 200) game.damageEnemy(e, dmg, 12, p.x, p.y, 'kunai');
+      }
+    },
+  },
+
+  xian_mage: {
+    id: 'xian_mage', sprite: 'xian_mage',
+    codename: '法修', title: '雷法天師',
+    role: '天雷法陣 / 範圍連鎖',
+    heroClass: '法修', classColor: '#e8e8e8', classTitle: '五雷正法 / 群體控場',
+    traitName: '法力無邊',
+    traitDesc: '全傷害 +10%；每 20 殺頓悟一次：6 秒內傷害 +30%',
+    startWeapon: 'lightning', unlockCost: 240, accent: '#dfe6ff',
+    lines: {
+      start: '天地法則，聽我號令。',
+      levelup: '參悟新的法訣。',
+      evolve: '五雷轟頂！',
+      lowhp: '法力將竭……',
+      boss: '讓你見識何謂天威。',
+      win: '法陣收起，塵埃落定。',
+      death: '道……未成……',
+    },
+    init(player) { player.enlightenTimer = 0; player.mageKills = 0; },
+    tick(dt, game) {
+      const p = game.player;
+      if (p.enlightenTimer > 0) p.enlightenTimer -= dt;
+      p.traitDmgMul = p.enlightenTimer > 0 ? 1.4 : 1.1;
+    },
+    onKill(enemy, game) {
+      const p = game.player;
+      p.mageKills = (p.mageKills || 0) + 1;
+      if (p.mageKills < 20) return;
+      p.mageKills = 0;
+      p.enlightenTimer = 6;
+      game.particles.createShockwave(p.x, p.y, 150, '#dfe6ff');
+    },
+  },
+
+  xian_alchemy: {
+    id: 'xian_alchemy', sprite: 'xian_alchemy',
+    codename: '丹修', title: '青囊丹師',
+    role: '丹火灼燒 / 持續回復',
+    heroClass: '丹修', classColor: '#3ddc84', classTitle: '丹火煉妖 / 以戰養戰',
+    traitName: '九轉還丹',
+    traitDesc: '生命上限 +20；每秒回復 1% 最大生命',
+    startWeapon: 'molotov', unlockCost: 200, accent: '#3ddc84',
+    lines: {
+      start: '丹爐已熱，今夜煉妖成丹。',
+      levelup: '得一味新藥材。',
+      evolve: '九轉金丹，成了！',
+      lowhp: '先服一顆回春丹……',
+      boss: '這妖丹品相不錯。',
+      win: '收爐！此行收穫頗豐。',
+      death: '丹……炸爐了……',
+    },
+    init(player) { player.maxHp = 120; player.hp = 120; player.pillTimer = 0; },
+    tick(dt, game) {
+      const p = game.player;
+      p.pillTimer = (p.pillTimer || 0) + dt;
+      if (p.pillTimer >= 1) {
+        p.pillTimer = 0;
+        if (p.hp < p.maxHp) p.heal(p.maxHp * 0.01);
+      }
+    },
+  },
+
+  xian_zen: {
+    id: 'xian_zen', sprite: 'xian_zen',
+    codename: '禪修', title: '金剛禪師',
+    role: '佛光護體 / 近身肉盾',
+    heroClass: '禪修', classColor: '#ffd166', classTitle: '金剛不壞 / 佛光普照',
+    traitName: '金剛不壞',
+    traitDesc: '生命上限 140、受到傷害 -30%，但移速 -10%',
+    startWeapon: 'guardian', unlockCost: 220, accent: '#ffd166',
+    lines: {
+      start: '阿彌陀佛，施主請回頭。',
+      levelup: '禪定又深一分。',
+      evolve: '佛光普照，萬邪不侵！',
+      lowhp: '色即是空……痛也是空……',
+      boss: '貧僧今日要開殺戒了。',
+      win: '善哉，妖魔盡散。',
+      death: '貧僧……先行圓寂……',
+    },
+    init(player) { player.maxHp = 140; player.hp = 140; player.damageTakenMul = 0.7; player.baseSpeedMul = 0.9; },
+  },
+
+  xian_demon: {
+    id: 'xian_demon', sprite: 'xian_demon',
+    codename: '魔修', title: '血魔妖姬',
+    role: '魔氣射線 / 越殘越強',
+    heroClass: '魔修', classColor: '#b388ff', classTitle: '以血換力 / 殘血爆發',
+    traitName: '血魔大法',
+    traitDesc: '全傷害 +15%；生命低於 50% 時改為 +50%，但受到傷害 +15%',
+    startWeapon: 'annihilation_beam', unlockCost: 300, accent: '#b388ff',
+    lines: {
+      start: '正道？那是什麼？',
+      levelup: '魔功再進一層。',
+      evolve: '天魔解體！',
+      lowhp: '呵……血越少，我越強。',
+      boss: '你的妖丹，我收下了。',
+      win: '這山頭，以後歸我。',
+      death: '魔心……不滅……',
+    },
+    init(player) { player.damageTakenMul = 1.15; },
+    tick(dt, game) {
+      const p = game.player;
+      p.traitDmgMul = p.hp < p.maxHp * 0.5 ? 1.5 : 1.15;
+    },
+  },
 };
 
-export const CHARACTER_ORDER = ['duck', 'rabbit', 'penguin', 'cat', 'mechanic'];
+export const CHARACTER_ORDER = ['duck', 'rabbit', 'penguin', 'cat', 'mechanic',
+  'xian_sword', 'xian_talisman', 'xian_mage', 'xian_alchemy', 'xian_zen', 'xian_demon'];
