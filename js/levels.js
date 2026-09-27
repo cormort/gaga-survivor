@@ -663,21 +663,6 @@ export const LEVELS = {
       },
     },
     decor: ['ink_maple', 'ink_rock', 'ink_maple', 'ink_pine'],
-    // 水墨妖獸：沿用原型態的 AI 與數值，外觀/名稱換成山林妖怪 [sprite, 名稱]
-    enemySkins: {
-      hound: ['ink_wolf', '墨狼'],
-      runner: ['ink_wolf', '疾風狼妖'],
-      brute: ['ink_boar', '山豬妖'],
-      warden: ['ink_boar', '鐵鬃豬王'],
-      bloater: ['ink_boar', '脹氣豬妖'],
-      bat: ['ink_crow', '墨鴉'],
-      blinker: ['ink_crow', '遁影鴉'],
-      spitter: ['ink_fox', '狐火妖'],
-      mortar: ['ink_fox', '玄狐術士'],
-      medic: ['ink_fox', '青丘靈狐'],
-      chimera: ['ink_ape', '山魈'],
-      hatcher: ['ink_ape', '育魈母'],
-    },
     decorDensity: 0.5,
     hpScale: 4.6,
     rules: {
@@ -688,13 +673,14 @@ export const LEVELS = {
       { type: 'spring', interval: 32, jitter: 10, radius: 100, dur: 7, heal: 4, color: '#e0782a' },
       { type: 'supply', interval: 40, jitter: 14 },
     ],
+    // 全部是水墨妖獸：狼群先到，山豬衝陣、狐妖放火，後期山魈壓場
     waves: [
-      { until: 40, pool: [['hound', 0.45], ['runner', 0.3], ['bat', 0.25]], interval: 0.5, batch: 2 },
-      { until: 120, pool: [['hound', 0.35], ['runner', 0.25], ['brute', 0.15], ['bat', 0.15], ['spitter', 0.1]], interval: 0.42, batch: 2 },
-      { until: 240, pool: [['hound', 0.25], ['chimera', 0.15], ['brute', 0.15], ['runner', 0.15], ['spitter', 0.2], ['blinker', 0.1]], interval: 0.34, batch: 3 },
-      { until: 360, pool: [['hound', 0.2], ['chimera', 0.18], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.2], ['medic', 0.06], ['mortar', 0.07], ['blinker', 0.07]], interval: 0.26, batch: 3 },
-      { until: LEVEL_DURATION, pool: [['hound', 0.18], ['chimera', 0.18], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.22], ['medic', 0.06], ['mortar', 0.07], ['bloater', 0.07]], interval: 0.2, batch: 4 },
-      { until: 9999, pool: [['hound', 0.16], ['chimera', 0.18], ['warden', 0.12], ['hatcher', 0.1], ['spitter', 0.26], ['medic', 0.06], ['mortar', 0.06], ['bloater', 0.06]], interval: 0.17, batch: 5 },
+      { until: 40, pool: [['ink_wolf', 0.6], ['ink_crow', 0.4]], interval: 0.5, batch: 2 },
+      { until: 120, pool: [['ink_wolf', 0.4], ['ink_crow', 0.25], ['ink_boar', 0.2], ['ink_fox', 0.15]], interval: 0.42, batch: 2 },
+      { until: 240, pool: [['ink_wolf', 0.32], ['ink_crow', 0.2], ['ink_boar', 0.2], ['ink_fox', 0.22], ['ink_ape', 0.06]], interval: 0.34, batch: 3 },
+      { until: 360, pool: [['ink_wolf', 0.28], ['ink_crow', 0.18], ['ink_boar', 0.2], ['ink_fox', 0.24], ['ink_ape', 0.1]], interval: 0.26, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['ink_wolf', 0.26], ['ink_crow', 0.18], ['ink_boar', 0.2], ['ink_fox', 0.24], ['ink_ape', 0.12]], interval: 0.2, batch: 4 },
+      { until: 9999, pool: [['ink_wolf', 0.24], ['ink_crow', 0.2], ['ink_boar', 0.2], ['ink_fox', 0.24], ['ink_ape', 0.12]], interval: 0.17, batch: 5 },
     ],
     bosses: [
       { at: 120, hp: 42000, name: '山魈妖王', speed: 100, damage: 40, behaviors: ['barrage', 'summon'], skin: 'boss_storm' },

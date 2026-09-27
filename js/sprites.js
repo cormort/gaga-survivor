@@ -5399,7 +5399,7 @@ const BUILDERS = {
   mortar:   { w: 72, h: 80, fn: (x, t) => drawMortar(x, t, 18) },
   tar_slug: { w: 72, h: 72, fn: (x, t) => drawTarSlug(x, t, 18) },
   bloater:  { w: 68, h: 80, fn: (x, t) => drawBloater(x, t, 17) },
-  // 水墨仙山妖獸 (level.enemySkins 換皮用)
+  // 水墨仙山妖獸 (config.js ENEMY_TYPES 同名型態)
   ink_wolf: { w: 84, h: 56, fn: (x, t) => drawInkWolf(x, t, 14) },
   ink_boar: { w: 84, h: 70, fn: (x, t) => drawInkBoar(x, t, 21) },
   ink_crow: { w: 64, h: 60, fn: (x, t) => drawInkCrow(x, t, 12) },

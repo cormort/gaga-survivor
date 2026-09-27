@@ -789,6 +789,65 @@ export const ENEMY_TYPES = {
     // 死亡時炸出毒池：近身擊殺要付代價，逼玩家用遠程武器或殺完就走
     deathZone: { radius: 80, dur: 4, dmg: 6, color: '#8ac926' },
   },
+  // ── 水墨仙山妖獸 (只在水墨仙山出現；sprite key 與 type 同名) ──────────
+  ink_wolf: {
+    name: '墨狼',
+    // 狼群：繞到側面再撲咬，撲得比獵犬更遠
+    ai: { kind: 'flank', standoff: 170, lunge: { every: 2.6, windup: 0.35, dur: 0.45, mul: 3.4 }, animSpeed: 12, sepMul: 0.7 },
+    hp: 40,
+    speed: 160,
+    damage: 10,
+    color: '#3c4745',
+    radius: 13,
+    exp: 2,
+  },
+  ink_boar: {
+    name: '山豬妖',
+    // 直線衝撞：長預警 → 鎖定方向狂奔一大段，側身一閃就能躲開
+    ai: { kind: 'plod', kbResist: 0.55, lunge: { every: 3.8, windup: 0.8, dur: 0.95, mul: 4.6 }, animSpeed: 6, sepMul: 1.5 },
+    hp: 130,
+    speed: 58,
+    damage: 18,
+    color: '#5a6663',
+    radius: 21,
+    exp: 4,
+  },
+  ink_crow: {
+    name: '墨鴉',
+    // 成群俯衝：大幅左右擺盪、忽快忽慢，脆但難瞄
+    ai: { kind: 'weave', weaveAmp: 60, weaveFreq: 4.4, hoverAmp: 0.5, hoverFreq: 3, animSpeed: 14, sepMul: 0.5 },
+    hp: 20,
+    speed: 150,
+    damage: 7,
+    color: '#1c2322',
+    radius: 12,
+    exp: 1,
+  },
+  ink_fox: {
+    name: '狐妖',
+    // 狐火三連：一次噴出扇形三團狐火，站在正前方最危險
+    ai: { kind: 'kite', windup: 0.5, animSpeed: 7, sepMul: 0.9 },
+    hp: 90,
+    speed: 80,
+    damage: 8,
+    color: '#f5962d',
+    radius: 15,
+    exp: 3,
+    ranged: { range: 300, cd: 2.6, speed: 210, damage: 11, radius: 7, color: '#ff9a3c', count: 3, spread: 0.32 },
+  },
+  ink_ape: {
+    name: '山魈',
+    // 重型妖王：遠處投石 (落點預警)，貼近就捶地震波
+    ai: { kind: 'slam', slam: { every: 3.6, windup: 0.7, radius: 130, dmg: 22 }, kbResist: 0.6, animSpeed: 4.5, sepMul: 2.0 },
+    hp: 320,
+    speed: 46,
+    damage: 22,
+    color: '#c9443a',
+    radius: 27,
+    exp: 7,
+    damageTakenMul: 0.7,
+    mortar: { every: 5, range: 520, radius: 64, fuse: 1.1, dmg: 16, color: '#8a7a66' },
+  },
   boss: {
     name: '毀滅巨神‧暴君',
     ai: { kind: 'boss', animSpeed: 5, sepMul: 0 },
