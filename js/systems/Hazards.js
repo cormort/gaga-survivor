@@ -330,6 +330,11 @@ export function updateHazards(game, dt) {
       }
       if (h.t >= h.dur) game.hazards.splice(i, 1);
     } else if (h.kind === 'mine' || h.kind === 'geyser') {
+      // 延遲的追蹤落點 (天劫三重雷)：預警開始前 (t < 0) 一直貼著特工
+      if (h.follow && h.t < 0) {
+        h.x = p.x;
+        h.y = p.y;
+      }
       if (h.t >= h.fuse) {
         explodeHazard(game, h);
         game.hazards.splice(i, 1);
@@ -421,7 +426,7 @@ export function explodeHazard(game, h) {
   game.addDecal(h.x, h.y, h.r * 0.9, FX.scorch.fill, FX.scorch.a, hexToRgba(h.color, 0.45), FX.decalLife + 2);
 
   const rr = h.r;
-  for (const e of game.enemies) {
+  for (const e of (h.dmgEnemy ? game.enemies : [])) {   // Boss 招式的落點不傷小怪
     if (e.isDead) continue;
     const dx = e.x - h.x;
     const dy = e.y - h.y;
@@ -463,6 +468,7 @@ export function drawHazards(game, cam) {
       ctx.arc(0, 0, h.r * wob, 0, Math.PI * 2);
       ctx.stroke();
     } else if (h.kind === 'mine' || h.kind === 'geyser') {
+      if (h.t < 0) { ctx.restore(); continue; }   // 尚未開始預警的延遲落點不畫
       // 地雷/噴發：倒數警示 (Soulstone 風格刻紋圓陣：旋轉虛線外環 + 內縮實圈 + 輻條)
       const prog = Math.min(1, h.t / h.fuse); // 0→1 越接近引爆
       const R = h.r * (1.3 - prog * 0.3);

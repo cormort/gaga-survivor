@@ -1186,6 +1186,62 @@ class Game {
         dmgEnemy: 450,
       });
       this.particles.createShockwave(boss.x, boss.y, 90, '#ff0055');
+    } else if (act === 'rockfall') {
+      // 山魈投石：特工周圍一圈 + 腳下一顆落石，全部先亮預警圈 —— 往圈與圈的縫隙鑽
+      const b = worldBounds();
+      const drop = (x, y, fuse) => this.hazards.push({
+        kind: 'mine', x: Math.max(b.minX + 60, Math.min(b.maxX - 60, x)), y: Math.max(b.minY + 60, Math.min(b.maxY - 60, y)),
+        r: 72, color: '#8a7a66', t: 0, tick: 0.5, fuse, dur: 0, dmg: 20, dmgEnemy: 0, source: `${boss.name}・投石`,
+      });
+      const n = boss.skin && boss.skin.endsWith('_final') ? 8 : 6;
+      const rot = Math.random() * Math.PI * 2;
+      for (let i = 0; i < n; i++) {
+        const a = rot + (i / n) * Math.PI * 2;
+        drop(this.player.x + Math.cos(a) * 150, this.player.y + Math.sin(a) * 150, 1.3 + (i % 2) * 0.25);
+      }
+      drop(this.player.x, this.player.y, 1.1);
+      this.camera.shake = Math.max(this.camera.shake, 8);
+      this.ui.say(`🪨 ${boss.name}：巨石從天而降！`, '#c9443a', 1.6);
+    } else if (act === 'foxfire') {
+      // 九尾狐火陣：兩圈錯開的狐火向外螺旋擴散 —— 看準縫隙穿過去
+      sound.playShoot();
+      const rings = 2;
+      const per = 9;
+      for (let k = 0; k < rings; k++) {
+        for (let i = 0; i < per; i++) {
+          const a = (i / per) * Math.PI * 2 + k * (Math.PI / per) + this.gameTime;
+          const spd = 150 + k * 60;
+          this.spawnEnemyProjectile(boss, {
+            x: boss.x + Math.cos(a) * (boss.radius + 10),
+            y: boss.y + Math.sin(a) * (boss.radius + 10),
+            vx: Math.cos(a) * spd,
+            vy: Math.sin(a) * spd,
+            damage: 14,
+            radius: 9,
+            life: 5,
+            color: '#ff9a3c',
+            glow: '#ffd166',
+          });
+        }
+      }
+      this.particles.createShockwave(boss.x, boss.y, boss.radius * 3, '#ff9a3c');
+      this.ui.say(`🦊 ${boss.name}：九尾狐火陣！`, '#ff9a3c', 1.6);
+    } else if (act === 'tribulation') {
+      // 天劫三重雷：三道天雷依序鎖定特工「當下位置」落下，停下來就會被劈中
+      const b = worldBounds();
+      const strikes = boss.skin && boss.skin.endsWith('_final') ? 4 : 3;
+      for (let i = 0; i < strikes; i++) {
+        this.hazards.push({
+          kind: 'mine',
+          x: Math.max(b.minX + 60, Math.min(b.maxX - 60, this.player.x + (Math.random() - 0.5) * 40)),
+          y: Math.max(b.minY + 60, Math.min(b.maxY - 60, this.player.y + (Math.random() - 0.5) * 40)),
+          r: 95, color: '#9fd8ff', t: -i * 0.7, tick: 0.5, fuse: 1.0, dur: 0, dmg: 22, dmgEnemy: 0,
+          source: `${boss.name}・天劫`,
+          follow: i > 0,   // 後續的雷在預警開始前持續追蹤特工
+        });
+      }
+      this.camera.shake = Math.max(this.camera.shake, 10);
+      this.ui.say(`⚡ ${boss.name}：天劫降臨！別停下腳步！`, '#9fd8ff', 1.8);
     }
   }
 
