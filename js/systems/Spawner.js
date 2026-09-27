@@ -17,6 +17,19 @@ export const LOW_END_MAX_ENEMIES = 300;
 // 精英詞綴清單只算一次 (原本每生成一隻怪就 Object.keys 一次)
 const ELITE_KEYS = Object.keys(ELITE_AFFIXES);
 
+// 動態難度：固定的時間曲線追不上玩家輸出（實測 2→20 分鐘成長數百倍，而且因人而異），
+// 一旦火力過門檻，雜兵全部死在半路 —— 難度是「階梯」而不是曲線。
+// 這裡量雜兵「生成 → 死亡」的平均存活秒數，太短就提高之後生成的雜兵血量，
+// 夠長就慢慢降回來；只會往上加（下限 = 原本的時間曲線），經驗與金幣不變。
+export const ADAPTIVE = {
+  targetLife: 3.2,   // 希望雜兵平均能活這麼久（≈ 從生成距離走到玩家面前）
+  relaxLife: 4.8,    // 平均活超過這麼久才開始往下調
+  rise: 0.06,        // 每秒最多 +6%（約 12 秒翻倍）
+  fall: 0.03,        // 每秒最多 -3%
+  max: 40,
+  ema: 0.15,         // 單筆死亡對平均的權重
+};
+
 export class Spawner {
   constructor() {
     this.maxEnemies = MAX_ENEMIES;   // 目前生效的上限（低階裝置會被自適應效能調低）
@@ -40,14 +53,43 @@ export class Spawner {
 
   reset() {
     this.spawnTimer = 0;
+    this.adaptiveHpMul = 1;
+    this._lifeAvg = ADAPTIVE.targetLife;
+    this._adaptTick = 0;
+    this._sinceKill = 0;
     this.bossIndex = 0;         // 下一隻要生的 Boss 在 level.bosses 的位置 (一般關卡)
     this.bossRef = null;
     this.endlessBossIdx = 0;    // 無盡模式的 Boss 輪播指標
     this.nextEndlessBossAt = ENDLESS_BOSS_INTERVAL; // 開場 90 秒後第一隻
   }
 
+  // 雜兵死亡時由主迴圈回報 (Boss、召喚/孵化的小怪沒有 spawnTime，不列入)
+  reportDeath(enemy, gameTime) {
+    if (enemy.isBoss || enemy.spawnTime == null) return;
+    const life = gameTime - enemy.spawnTime;
+    this._lifeAvg += (life - this._lifeAvg) * ADAPTIVE.ema;
+    this._sinceKill = 0;
+  }
+
+  updateAdaptive(dt) {
+    this._sinceKill += dt;
+    // 很久沒有擊殺 = 雜兵活得夠久，視同存活時間拉長
+    if (this._sinceKill > 3) this._lifeAvg += (ADAPTIVE.relaxLife + 1 - this._lifeAvg) * Math.min(1, dt * 0.5);
+    this._adaptTick += dt;
+    if (this._adaptTick < 0.5) return;
+    const step = this._adaptTick;
+    this._adaptTick = 0;
+    if (this._lifeAvg < ADAPTIVE.targetLife) {
+      const k = (ADAPTIVE.targetLife - this._lifeAvg) / ADAPTIVE.targetLife;   // 0~1，死得越快加越多
+      this.adaptiveHpMul = Math.min(ADAPTIVE.max, this.adaptiveHpMul * (1 + ADAPTIVE.rise * step * (0.3 + k)));
+    } else if (this._lifeAvg > ADAPTIVE.relaxLife) {
+      this.adaptiveHpMul = Math.max(1, this.adaptiveHpMul * (1 - ADAPTIVE.fall * step));
+    }
+  }
+
   update(dt, gameTime, player, enemies, onBossSpawnCallback = null) {
     const level = this.level;
+    this.updateAdaptive(dt);
 
     // Boss 排程：無盡模式 = 固定週期輪播深淵 Boss；一般關卡 = 時間表
     if (level.id === 'endless') {
@@ -92,6 +134,7 @@ export class Spawner {
 
     // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)
     const scale = enemyScale(gameTime, level, rules);
+    scale.hp *= this.adaptiveHpMul;
     for (let i = 0; i < batch; i++) {
       // 生成距離隨時間縮短 (520 → 440)：後期玩家的清場半徑遠大於此，
       // 生得太遠等於「還沒靠近就被打掉」，威脅永遠傳不到玩家身上。
@@ -100,6 +143,7 @@ export class Spawner {
       const spawnDist = Math.max(440, 520 - gameTime * 0.12) + Math.random() * 120;
       const pos = this.getSpawnPosition(player, spawnDist);
       const e = new Enemy(pickEnemy(wave.pool), pos.x, pos.y, scale);
+      e.spawnTime = gameTime;
       this.rollElite(e, gameTime);
       enemies.push(e);
       // 每一隻都要檢查上限：原本只在迴圈外檢查一次，batch 5 時實際上限是 254，
