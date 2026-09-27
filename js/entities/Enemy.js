@@ -732,7 +732,8 @@ export class Enemy {
     }
 
     // 預警前搖 (撲擊方向扇形 / 踏地範圍圈 / 射擊瞄準線)
-    if (this.windupKind) this.drawWindup(ctx, screenX, screenY);
+    // 撲擊 (lunge) 的扇形預警已移除以節省繪製成本；預警期間的減速仍保留作為提示
+    if (this.windupKind && this.windupKind !== 'lunge') this.drawWindup(ctx, screenX, screenY);
 
     // 非滿血且非 Boss 時顯示小血條 (Boss 有頂部專屬 HUD)
     if (!this.isBoss && this.hp < this.maxHp) {
@@ -925,38 +926,14 @@ export class Enemy {
     }
   }
 
-  // 預警前搖的視覺：三種動作三種形狀，而且畫在「動作之前」。
+  // 預警前搖的視覺：踏地畫範圍圈、射擊畫瞄準線 (撲擊扇形已移除)，畫在「動作之前」。
   // 這是敵人可讀性的核心 —— 玩家必須能預判，撲擊才閃得掉、踏地才躲得開。
   drawWindup(ctx, screenX, screenY) {
     const prog = this.windupMax > 0 ? Math.max(0, Math.min(1, 1 - this.windupTimer / this.windupMax)) : 0.5;
     ctx.save();
     ctx.translate(screenX, screenY);
 
-    if (this.windupKind === 'lunge') {
-      // 撲擊：朝鎖定方向張開的扇形 (角度與長度隨預警進度收斂)
-      const R = 190 - prog * 40;
-      const half = 0.5 - prog * 0.16;
-      const base = Math.atan2(this.windupDir.y, this.windupDir.x);
-      ctx.globalAlpha = 0.14 + prog * 0.3;
-      ctx.fillStyle = '#ff3860';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, R, base - half, base + half);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 0.5 + prog * 0.5;
-      ctx.strokeStyle = '#ff0055';
-      ctx.lineWidth = 2 + prog * 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, R, base - half, base + half);
-      ctx.stroke();
-      // 中央指向線
-      ctx.globalAlpha = 0.35 + prog * 0.5;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(base) * this.radius, Math.sin(base) * this.radius);
-      ctx.lineTo(Math.cos(base) * R, Math.sin(base) * R);
-      ctx.stroke();
-    } else if (this.windupKind === 'slam') {
+    if (this.windupKind === 'slam') {
       // 踏地：範圍圈由大收縮到定值，圈內填色越來越實
       const target = (this.ai.slam && this.ai.slam.radius) || 130;
       const R = target * (1.35 - prog * 0.35);
