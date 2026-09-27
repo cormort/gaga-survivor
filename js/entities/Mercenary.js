@@ -9,7 +9,7 @@ import { getSprite, blit } from '../sprites.js';
 export const MERC = {
   baseCost: 80,     // 首名費用
   costGrowth: 60,   // 每多雇一名更貴
-  maxCount: 3,
+  maxCount: 1,   // 一次最多一名傭兵
   maxLevel: 5,
   hpPerLevel: [90, 130, 170, 210, 250],
   damagePerLevel: [12, 19, 26, 33, 40],

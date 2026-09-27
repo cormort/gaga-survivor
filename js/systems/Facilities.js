@@ -160,7 +160,7 @@ export function hireMercenary(game) {
     return;
   }
   if (game.mercenaries.length >= MERC.maxCount) {
-    game.ui.say(`傭兵小隊已滿員 (${MERC.maxCount}/${MERC.maxCount})`, '#8a9bb0', 1.6);
+    game.ui.say(`已有一名傭兵隨行 (上限 ${MERC.maxCount})`, '#8a9bb0', 1.6);
     sound.playHurt();
     return;
   }

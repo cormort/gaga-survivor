@@ -990,7 +990,7 @@ export class UIManager {
     if (key) key.textContent = cost === null ? 'MAX' : `${cost}🪙`;
     this.hireBtn.disabled = cost === null || !affordable;
     this.hireBtn.title = cost === null
-      ? '傭兵小隊已滿員'
+      ? '已有一名傭兵隨行'
       : affordable ? `僱傭傭兵 (${cost} 🪙, G)` : `金幣不足 (需要 ${cost} 🪙)`;
   }
 
