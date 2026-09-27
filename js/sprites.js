@@ -88,6 +88,10 @@ const BOSS_ACCENT = [
   ['boss_foundry', '#ff9a3c'],
   ['boss_frostvoid', '#9d8cff'],
   ['boss_voidroad', '#7dffe8'],
+  // 水墨仙山三 Boss (同樣要排在泛用 ['boss', …] 之前)
+  ['boss_inkape', '#c9443a'],
+  ['boss_inkfox', '#f5962d'],
+  ['boss_thunder', '#9fd8ff'],
   ['boss', '#ff4d6d'],
 ];
 
@@ -4365,6 +4369,260 @@ function drawInkApe(x, t, r) {
   inkEye(x, r * 0.15, -r * 0.55, 1.8);
 }
 
+// ===== 水墨仙山 Boss：山魈妖王 / 九尾墨狐 / 天劫雷尊 (濃墨身軀 + 朱紅妖眼 + 淡墨暈) =====
+function inkAura(x, cx, cy, rad, rgb, a) {
+  const g = x.createRadialGradient(cx, cy, rad * 0.35, cx, cy, rad);
+  g.addColorStop(0, `rgba(${rgb},${a})`);
+  g.addColorStop(1, `rgba(${rgb},0)`);
+  x.fillStyle = g;
+  x.beginPath(); x.arc(cx, cy, rad, 0, Math.PI * 2); x.fill();
+}
+
+function inkSplash(x, r, p, n, alpha) {
+  // 身周飛濺的墨點，隨時間繞行
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + p * 0.3;
+    const d = r * (1.15 + 0.12 * Math.sin(p * 2 + i));
+    x.fillStyle = `rgba(28,35,34,${alpha})`;
+    x.beginPath(); x.arc(Math.cos(a) * d, Math.sin(a) * d * 0.8, r * (0.04 + (i % 3) * 0.02), 0, Math.PI * 2); x.fill();
+  }
+}
+
+function drawBossInkApe(x, t, r, charging, final) {
+  const p = t * Math.PI * 2;
+  const heave = Math.sin(p) * r * 0.04;
+  shadow(x, r * 1.05, r * 1.05);
+  inkAura(x, 0, -r * 0.1, r * (final ? 1.7 : 1.5), charging ? '220,40,30' : '60,80,75', charging ? 0.5 : 0.25);
+  inkSplash(x, r, p, final ? 14 : 9, 0.55);
+  // 雙腿
+  x.strokeStyle = '#1c2322';
+  x.lineCap = 'round';
+  x.lineWidth = r * 0.3;
+  x.beginPath();
+  x.moveTo(-r * 0.35, r * 0.4); x.lineTo(-r * 0.45, r * 0.95);
+  x.moveTo(r * 0.35, r * 0.4); x.lineTo(r * 0.45, r * 0.95);
+  x.stroke();
+  // 長臂：平時垂地搖擺，蓄力時高舉過頭
+  const lift = charging ? 1 : 0;
+  x.lineWidth = r * 0.26;
+  for (const side of [-1, 1]) {
+    const sw = Math.sin(p + side) * r * 0.08;
+    const hx = side * (r * (1.0 - lift * 0.35)) + sw;
+    const hy = r * (0.85 - lift * 2.0);
+    x.beginPath();
+    x.moveTo(side * r * 0.6, -r * 0.25 + heave);
+    x.quadraticCurveTo(side * r * 1.15, -r * (0.1 + lift * 0.8), hx, hy);
+    x.stroke();
+    // 拳頭
+    x.fillStyle = '#2a3432';
+    x.beginPath(); x.arc(hx, hy, r * 0.2, 0, Math.PI * 2); x.fill();
+  }
+  // 身軀 + 亂鬃
+  inkBody(x, 0, heave, r * 0.85, r * 0.72);
+  x.fillStyle = 'rgba(18,24,23,0.92)';
+  x.beginPath();
+  for (let i = 0; i <= 14; i++) {
+    const a = Math.PI + (i / 14) * Math.PI;
+    const rr = r * (i % 2 ? 0.8 : 1.05);
+    x.lineTo(Math.cos(a) * rr, -r * 0.35 + heave + Math.sin(a) * rr * 0.8);
+  }
+  x.closePath(); x.fill();
+  // 骨冠 (最終形為金冠)
+  x.fillStyle = final ? '#e0b44a' : '#e8e2d0';
+  for (let i = -2; i <= 2; i++) {
+    x.beginPath();
+    x.moveTo(i * r * 0.14 - r * 0.06, -r * 0.95 + heave);
+    x.lineTo(i * r * 0.14, -r * (1.25 + (i === 0 ? 0.15 : 0)) + heave);
+    x.lineTo(i * r * 0.14 + r * 0.06, -r * 0.95 + heave);
+    x.fill();
+  }
+  // 紅藍面具臉
+  const fy = -r * 0.5 + heave;
+  x.fillStyle = '#f2efe6';
+  x.beginPath(); x.ellipse(0, fy, r * 0.4, r * 0.45, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#c9443a';
+  x.fillRect(-r * 0.07, fy - r * 0.35, r * 0.14, r * 0.55);
+  x.fillStyle = '#3a6fa8';
+  x.beginPath(); x.ellipse(-r * 0.22, fy + r * 0.08, r * 0.09, r * 0.2, 0, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.ellipse(r * 0.22, fy + r * 0.08, r * 0.09, r * 0.2, 0, 0, Math.PI * 2); x.fill();
+  // 獠牙
+  x.fillStyle = '#f2efe6';
+  x.beginPath(); x.moveTo(-r * 0.15, fy + r * 0.3); x.lineTo(-r * 0.1, fy + r * 0.5); x.lineTo(-r * 0.05, fy + r * 0.3); x.fill();
+  x.beginPath(); x.moveTo(r * 0.05, fy + r * 0.3); x.lineTo(r * 0.1, fy + r * 0.5); x.lineTo(r * 0.15, fy + r * 0.3); x.fill();
+  inkEye(x, -r * 0.17, fy - r * 0.12, r * 0.06);
+  inkEye(x, r * 0.17, fy - r * 0.12, r * 0.06);
+}
+
+function drawBossInkFox(x, t, r, charging, final) {
+  const p = t * Math.PI * 2;
+  const fire = charging ? '#dff4ff' : final ? '#7fb8ff' : '#f5962d';
+  const fireRgb = charging ? '200,235,255' : final ? '120,170,255' : '245,150,45';
+  shadow(x, r * 1.0, r * 0.95);
+  inkAura(x, 0, -r * 0.2, r * 1.7, fireRgb, charging ? 0.45 : 0.22);
+  // 九尾：扇形展開，蓄力時全部豎直收攏
+  const spread = charging ? 0.55 : 1;
+  for (let i = 0; i < 9; i++) {
+    const k = (i - 4) / 4;
+    const a = -Math.PI / 2 + k * 1.6 * spread + Math.sin(p + i * 0.7) * 0.08;
+    const len = r * (1.35 + (4 - Math.abs(i - 4)) * 0.06);
+    const ex = Math.cos(a) * len;
+    const ey = Math.sin(a) * len - r * 0.1;
+    x.strokeStyle = 'rgba(40,50,48,0.88)';
+    x.lineWidth = r * 0.26;
+    x.lineCap = 'round';
+    x.beginPath();
+    x.moveTo(0, r * 0.55);
+    x.quadraticCurveTo(Math.cos(a - 0.4) * len * 0.6, Math.sin(a - 0.4) * len * 0.6, ex, ey);
+    x.stroke();
+    x.strokeStyle = 'rgba(230,232,225,0.5)';
+    x.lineWidth = r * 0.08;
+    x.beginPath();
+    x.moveTo(Math.cos(a) * len * 0.5, Math.sin(a) * len * 0.5 - r * 0.05);
+    x.lineTo(ex * 0.95, ey * 0.95);
+    x.stroke();
+    // 尾尖狐火
+    inkAura(x, ex, ey, r * 0.32, fireRgb, 0.75);
+    x.fillStyle = fire;
+    x.beginPath(); x.arc(ex, ey, r * 0.12 + Math.sin(p * 2 + i) * r * 0.02, 0, Math.PI * 2); x.fill();
+  }
+  // 身軀 (坐姿：直立的橢圓 + 前腳)
+  inkBody(x, 0, r * 0.35, r * 0.42, r * 0.62);
+  x.strokeStyle = '#1c2322';
+  x.lineWidth = r * 0.12;
+  x.beginPath();
+  x.moveTo(-r * 0.18, r * 0.5); x.lineTo(-r * 0.2, r * 0.98);
+  x.moveTo(r * 0.18, r * 0.5); x.lineTo(r * 0.2, r * 0.98);
+  x.stroke();
+  // 胸前白毛
+  x.fillStyle = 'rgba(242,239,230,0.85)';
+  x.beginPath(); x.ellipse(0, r * 0.25, r * 0.28, r * 0.35, 0, 0, Math.PI * 2); x.fill();
+  // 狐首
+  const hy = -r * 0.35 + Math.sin(p) * r * 0.03;
+  inkBody(x, 0, hy, r * 0.45, r * 0.4);
+  x.fillStyle = '#1c2322';
+  x.beginPath(); x.moveTo(-r * 0.4, hy - r * 0.15); x.lineTo(-r * 0.5, hy - r * 0.75); x.lineTo(-r * 0.12, hy - r * 0.35); x.fill();
+  x.beginPath(); x.moveTo(r * 0.4, hy - r * 0.15); x.lineTo(r * 0.5, hy - r * 0.75); x.lineTo(r * 0.12, hy - r * 0.35); x.fill();
+  // 白吻
+  x.fillStyle = '#f2efe6';
+  x.beginPath(); x.moveTo(-r * 0.2, hy + r * 0.05); x.lineTo(0, hy + r * 0.42); x.lineTo(r * 0.2, hy + r * 0.05); x.closePath(); x.fill();
+  x.fillStyle = '#1c2322';
+  x.beginPath(); x.arc(0, hy + r * 0.38, r * 0.05, 0, Math.PI * 2); x.fill();
+  // 額前狐火印
+  x.fillStyle = fire;
+  x.beginPath(); x.ellipse(0, hy - r * 0.2, r * 0.05, r * 0.1, 0, 0, Math.PI * 2); x.fill();
+  inkEye(x, -r * 0.18, hy - r * 0.02, r * 0.055);
+  inkEye(x, r * 0.18, hy - r * 0.02, r * 0.055);
+}
+
+function drawBossThunder(x, t, r, charging, final) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * r * 0.06;       // 懸空浮動
+  const bolt = charging ? '#fff6b0' : '#9fd8ff';
+  // 貼地陰影較淡 (飄在空中)
+  x.fillStyle = 'rgba(0,0,0,0.22)';
+  x.beginPath(); x.ellipse(0, r * 1.15, r * 0.7, r * 0.2, 0, 0, Math.PI * 2); x.fill();
+  inkAura(x, 0, -r * 0.15, r * (final ? 1.8 : 1.55), charging ? '255,240,150' : '130,190,255', charging ? 0.55 : 0.28);
+  // 雷鼓環：八面 (最終形十二面) 小鼓繞身旋轉，鼓間以電弧相連
+  const n = final ? 12 : 8;
+  const ring = r * (charging ? 1.0 : 1.2);
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + p * 0.5;
+    pts.push([Math.cos(a) * ring, Math.sin(a) * ring * 0.55 - r * 0.2 + bob]);
+  }
+  x.strokeStyle = bolt;
+  x.lineWidth = r * 0.035;
+  x.globalAlpha = charging ? 0.95 : 0.55;
+  x.beginPath();
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = pts[i];
+    const [bx, by] = pts[(i + 1) % n];
+    const mx = (ax + bx) / 2 + Math.sin(p * 4 + i * 2) * r * 0.08;
+    const my = (ay + by) / 2 + Math.cos(p * 4 + i) * r * 0.08;
+    x.moveTo(ax, ay); x.lineTo(mx, my); x.lineTo(bx, by);
+  }
+  x.stroke();
+  x.globalAlpha = 1;
+  // 後半圈的鼓先畫 (被身體擋住)
+  const drum = ([dx, dy]) => {
+    x.fillStyle = '#8a2a22';
+    x.strokeStyle = '#1c2322';
+    x.lineWidth = r * 0.03;
+    x.beginPath(); x.ellipse(dx, dy, r * 0.16, r * 0.13, 0, 0, Math.PI * 2); x.fill(); x.stroke();
+    x.fillStyle = '#e0b44a';
+    x.beginPath(); x.arc(dx, dy, r * 0.06, 0, Math.PI * 2); x.fill();
+  };
+  pts.filter(([, dy]) => dy < -r * 0.2 + bob).forEach(drum);
+  // 墨色長袍 (下擺化為墨霧)
+  const robe = x.createLinearGradient(0, -r * 0.6, 0, r * 1.0);
+  robe.addColorStop(0, '#1c2322');
+  robe.addColorStop(0.7, 'rgba(50,62,60,0.9)');
+  robe.addColorStop(1, 'rgba(90,105,100,0)');
+  x.fillStyle = robe;
+  x.beginPath();
+  x.moveTo(-r * 0.3, -r * 0.55 + bob);
+  x.lineTo(r * 0.3, -r * 0.55 + bob);
+  x.quadraticCurveTo(r * 0.75, r * 0.2 + bob, r * 0.55 + Math.sin(p * 2) * r * 0.08, r * 1.0);
+  x.lineTo(-r * 0.55 + Math.cos(p * 2) * r * 0.08, r * 1.0);
+  x.quadraticCurveTo(-r * 0.75, r * 0.2 + bob, -r * 0.3, -r * 0.55 + bob);
+  x.fill();
+  // 金色束腰與交領
+  x.strokeStyle = '#e0b44a';
+  x.lineWidth = r * 0.06;
+  x.beginPath();
+  x.moveTo(-r * 0.42, -r * 0.05 + bob); x.lineTo(r * 0.42, -r * 0.05 + bob);
+  x.moveTo(-r * 0.22, -r * 0.55 + bob); x.lineTo(0, -r * 0.2 + bob); x.lineTo(r * 0.22, -r * 0.55 + bob);
+  x.stroke();
+  // 張開雙臂，掌心雷光
+  x.strokeStyle = '#1c2322';
+  x.lineWidth = r * 0.16;
+  for (const side of [-1, 1]) {
+    const hx = side * r * 0.95;
+    const hy = -r * (charging ? 0.9 : 0.45) + bob;
+    x.beginPath(); x.moveTo(side * r * 0.3, -r * 0.45 + bob); x.lineTo(hx, hy); x.stroke();
+    inkAura(x, hx, hy, r * 0.3, charging ? '255,240,150' : '160,210,255', 0.9);
+  }
+  // 頭：墨髮高冠 + 怒目
+  const hy = -r * 0.78 + bob;
+  x.fillStyle = '#e9dcc8';
+  x.beginPath(); x.arc(0, hy, r * 0.24, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#121716';
+  x.beginPath(); x.arc(0, hy - r * 0.06, r * 0.26, Math.PI * 1.05, Math.PI * 1.95); x.fill();
+  x.fillStyle = '#e0b44a';
+  x.beginPath(); x.moveTo(-r * 0.12, hy - r * 0.25); x.lineTo(0, hy - r * 0.52); x.lineTo(r * 0.12, hy - r * 0.25); x.fill();
+  // 天眼 + 雙目
+  x.fillStyle = bolt;
+  x.beginPath(); x.ellipse(0, hy - r * 0.1, r * 0.03, r * 0.07, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = charging ? '#fff6b0' : '#ffd166';
+  x.fillRect(-r * 0.14, hy + r * 0.02, r * 0.08, r * 0.035);
+  x.fillRect(r * 0.06, hy + r * 0.02, r * 0.08, r * 0.035);
+  // 長鬚
+  x.strokeStyle = '#121716';
+  x.lineWidth = r * 0.03;
+  x.beginPath();
+  x.moveTo(-r * 0.06, hy + r * 0.14); x.quadraticCurveTo(-r * 0.1, hy + r * 0.4, -r * 0.02, hy + r * 0.55);
+  x.moveTo(r * 0.06, hy + r * 0.14); x.quadraticCurveTo(r * 0.1, hy + r * 0.4, r * 0.02, hy + r * 0.55);
+  x.stroke();
+  // 前半圈的鼓
+  pts.filter(([, dy]) => dy >= -r * 0.2 + bob).forEach(drum);
+  // 劈落的雷 (蓄力時更多)
+  const bolts = charging ? 3 : final ? 2 : 1;
+  x.strokeStyle = bolt;
+  x.lineWidth = r * 0.045;
+  for (let b = 0; b < bolts; b++) {
+    const a = p * 1.3 + b * 2.1;
+    let bx = Math.cos(a) * r * 1.3;
+    let by = -r * 1.5;
+    x.beginPath(); x.moveTo(bx, by);
+    for (let k = 0; k < 4; k++) {
+      bx += Math.sin(a * 3 + k * 1.7) * r * 0.18;
+      by += r * 0.4;
+      x.lineTo(bx, by);
+    }
+    x.stroke();
+  }
+}
+
 function drawSnowMound(x) {
   x.fillStyle = 'rgba(200,230,255,0.22)';
   x.beginPath();
@@ -5448,6 +5706,7 @@ for (const [theme, fn] of Object.entries({
   street: drawBossStreet, lab: drawBossLab, frost: drawBossFrost, core: drawBossCore,
   subway: drawBossSubway, swamp: drawBossSwamp, storm: drawBossStorm,
   foundry: drawBossFoundry, frostvoid: drawBossFrostvoid, voidroad: drawBossVoidroad,
+  inkape: drawBossInkApe, inkfox: drawBossInkFox, thunder: drawBossThunder,
 })) {
   for (const [suffix, size, r, final] of [['', 172, 40, false], ['_final', 208, 50, true]]) {
     for (const charging of [false, true]) {

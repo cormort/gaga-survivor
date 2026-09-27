@@ -683,9 +683,9 @@ export const LEVELS = {
       { until: 9999, pool: [['ink_wolf', 0.15], ['ink_gale_wolf', 0.1], ['ink_crow', 0.1], ['ink_shadow_crow', 0.08], ['ink_boar', 0.1], ['ink_boar_king', 0.06], ['ink_gas_boar', 0.06], ['ink_fox', 0.12], ['ink_fox_guard', 0.08], ['ink_fox_spirit', 0.05], ['ink_ape', 0.07], ['ink_ape_mother', 0.03]], interval: 0.17, batch: 5 },
     ],
     bosses: [
-      { at: 120, hp: 42000, name: '山魈妖王', speed: 100, damage: 40, behaviors: ['barrage', 'summon'], skin: 'boss_storm' },
-      { at: 300, hp: 95000, name: '九尾墨狐', speed: 96, damage: 44, behaviors: ['nova', 'vortex'], skin: 'boss_swamp' },
-      { at: LEVEL_DURATION, hp: 290000, name: '天劫雷尊‧渡劫', speed: 86, damage: 50, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_frostvoid' },
+      { at: 120, hp: 42000, name: '山魈妖王', speed: 100, damage: 40, behaviors: ['barrage', 'summon'], skin: 'boss_inkape' },
+      { at: 300, hp: 95000, name: '九尾墨狐', speed: 96, damage: 44, behaviors: ['nova', 'vortex'], skin: 'boss_inkfox' },
+      { at: LEVEL_DURATION, hp: 290000, name: '天劫雷尊‧渡劫', speed: 86, damage: 50, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_thunder' },
     ],
   },
 
