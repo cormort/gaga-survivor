@@ -378,12 +378,15 @@ export class UIManager {
       this.charSelect.appendChild(card);
 
       // 直接把遊戲內同一組 sprite 畫成頭像，選角看到的就是實際長相
-      import('../sprites.js').then(({ getSprite }) => {
+      import('../sprites.js').then(async ({ getSprite, imageSpritesReady }) => {
+        await imageSpritesReady;
         const ctx = card.querySelector('.char-portrait').getContext('2d');
         const sp = getSprite(c.sprite);
         ctx.save();
+        ctx.clearRect(0, 0, 128, 120);
         ctx.translate(64, 68);
-        ctx.scale(1.5, 1.5);
+        const zoom = Math.min(1.5, 112 / sp.h);   // 修仙貼圖較高，縮到放得進頭像框
+        ctx.scale(zoom, zoom);
         ctx.drawImage(sp.frames[0], -sp.w / 2, -sp.h / 2, sp.w, sp.h);
         ctx.restore();
       });
@@ -987,7 +990,7 @@ export class UIManager {
     if (key) key.textContent = cost === null ? 'MAX' : `${cost}🪙`;
     this.hireBtn.disabled = cost === null || !affordable;
     this.hireBtn.title = cost === null
-      ? '傭兵小隊已滿員'
+      ? '已有一名傭兵隨行'
       : affordable ? `僱傭傭兵 (${cost} 🪙, G)` : `金幣不足 (需要 ${cost} 🪙)`;
   }
 

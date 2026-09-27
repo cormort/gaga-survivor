@@ -31,6 +31,7 @@ function blank() {
     stashCap: STASH_CAP,    // 倉庫容量上限 (可於黑市升級擴充)
     talents: {},            // 天賦樹等級 (基因強化)
     charLevels: {},         // 特工等級 { charId: level }，沒有記錄 = Lv1
+    merc: { level: 1, exp: 0 },   // 傭兵境界與經驗 (跨局累積)
     stash: [],              // 打寶倉庫 (最多 stashCap 件)
     jewels: {},             // 珠寶袋 { jewelId: 數量 }：撿到當下就入袋，陣亡也保留
     // 圖鑑 codex { weapons, enemies, jewels, claimed } 刻意不放在這裡：load() 是
@@ -113,6 +114,7 @@ function ensureDefaults(d) {
   if (d.character && !d.unlockedChars.includes(d.character)) d.unlockedChars.push(d.character);
   if (!d.talents || typeof d.talents !== 'object') d.talents = {};
   if (!d.charLevels || typeof d.charLevels !== 'object') d.charLevels = {};
+  if (!d.merc || typeof d.merc !== 'object') d.merc = { level: 1, exp: 0 };
   if (!Array.isArray(d.stash)) d.stash = [];
   if (!d.jewels || typeof d.jewels !== 'object') d.jewels = {};
   if (!d.codex || typeof d.codex !== 'object') {

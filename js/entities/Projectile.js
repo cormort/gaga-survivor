@@ -2,6 +2,7 @@
 
 import { GAME_CONFIG, CHARGE, worldBounds } from '../config.js';
 import { drawGlow, drawStreak } from '../weapons/ProjectileFX.js';
+import { drawFlyingSword } from './Mercenary.js';
 
 // ── 飛行光暈與拖尾 ─────────────────────────────────────────────────
 // 為什麼要這張表：投射物先前只有「本體」，高速彈體在深色場景裡是一顆顆小點，
@@ -158,6 +159,7 @@ export class Projectile {
 
     // 傭兵專屬 (擊殺升級 credit)
     this.mercOwner = options.mercOwner || null;
+    this.qiColor = options.qiColor || null;
 
     // 武器型態專屬 (Hades Aspects)
     this.aspect = options.aspect || null;
@@ -633,21 +635,22 @@ export class Projectile {
     ctx.fill();
   }
 
-  // 傭兵能量彈 (金色曳光)
+  // 傭兵御劍：飛劍 + 劍氣殘影
   drawMerc(ctx) {
     const angle = Math.atan2(this.vy, this.vx);
     ctx.rotate(angle);
-    ctx.shadowColor = '#ffd60a';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = '#ffd60a';
+    const qi = this.qiColor || '#7fe0d0';
+    const g = ctx.createLinearGradient(-34, 0, 0, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(1, qi);
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(4, 0, 7, 3, 0, 0, Math.PI * 2);
+    ctx.moveTo(0, -3); ctx.lineTo(-34, 0); ctx.lineTo(0, 3);
+    ctx.closePath();
     ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#fff3c4';
-    ctx.beginPath();
-    ctx.arc(-1, 0, 2.4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.globalAlpha = 1;
+    drawFlyingSword(ctx, 1, qi, 1);
   }
 
   drawKunai(ctx) {

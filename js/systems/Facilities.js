@@ -9,9 +9,10 @@
 // `game.turretCost` / `game.mercCost` 這兩個屬性存取由主檔既有的 getter 維持。
 
 import { Turret, TURRET_VARIANTS, FACILITY_TYPES } from '../entities/Turret.js';
-import { Mercenary, MERC } from '../entities/Mercenary.js';
+import { Mercenary, MERC, REALM } from '../entities/Mercenary.js';
 import { Projectile } from '../entities/Projectile.js';
 import { sound } from '../audio.js';
+import { save } from '../save.js';
 
 // 金幣乘數的天花板。天賦財運 × 模式 × 祝福 × 每日規則 × 淘金潮是純乘法疊加、
 // 原本沒有上限 —— 實測空存檔 23 分鐘 5.8 萬金，帶滿 meta 加成的存檔同時間 142 萬，
@@ -160,7 +161,7 @@ export function hireMercenary(game) {
     return;
   }
   if (game.mercenaries.length >= MERC.maxCount) {
-    game.ui.say(`傭兵小隊已滿員 (${MERC.maxCount}/${MERC.maxCount})`, '#8a9bb0', 1.6);
+    game.ui.say(`已有一名傭兵隨行 (上限 ${MERC.maxCount})`, '#8a9bb0', 1.6);
     sound.playHurt();
     return;
   }
@@ -171,11 +172,16 @@ export function hireMercenary(game) {
     return;
   }
   game.gold -= cost;
-  const m = new Mercenary(game.player.x, game.player.y, game.mercenaries.length);
+  const m = new Mercenary(game.player.x, game.player.y, game.mercenaries.length, save.data.merc);
+  m.onLevelUp = (merc) => {
+    save.flush();
+    game.particles.createShockwave(merc.x, merc.y, 110, merc.qiColor);
+    game.ui.say(`⚡ 傭兵突破境界：【${REALM[merc.level - 1]}】！血量與傷害提升`, merc.qiColor, 2.6);
+  };
   game.mercenaries.push(m);
   game.particles.createShockwave(game.player.x, game.player.y, 90, '#3ddc84');
   sound.playEvoFanfare();
-  game.ui.say(`💂 傭兵報到！(${cost} 🪙) 擊殺敵人可升級`, '#3ddc84', 2.4);
+  game.ui.say(`🗡️ ${REALM[m.level - 1]}弟子報到！(${cost} 🪙) 斬妖累積經驗、突破境界`, '#3ddc84', 2.4);
   game.ui.updateHUD(game.player, game.gameTime, game.kills, game.gold);
   game.ui.updateBuildBtn(game.gold, game.turretCost);
   // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)
@@ -203,6 +209,7 @@ export function updateMercenaries(game, dt) {
         life: 1.7,
         knockback: 1,
         mercOwner: merc,
+        qiColor: merc.qiColor,
       }));
       sound.playShoot();
     });
@@ -223,9 +230,10 @@ export function updateMercenaries(game, dt) {
 
     if (m.isDead) {
       game.particles.createExplosion(m.x, m.y, 40);
-      game.particles.createShockwave(m.x, m.y, 80, '#4a7c3f');
+      game.particles.createShockwave(m.x, m.y, 80, m.qiColor);
       sound.playHurt();
-      game.ui.say('💂 傭兵陣亡！重新僱傭一位吧', '#ff5e5e', 2.2);
+      game.ui.say('🗡️ 弟子兵解！境界與經驗保留，重新僱傭即可', '#ff5e5e', 2.2);
+      save.flush();   // 陣亡不掉境界，經驗先寫回存檔
       game.mercenaries.splice(i, 1);
       game.ui.updateHireBtn(game.mercCost, game.gold >= (game.mercCost || 1e9));
     }

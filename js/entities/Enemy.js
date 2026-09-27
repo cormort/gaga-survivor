@@ -375,16 +375,24 @@ export class Enemy {
   // 遠程射擊 (從 update 抽出，讓預警與發射分離)
   fireRanged(dist, nx, ny, cb) {
     if (!cb.onShoot || dist <= 0 || dist > this.ranged.range * 1.6) return;
-    cb.onShoot(this, {
-      x: this.x + nx * (this.radius + 6),
-      y: this.y + ny * (this.radius + 6),
-      vx: nx * this.ranged.speed,
-      vy: ny * this.ranged.speed,
-      damage: this.ranged.damage,
-      radius: this.ranged.radius,
-      color: this.eliteColor || this.ranged.color,
-      glow: this.eliteColor || this.ranged.color,
-    });
+    // count > 1：扇形齊射 (狐妖的狐火三連)，spread 為相鄰兩發的夾角
+    const count = this.ranged.count || 1;
+    const base = Math.atan2(ny, nx);
+    for (let i = 0; i < count; i++) {
+      const a = base + (i - (count - 1) / 2) * (this.ranged.spread || 0);
+      const cx = Math.cos(a);
+      const cy = Math.sin(a);
+      cb.onShoot(this, {
+        x: this.x + cx * (this.radius + 6),
+        y: this.y + cy * (this.radius + 6),
+        vx: cx * this.ranged.speed,
+        vy: cy * this.ranged.speed,
+        damage: this.ranged.damage,
+        radius: this.ranged.radius,
+        color: this.eliteColor || this.ranged.color,
+        glow: this.eliteColor || this.ranged.color,
+      });
+    }
   }
 
   // 近戰移動：回傳「已乘上速度」的位移向量，由 update 統一積分。
