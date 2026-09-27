@@ -40,7 +40,7 @@ function blank() {
     quests: { date: '', list: [] },   // 每日任務（依本地日期產生，跨局累積）
     runCard: null,                    // 出擊規則卡（js/runcards.js 的 id，null = 不使用）
     equipped: {},           // 已穿裝備 { slotKey: itemId }
-    unlocked: { survivor: ['street'], defense: ['street'] }, // 已解鎖關卡 (依模式)
+    unlocked: { survivor: ['street', 'inkmount'], defense: ['street', 'inkmount'] }, // 已解鎖關卡 (依模式)；水墨仙山開局即開放
     unlockedChars: ['duck'], // 已解鎖特工
     best: { survivor: {}, defense: {} }, // { modeId: { levelId: { time, kills, cleared } } }
     character: 'duck',
@@ -101,6 +101,8 @@ function ensureDefaults(d) {
   // 「改版前就通關 core」的玩家不會再觸發一次 unlock，新關卡會永遠鎖著 ——
   // 玩家只會覺得「更新後什麼都沒多」，而畫面上完全沒有線索。
   for (const m of MODE_IDS) {
+    // 水墨仙山開局即開放 (不必先打完虛空裂道)：舊存檔補上
+    if (Array.isArray(d.unlocked[m]) && !d.unlocked[m].includes('inkmount')) d.unlocked[m].push('inkmount');
     for (const [levelId, rec] of Object.entries(d.best[m] || {})) {
       if (!rec || !rec.cleared) continue;
       const nxt = LEVELS[levelId] && LEVELS[levelId].next;
