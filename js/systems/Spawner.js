@@ -26,6 +26,10 @@ export class Spawner {
   setLevel(levelId, rules = RULE_DEFAULTS) {
     this.level = LEVELS[levelId] || LEVELS.street;
     this.rules = rules;
+    Enemy.skins = this.level.enemySkins || null;
+    for (const [type, [key]] of Object.entries(Enemy.skins || {})) {
+      if (!hasSprite(key)) console.warn(`[Spawner] 關卡 ${this.level.id} 的 ${type} 換皮 sprite 不存在：${key}`);
+    }
     // 開局體檢：關卡的 Boss skin 必須真的有對應的 sprite。
     // 為什麼要出聲：`getSprite()` 對未知 key 會**靜默退回 walker**（見 sprites.js 的說明），
     // 所以打錯 skin 的後果是「最終首領長成一隻普通殭屍」而不是任何錯誤訊息 ——

@@ -90,12 +90,16 @@ function statusGlow(kind, radius) {
 }
 
 export class Enemy {
+  static skins = null;
   // scale: { hp, dmg, speed } — 關卡難度、時間成長與關卡規則合併後的係數
   constructor(typeKey, x, y, scale = {}) {
     const config = ENEMY_TYPES[typeKey] || ENEMY_TYPES.walker;
     this.typeKey = typeKey;
     this.skin = null; // Boss 關卡主題外觀 (生成後由 Spawner 依 def.skin 覆寫)
-    this.name = config.name;
+    // 關卡換皮 (Enemy.skins 由 Spawner.setLevel 依 level.enemySkins 設定)：
+    // 行為/數值沿用原型態，只換外觀與名稱 —— 例如水墨仙山把獵犬畫成墨狼
+    const reskin = !config.isBoss && Enemy.skins && Enemy.skins[typeKey];
+    this.name = reskin ? reskin[1] : config.name;
     this.maxHp = config.hp * (scale.hp || 1);
     this.hp = this.maxHp;
     this.speed = config.speed * (scale.speed || 1);
@@ -107,7 +111,8 @@ export class Enemy {
     // 外觀變異：一般怪隨機套一組烘焙好的尺寸變體，成群時不會看起來都一樣
     // (Boss 用關卡主題 skin，不套尺寸抖動)
     this.spriteVariant = this.isBoss ? 0 : Math.floor(Math.random() * 3);
-    this.baseSpriteKey = this.spriteVariant > 0 ? this.typeKey + ':v' + this.spriteVariant : this.typeKey;
+    const spriteBase = reskin ? reskin[0] : this.typeKey;
+    this.baseSpriteKey = this.spriteVariant > 0 ? spriteBase + ':v' + this.spriteVariant : spriteBase;
     this.explodes = !!config.explodes;
     this.splitInto = config.splitInto || null; // 孢子母體：死亡裂解
     this.splitCount = config.splitCount || 0;

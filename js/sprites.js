@@ -4156,6 +4156,215 @@ function drawInkPine(x) {
   }
 }
 
+// ===== 水墨妖獸 (水墨仙山專用換皮)：濃墨身軀 + 淡墨暈邊 + 朱紅妖眼，朝右 =====
+function inkBody(x, cx, cy, rx, ry, rot = 0) {
+  // 外圈淡墨暈 → 內層濃墨，像濕筆一筆落下
+  x.fillStyle = 'rgba(70,85,82,0.35)';
+  x.beginPath(); x.ellipse(cx, cy, rx * 1.12, ry * 1.15, rot, 0, Math.PI * 2); x.fill();
+  const g = x.createLinearGradient(0, cy - ry, 0, cy + ry);
+  g.addColorStop(0, '#1c2322');
+  g.addColorStop(0.7, '#3c4745');
+  g.addColorStop(1, '#6f7c78');
+  x.fillStyle = g;
+  x.beginPath(); x.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2); x.fill();
+}
+
+function inkEye(x, ex, ey, rr) {
+  const g = x.createRadialGradient(ex, ey, 0, ex, ey, rr * 3);
+  g.addColorStop(0, 'rgba(255,60,40,0.55)');
+  g.addColorStop(1, 'rgba(255,60,40,0)');
+  x.fillStyle = g;
+  x.beginPath(); x.arc(ex, ey, rr * 3, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#ff4a2e';
+  x.beginPath(); x.arc(ex, ey, rr, 0, Math.PI * 2); x.fill();
+}
+
+function inkFur(x, pts) {
+  // 乾筆飛白：幾道細碎毛筆觸
+  x.strokeStyle = 'rgba(15,20,19,0.8)';
+  x.lineWidth = 1.2;
+  x.lineCap = 'round';
+  x.beginPath();
+  for (const [a, b, c, d] of pts) { x.moveTo(a, b); x.lineTo(c, d); }
+  x.stroke();
+}
+
+function inkLegs(x, r, p, spread, len, w = 2.6) {
+  const stride = Math.sin(p) * r * 0.22;
+  x.strokeStyle = '#1c2322';
+  x.lineWidth = w;
+  x.lineCap = 'round';
+  for (const [bx, dir] of [[-spread, 1], [-spread * 0.55, -1], [spread * 0.55, 1], [spread, -1]]) {
+    x.beginPath(); x.moveTo(bx * r, r * 0.3); x.lineTo(bx * r + dir * stride, r * 0.3 + len * r); x.stroke();
+  }
+}
+
+function drawInkWolf(x, t, r) {
+  const p = t * Math.PI * 2;
+  shadow(x, r * 1.1, r * 0.95);
+  inkLegs(x, r, p, 0.7, 0.62, 2.4);
+  x.save();
+  x.rotate(Math.sin(p) * 0.05);
+  // 蓬尾
+  x.fillStyle = 'rgba(40,50,48,0.8)';
+  x.beginPath();
+  x.moveTo(-r * 0.8, -r * 0.1);
+  x.quadraticCurveTo(-r * 1.6, -r * 0.2 + Math.sin(p) * 2, -r * 1.7, -r * 0.7);
+  x.quadraticCurveTo(-r * 1.2, -r * 0.4, -r * 0.7, -r * 0.35);
+  x.fill();
+  inkBody(x, -r * 0.1, 0, r * 0.95, r * 0.5, -0.05);
+  // 頭 + 長吻
+  inkBody(x, r * 0.75, -r * 0.35, r * 0.48, r * 0.4);
+  x.fillStyle = '#1c2322';
+  x.beginPath();
+  x.moveTo(r * 0.95, -r * 0.5); x.lineTo(r * 1.6, -r * 0.2); x.lineTo(r * 0.95, -r * 0.08);
+  x.closePath(); x.fill();
+  // 尖耳
+  x.beginPath(); x.moveTo(r * 0.5, -r * 0.65); x.lineTo(r * 0.45, -r * 1.2); x.lineTo(r * 0.8, -r * 0.72); x.closePath(); x.fill();
+  // 白牙
+  x.fillStyle = '#f2efe6';
+  x.beginPath(); x.moveTo(r * 1.3, -r * 0.14); x.lineTo(r * 1.36, r * 0.05); x.lineTo(r * 1.42, -r * 0.16); x.fill();
+  inkFur(x, [[-r * 0.6, -r * 0.45, -r * 0.3, -r * 0.2], [-r * 0.1, -r * 0.5, r * 0.1, -r * 0.25], [r * 0.3, -r * 0.45, r * 0.45, -r * 0.2]]);
+  inkEye(x, r * 0.85, -r * 0.45, 1.8);
+  x.restore();
+}
+
+function drawInkBoar(x, t, r) {
+  const p = t * Math.PI * 2;
+  shadow(x, r * 1.1, r * 0.8);
+  inkLegs(x, r, p, 0.6, 0.45, 3.4);
+  x.save();
+  x.translate(0, Math.abs(Math.sin(p)) * -1.5);
+  inkBody(x, -r * 0.05, 0, r * 1.0, r * 0.62);
+  // 背鬃：一排尖刺筆觸
+  x.fillStyle = '#121716';
+  x.beginPath();
+  x.moveTo(-r * 0.8, -r * 0.35);
+  for (let i = 0; i <= 6; i++) {
+    const bx = -r * 0.8 + i * r * 0.22;
+    x.lineTo(bx + r * 0.05, -r * (0.85 + (i % 2) * 0.15));
+    x.lineTo(bx + r * 0.16, -r * 0.45);
+  }
+  x.closePath(); x.fill();
+  // 豬頭 + 鼻盤
+  inkBody(x, r * 0.8, r * 0.05, r * 0.45, r * 0.42);
+  x.fillStyle = '#5a6663';
+  x.beginPath(); x.ellipse(r * 1.18, r * 0.12, r * 0.14, r * 0.2, 0, 0, Math.PI * 2); x.fill();
+  // 彎獠牙
+  x.strokeStyle = '#f2efe6';
+  x.lineWidth = 2.4;
+  x.lineCap = 'round';
+  x.beginPath();
+  x.moveTo(r * 1.0, r * 0.3); x.quadraticCurveTo(r * 1.3, r * 0.3, r * 1.28, -r * 0.05);
+  x.stroke();
+  inkFur(x, [[-r * 0.5, r * 0.1, -r * 0.2, r * 0.35], [0, r * 0.05, r * 0.25, r * 0.35]]);
+  inkEye(x, r * 0.85, -r * 0.1, 2);
+  x.restore();
+}
+
+function drawInkCrow(x, t, r) {
+  const p = t * Math.PI * 2;
+  const flap = Math.sin(p) * 0.9;
+  shadow(x, r * 0.8, r * 1.4);
+  x.save();
+  x.translate(0, Math.sin(p) * 1.5);
+  // 雙翼：大片潑墨羽
+  for (const side of [-1, 1]) {
+    x.save();
+    x.scale(1, side);
+    x.rotate(-0.2 - flap * 0.5);
+    x.fillStyle = 'rgba(25,32,31,0.9)';
+    x.beginPath();
+    x.moveTo(-r * 0.1, -r * 0.15);
+    x.quadraticCurveTo(-r * 0.6, -r * 1.6, -r * 1.5, -r * 1.2);
+    x.lineTo(-r * 1.1, -r * 0.9);
+    x.lineTo(-r * 1.2, -r * 0.6);
+    x.lineTo(-r * 0.8, -r * 0.45);
+    x.closePath(); x.fill();
+    x.restore();
+  }
+  inkBody(x, 0, 0, r * 0.75, r * 0.45);
+  // 尾羽
+  x.fillStyle = '#1c2322';
+  x.beginPath(); x.moveTo(-r * 0.6, 0); x.lineTo(-r * 1.3, -r * 0.25); x.lineTo(-r * 1.3, r * 0.25); x.closePath(); x.fill();
+  // 頭 + 喙
+  inkBody(x, r * 0.7, -r * 0.1, r * 0.38, r * 0.34);
+  x.fillStyle = '#c9a44a';
+  x.beginPath(); x.moveTo(r * 1.0, -r * 0.2); x.lineTo(r * 1.45, -r * 0.05); x.lineTo(r * 1.0, r * 0.05); x.closePath(); x.fill();
+  inkEye(x, r * 0.8, -r * 0.18, 1.5);
+  x.restore();
+}
+
+function drawInkFox(x, t, r) {
+  const p = t * Math.PI * 2;
+  shadow(x, r * 1.0, r * 0.9);
+  inkLegs(x, r, p, 0.55, 0.55, 2.2);
+  x.save();
+  // 三條狐尾，尾尖點橙色狐火
+  for (let i = 0; i < 3; i++) {
+    const a = -0.5 - i * 0.35 + Math.sin(p + i) * 0.12;
+    const ex = -r * 0.6 + Math.cos(Math.PI + a) * r * 1.2;
+    const ey = Math.sin(Math.PI + a) * r * 1.2 - r * 0.1;
+    x.strokeStyle = 'rgba(40,50,48,0.85)';
+    x.lineWidth = r * 0.32;
+    x.lineCap = 'round';
+    x.beginPath(); x.moveTo(-r * 0.6, 0); x.quadraticCurveTo(-r * 1.1, -r * 0.1, ex, ey); x.stroke();
+    x.fillStyle = 'rgba(245,150,45,0.9)';
+    x.beginPath(); x.arc(ex, ey, r * 0.2, 0, Math.PI * 2); x.fill();
+  }
+  inkBody(x, -r * 0.05, 0, r * 0.8, r * 0.45);
+  inkBody(x, r * 0.65, -r * 0.4, r * 0.42, r * 0.36);
+  x.fillStyle = '#1c2322';
+  x.beginPath(); x.moveTo(r * 0.85, -r * 0.5); x.lineTo(r * 1.35, -r * 0.3); x.lineTo(r * 0.85, -r * 0.2); x.closePath(); x.fill();
+  x.beginPath(); x.moveTo(r * 0.4, -r * 0.65); x.lineTo(r * 0.4, -r * 1.2); x.lineTo(r * 0.7, -r * 0.72); x.closePath(); x.fill();
+  x.beginPath(); x.moveTo(r * 0.7, -r * 0.7); x.lineTo(r * 0.85, -r * 1.2); x.lineTo(r * 0.92, -r * 0.62); x.closePath(); x.fill();
+  // 額前狐火印
+  x.fillStyle = '#f5962d';
+  x.beginPath(); x.arc(r * 0.62, -r * 0.62, r * 0.09, 0, Math.PI * 2); x.fill();
+  inkEye(x, r * 0.78, -r * 0.42, 1.6);
+  x.restore();
+}
+
+function drawInkApe(x, t, r) {
+  const p = t * Math.PI * 2;
+  const sw = Math.sin(p) * r * 0.08;
+  shadow(x, r * 0.9, r * 0.9);
+  // 短腿
+  x.strokeStyle = '#1c2322';
+  x.lineWidth = r * 0.22;
+  x.lineCap = 'round';
+  x.beginPath();
+  x.moveTo(-r * 0.3, r * 0.4); x.lineTo(-r * 0.35 + sw, r * 0.85);
+  x.moveTo(r * 0.3, r * 0.4); x.lineTo(r * 0.35 - sw, r * 0.85);
+  x.stroke();
+  // 長臂 (垂地搖擺)
+  x.lineWidth = r * 0.18;
+  x.beginPath();
+  x.moveTo(-r * 0.55, -r * 0.2); x.quadraticCurveTo(-r * 0.95, r * 0.2, -r * 0.8 - sw, r * 0.8);
+  x.moveTo(r * 0.55, -r * 0.2); x.quadraticCurveTo(r * 0.95, r * 0.2, r * 0.8 + sw, r * 0.8);
+  x.stroke();
+  inkBody(x, 0, 0, r * 0.7, r * 0.6);
+  // 亂鬃披肩
+  x.fillStyle = 'rgba(20,26,25,0.9)';
+  x.beginPath();
+  for (let i = 0; i <= 10; i++) {
+    const a = Math.PI + (i / 10) * Math.PI;
+    const rr = r * (i % 2 ? 0.7 : 0.9);
+    x.lineTo(Math.cos(a) * rr, -r * 0.35 + Math.sin(a) * rr * 0.8);
+  }
+  x.closePath(); x.fill();
+  // 紅藍面具臉 (山魈)
+  x.fillStyle = '#f2efe6';
+  x.beginPath(); x.ellipse(0, -r * 0.45, r * 0.34, r * 0.38, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#c9443a';
+  x.fillRect(-r * 0.06, -r * 0.62, r * 0.12, r * 0.42);
+  x.fillStyle = '#3a6fa8';
+  x.beginPath(); x.ellipse(-r * 0.18, -r * 0.35, r * 0.08, r * 0.16, 0, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.ellipse(r * 0.18, -r * 0.35, r * 0.08, r * 0.16, 0, 0, Math.PI * 2); x.fill();
+  inkEye(x, -r * 0.15, -r * 0.55, 1.8);
+  inkEye(x, r * 0.15, -r * 0.55, 1.8);
+}
+
 function drawSnowMound(x) {
   x.fillStyle = 'rgba(200,230,255,0.22)';
   x.beginPath();
@@ -5190,6 +5399,12 @@ const BUILDERS = {
   mortar:   { w: 72, h: 80, fn: (x, t) => drawMortar(x, t, 18) },
   tar_slug: { w: 72, h: 72, fn: (x, t) => drawTarSlug(x, t, 18) },
   bloater:  { w: 68, h: 80, fn: (x, t) => drawBloater(x, t, 17) },
+  // 水墨仙山妖獸 (level.enemySkins 換皮用)
+  ink_wolf: { w: 84, h: 56, fn: (x, t) => drawInkWolf(x, t, 14) },
+  ink_boar: { w: 84, h: 70, fn: (x, t) => drawInkBoar(x, t, 21) },
+  ink_crow: { w: 64, h: 60, fn: (x, t) => drawInkCrow(x, t, 12) },
+  ink_fox:  { w: 76, h: 62, fn: (x, t) => drawInkFox(x, t, 15) },
+  ink_ape:  { w: 90, h: 84, fn: (x, t) => drawInkApe(x, t, 27) },
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },

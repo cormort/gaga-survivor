@@ -663,6 +663,21 @@ export const LEVELS = {
       },
     },
     decor: ['ink_maple', 'ink_rock', 'ink_maple', 'ink_pine'],
+    // 水墨妖獸：沿用原型態的 AI 與數值，外觀/名稱換成山林妖怪 [sprite, 名稱]
+    enemySkins: {
+      hound: ['ink_wolf', '墨狼'],
+      runner: ['ink_wolf', '疾風狼妖'],
+      brute: ['ink_boar', '山豬妖'],
+      warden: ['ink_boar', '鐵鬃豬王'],
+      bloater: ['ink_boar', '脹氣豬妖'],
+      bat: ['ink_crow', '墨鴉'],
+      blinker: ['ink_crow', '遁影鴉'],
+      spitter: ['ink_fox', '狐火妖'],
+      mortar: ['ink_fox', '玄狐術士'],
+      medic: ['ink_fox', '青丘靈狐'],
+      chimera: ['ink_ape', '山魈'],
+      hatcher: ['ink_ape', '育魈母'],
+    },
     decorDensity: 0.5,
     hpScale: 4.6,
     rules: {
