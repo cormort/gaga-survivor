@@ -17,6 +17,18 @@ export const LOW_END_MAX_ENEMIES = 300;
 // 精英詞綴清單只算一次 (原本每生成一隻怪就 Object.keys 一次)
 const ELITE_KEYS = Object.keys(ELITE_AFFIXES);
 
+// 開局階段：一開始怪少但皮厚，讓玩家先被幾隻追著跑，而不是站樁清一大片脆皮。
+// 效果在 dur 秒內線性淡出，之後完全回到原本的波次節奏。
+export const OPENING = {
+  dur: 180,      // 前 3 分鐘
+  hpMul: 2.5,    // 開場雜兵血量 ×2.5 → 3 分鐘時 ×1
+  sparse: 2.2,   // 開場生成間隔 ×2.2（約 45% 的數量）→ 3 分鐘時 ×1
+};
+
+export function openingFactor(gameTime) {
+  return Math.max(0, 1 - gameTime / OPENING.dur);   // 1 → 0
+}
+
 // 動態難度：固定的時間曲線追不上玩家輸出（實測 2→20 分鐘成長數百倍，而且因人而異），
 // 一旦火力過門檻，雜兵全部死在半路 —— 難度是「階梯」而不是曲線。
 // 這裡量雜兵「生成 → 死亡」的平均存活秒數，太短就提高之後生成的雜兵血量，
@@ -126,6 +138,8 @@ export class Spawner {
 
     // 生成密度：直接縮短間隔 (關卡規則 / 每日詞綴共用)
     interval /= rules.spawnMul;
+    // 開局怪少：前期拉長生成間隔（無盡模式照舊）
+    if (level.id !== 'endless') interval *= 1 + (OPENING.sparse - 1) * openingFactor(gameTime);
 
     if (this.spawnTimer < interval) return;
     this.spawnTimer = 0;
@@ -135,6 +149,7 @@ export class Spawner {
     // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)
     const scale = enemyScale(gameTime, level, rules);
     scale.hp *= this.adaptiveHpMul;
+    if (level.id !== 'endless') scale.hp *= 1 + (OPENING.hpMul - 1) * openingFactor(gameTime);   // 開局皮厚
     for (let i = 0; i < batch; i++) {
       // 生成距離隨時間縮短 (520 → 440)：後期玩家的清場半徑遠大於此，
       // 生得太遠等於「還沒靠近就被打掉」，威脅永遠傳不到玩家身上。
