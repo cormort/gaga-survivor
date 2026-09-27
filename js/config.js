@@ -98,7 +98,8 @@ export const WEAPONS = {
     pairPassive: 'range_fuel',    // 火海範圍加大 (原 speed_shoes)
     maxLevel: 5,
     baseDamage: 8, // 每跳傷害
-    baseCooldown: 2.8,
+    baseCooldown: 3.4,
+    cooldownGrowth: -0.2,          // 升級加快投擲 (3.4 → 2.6 秒)
     duration: 3.8,
     radius: [55, 65, 75, 85, 95],
     count: [1, 2, 3, 4, 5],
@@ -113,8 +114,8 @@ export const WEAPONS = {
     pairPassive: 'cdr_battery',
     maxLevel: 5,
     baseDamage: 32,                // 落點不再重複、又多了電網，單發比舊版略低
-    baseCooldown: 1.8,
-    cooldownGrowth: -0.2,
+    baseCooldown: 2.4,
+    cooldownGrowth: -0.15,
     strikes: [1, 2, 3, 4, 5],
     linkDamageMul: 0.15,           // 電網線段的傷害倍率
     linkWidth: 18,
@@ -130,6 +131,7 @@ export const WEAPONS = {
     maxLevel: 5,
     baseDamage: 28,
     baseCooldown: 3.2,
+    cooldownGrowth: -0.35,         // 升級加快出球 (3.2 → 1.8 秒)
     speed: 520,
     bounces: [4, 5, 6, 7, 8],      // 彈射次數（命中彈向下一個敵人、撞畫面邊緣都算一次）
     count: [1, 2, 2, 3, 4],
