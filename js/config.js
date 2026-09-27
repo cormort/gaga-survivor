@@ -47,11 +47,10 @@ export const WEAPONS = {
     pairPassive: 'atk_scroll',
     maxLevel: 5,
     baseDamage: 22,
-    damageGrowth: 8,
     baseCooldown: 0.7, // 秒
-    cooldownGrowth: -0.06,
+    cooldownGrowth: -0.07,
     speed: 650,
-    projectiles: [1, 1, 2, 2, 3], // 各等級發射數量
+    projectiles: [1, 2, 3, 4, 5], // 各等級發射數量
     pierce: [1, 1, 2, 2, 3],
     charge: { every: 5, effect: 'burn' }, // 每 5 發射出一枚燃燒苦無
   },
@@ -65,11 +64,10 @@ export const WEAPONS = {
     pairPassive: 'max_hp_vest',   // 護身武器 ↔ 生存配件 (原 magnet)
     maxLevel: 5,
     baseDamage: 16,
-    damageGrowth: 6,
     baseCooldown: 2.2, // 冷卻（非超武時有旋轉週期）
     duration: 3.5, // 持續旋轉時間
     spinSpeed: 3.5,
-    count: [2, 3, 3, 4, 4],
+    count: [2, 3, 4, 5, 6],
     radius: [65, 75, 80, 90, 95],
   },
   rocket: {
@@ -82,13 +80,12 @@ export const WEAPONS = {
     pairPassive: 'magnet',        // 爆炸清場 → 自動吸寶 (原 range_fuel)
     maxLevel: 5,
     baseDamage: 35,                // 鎖定追蹤後幾乎發發命中，單發傷害比直線版低
-    damageGrowth: 13,
     baseCooldown: 2.5,
-    cooldownGrowth: -0.2,
+    cooldownGrowth: -0.3,
     speed: 380,
     homing: 5.0,                   // 每秒最大轉向（弧度）：鎖定目標、轉彎追上
     explosionRadius: [70, 85, 95, 110, 130],
-    count: [1, 1, 2, 2, 3],
+    count: [1, 2, 2, 3, 4],
     charge: { every: 3, effect: 'poison' }, // 每 3 發射出毒氣彈，爆炸範圍內全部中毒
   },
   molotov: {
@@ -101,11 +98,10 @@ export const WEAPONS = {
     pairPassive: 'range_fuel',    // 火海範圍加大 (原 speed_shoes)
     maxLevel: 5,
     baseDamage: 8, // 每跳傷害
-    damageGrowth: 4,
     baseCooldown: 2.8,
     duration: 3.8,
     radius: [55, 65, 75, 85, 95],
-    count: [1, 1, 2, 2, 3],
+    count: [1, 2, 3, 4, 5],
   },
   lightning: {
     id: 'lightning',
@@ -117,10 +113,9 @@ export const WEAPONS = {
     pairPassive: 'cdr_battery',
     maxLevel: 5,
     baseDamage: 32,                // 落點不再重複、又多了電網，單發比舊版略低
-    damageGrowth: 12,
     baseCooldown: 1.8,
-    cooldownGrowth: -0.15,
-    strikes: [1, 2, 2, 3, 4],
+    cooldownGrowth: -0.2,
+    strikes: [1, 2, 3, 4, 5],
     linkDamageMul: 0.15,           // 電網線段的傷害倍率
     linkWidth: 18,
   },
@@ -134,11 +129,10 @@ export const WEAPONS = {
     pairPassive: 'speed_shoes',   // 走位控球/追球 (原 max_hp_vest)
     maxLevel: 5,
     baseDamage: 28,
-    damageGrowth: 10,
     baseCooldown: 3.2,
     speed: 520,
     bounces: [4, 5, 6, 7, 8],      // 彈射次數（命中彈向下一個敵人、撞畫面邊緣都算一次）
-    count: [1, 1, 2, 2, 3],
+    count: [1, 2, 2, 3, 4],
     charge: { every: 3, effect: 'freeze' }, // 每 3 顆射出冰凍球
   },
 
@@ -150,9 +144,9 @@ export const WEAPONS = {
     description: '半透明的幽靈手裏劍高速旋轉連發，會轉彎追蹤目標、穿透敵群，每 6 發挾帶燃燒彈。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
+    evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'kunai',
-    baseDamage: 46,  // 40 時單體 DPS 反而略低於滿級苦無
+    baseDamage: 60,  // 40 時單體 DPS 反而略低於滿級苦無
     baseCooldown: 0.12, // 極致機槍射速
     speed: 800,
     projectiles: 1,
@@ -168,9 +162,9 @@ export const WEAPONS = {
     description: '輪盤化為常駐的金色力場，範圍內的敵人持續受創，並定時放出擊退風暴。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
+    evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'guardian',
-    baseDamage: 60,  // 傷害節奏改由 rehit (0.4s) 控制，單刀要拉高才撐得起超武定位
+    baseDamage: 78,  // 傷害節奏改由 rehit (0.4s) 控制，單刀要拉高才撐得起超武定位
     baseCooldown: 0, // 無 CD，永久旋轉
     duration: 999999,
     spinSpeed: 5.5,
@@ -186,9 +180,9 @@ export const WEAPONS = {
     description: '放出擺尾獵殺的鯊魚魚雷，一路追咬目標，撞上即核爆震動全畫面，每 2 發挾帶劇毒。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
+    evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'rocket',
-    baseDamage: 150,
+    baseDamage: 195,
     baseCooldown: 1.2,  // 1.8 時單體 DPS 反而低於滿級火箭
     speed: 460,
     homing: 3.2,                   // 鯊魚轉彎比飛彈鈍，但會一直追
@@ -204,9 +198,9 @@ export const WEAPONS = {
     description: '拋出藍焰燃油彈，落地後火海沿地面持續擴散，迅速融化怪群。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
+    evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'molotov',
-    baseDamage: 40,  // 滿級燃燒瓶每跳就是 24，超武不能原地踏步
+    baseDamage: 52,  // 滿級燃燒瓶每跳就是 24，超武不能原地踏步
     baseCooldown: 2.0,
     duration: 5.5,
     radius: 140,
@@ -222,9 +216,9 @@ export const WEAPONS = {
     description: '中心一記巨雷，外圈落雷呈星形爆開，並以電光射線連回中心。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
+    evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'lightning',
-    baseDamage: 75,
+    baseDamage: 98,
     baseCooldown: 1.1,
     strikes: 6,                    // 中心 1 + 外圈 5
     starBurst: true,
@@ -239,9 +233,9 @@ export const WEAPONS = {
     description: '量子球在敵群間彈射，每次命中裂變出一顆子球，拖著能量殘影，每 4 顆挾帶冰凍。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
+    evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'soccer',
-    baseDamage: 45,                // 命中裂變 + 敵間彈射，命中數遠多於舊版飛出畫面的球
+    baseDamage: 58,                // 命中裂變 + 敵間彈射，命中數遠多於舊版飛出畫面的球
     baseCooldown: 2.2,
     speed: 700,
     bounces: 10,
@@ -266,14 +260,13 @@ export const WEAPONS = {
     pairPassive: 'guardian',     // 雙武合成：迴力鏢 + 守護輪盤 → 雙刃風暴
     maxLevel: 5,
     baseDamage: 26,
-    damageGrowth: 9,
     baseCooldown: 1.15,
-    cooldownGrowth: -0.08,
+    cooldownGrowth: -0.1,
     speed: 520,
     projType: 'boomerang',
     // 各等級：去程時間（秒）、同時擲出數、穿透、再命中間隔
     outTime: [0.34, 0.36, 0.38, 0.40, 0.42],
-    count: [1, 1, 2, 2, 3],
+    count: [1, 2, 2, 3, 4],
     pierce: [2, 2, 3, 3, 4],
     rehit: 0.45,
   },
@@ -287,9 +280,8 @@ export const WEAPONS = {
     pairPassive: 'atk_scroll',   // 配件滿級即可合成
     maxLevel: 5,
     baseDamage: 58,
-    damageGrowth: 22,
     baseCooldown: 2.6,
-    cooldownGrowth: -0.18,
+    cooldownGrowth: -0.4,
     projType: 'rail_beam',
     range: 900,
     width: [26, 30, 34, 38, 42],
@@ -304,8 +296,8 @@ export const WEAPONS = {
     isEvo: true,
     evoTarget: null,
     maxLevel: 5,
-    evoGrowth: 0.15,             // 覺醒：每級傷害 +15%（見 WeaponManager 的傷害計算）
-    baseDamage: 72,
+    evoGrowth: 0.25,             // 覺醒：每級傷害 +25%（見 WeaponManager 的傷害計算）
+    baseDamage: 94,
     baseCooldown: 0.62,
     speed: 610,
     projType: 'boomerang',
@@ -323,8 +315,8 @@ export const WEAPONS = {
     isEvo: true,
     evoTarget: null,
     maxLevel: 5,
-    evoGrowth: 0.15,
-    baseDamage: 132,
+    evoGrowth: 0.25,
+    baseDamage: 172,
     baseCooldown: 1.25,
     projType: 'rail_beam',
     range: 1200,
@@ -343,11 +335,10 @@ export const WEAPONS = {
     pairPassive: 'kunai',          // 武器+武器合成 (VS 黑白鴿精神)
     maxLevel: 5,
     baseDamage: 22,                // 相位跳躍讓命中率大增，單發傷害相應調低
-    damageGrowth: 7,
     baseCooldown: 1.4,
-    cooldownGrowth: -0.08,
+    cooldownGrowth: -0.12,
     speed: 560,
-    projectiles: [1, 1, 1, 2, 2],
+    projectiles: [1, 2, 2, 3, 4],
     pierce: [2, 2, 3, 4, 5],       // 相位跳躍保證第二刀命中，穿透比直線飛行時少
     charge: { every: 4, effect: 'chain' }, // 每 4 發射出一枚電弧刃
     projType: 'drill',
@@ -365,11 +356,10 @@ export const WEAPONS = {
     pairPassive: 'cdr_battery',
     maxLevel: 5,
     baseDamage: 18,
-    damageGrowth: 6,
     baseCooldown: 1.9,
     duration: 3.2,
     spinSpeed: 4.2,
-    count: [2, 2, 3, 3, 4],
+    count: [2, 3, 4, 5, 6],
     // 貼身護體軌道：緊貼角色旋轉，與守護輪盤的寬軌道明顯區隔
     radius: [34, 40, 46, 52, 58],
     projType: 'saw',
@@ -385,9 +375,9 @@ export const WEAPONS = {
     description: '雙武合體！飛刃從特工周圍的相位裂隙不斷射出，命中後連續相位跳躍，每 8 發挾帶電弧刃。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
+    evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'phase_blade',
-    baseDamage: 45,
+    baseDamage: 58,
     baseCooldown: 0.3,             // 裂隙射出 + 相位跳躍，命中率高，射速相應放慢
     speed: 720,
     projectiles: 1,
@@ -406,9 +396,9 @@ export const WEAPONS = {
     description: '特工身邊生成黑洞奇點，強大引力把大範圍的敵人吸進永續運轉的鋸環。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,   // 覺醒：每級傷害 +15%（超武進化後仍可升級）
+    evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'orbit_saw',
-    baseDamage: 70,  // 同上：軌道更貼身、範圍更小，單刀給得比守護力場高
+    baseDamage: 91,  // 同上：軌道更貼身、範圍更小，單刀給得比守護力場高
     baseCooldown: 0,
     duration: 999999,
     spinSpeed: 6.2,
@@ -433,9 +423,8 @@ export const WEAPONS = {
     pairPassive: 'range_fuel',     // 範圍型武器 ↔ 範圍配件
     maxLevel: 5,
     baseDamage: 30,
-    damageGrowth: 10,
     baseCooldown: 1.8,
-    cooldownGrowth: -0.1,
+    cooldownGrowth: -0.25,
     radius: [110, 120, 135, 150, 165],
     slowDur: 2.0,                  // 比冷卻長：範圍內的敵人會被持續減速（赫爾碎冰也靠這個）
   },
@@ -467,9 +456,9 @@ export const WEAPONS = {
     description: '冰霜脈衝擴張成絕對零度領域，範圍翻倍，命中的雜兵直接凍結。',
     isEvo: true,
     maxLevel: 5,
-    evoGrowth: 0.15,
+    evoGrowth: 0.25,
     baseWeapon: 'frost_nova',
-    baseDamage: 85,
+    baseDamage: 110,
     baseCooldown: 1.2,
     radius: 230,
     slowDur: 2.5,
