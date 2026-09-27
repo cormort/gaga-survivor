@@ -10,18 +10,26 @@ export const MERC = {
   baseCost: 80,     // 首名費用
   costGrowth: 60,   // 每多雇一名更貴
   maxCount: 1,   // 一次最多一名傭兵
-  maxLevel: 5,
-  hpPerLevel: [90, 130, 170, 210, 250],
-  damagePerLevel: [12, 19, 26, 33, 40],
-  baseCooldown: 0.95,   // 隨等級微降
-  range: 250,
+  maxLevel: 10,
+  // 境界成長：只剩一名傭兵，數值比原本三人小隊時代高很多
+  hpBase: 260, hpPerLevel: 90,        // Lv1 260 → Lv10 1070
+  dmgBase: 30, dmgPerLevel: 12,       // Lv1 30  → Lv10 138
+  baseCooldown: 0.85,   // 每升一級 -0.04，最低 0.45
+  range: 280,
   followSpeed: 250,
-  bulletSpeed: 540,
+  bulletSpeed: 560,
+  killExpMul: 1,        // 傭兵親手擊殺：拿全額經驗
+  shareExpMul: 0.15,    // 其他擊殺 (玩家/砲塔)：分到 15%
 };
 
-// 境界：參考修仙境界表，傭兵等級 1~5 對應凡人階段前五境
-export const REALM = ['煉氣期', '築基期', '金丹期', '元嬰期', '化神期'];
-const REALM_COLOR = ['#ff6b5e', '#6ea8ff', '#ffd166', '#ffe45e', '#e8e8e8'];
+// 升到下一境界所需經驗 (跨局累積，存在 save.data.merc)
+export function mercNextExp(level) {
+  return Math.round(30 * Math.pow(level, 1.5));
+}
+
+// 境界：參考修仙境界表，傭兵等級 1~10 對應凡人／仙人階段前十境
+export const REALM = ['煉氣期', '築基期', '金丹期', '元嬰期', '化神期', '煉虛期', '合體期', '大乘期', '渡劫期', '地仙境'];
+const REALM_COLOR = ['#ff6b5e', '#6ea8ff', '#e8e8e8', '#ffe45e', '#e8e8e8', '#c77dff', '#ffd166', '#e8e8e8', '#3ddc84', '#ff6b5e'];
 
 // 六脈弟子 (貼圖 = 修仙角色)，雇用時隨機抽一脈；qi = 劍氣顏色
 const SECTS = [
@@ -81,13 +89,14 @@ const FORMATION = [
 ];
 
 export class Mercenary {
-  constructor(x, y, index = 0) {
+  // progress = save.data.merc ({ level, exp })：同一個物件，經驗直接寫回存檔
+  constructor(x, y, index = 0, progress = { level: 1, exp: 0 }) {
     this.x = x;
     this.y = y;
     this.index = index;
-    this.level = 1;
-    this.exp = 0;
-    this.maxHp = MERC.hpPerLevel[0];
+    this.progress = progress;
+    this.onLevelUp = null;
+    this.maxHp = this.statHp();
     this.hp = this.maxHp;
     this.fireCd = 0.6;
     this.angle = Math.PI;       // 槍口指向 (索敵時更新)
@@ -97,8 +106,20 @@ export class Mercenary {
     this.sect = SECTS[Math.floor(Math.random() * SECTS.length)];
   }
 
+  get level() {
+    return Math.max(1, Math.min(MERC.maxLevel, this.progress.level || 1));
+  }
+
+  get exp() {
+    return this.progress.exp || 0;
+  }
+
+  statHp() {
+    return MERC.hpBase + MERC.hpPerLevel * (this.level - 1);
+  }
+
   get damage() {
-    return MERC.damagePerLevel[this.level - 1] || MERC.damagePerLevel[MERC.damagePerLevel.length - 1];
+    return MERC.dmgBase + MERC.dmgPerLevel * (this.level - 1);
   }
 
   get qiColor() {
@@ -106,24 +127,33 @@ export class Mercenary {
   }
 
   get cooldown() {
-    return Math.max(0.6, MERC.baseCooldown - 0.05 * (this.level - 1));
+    return Math.max(0.45, MERC.baseCooldown - 0.04 * (this.level - 1));
   }
 
   nextExp() {
-    return this.level * 3; // Lv1 殺 3 隻升 2，依此類推
+    return mercNextExp(this.level);
   }
 
-  // 傭兵親手擊殺敵人時由主迴圈呼叫
-  gainKill() {
-    this.exp++;
-    if (this.exp >= this.nextExp() && this.level < MERC.maxLevel) {
-      this.exp -= this.nextExp();
-      this.level++;
+  // 累積經驗 (跨局保存)；經驗滿自動突破下一境界，並補滿新增的血量
+  gainExp(n) {
+    if (this.level >= MERC.maxLevel) return;
+    const pr = this.progress;
+    pr.exp = (pr.exp || 0) + n;
+    while (pr.exp >= mercNextExp(this.level) && this.level < MERC.maxLevel) {
+      pr.exp -= mercNextExp(this.level);
+      pr.level = this.level + 1;
       const prevMax = this.maxHp;
-      this.maxHp = MERC.hpPerLevel[this.level - 1];
+      this.maxHp = this.statHp();
       this.hp = Math.min(this.maxHp, this.hp + (this.maxHp - prevMax));
       sound.playGem();
+      this.onLevelUp?.(this);
     }
+    if (this.level >= MERC.maxLevel) pr.exp = 0;
+  }
+
+  // 傭兵親手擊殺
+  gainKill(enemy) {
+    this.gainExp(((enemy && enemy.exp) || 1) * MERC.killExpMul * (enemy && enemy.isBoss ? 3 : 1));
   }
 
   update(dt, player, enemies, onFire) {
@@ -220,6 +250,12 @@ export class Mercenary {
     ctx.beginPath();
     ctx.roundRect(-barW / 2, -33, barW * pct, 3, 1.5);
     ctx.fill();
+    // 經驗條 (境界進度)
+    const ep = this.level >= MERC.maxLevel ? 1 : Math.min(1, this.exp / this.nextExp());
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(-barW / 2, -29, barW, 2);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillRect(-barW / 2, -29, barW * ep, 2);
     ctx.font = 'bold 9px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';

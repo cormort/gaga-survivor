@@ -2057,7 +2057,7 @@ class Game {
         // 存進投射物就沒有人讀，_markedTimer 只會被扣、永遠不會被設)
         if (p.markOnHit) enemy.applyMark(p.markDur, p.markBonus);
         const died = enemy.takeDamage(actualDmg, p.knockback, p.x, p.y);
-        if (died && p.mercOwner) p.mercOwner.gainKill(); // 傭兵擊殺 → 經驗升級
+        if (died && p.mercOwner) p.mercOwner.gainKill(enemy); // 傭兵擊殺 → 全額經驗
         this.weaponManager.recordDamage(p.weaponId, actualDmg);
         this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit);
         sound.playHit(enemy.x);
@@ -2248,6 +2248,8 @@ class Game {
           this.triggerHitstop(0.035);
         }
         this.player.character.onKill?.(enemy, this);
+        // 任何擊殺都分一點經驗給隨行傭兵 (跨局累積)
+        for (const m of this.mercenaries) m.gainExp((enemy.exp || 1) * MERC.shareExpMul);
         this.particles.createDeathParticles(enemy.x, enemy.y, enemy.color, enemy.isBoss ? 28 : 8);
 
         // 地面殘跡：雜兵死亡留血漬 (Soulstone 風格視覺回饋)
