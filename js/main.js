@@ -1546,7 +1546,7 @@ class Game {
     const mobTarget = this.core && this.mode.enemyTarget === 'core' ? this.core : this.player;
     for (const enemy of this.enemies) {
       if (enemy.isDead) continue;
-      const tdTarget = this.td && enemy.path ? this.td.targetFor(enemy, mobTarget) : null;
+      const tdTarget = this.td && enemy.path ? this.td.targetFor(enemy, mobTarget, dt) : null;
       // 守塔關的首領也沿路線走（tdTarget）；其餘模式的首領照舊追玩家
       enemy.update(dt, tdTarget || (enemy.isBoss ? this.player : mobTarget), {
         onExplode: (boomer) => {

@@ -646,11 +646,11 @@ export class Projectile {
     ctx.globalAlpha = 0.55;
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.moveTo(0, -3); ctx.lineTo(-34, 0); ctx.lineTo(0, 3);
+    ctx.moveTo(0, -5); ctx.lineTo(-48, 0); ctx.lineTo(0, 5);
     ctx.closePath();
     ctx.fill();
     ctx.globalAlpha = 1;
-    drawFlyingSword(ctx, 1, qi, 1);
+    drawFlyingSword(ctx, 1.4, qi, 1);   // 放大：飛劍要看得見
   }
 
   drawKunai(ctx) {
