@@ -18,6 +18,7 @@
 // (4000/3 ≈ 1334²)，但道路/板塊/渠道的邊緣銳利度明顯提升 (放大倍率從 4× 降到 3×)。
 import { worldBounds } from '../config.js';
 import { onPath } from '../tdlevels.js';
+import { LevelCache } from './LevelCache.js';
 
 const SCALE = 3;
 const LANDMARK_SPRITE = new Map();   // key: `${kind}:${seed}` → canvas
@@ -39,7 +40,7 @@ function levelSeed(id) {
   return s;
 }
 
-const macroCache = new Map();
+const macroCache = new LevelCache();   // 宏觀地形層：每關約 2.2~2.8 MB，只留最近 3 關
 
 // 地形磚邊長的目標值（世界單位）。實際邊長取「關卡格距的整數倍」最接近這個值的數字，
 // 道路／渠道的格線才會在磚與磚的接縫處對齊。
@@ -594,7 +595,7 @@ export function drawLandmarks(ctx, camera, level, vw, vh) {
 // 「同一張圖 8 分鐘不變」也是單調的來源之一。這裡烘一片稀疏的餘燼/裂痕磚，
 // 疊在宏觀層之上，透明度隨遊戲時間上升 —— 開局乾淨、越接近終局越殘破。
 const ESCALATE_TILE = 512;
-const escalateCache = new Map();
+const escalateCache = new LevelCache();   // 劣化磚：每關 512² ≈ 1 MB，只留最近 3 關
 
 function getEscalateTile(level) {
   const id = (level && level.id) || 'street';
@@ -668,4 +669,23 @@ export function drawTerrain(ctx, camera, level, vw, vh, gameTime = 0) {
   drawMacro(ctx, camera, level, vw, vh);
   drawLandmarks(ctx, camera, level, vw, vh);
   drawEscalation(ctx, camera, level, vw, vh, gameTime);
+}
+
+// 觀測用：這一層的兩個關卡快取目前佔了幾關、是哪幾關。
+// 為什麼要開這個出口：它們是模組層變數，測試腳本從 game 物件上完全看不到，
+// 只能靠「畫布張數有沒有收斂」間接猜 —— 那沒辦法區分「快取正常運作」與
+// 「根本沒在烘」。回傳的是即時參照，呼叫端只讀不寫。
+export function terrainCacheInfo() {
+  return {
+    macro: { size: macroCache.size, keys: macroCache.keys, keep: macroCache.keep },
+    escalate: { size: escalateCache.size, keys: escalateCache.keys, keep: escalateCache.keep },
+  };
+}
+
+// 清掉這一層的快取。給「換關卡時釋放前一關資源」與量測冷啟動成本用。
+// 快取本身已經有容量上限，所以這不是必要的清理路徑 —— 但換關時主動放掉
+// 上一關的畫布（每關 3 MB 上下）能讓峰值記憶體更低。
+export function clearTerrainCache() {
+  macroCache.clear();
+  escalateCache.clear();
 }

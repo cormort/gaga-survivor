@@ -10,6 +10,7 @@
 import { GAME_CONFIG, FX, isWorldBounded } from '../config.js';
 import { LEVELS } from '../levels.js';
 import { drawTerrain } from './Terrain.js';
+import { LevelCache } from './LevelCache.js';
 import { makeFbm, reliefDot, bevelRect, reliefCrack, starPoint } from './Texture.js';
 
 // 地表大面積汙漬／底層起伏的「壓暗係數」（1 = 不動）。
@@ -67,8 +68,16 @@ function isDarkTone(rgb) {
 
 export class GroundRenderer {
   constructor() {
-    this.textures = null;      // 各關地表磚 (key = level id)
+    // 地表磚改用 LevelCache（容量 3 關）：每張 1024² ≈ 4 MB，只增不減的話
+    // 把 11 關都玩過會累積到 44 MB。
+    this._groundTextures = new LevelCache();
     this.entityContrast = ENTITY_CONTRAST;
+  }
+
+  // 清掉地表磚快取。主要給「量測冷啟動成本」與未來的換關釋放路徑用 ——
+  // 快取本身已經有容量上限，不清也不會無限成長。
+  clearTextureCache() {
+    this._groundTextures.clear();
   }
 
   drawColorGrade(ctx, vw, vh, level) {
@@ -231,7 +240,8 @@ export class GroundRenderer {
   // levels.js theme.ground.motif / material 資料決定。
   getGroundTexture(level) {
     const id = (level && level.id) || 'street';
-    if (this._groundTextures && this._groundTextures[id]) return this._groundTextures[id];
+    const hit = this._groundTextures.get(id);
+    if (hit) return hit;
 
     // 世界錨定的接縫消除：先把細節畫在一片比成品大 2×PAD 的畫布上，
     // 再裁出中央區塊當磚。跨磚界的柔光汙漬光暈照常接合，不會出現週期接縫。
@@ -322,8 +332,9 @@ export class GroundRenderer {
     const tile = document.createElement('canvas');
     tile.width = tile.height = T;
     tile.getContext('2d').drawImage(big, P, P, T, T, 0, 0, T, T);
-    if (!this._groundTextures) this._groundTextures = {};
-    this._groundTextures[id] = tile;
+    // LevelCache：只保留最近 LEVEL_CACHE_KEEP 關的地表磚（每張 1024² ≈ 4 MB）。
+    // 同一關重複玩完全命中，把 11 關都玩過也不會累積到 44 MB。
+    this._groundTextures.set(id, tile);
     return tile;
   }
 
