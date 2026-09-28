@@ -380,10 +380,16 @@ export function refreshLevelSelect(game) {
   // 難度下拉 (原生 select)：選項標出 DNA 倍率，下方即時說明實際影響的規則倍率。
   const sel = document.getElementById('difficulty-select');
   if (sel) {
-    if (!sel.options.length) {
-      sel.innerHTML = Object.entries(DIFFICULTIES)
-        .map(([k, d]) => `<option value="${k}">${d.name} (DNA ×${d.dnaMult || 1})</option>`).join('');
-      sel.value = DIFFICULTIES[save.data.difficulty] ? save.data.difficulty : 'normal';
+    // 每次回到選單都重建：通關後可能剛解鎖新難度
+    sel.innerHTML = Object.entries(DIFFICULTIES).map(([k, d], i, all) => {
+      if (save.difficultyUnlocked(k)) return `<option value="${k}">${d.name} (DNA ×${d.dnaMult || 1})</option>`;
+      const pr = save.difficultyProgress(k);
+      return `<option value="${k}" disabled>🔒 ${d.name} (DNA ×${d.dnaMult || 1})｜${all[i - 1][1].name}全通關 ${pr.done}/${pr.total}</option>`;
+    }).join('');
+    const want = DIFFICULTIES[save.data.difficulty] && save.difficultyUnlocked(save.data.difficulty) ? save.data.difficulty : 'easy';
+    sel.value = want;
+    if (!sel.dataset.bound) {
+      sel.dataset.bound = '1';
       sel.addEventListener('change', () => {
         save.set({ difficulty: sel.value });
         sound.playGem();

@@ -35,6 +35,19 @@ async function probe(width, height, mobile, label) {
   await page.waitForFunction(() => window.game, undefined, { timeout: 30000 });
   await page.waitForTimeout(600);
 
+  // 難度逐級開放：全新存檔只有最簡單的難度可選
+  const fresh = await page.evaluate(() => [...document.getElementById('difficulty-select').options]
+    .map((o) => `${o.value}:${o.disabled ? 'locked' : 'open'}`));
+  ok(`${label}：全新存檔只開放「輕鬆」，其餘難度上鎖並顯示進度`,
+    fresh[0] === 'easy:open' && fresh.slice(1).every((t) => t.endsWith(':locked')), fresh.join(' '));
+  // 其餘檢查模擬「全部難度都已解鎖」的存檔
+  await page.evaluate(() => localStorage.setItem('gaga_save', JSON.stringify({
+    diffClears: {}, diffUnlocked: ['easy', 'normal', 'hard', 'nightmare', 'hell'],
+  })));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.game, undefined, { timeout: 30000 });
+  await page.waitForTimeout(600);
+
   const view = await page.evaluate(() => {
     const sel = document.getElementById('difficulty-select');
     const btn = document.getElementById('btn-start-game');

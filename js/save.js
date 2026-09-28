@@ -6,7 +6,11 @@ import { SLOT_ORDER, salvageValue, salvageGold, reforgeCost, rerollAffixes, FUSI
 // 倉庫基礎容量也住在黑市（擴建成本要從它算第幾次擴建），這裡再匯出給既有的讀者
 import { MAX_BOOSTER_STACK, STASH_CAP } from './shop.js';
 // 舊存檔的解鎖鏈修補需要關卡表（levels.js 是純資料、不 import 任何模組，不會循環）
-import { LEVELS } from './levels.js';
+import { LEVELS, LEVEL_ORDER, DIFFICULTIES } from './levels.js';
+
+// 難度逐級開放：前一個難度把所有關卡（無盡除外）各通關一次，才解鎖下一個難度
+export const DIFF_ORDER = Object.keys(DIFFICULTIES);
+export const DIFF_REQUIRED_LEVELS = LEVEL_ORDER.filter((id) => id !== 'endless');
 // 珠寶是純資料檔（不 import 任何模組），不會循環
 import { JEWELS, jewelValue } from './jewels.js';
 import { CODEX_MILESTONES, codexProgress } from './codex.js';
@@ -42,6 +46,8 @@ function blank() {
     equipped: {},           // 已穿裝備 { slotKey: itemId }
     unlocked: { survivor: ['street', 'inkmount'], defense: ['street', 'inkmount'] }, // 已解鎖關卡 (依模式)；水墨仙山開局即開放
     unlockedChars: ['duck'], // 已解鎖特工
+    // difficulty / diffClears / diffUnlocked 刻意不放在這裡（同 codex）：由 ensureDefaults 建立，
+    // 才分得出「舊存檔」與「新玩家」—— 舊存檔保留原本能選的難度，新玩家從最簡單開始。
     best: { survivor: {}, defense: {} }, // { modeId: { levelId: { time, kills, cleared } } }
     character: 'duck',
     mode: 'survivor',       // 上次選的模式
@@ -117,6 +123,16 @@ function ensureDefaults(d) {
   if (!d.talents || typeof d.talents !== 'object') d.talents = {};
   if (!d.charLevels || typeof d.charLevels !== 'object') d.charLevels = {};
   if (!d.merc || typeof d.merc !== 'object') d.merc = { level: 1, exp: 0 };
+  // 難度逐級開放：舊存檔（已有遊玩紀錄）保留「到目前所選難度為止」都可選，不把人鎖在外面
+  if (!d.diffClears || typeof d.diffClears !== 'object') {
+    d.diffClears = {};
+    const played = Object.values(d.best || {}).some((m) => m && Object.keys(m).length > 0);
+    const cur = DIFF_ORDER.indexOf(d.difficulty || 'normal');   // 舊版預設是標準
+    d.diffUnlocked = played ? DIFF_ORDER.slice(0, Math.max(1, cur + 1)) : [];
+    if (!played) d.difficulty = 'easy';
+  }
+  if (!DIFFICULTIES[d.difficulty]) d.difficulty = 'easy';
+  if (!Array.isArray(d.diffUnlocked)) d.diffUnlocked = [];
   if (!Array.isArray(d.stash)) d.stash = [];
   if (!d.jewels || typeof d.jewels !== 'object') d.jewels = {};
   if (!d.codex || typeof d.codex !== 'object') {
@@ -560,6 +576,33 @@ export const save = {
     }
     this.flush();
     return { dna, isRecord: false, unlockedNew: false };
+  },
+
+  // 難度是否可選：第一個難度永遠開放；其餘要前一個難度全部關卡通關（或舊存檔保留）
+  difficultyUnlocked(diff) {
+    const i = DIFF_ORDER.indexOf(diff);
+    if (i <= 0) return i === 0;
+    if (this.data.diffUnlocked.includes(diff)) return true;
+    const prev = this.data.diffClears[DIFF_ORDER[i - 1]] || {};
+    return DIFF_REQUIRED_LEVELS.every((id) => prev[id]);
+  },
+
+  // 前一難度還差幾關 (選單提示用)
+  difficultyProgress(diff) {
+    const i = DIFF_ORDER.indexOf(diff);
+    const prev = i > 0 ? (this.data.diffClears[DIFF_ORDER[i - 1]] || {}) : {};
+    return { done: DIFF_REQUIRED_LEVELS.filter((id) => prev[id]).length, total: DIFF_REQUIRED_LEVELS.length };
+  },
+
+  // 通關後記錄；回傳因此新解鎖的難度 id（沒有則 null）
+  recordDifficultyClear(diff, levelId) {
+    if (!DIFF_REQUIRED_LEVELS.includes(levelId) || !DIFFICULTIES[diff]) return null;
+    const next = DIFF_ORDER[DIFF_ORDER.indexOf(diff) + 1];
+    const before = next ? this.difficultyUnlocked(next) : true;
+    if (!this.data.diffClears[diff]) this.data.diffClears[diff] = {};
+    this.data.diffClears[diff][levelId] = 1;
+    this.flush();
+    return next && !before && this.difficultyUnlocked(next) ? next : null;
   },
 
   recordDailyRun({ date, time, cleared }) {
