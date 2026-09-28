@@ -3214,6 +3214,11 @@ class Game {
     // 全域色調 overlay (Soulstone 風格調光：場景染上關卡色，角色保持原色)
     this.ground.drawColorGrade(this.ctx, this.vw, this.vh, this.level || LEVELS.street);
 
+    // 對比層：地板這一層（地面＋裝飾＋殘跡＋色調）整體壓暗一階，之後才畫實體。
+    // 實體 sprite 已有烘焙好的深色外框，但那只是「與相鄰像素」的局部對比；
+    // 地板若與角色同亮度，雜兵成群時剪影就會糊在一起。成本固定一次 fillRect。
+    this.ground.applyEntityContrast(this.ctx, this.vw, this.vh, this.level || LEVELS.street);
+
     // 繪製掉落物
     for (const item of this.dropItems) {
       item.draw(this.ctx, renderCam);
@@ -3295,8 +3300,112 @@ class Game {
       ctx.fillRect(0, 0, this.vw, this.vh);
     }
 
+    // 守塔模式的專屬指示 (威脅來向箭頭 + 核心危急的畫面回饋)
+    this.drawDefenseIndicators(renderCam);
+
     // 小地圖
     this.drawMinimap();
+  }
+
+
+  // 守塔模式的畫面資訊層。
+  //
+  //   1. 核心危急時只有中央一條血條在變紅，玩家若正在畫面另一側清怪就不會察覺。
+  //      這裡補一圈低頻脈動的紅暈，用餘光就看得見。
+  //   2. 威脅來向箭頭：只在「沒有固定路線」的守塔關卡才畫。固定路線的關卡
+  //      （js/tdlevels.js 的 td_*）路線本身就是來向指示 —— 而且 td_* 的怪一律從
+  //      入口沿路走向核心，畫箭頭只是重複路線已經說過的資訊，還會壓到頂部 HUD。
+  //
+  // 成本：一次線性掃描 enemies（不做排序以外的額外配置），且只有守塔模式才跑。
+  drawDefenseIndicators(camera) {
+    if (!this.core || this.mode.enemyTarget !== 'core') return;
+    const ctx = this.ctx;
+    const core = this.core;
+    // 邊緣留白刻意大於 HUD 高度：箭頭若壓在頂部狀態列上，玩家讀到的是「HUD 壞了」
+    // 而不是「那邊有敵人」。
+    const m = 64;
+    // 只有「真的在畫面外」的敵人才需要方向指示；核心附近的可見敵人用眼睛看就好。
+    const visible = (x, y) => x > -24 && x < this.vw + 24 && y > -24 && y < this.vh + 24;
+    const hasLanes = !!(this.level && this.level.paths && this.level.paths.length);
+
+    // 核心危急：邊緣紅暈 (與 Boss 大招的 redFlash 疊加，取較強者)
+    if (core.status === 'critical') {
+      const beat = 0.55 + 0.45 * Math.sin(this.gameTime * 4.5);
+      const a = 0.16 + beat * 0.14;
+      const g = ctx.createRadialGradient(
+        this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.3,
+        this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.72);
+      g.addColorStop(0, 'rgba(255,0,60,0)');
+      g.addColorStop(1, `rgba(255,0,60,${a.toFixed(3)})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, this.vw, this.vh);
+    }
+
+    // 威脅來向（僅無固定路線的守塔關卡）：掃描畫面外的敵人（上限 120 隻），
+    // 依「相對核心的角度」聚合成最多 3 個箭頭，箭頭上的數字是該方向的敵人數。
+    if (hasLanes) return;
+    const groups = new Map();
+    let considered = 0;
+    for (const e of this.enemies) {
+      if (e.isDead || e.isBoss) continue;
+      if (considered++ > 120) break;          // 硬上限：不隨敵人數無限成長
+      if (visible(e.x - camera.x, e.y - camera.y)) continue;
+      const key = `${Math.round(Math.atan2(e.y - core.y, e.x - core.x) / 0.45)}`;
+      const d = (e.x - core.x) ** 2 + (e.y - core.y) ** 2;
+      const cur = groups.get(key);
+      if (cur) { cur.n++; if (d < cur.d) { cur.d = d; } }
+      else groups.set(key, { x: e.x, y: e.y, n: 1, d });
+    }
+    if (groups.size === 0) return;
+
+    const list = [...groups.values()].sort((a, b) => a.d - b.d).slice(0, 3);
+    const cx = this.vw / 2;
+    const cy = this.vh / 2;
+    // 右側留白加大：那條直欄是技能／道具／搖桿的固定操作區，箭頭壓上去會蓋住
+    // 玩家正在按的按鈕。手機版該欄佔比更高，所以用畫面比例而不是固定值。
+    const mRight = Math.max(m, Math.min(this.vw * 0.2, 176));
+    for (const g of list) {
+      const dirX = g.x - camera.x - cx;
+      const dirY = g.y - camera.y - cy;
+      const len = Math.hypot(dirX, dirY) || 1;
+      const ux = dirX / len;
+      const uy = dirY / len;
+      // 把方向射線夾到「畫面內縮」的矩形邊界：水平往右時用較大的右側留白
+      const halfW = ux >= 0 ? this.vw / 2 - mRight : this.vw / 2 - m;
+      const t = Math.min(halfW / Math.abs(ux || 1e-6), (this.vh / 2 - m) / Math.abs(uy || 1e-6));
+      const ax = cx + ux * t;
+      const ay = cy + uy * t;
+      const ang = Math.atan2(uy, ux);
+      const warm = g.d < 900 * 900;           // 900 單位內視為「快到了」
+
+      ctx.save();
+      ctx.translate(ax, ay);
+      ctx.rotate(ang);
+      ctx.fillStyle = warm ? 'rgba(255,59,92,0.95)' : 'rgba(255,183,3,0.85)';
+      ctx.beginPath();
+      ctx.moveTo(24, 0);
+      ctx.lineTo(-10, -15);
+      ctx.lineTo(-4, 0);
+      ctx.lineTo(-10, 15);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(4,6,12,0.9)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      if (g.n > 1) {
+        ctx.rotate(-ang);
+        ctx.font = '900 13px "Chakra Petch", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = 'rgba(4,6,12,0.9)';
+        ctx.strokeText(String(g.n), -26, 0);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(String(g.n), -26, 0);
+      }
+      ctx.restore();
+    }
   }
 
 
@@ -3353,14 +3462,17 @@ class Game {
     const ox = this.vw - size - pad;
     const oy = this.vh - size - pad;
 
-    // 以玩家為中心的局部視野。整張地圖 4000 單位縮到 136px 的話所有東西會擠成一團，
-    // 只顯示周圍 RANGE 單位才看得出敵人分佈與 Boss 方位。
+    // 以「守塔目標」為中心的局部視野。整張地圖 4000 單位縮到 136px 的話所有東西
+    // 會擠成一團，只顯示周圍 RANGE 單位才看得出敵人分佈與 Boss 方位。
+    // 守塔模式改成以基地核心為中心：這個模式要守的是核心，小地圖以玩家為中心時
+    // 反而看不出「哪一側正在被圍」。
     const RANGE = 1300;
     const k = size / (RANGE * 2);
     const cx = ox + size / 2;
     const cy = oy + size / 2;
-    const toX = (wx) => cx + (wx - this.player.x) * k;
-    const toY = (wy) => cy + (wy - this.player.y) * k;
+    const anchor = this.core || this.player;
+    const toX = (wx) => cx + (wx - anchor.x) * k;
+    const toY = (wy) => cy + (wy - anchor.y) * k;
 
     ctx.save();
     ctx.fillStyle = 'rgba(6, 10, 18, 0.72)';
@@ -3396,6 +3508,23 @@ class Game {
     for (const d of this.dropItems) {
       if (d.type === 'exp') continue;
       ctx.fillRect(toX(d.x) - 1.5, toY(d.y) - 1.5, 3, 3);
+    }
+
+    // 基地核心：不論多大場面都要一眼找到自己家在畫面哪個方位
+    if (this.core) {
+      const crit = this.core.status === 'critical';
+      const beat = 0.55 + 0.45 * Math.abs(Math.sin(this.gameTime * 5));
+      const kx = toX(this.core.x);
+      const ky = toY(this.core.y);
+      ctx.fillStyle = crit ? `rgba(255,59,92,${(0.5 + beat * 0.5).toFixed(3)})` : '#ffd60a';
+      ctx.beginPath();
+      ctx.arc(kx, ky, crit ? 5 + beat * 2 : 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = crit ? 'rgba(255,59,92,0.9)' : 'rgba(255,214,10,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(kx, ky, crit ? 9 + beat * 3 : 8, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     // 敵人

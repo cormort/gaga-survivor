@@ -1214,8 +1214,10 @@ export class UIManager {
     this.coreHud.classList.remove('hidden');
     const pct = Math.max(0, (core.hp / core.maxHp) * 100);
     this.coreHpFill.style.width = `${pct}%`;
-    // 危險時整條轉紅提示
-    this.coreHud.classList.toggle('danger', pct < 30);
+    // 危險時整條轉紅提示。門檻與 Core.status 的 CRIT_PCT 對齊 (35%)——
+    // 原本的 30% 會出現「核心在畫面裡已經轉紅、HUD 卻還是正常色」的兩套說法。
+    this.coreHud.classList.toggle('danger', pct <= 35);
+    this.coreHud.classList.toggle('critical', pct <= 20);
     this.coreHpText.textContent = Math.ceil(core.hp);
   }
 

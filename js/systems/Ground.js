@@ -12,9 +12,63 @@ import { LEVELS } from '../levels.js';
 import { drawTerrain } from './Terrain.js';
 import { makeFbm, reliefDot, bevelRect, reliefCrack, starPoint } from './Texture.js';
 
+// 地表大面積汙漬／底層起伏的「壓暗係數」（1 = 不動）。
+// 由 getGroundTexture 依關卡底色亮度換算：亮底用 DARK_BLOB_MUL、近黑底回到 1。
+//
+// 為什麼要分關卡而不是一刀砍：暗塊有兩個作用 —— 在亮底（商業街、實驗室）上
+// 它是一團糊，在近黑的底（虛空迴廊、無盡裂界）上它卻是這關地表唯一的低頻結構，
+// 也是「兩關長得不一樣」的來源之一（verify-levels 的 D15b 就在量這件事）。
+const DARK_BLOB_MUL = 0.5;
+
+// 壓暗「地板＋裝飾」的最終對比層（0 = 不壓）。見 GroundRenderer.applyEntityContrast。
+//
+// 這條門檻是量出來的，不是猜的：把「地板這一層」整體壓暗會讓所有實體從背景
+// 浮出來，但也會把所有暗色關卡一起推向黑 —— 實測（tools/gfx-signature-scan.js）
+// 對 voidroad↔endless 這種同為近黑底的關卡，地表簽章差會從 9.3% 掉到 2.2%，
+// verify-levels 的 D15b「任兩關地表不得相似 > 5%」當場變紅。
+// 所以對比層只給「相對亮」的關卡用；近黑底靠 sprite 自己的深色外框與邊光就夠。
+export const ENTITY_CONTRAST = 0.16;
+
+// 地表磚的底色亮度對照（0~255，見 topLuminance）。實測 11 關落在 11.8~24.5 之間，
+// 這條界線把「有壓暗」與「不壓暗」分在 endless(15.6)/foundry(16.2) 與
+// street(18.6) 之間。
+const CONTRAST_MIN_LUM = 16.4;
+
+// 關卡底色的概略亮度（0~255）：取 theme 的 top/mid/bottom 三段的平均。
+// 只當「這關是不是近黑底」的粗略指標，不需要色彩管理級的精確度。
+export function topLuminance(theme) {
+  if (!theme) return 0;
+  const hexLum = (hex) => {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return 0;
+    const n = parseInt(m[1], 16);
+    return 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+  };
+  const v = [theme.top, theme.mid, theme.bottom].map(hexLum);
+  return (v[0] + v[1] + v[2]) / 3;
+}
+
+// 0 = 近黑底（保留原始對比）、1 = 較亮底（可以放心壓暗）
+function brightnessFactor(theme) {
+  return topLuminance(theme) >= CONTRAST_MIN_LUM ? 1 : 0;
+}
+
+// 顏色字串 "r,g,b" 是否為「暗且近無彩度」。用於只減弱壓暗型的大面積團塊 ——
+// 彩色（霓虹、血跡、岩漿）與亮色一律原樣保留。
+function isDarkTone(rgb) {
+  const p = String(rgb).split(',');
+  if (p.length < 3) return false;
+  const r = +p[0], g = +p[1], b = +p[2];
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return false;
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+  return lum < 96 && chroma < 40;
+}
+
 export class GroundRenderer {
   constructor() {
     this.textures = null;      // 各關地表磚 (key = level id)
+    this.entityContrast = ENTITY_CONTRAST;
   }
 
   drawColorGrade(ctx, vw, vh, level) {
@@ -30,6 +84,23 @@ export class GroundRenderer {
     ctx.fillRect(0, 0, this.vw, this.vh);
   }
 
+  // 把已經畫好的「地板＋裝飾＋地面殘跡」整體壓暗一階，之後才畫實體。
+  // 敵人／砲塔／掉落物的 sprite 已經烘了深色外框，但那是與相鄰像素的局部對比；
+  // 整片地板若與角色同亮度，一群雜兵疊在一起時剪影就糊掉了。這一步等於替所有
+  // 實體墊一層「舞台燈」，成本是一個 fillRect，與場上實體數量無關。
+  //
+  // 只對「相對亮」的關卡生效（見 brightnessFactor 的說明）：近黑底的地板本來就
+  // 比角色暗得多，再壓暗只是把所有暗色關卡一起推向黑，反而讓同色系的關卡
+  // 越長越像 —— verify-levels 的 D15b 就是在量這件事。
+  applyEntityContrast(ctx, vw, vh, level) {
+    const base = this.entityContrast;
+    if (!(base > 0)) return;
+    const a = base * brightnessFactor((level || this.level || LEVELS.street).theme);
+    if (!(a > 0.004)) return;
+    ctx.fillStyle = `rgba(2,5,12,${a.toFixed(3)})`;
+    ctx.fillRect(0, 0, vw, vh);
+  }
+
   drawVignette(ctx, vw, vh, level) {
     this.ctx = ctx; this.vw = vw; this.vh = vh; this.level = level;
     // ponytail: 暗角烘焙進離屏 canvas，每幀只做一次 drawImage
@@ -41,13 +112,16 @@ export class GroundRenderer {
       oc.width = Math.max(1, Math.round(this.vw));
       oc.height = Math.max(1, Math.round(this.vh));
       const octx = oc.getContext('2d');
+      // 暗角從 0.28/0.72 收到 0.20/0.46：邊緣壓暗原本吃掉整個畫面四角，
+      // 關卡主題 vignette 乘數最高到 1.3 (沙暴) 時四角幾乎全黑，遠處的敵人
+      // 一走進邊緣就消失。同樣保留「聚光在中央」的讀法，但不再吃掉視野。
       const g = octx.createRadialGradient(
-        this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.22,
-        this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.72
+        this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.26,
+        this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.76
       );
       g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(0.6, `rgba(0,0,0,${(0.28 * vigMult).toFixed(3)})`);
-      g.addColorStop(1, `rgba(0,0,0,${(0.72 * vigMult).toFixed(3)})`);
+      g.addColorStop(0.6, `rgba(0,0,0,${(0.20 * vigMult).toFixed(3)})`);
+      g.addColorStop(1, `rgba(0,0,0,${(0.46 * vigMult).toFixed(3)})`);
       octx.fillStyle = g;
       octx.fillRect(0, 0, oc.width, oc.height);
       this._vigCanvas = oc;
@@ -200,6 +274,13 @@ export class GroundRenderer {
     const grainMul = dens.grain != null ? dens.grain : 1;
     const accentMul = dens.accents != null ? dens.accents : 1;
 
+    // 暗塊的減弱幅度依「關卡底色有多暗」決定，而不是一律砍半（見 brightnessFactor）。
+    // 為什麼要分關卡：暗塊有兩個作用 —— 在亮底（商業街、實驗室）上它是一團糊，
+    // 在近黑的底（虛空迴廊、無盡裂界）上它卻是這關地表唯一的低頻結構，也是
+    // 「兩關長得不一樣」的來源之一（verify-levels 的 D15b 就在量這件事：
+    // 一律砍半會讓 voidroad↔endless 的簽章差從 7.8% 掉到 2.5%）。
+    const darkMul = DARK_BLOB_MUL + (1 - DARK_BLOB_MUL) * (1 - brightnessFactor(level.theme));
+
     // 0) 材質底層：整張磚鋪一層低頻明暗起伏與微顆粒。
     // 為什麼需要：磚原本大部分是「透明」的，畫面上的地表其實是螢幕鎖定的底色
     // 漸層，材質只出現在細節處 → 看起來平、而且底色漸層不隨世界移動。
@@ -221,7 +302,7 @@ export class GroundRenderer {
           const px = x + r * cell * 2.6 - cell * 0.8;
           const py = y + h(cx, cy, 2) * cell * 2.6 - cell * 0.8;
           const rad = (90 + r * 170) * stainRadiusMul;
-          this._noiseBlob(bx, px, py, rad, nl, 0.0042, p.c, p.a, 15);
+          this._noiseBlob(bx, px, py, rad, nl, 0.0042, p.c, p.a, 15, darkMul);
         }
 
         // 2) 專屬地表紋理 (每格 1-2 筆，密度可調；r3 提供形狀/角度/鏡射變化)
@@ -326,13 +407,19 @@ export class GroundRenderer {
 
   // 有機色塊：輪廓由 fBm 調變（不是圓），填入柔邊的徑向漸層。
   // points 越多輪廓越圓滑；freq 是雜訊頻率（越小團塊越大）。
-  _noiseBlob(ctx, cx, cy, baseR, nl, freq, rgb, alpha, points = 14) {
+  _noiseBlob(ctx, cx, cy, baseR, nl, freq, rgb, alpha, points = 14, darkMul = DARK_BLOB_MUL) {
+    // 暗色團塊（暗於中灰且近無彩度）按 darkMul 減弱，係數由關卡底色亮度決定
+    // （見 getGroundTexture）。只砍「大面積壓暗」，亮色汙漬、霓虹 accent、
+    // 飽和色塊完全不動 —— 這一層的問題從來不是顏色，是整片地板被十幾塊
+    // 低頻暗塊疊到糊掉。
+    const a = isDarkTone(rgb) ? alpha * darkMul : alpha;
+    if (a <= 0) return;
     const pts = [];
     for (let i = 0; i <= points; i++) {
-      const a = (i / points) * Math.PI * 2;
-      const n = nl(cx + Math.cos(a) * baseR * 1.3, cy + Math.sin(a) * baseR * 1.3);
+      const ang = (i / points) * Math.PI * 2;
+      const n = nl(cx + Math.cos(ang) * baseR * 1.3, cy + Math.sin(ang) * baseR * 1.3);
       const r = baseR * (1.05 + (n - 0.5) * 0.9);
-      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+      pts.push([cx + Math.cos(ang) * r, cy + Math.sin(ang) * r]);
     }
     ctx.save();
     ctx.beginPath();
@@ -341,8 +428,8 @@ export class GroundRenderer {
     ctx.closePath();
     ctx.clip();
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseR * 1.5);
-    grad.addColorStop(0, `rgba(${rgb},${alpha})`);
-    grad.addColorStop(0.6, `rgba(${rgb},${alpha * 0.75})`);
+    grad.addColorStop(0, `rgba(${rgb},${a})`);
+    grad.addColorStop(0.6, `rgba(${rgb},${a * 0.75})`);
     grad.addColorStop(1, `rgba(${rgb},0)`);
     ctx.fillStyle = grad;
     ctx.fillRect(cx - baseR * 1.8, cy - baseR * 1.8, baseR * 3.6, baseR * 3.6);

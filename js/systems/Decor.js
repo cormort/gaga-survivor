@@ -92,6 +92,13 @@ export function drawDecor(ctx, camera, level, vw, vh) {
         ctx.translate(px, py);
         ctx.rotate(tilt);
         ctx.scale(flip * scale, scale);
+        // 接地陰影：裝飾物原本像「浮」在地板上的貼紙 —— sprite 自帶深色外框，
+        // 但沒有任何與地面接觸的線索。一顆壓扁的暗橢圓貼在底部就足以把物件
+        // 「放」到地上，成本是每個視野內裝飾物一次 fill。
+        ctx.fillStyle = 'rgba(0,0,0,0.34)';
+        ctx.beginPath();
+        ctx.ellipse(0, sp.h * 0.30, sp.w * 0.40, sp.h * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
         ctx.drawImage(sp.frames[0], -sp.w / 2, -sp.h / 2, sp.w, sp.h);
         ctx.restore();
       }

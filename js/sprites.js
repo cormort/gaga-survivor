@@ -114,8 +114,12 @@ const RIM_LAYERS = [
   { off: 1.6, blur: 0.45, alpha: 0.82 },  // 內圈：窄而亮，負責讀出邊緣
 ];
 // 深色外框的厚度（device px）。它同時是可讀性（任何底色都有邊界）與對比來源。
-const OUTLINE_BLUR = 2.2;
-const OUTLINE_ALPHA = 0.5;
+//
+// 2.2/0.5 → 2.9/0.66：烘焙時一次加強，換來每幀零成本的剪影分離。這是所有關卡通用的
+// 對比來源 —— 全域壓暗地板那一招在近黑底關卡上會把各關一起推向黑（地表簽章趨同），
+// 加強外框則沒有這個副作用：只加在角色自己身上，不動背景。
+const OUTLINE_BLUR = 2.9;
+const OUTLINE_ALPHA = 0.66;
 
 function scratchCanvas(w, h) {
   const c = document.createElement('canvas');

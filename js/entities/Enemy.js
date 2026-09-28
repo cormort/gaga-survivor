@@ -27,30 +27,43 @@ const SPARKS = SPARK_COLORS.map((color) => {
   return cv;
 });
 
-// 純色填色的 pattern 快取。
+// 敵人小血條的預烘條圖。
 //
-// 為什麼：`ctx.fillStyle = 'rgba(0,0,0,0.75)'` 每次指派都會重新解析字串，而小血條
-// 是「每隻受傷的怪、每幀」畫一次 —— 效能探針在 250 隻燃燒怪的場景量到每幀 498
-// 個色彩字串，其中約 500 個就是這裡來的。改用 1×1 畫布做成的 pattern 物件後，
-// 指派的是物件而不是字串，完全不需解析，外觀一模一樣。
-const PATTERN_CACHE = new WeakMap();
-function solidPattern(ctx, rgba) {
-  let per = PATTERN_CACHE.get(ctx);
-  if (!per) {
-    per = new Map();
-    PATTERN_CACHE.set(ctx, per);
-  }
-  let pat = per.get(rgba);
-  if (!pat) {
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 1;
-    const c = cv.getContext('2d');
-    c.fillStyle = rgba;
-    c.fillRect(0, 0, 1, 1);
-    pat = ctx.createPattern(cv, 'repeat');
-    per.set(rgba, pat);
-  }
-  return pat;
+// 為什麼要烘：小血條是「每隻受傷的怪、每幀」畫一次，滿場 250 隻時就是每幀
+// 250×3 次 fill + 250 次 roundRect 路徑建構。血條只有 3 種顏色、寬度也只由
+// radius 決定（全場只有個位數種），所以整條「底框 + 三種顏色的填色」可以先烘成
+// 一張小畫布，繪製時每條只要 2 次 drawImage（底框全寬 + 依血量比例取填色前段）。
+// 250 隻的場景因此少掉約 500 次路徑建構與填色，外觀與原本逐格畫的完全一致。
+const HPBAR_CACHE = new Map();
+const HPBAR_ROWS = ['#ff3b5c', '#ffc233', '#ffffff'];
+const HPBAR_INSET = 1.5;          // 底框相對條身的出血
+
+function hpBarSheet(w0, h) {
+  const key = w0 | 0;
+  let sheet = HPBAR_CACHE.get(key);
+  if (sheet) return sheet;
+
+  const pad = Math.ceil(HPBAR_INSET);
+  const sw = key + pad * 2;
+  const sh = h + pad * 2;
+  const cv = document.createElement('canvas');
+  cv.width = sw;
+  cv.height = sh * HPBAR_ROWS.length + 2;
+  const c = cv.getContext('2d');
+
+  // 逐列：底框（不透明近黑）+ 條身。外框不透明是刻意的 —— 半透明黑疊在亮地板
+  // 或霓虹 accent 上會整條失去邊界，敵人數一多就完全讀不出血量。
+  HPBAR_ROWS.forEach((color, row) => {
+    const oy = row * sh;
+    c.fillStyle = 'rgba(4,6,12,0.92)';
+    c.fillRect(0, oy, sw, sh);
+    c.fillStyle = color;
+    c.fillRect(pad, oy + pad, key, h);
+  });
+
+  sheet = { cv, sw, sh, pad, h, w: key };
+  HPBAR_CACHE.set(key, sheet);
+  return sheet;
 }
 
 // 以中心點與半徑貼上烘好的火星
@@ -990,20 +1003,23 @@ export class Enemy {
   }
 
   drawMiniHpBar(ctx) {
-    const barW = this.radius * 1.6;
-    const barH = 3;
-    const barX = -barW / 2;
-    const barY = -this.radius - 8;
+    // 見檔頭 hpBarSheet：整條血條（底框＋三種顏色）預烘成一張小圖，
+    // 這裡只做兩次 drawImage —— 底框全寬、填色依血量比例取前段。
+    const barW = Math.max(10, this.radius * 1.7);
+    const barH = 4;
+    const sheet = hpBarSheet(Math.round(barW), barH);
+    const sx = -sheet.w / 2 - sheet.pad;
+    const sy = -this.radius - 10 - sheet.pad;
 
-    ctx.fillStyle = solidPattern(ctx, 'rgba(0,0,0,0.75)');
-    ctx.beginPath();
-    ctx.roundRect(barX - 1, barY - 1, barW + 2, barH + 2, 2.5);
-    ctx.fill();
+    ctx.drawImage(sheet.cv, 0, 0, sheet.sw, sheet.sh, sx, sy, sheet.sw, sheet.sh);
 
     const pct = Math.max(0, this.hp / this.maxHp);
-    ctx.fillStyle = solidPattern(ctx, '#ff3366');
-    ctx.beginPath();
-    ctx.roundRect(barX, barY, Math.max(0, barW * pct), barH, 1.5);
-    ctx.fill();
+    if (pct <= 0) return;
+    const row = pct > 0.35 ? 0 : pct > 0.12 ? 1 : 2;
+    const fillW = Math.max(1.5, sheet.w * pct);
+    // 只取該列「填色」那一段（跳過左側 pad），縮放到當前血量寬度
+    ctx.drawImage(sheet.cv,
+      sheet.pad, row * sheet.sh + sheet.pad, fillW, sheet.h,
+      sx + sheet.pad, sy + sheet.pad, fillW, sheet.h);
   }
 }

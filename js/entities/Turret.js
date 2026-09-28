@@ -448,12 +448,18 @@ export class Turret {
     }
 
     // ── 繪製機槍砲台 ──
-    // 射程圈 (淡色)
-    ctx.strokeStyle = this.conf.color + '18';
-    ctx.lineWidth = 1;
+    // 射程圈：原本是 6% alpha 的細實線，疊在深色地板上幾乎不可見 ——
+    // 而「這座塔到底守到哪裡」正是守塔模式最需要的資訊。改成虛線 + 可讀的
+    // alpha，並在塔本身被打時轉為警示色（受擊代表敵人已經進到這裡了）。
+    const hurt = this.hp < this.maxHp * 0.6;
+    const pulseA = 0.26 + 0.1 * Math.sin(this.animTimer * 2.2);
+    ctx.strokeStyle = hurt ? `rgba(255,59,92,${(pulseA + 0.16).toFixed(3)})` : hexA(this.conf.color, pulseA);
+    ctx.lineWidth = hurt ? 2 : 1.4;
+    ctx.setLineDash(hurt ? [10, 7] : [14, 12]);
     ctx.beginPath();
     ctx.arc(sx, sy, this.conf.range, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.setLineDash([]);
 
     // 脈衝光環 (極寒塔專用)
     if (this.pulseTimer > 0) {
@@ -528,10 +534,18 @@ export class Turret {
   drawHpBar(ctx, sx, sy) {
     if (this.hp < this.maxHp) {
       const w = 40;
-      ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillRect(sx - w / 2 - 1, sy - 30, w + 2, 5);
-      ctx.fillStyle = this.hp / this.maxHp > 0.35 ? '#00e5ff' : '#ff0055';
-      ctx.fillRect(sx - w / 2, sy - 29, w * (this.hp / this.maxHp), 3);
+      // 外框改成不透明近黑：原本 0.7 半透明在亮地面上會整條失去邊界
+      ctx.fillStyle = 'rgba(4,6,12,0.92)';
+      ctx.fillRect(sx - w / 2 - 1.5, sy - 31.5, w + 3, 8);
+      const pct = Math.max(0, this.hp / this.maxHp);
+      ctx.fillStyle = pct > 0.35 ? '#00e5ff' : '#ff3b5c';
+      ctx.fillRect(sx - w / 2, sy - 30, w * pct, 5);
     }
   }
+}
+
+// '#rrggbb' → rgba(...)：射程圈的 alpha 需要隨時間脈動，字串拼接做不出來
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a.toFixed(3)})`;
 }

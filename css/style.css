@@ -2106,6 +2106,27 @@ body, html {
   background: linear-gradient(90deg, #ff0055, #ff7b00);
 }
 
+/* 核心危急 (≤20%)：與「告急」分開一階。玩家在 35% 就該開始回防，
+   20% 之後畫面上要多一個更急的訊號，否則兩種狀態看起來一樣。 */
+#core-hud.critical {
+  border-color: rgba(255, 59, 92, 0.95);
+}
+
+#core-hud.critical::after {
+  animation-duration: 0.34s;
+  box-shadow: 0 0 22px 4px rgba(255, 59, 92, 0.7);
+}
+
+#core-hud.critical .core-title {
+  color: #ff3b5c;
+  animation: coreLabelBlink 0.68s steps(2, end) infinite;
+}
+
+@keyframes coreLabelBlink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
 @keyframes corePulse {
   0%, 100% { opacity: 0.35; transform: scale(1); }
   50%      { opacity: 1;    transform: scale(1.03); }
