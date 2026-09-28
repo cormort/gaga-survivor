@@ -228,6 +228,18 @@
       </div>
     </div>
 
+    <!-- 存檔欄位：三份獨立進度，可切換或在任一欄開新遊戲 -->
+    <div id="slot-modal" class="overlay hidden">
+      <div class="modal-content recipe-content">
+        <div class="modal-header">
+          <h2 class="glow-text">💾 存檔欄位</h2>
+          <p class="subtitle">每一欄都是完全獨立的進度（關卡、難度、角色、DNA、裝備⋯）。開新遊戲會從頭開始。</p>
+        </div>
+        <div id="slot-list" class="slot-list"></div>
+        <button id="btn-close-slots" class="game-btn secondary-btn">關閉</button>
+      </div>
+    </div>
+
     <!-- 暫停面板：目前的構築（武器／配件／超武配方進度／總數值）+ 顯示設定 -->
     <div id="pause-modal" class="overlay hidden">
       <div class="modal-content pause-content">
@@ -440,6 +452,7 @@
             <button id="btn-daily" class="game-btn talent-btn">📅 每日挑戰</button>
             <button id="btn-quests" class="game-btn talent-btn">📋 每日任務</button>
             <button id="btn-codex" class="game-btn talent-btn">📖 圖鑑</button>
+            <button id="btn-slots" class="game-btn talent-btn">💾 存檔欄位</button>
           </div>
           <div class="audio-row">
             <label class="vol-item">🔊<input id="sfx-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音效音量"></label>

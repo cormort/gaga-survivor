@@ -6,7 +6,11 @@ import { SLOT_ORDER, salvageValue, salvageGold, reforgeCost, rerollAffixes, FUSI
 // 倉庫基礎容量也住在黑市（擴建成本要從它算第幾次擴建），這裡再匯出給既有的讀者
 import { MAX_BOOSTER_STACK, STASH_CAP } from './shop.js';
 // 舊存檔的解鎖鏈修補需要關卡表（levels.js 是純資料、不 import 任何模組，不會循環）
-import { LEVELS } from './levels.js';
+import { LEVELS, LEVEL_ORDER, DIFFICULTIES } from './levels.js';
+
+// 難度逐級開放：前一個難度把所有關卡（無盡除外）各通關一次，才解鎖下一個難度
+export const DIFF_ORDER = Object.keys(DIFFICULTIES);
+export const DIFF_REQUIRED_LEVELS = LEVEL_ORDER.filter((id) => id !== 'endless');
 // 珠寶是純資料檔（不 import 任何模組），不會循環
 import { JEWELS, jewelValue } from './jewels.js';
 import { CODEX_MILESTONES, codexProgress } from './codex.js';
@@ -15,7 +19,18 @@ import { WEAPONS } from './config.js';
 
 export { STASH_CAP };
 
-const KEY = 'gaga_save';
+// 存檔欄位：最多 SLOT_COUNT 份完全獨立的進度。第 1 欄沿用原本的 key（舊存檔不必搬），
+// 其餘為 gaga_save_2、gaga_save_3。目前使用哪一欄記在 SLOT_KEY。
+export const SLOT_COUNT = 3;
+const SLOT_KEY = 'gaga_slot';
+const slotKey = (n) => (n === 1 ? 'gaga_save' : `gaga_save_${n}`);
+function activeSlot() {
+  let n = 1;
+  try { n = Number(localStorage.getItem(SLOT_KEY)) || 1; } catch (_) { /* 無痕模式 */ }
+  return n >= 1 && n <= SLOT_COUNT ? n : 1;
+}
+const SLOT = activeSlot();
+const KEY = slotKey(SLOT);
 const VERSION = 4;
 
 // 兩種模式的進度分開記 (最佳紀錄與關卡解鎖)，但養成完全共用：
@@ -42,6 +57,8 @@ function blank() {
     equipped: {},           // 已穿裝備 { slotKey: itemId }
     unlocked: { survivor: ['street', 'inkmount'], defense: ['street', 'inkmount'] }, // 已解鎖關卡 (依模式)；水墨仙山開局即開放
     unlockedChars: ['duck'], // 已解鎖特工
+    // difficulty / diffClears / diffUnlocked 刻意不放在這裡（同 codex）：由 ensureDefaults 建立，
+    // 才分得出「舊存檔」與「新玩家」—— 舊存檔保留原本能選的難度，新玩家從最簡單開始。
     best: { survivor: {}, defense: {} }, // { modeId: { levelId: { time, kills, cleared } } }
     character: 'duck',
     mode: 'survivor',       // 上次選的模式
@@ -117,6 +134,16 @@ function ensureDefaults(d) {
   if (!d.talents || typeof d.talents !== 'object') d.talents = {};
   if (!d.charLevels || typeof d.charLevels !== 'object') d.charLevels = {};
   if (!d.merc || typeof d.merc !== 'object') d.merc = { level: 1, exp: 0 };
+  // 難度逐級開放：舊存檔（已有遊玩紀錄）保留「到目前所選難度為止」都可選，不把人鎖在外面
+  if (!d.diffClears || typeof d.diffClears !== 'object') {
+    d.diffClears = {};
+    const played = Object.values(d.best || {}).some((m) => m && Object.keys(m).length > 0);
+    const cur = DIFF_ORDER.indexOf(d.difficulty || 'normal');   // 舊版預設是標準
+    d.diffUnlocked = played ? DIFF_ORDER.slice(0, Math.max(1, cur + 1)) : [];
+    if (!played) d.difficulty = 'easy';
+  }
+  if (!DIFFICULTIES[d.difficulty]) d.difficulty = 'easy';
+  if (!Array.isArray(d.diffUnlocked)) d.diffUnlocked = [];
   if (!Array.isArray(d.stash)) d.stash = [];
   if (!d.jewels || typeof d.jewels !== 'object') d.jewels = {};
   if (!d.codex || typeof d.codex !== 'object') {
@@ -164,7 +191,8 @@ export const save = {
     let raw = null;
     try {
       raw = localStorage.getItem(KEY);
-      this.data = ensureDefaults(raw ? { ...blank(), ...JSON.parse(raw) } : migrate(blank()));
+      // 舊版散落的 key 只搬進第 1 欄；其他欄位是全新進度
+      this.data = ensureDefaults(raw ? { ...blank(), ...JSON.parse(raw) } : (SLOT === 1 ? migrate(blank()) : blank()));
     } catch (e) {
       // 存檔壞掉不該讓遊戲開不起來，直接重來一份 ——
       // 但原始字串先備份到另一個 key：下一次 flush 就會蓋掉 KEY，不留備份等於整份進度蒸發
@@ -172,6 +200,41 @@ export const save = {
       this.data = ensureDefaults(blank());
     }
     return this.data;
+  },
+
+  // ── 存檔欄位 ──
+  slot: SLOT,
+
+  // 欄位摘要（選單顯示用）；空欄位回傳 null
+  slotSummary(n) {
+    let raw = null;
+    try { raw = localStorage.getItem(slotKey(n)); } catch (_) { return null; }
+    if (!raw) return null;
+    try {
+      const d = JSON.parse(raw);
+      const cleared = new Set();
+      for (const m of Object.values(d.best || {})) {
+        for (const [id, r] of Object.entries(m || {})) if (r && r.cleared) cleared.add(id);
+      }
+      return { dna: d.dna || 0, chars: (d.unlockedChars || ['duck']).length, cleared: cleared.size };
+    } catch (_) {
+      return { dna: 0, chars: 0, cleared: 0, broken: true };
+    }
+  },
+
+  // 切換到第 n 欄（fresh=true 先清空該欄 → 從頭開始的新遊戲），然後重新載入頁面
+  switchSlot(n, fresh = false) {
+    if (n < 1 || n > SLOT_COUNT) return;
+    try {
+      if (n === SLOT) this.flush();
+      if (fresh) {
+        const old = localStorage.getItem(slotKey(n));
+        if (old) localStorage.setItem(`${slotKey(n)}_before_new_game`, old);   // 留一份備份，誤按還救得回來
+        localStorage.setItem(slotKey(n), JSON.stringify(ensureDefaults(blank())));
+      }
+      localStorage.setItem(SLOT_KEY, String(n));
+    } catch (_) { /* 寫不進去就維持原狀 */ }
+    location.reload();
   },
 
   flush() {
@@ -560,6 +623,33 @@ export const save = {
     }
     this.flush();
     return { dna, isRecord: false, unlockedNew: false };
+  },
+
+  // 難度是否可選：第一個難度永遠開放；其餘要前一個難度全部關卡通關（或舊存檔保留）
+  difficultyUnlocked(diff) {
+    const i = DIFF_ORDER.indexOf(diff);
+    if (i <= 0) return i === 0;
+    if (this.data.diffUnlocked.includes(diff)) return true;
+    const prev = this.data.diffClears[DIFF_ORDER[i - 1]] || {};
+    return DIFF_REQUIRED_LEVELS.every((id) => prev[id]);
+  },
+
+  // 前一難度還差幾關 (選單提示用)
+  difficultyProgress(diff) {
+    const i = DIFF_ORDER.indexOf(diff);
+    const prev = i > 0 ? (this.data.diffClears[DIFF_ORDER[i - 1]] || {}) : {};
+    return { done: DIFF_REQUIRED_LEVELS.filter((id) => prev[id]).length, total: DIFF_REQUIRED_LEVELS.length };
+  },
+
+  // 通關後記錄；回傳因此新解鎖的難度 id（沒有則 null）
+  recordDifficultyClear(diff, levelId) {
+    if (!DIFF_REQUIRED_LEVELS.includes(levelId) || !DIFFICULTIES[diff]) return null;
+    const next = DIFF_ORDER[DIFF_ORDER.indexOf(diff) + 1];
+    const before = next ? this.difficultyUnlocked(next) : true;
+    if (!this.data.diffClears[diff]) this.data.diffClears[diff] = {};
+    this.data.diffClears[diff][levelId] = 1;
+    this.flush();
+    return next && !before && this.difficultyUnlocked(next) ? next : null;
   },
 
   recordDailyRun({ date, time, cleared }) {

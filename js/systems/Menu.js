@@ -13,7 +13,7 @@ import { MODES, MODE_ORDER, getMode } from '../modes.js';
 import { RUN_CARDS, RUN_CARD_ORDER } from '../runcards.js';
 import { MAX_BOOSTER_STACK, MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXPANSION_STEP, stashExpandCost, shopItemLevel } from '../shop.js';
 import { itemName } from '../items.js';
-import { save } from '../save.js';
+import { save, SLOT_COUNT } from '../save.js';
 import { sound } from '../audio.js';
 import { buildFacility, hireMercenary, tryUpgradeNearestTurret } from './Facilities.js';
 
@@ -271,6 +271,41 @@ export function bindEvents(game) {
     game.ui.openCodexModal(save, (i) => afterClaim(save.claimCodexMilestone(i), () => game.ui.rebuildCodexView(save)));
   });
   document.getElementById('btn-close-codex')?.addEventListener('click', () => document.getElementById('codex-modal').classList.add('hidden'));
+  // 存檔欄位：列出三欄，目前欄位標示；可載入或開新遊戲（新遊戲需確認）
+  const renderSlots = () => {
+    const list = document.getElementById('slot-list');
+    if (!list) return;
+    list.innerHTML = '';
+    for (let n = 1; n <= SLOT_COUNT; n++) {
+      const info = save.slotSummary(n);
+      const cur = n === save.slot;
+      const row = document.createElement('div');
+      row.className = 'slot-row' + (cur ? ' current' : '');
+      row.innerHTML = `
+        <div class="slot-info"><b>存檔 ${n}${cur ? '（使用中）' : ''}</b>
+          <span>${info ? `通關 ${info.cleared} 關 · 特工 ${info.chars} 位 · DNA ${info.dna}` : '空欄位'}</span></div>
+        <div class="slot-actions">
+          ${!cur && info ? `<button class="shop-buy-btn" data-act="load" data-n="${n}">載入</button>` : ''}
+          <button class="shop-buy-btn" data-act="new" data-n="${n}">🆕 新遊戲</button>
+        </div>`;
+      list.appendChild(row);
+    }
+  };
+  document.getElementById('slot-list')?.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    const n = Number(b.dataset.n);
+    if (b.dataset.act === 'load') return save.switchSlot(n);
+    const info = save.slotSummary(n);
+    if (info && !confirm(`存檔 ${n} 的所有進度會清空、從頭開始（會自動留一份備份）。確定嗎？`)) return;
+    save.switchSlot(n, true);
+  });
+  document.getElementById('btn-slots')?.addEventListener('click', () => {
+    sound.playGem();
+    renderSlots();
+    document.getElementById('slot-modal')?.classList.remove('hidden');
+  });
+  document.getElementById('btn-close-slots')?.addEventListener('click', () => document.getElementById('slot-modal').classList.add('hidden'));
   game.ui.updateClaimBadges(save);
 
   // 顯示設定：主選單「養成基地」與暫停面板各一份，改其中一邊就同步重畫兩邊並立即套用
@@ -380,10 +415,16 @@ export function refreshLevelSelect(game) {
   // 難度下拉 (原生 select)：選項標出 DNA 倍率，下方即時說明實際影響的規則倍率。
   const sel = document.getElementById('difficulty-select');
   if (sel) {
-    if (!sel.options.length) {
-      sel.innerHTML = Object.entries(DIFFICULTIES)
-        .map(([k, d]) => `<option value="${k}">${d.name} (DNA ×${d.dnaMult || 1})</option>`).join('');
-      sel.value = DIFFICULTIES[save.data.difficulty] ? save.data.difficulty : 'normal';
+    // 每次回到選單都重建：通關後可能剛解鎖新難度
+    sel.innerHTML = Object.entries(DIFFICULTIES).map(([k, d], i, all) => {
+      if (save.difficultyUnlocked(k)) return `<option value="${k}">${d.name} (DNA ×${d.dnaMult || 1})</option>`;
+      const pr = save.difficultyProgress(k);
+      return `<option value="${k}" disabled>🔒 ${d.name} (DNA ×${d.dnaMult || 1})｜${all[i - 1][1].name}全通關 ${pr.done}/${pr.total}</option>`;
+    }).join('');
+    const want = DIFFICULTIES[save.data.difficulty] && save.difficultyUnlocked(save.data.difficulty) ? save.data.difficulty : 'easy';
+    sel.value = want;
+    if (!sel.dataset.bound) {
+      sel.dataset.bound = '1';
       sel.addEventListener('change', () => {
         save.set({ difficulty: sel.value });
         sound.playGem();

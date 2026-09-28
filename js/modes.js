@@ -1,7 +1,7 @@
 // 兩種遊戲模式的資料定義。模式只描述「規則差異」，不含任何邏輯 ——
 // main.js / WeaponManager / UI 一律讀這張表，新增模式不用動引擎。
 //
-// survivor：原本的純割草。沒有砲塔與傭兵，玩家武器就是全部火力。
+// survivor：割草為主。可部署設施、也能雇用一名修仙傭兵。
 // defense ：守塔。場中央有基地核心，雜兵改為朝核心進攻，核心被打爆即失敗；
 //           玩家武器輸出被壓低、金幣收入拉高、砲塔便宜，逼你靠佈防而不是靠走位輸出。
 
@@ -15,7 +15,7 @@ export const MODES = {
     accent: '#00e5ff',
 
     turrets: true,
-    mercs: false,
+    mercs: true,           // 生存者也能雇用傭兵（跨局經驗與守塔共用）
     core: null,
     enemyTarget: 'player',
     boundedMap: false,     // 無限地圖（守塔的核心在原點，才需要邊界）
