@@ -38,6 +38,18 @@ export class WeaponManager {
     // 擁有的被動配件: Map<passiveId, { level }>
     this.passives = new Map();
 
+    // 本局已經被超武「吃掉」的基礎武器／配方件。
+    //
+    // 為什麼需要這個紀錄：evolveWeapon 會把基礎武器從 weapons 刪掉，於是它又符合
+    // 「新武器」卡的條件（!isEvo && !weapons.has(id)）。同一箱 5 張卡裡，第 1 張進化
+    // 之後第 4 張就可能把剛吃掉的基礎武器當成新武器再送回來 —— 實測重現率約 1/6，
+    // 玩家看到的是「進化完苦無又回到身上」而且白佔一個武器格。
+    //
+    // 放在 constructor：weaponManager 每局都重新 new（main.js 的 start()），
+    // 所以不需要另外在局與局之間重置。同一局內只增不減是正確的 ——
+    // 超武不會退化成基礎武器。
+    this.absorbedByEvo = new Set();
+
     // 投射物集合
     this.projectiles = [];
 
@@ -89,6 +101,12 @@ export class WeaponManager {
     }
   }
 
+  // 這件基礎武器／配方件能不能再以「新武器／新配件」的形式出現。
+  // 已經被超武吃掉的不能再給 —— 見 constructor 的 absorbedByEvo 說明。
+  skipsAsNewCard(id) {
+    return this.absorbedByEvo.has(id);
+  }
+
   evolveWeapon(baseWeaponId, evoWeaponId) {
     if (!this.weapons.has(baseWeaponId)) return;
     const old = this.weapons.get(baseWeaponId);
@@ -103,6 +121,11 @@ export class WeaponManager {
       if (partnerItem) partnerDmg = partnerItem.totalDamage || 0;
       this.weapons.delete(partnerId);
     }
+
+    // 記下這一局被吃掉的材料：不管是武器型配方件還是配件型配方件，
+    // 都不能再從「新武器／新配件」卡回到玩家身上。
+    this.absorbedByEvo.add(baseWeaponId);
+    if (partnerId) this.absorbedByEvo.add(partnerId);
 
     // 替換為超武 (繼承主武器與副手武器之累計總傷害)
     this.weapons.delete(baseWeaponId);

@@ -27,7 +27,17 @@ const out = await page.evaluate(() => {
   // 三選一是隨機抽樣：抽到持有武器的升級卡為止
   let up;
   for (let i = 0; i < 200 && !up; i++) up = g.ui.generateUpgradeOptions(wm).find((o) => o.type === 'weapon_upgrade' && o.id === wid);
-  ok('武器升級卡有實際數值', up && /LV 1 → 2：.*傷害 \+\d+/.test(up.description), up?.description);
+
+  // 卡面必須說得出「具體變化」或「這是滿級」——不能是「效果提升」這種等於沒說的罐頭文字。
+  // 不能只認「傷害 +N」：12 把武器沒有 damageGrowth（苦無、火箭、閃電、獵槍…），
+  // 它們的升級靠發射數／冷卻／範圍／換彈秒數呈現。
+  const hasNumbers = !!up && (
+    /傷害 \+\d+/.test(up.description)
+    || /(冷卻|換彈秒數) -?[\d.]+s/.test(up.description)
+    || /(發射數|數量|穿透|範圍|爆炸半徑|落雷數|彈跳|飛行時間|光束寬) [\d.]+→[\d.]+/.test(up.description)
+    || /滿級 LV \d+（此為最後一級）/.test(up.description)
+  );
+  ok('武器升級卡有實際數值', hasNumbers, up?.description);
   ok('武器升級卡有超武距離', up && /超武【.+】：武器差 4 級/.test(up.description), up?.description);
 
   // 死亡結算：同一來源打兩次、最後一擊換來源

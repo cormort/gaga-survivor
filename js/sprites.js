@@ -1,6 +1,10 @@
 // 角色與怪物 sprite 烘焙：所有精緻筆刷 (漸層、描邊、發光) 只在首次使用時畫一次，
 // 之後每幀只做 drawImage。畫質提升 + 每幀繪製成本大幅下降。
 
+// 只為了讀角色自己的 accent（邊光顏色）。這條 import 是安全的：characters.js 不 import
+// sprites.js，而且我們只在烘焙時（遊戲啟動後）取值，不在模組初始化時讀。
+import { CHARACTERS } from './characters.js';
+
 const SS = 2;          // 超取樣倍率 (retina 上不糊)
 export const FRAMES = 8;
 
@@ -95,10 +99,29 @@ const BOSS_ACCENT = [
   ['boss', '#ff4d6d'],
 ];
 
+// 玩家角色的貼圖 key。這些是「角色」而不是場景道具，所以即使底圖是圖片貼圖，
+// 也要跟程式繪製的角色一樣吃材質層（深色外框 + 左上邊光）—— 否則同一份角色選單裡
+// 會有一半有方向光、一半沒有，站在一起像貼上去的紙片。
+//
+// 為什麼在這裡明示、不去讀 js/characters.js：characters.js → entities/Turret.js →
+// sprites.js 已經是一條循環，再反向 import 會讓 CHARACTERS 在 sprites.js 取用時
+// 可能還是 undefined（模組初始化順序問題），症狀是「有時有邊光、有時沒有」。
+// 貼圖 key 本來就跟 IMAGE_SPRITES 放在一起，這裡是它真正的歸屬。
+const PLAYER_SPRITE_KEYS = new Set([
+  'xian_sword', 'xian_talisman', 'xian_mage', 'xian_alchemy', 'xian_zen', 'xian_demon',
+]);
+
 function accentFor(key, b) {
-  if (b.static || b.image) return null;   // 貼圖本身已有完整光影         // 場景裝飾維持平面：它們本來就是貼在地上的圖
+  // 場景裝飾維持平面：它們本來就是貼在地上的圖，加了邊光反而像浮起來。
+  if (b.static) return null;
   const m = key.match(/^([^:]+)/);
   const base = m ? m[1] : key;
+  if (b.image) {
+    // 圖片貼圖（assets/xian/）只有玩家角色要材質層。
+    // 顏色用角色自己的 accent：邊光是「光」，但色相跟著角色配色才不會每隻都冷白。
+    if (!PLAYER_SPRITE_KEYS.has(base)) return null;
+    return (CHARACTERS[base] && CHARACTERS[base].accent) || DEFAULT_ACCENT;
+  }
   if (FIXED_ACCENT[base]) return FIXED_ACCENT[base];
   for (const [prefix, color] of BOSS_ACCENT) {
     if (base.startsWith(prefix)) return color;

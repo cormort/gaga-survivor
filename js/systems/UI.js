@@ -59,12 +59,20 @@ const HUD_PEEK_SECONDS = 1.0;
 // 的時長，只有超過上限的才被截短。
 const HUD_HINT_MAX_SECONDS = 2.5;
 
-// 升級卡的實際數值變化：和 WeaponManager 開火時讀的是同一份 config，改平衡時卡面自動跟著變
+// 升級卡的實際數值變化：和 WeaponManager 開火時讀的是同一份 config，改平衡時卡面自動跟著變。
+//
+// level 是「目前等級」，陣列語意是 arr[level-1] → arr[level]（LV1→2 讀 arr[0]→arr[1]）。
+// 呼叫端只在 item.level < maxLevel 時組卡，所以正常情況下不會越界；但升級卡還有一個
+// 用途是「告訴玩家這張是不是最後一級」，因此越界時回傳明確的滿級文字，
+// 而不是「效果提升」這種等於沒說的罐頭訊息 ——
+// 實測 guardian / orbit_saw / shotgun 的 LV5 卡面本來就只有那四個字。
 const LEVEL_STAT_LABELS = {
   projectiles: '發射數', count: '數量', pierce: '穿透', radius: '範圍', explosionRadius: '爆炸半徑',
   strikes: '落雷數', bounces: '彈跳', outTime: '飛行時間', width: '光束寬', reload: '換彈秒數',
 };
+
 export function weaponLevelDiff(def, level) {
+  if (level >= (def.maxLevel || 5)) return `滿級 LV ${def.maxLevel || 5}（此為最後一級）`;
   const parts = [];
   if (def.damageGrowth) parts.push(`傷害 +${def.damageGrowth}`);
   if (def.cooldownGrowth) parts.push(`冷卻 ${def.cooldownGrowth}s`);
@@ -1832,7 +1840,10 @@ export class UIManager {
     // 4. 新武器 (若武器槽未滿)
     if (weaponManager.weapons.size < GAME_CONFIG.MAX_WEAPON_SLOTS) {
       for (const [id, def] of Object.entries(WEAPONS)) {
-        if (!def.isEvo && !weaponManager.weapons.has(id)) {
+        // skipsAsNewCard：已經被超武吃掉的材料不能再給 —— 否則同一箱裡會同時出現
+        // 「進化」與「再抽到剛吃掉的基礎武器」，玩家等於白丟一張卡又白佔一格
+        // （實測約 1/6 的首領箱會發生，verify-chest 的間歇紅燈就是它）。
+        if (!def.isEvo && !weaponManager.weapons.has(id) && !weaponManager.skipsAsNewCard(id)) {
           const hint = recipeHints.get(id);
           candidates.push({
             type: 'weapon_new',
@@ -1854,7 +1865,8 @@ export class UIManager {
     // 5. 新被動 (若被動槽未滿)
     if (weaponManager.passives.size < GAME_CONFIG.MAX_PASSIVE_SLOTS) {
       for (const [id, def] of Object.entries(PASSIVES)) {
-        if (!weaponManager.passives.has(id)) {
+        // 配方件若是配件型（被超武吃掉的那種），同樣不能再抽回來
+        if (!weaponManager.passives.has(id) && !weaponManager.skipsAsNewCard(id)) {
           const hint = recipeHints.get(id); // 某把滿級武器的配方配件還沒拿
           candidates.push({
             type: 'passive_new',

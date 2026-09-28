@@ -271,12 +271,29 @@ class Game {
 
     this.lastTime = performance.now();
     this.perf = this.initPerfHUD();
+    this._perfRun = this.newPerfRun();   // 整場效能統計（結算時寫進存檔）
 
     this.initWindow();
     bindEvents(this);
     this.loop = this.loop.bind(this);
 
     requestAnimationFrame(this.loop);
+  }
+
+  // 整場效能統計（跑一場累積一份，結算時寫進存檔）。
+  //
+  // 為什麼要做成常駐而不是只掛在 ?perf=1 底下：玩家回報「後期很卡」時，
+  // 我們先前只能反問機型與畫質、或請他開 console —— 兩者都拿不到數據。
+  // 這份統計讓「卡」變成事後查得到的紀錄：哪一局、第幾秒、幾隻敵人、掉到幾毫秒。
+  //
+  // 成本控制：每幀只有一次數字比較（見 loop()），刷新紀錄時才多一次
+  // performance.now()；寫入 localStorage 只在結算時發生一次。
+  newPerfRun() {
+    return {
+      worstMs: 0, worstUpdateMs: 0, worstRenderMs: 0,
+      worstEnemies: 0, worstAt: 0,
+      peakEnemies: 0, frames: 0, dpr: 0,
+    };
   }
 
   // 新的一局要從乾淨狀態開始。不清的話，玩家踩過一次例外之後，之後每一局的
@@ -359,6 +376,10 @@ class Game {
       `掉落 ${n(this.dropItems)}  粒子 ${n(this.particles?.particles)}  殘跡 ${n(this.decals)}`,
       `砲塔 ${n(this.turrets)}  傭兵 ${n(this.mercenaries)}  待升級 ${this.pendingLevelUps}`,
       `動態難度 血量 ×${this.spawner.adaptiveHpMul.toFixed(2)}  平均存活 ${this.spawner._lifeAvg.toFixed(1)}s`,
+      // 整場統計（與上面「這 250ms 窗期」區分開來）：結算時會寫進存檔
+      `本局最差 ${this._perfRun.worstMs.toFixed(0)}ms (u ${this._perfRun.worstUpdateMs.toFixed(1)} / r ${this._perfRun.worstRenderMs.toFixed(1)})`
+        + ` 在第 ${this._perfRun.worstAt.toFixed(0)}s、敵 ${this._perfRun.worstEnemies}`,
+      `本局峰值敵 ${this._perfRun.peakEnemies}  跑 ${this._perfRun.frames} 幀  dpr ${this._perfRun.dpr}`,
       `狀態 ${this.state}`,
       ...(this.frameErrorCount ? [
         `\n✖ 每幀例外 ×${this.frameErrorCount}`,
@@ -1047,6 +1068,7 @@ class Game {
     this._lastEliteHitstop = -99;
     this._buildHintShown = false;
     this.clearFrameErrors();
+    this._perfRun = this.newPerfRun();   // 新的一局重新累積效能統計
     this._eventIdx = 0;
     this.activeSynergies = [];
     this.merchant = null;
@@ -1482,7 +1504,17 @@ class Game {
             this.perf.render += t2 - t1;
             this.perf.ticks++;
           }
-          this._trackFrame(t2 - t0);
+          const frameMs = t2 - t0;
+          this._trackFrame(frameMs);
+          // 整場統計：正常遊玩也要有，否則玩家回報「很卡」時我們兩手空空。
+          // 成本是每幀一個數字比較（只在刷新紀錄時才多一次 performance.now）。
+          if (frameMs > this._perfRun.worstMs) {
+            this._perfRun.worstMs = frameMs;
+            this._perfRun.worstUpdateMs = t1 - t0;
+            this._perfRun.worstRenderMs = t2 - t1;
+            this._perfRun.worstEnemies = this.enemies.length;
+            this._perfRun.worstAt = this.gameTime;
+          }
         }
       }
       this.frameErrorStreak = 0;
@@ -1508,6 +1540,13 @@ class Game {
   update(dt) {
     this.gameTime += dt;
     if (this._timeStopTimer > 0) this._timeStopTimer -= dt;
+
+    // 整場效能統計：峰值敵人數與幀數。兩者都只是現成資料的比較與累加，
+    // 不需要額外掃描；寫入存檔留到結算時一次處理。
+    const pr = this._perfRun;
+    if (this.enemies.length > pr.peakEnemies) pr.peakEnemies = this.enemies.length;
+    pr.frames++;
+    pr.dpr = this.dpr;
 
     // 1. 更新特工玩家
     this.player.update(dt, this.input.vector);
@@ -3078,6 +3117,16 @@ class Game {
   settleRun(isVictory = false) {
     this.state = 'GAME_OVER';
     sound.stopBGM();
+    // 效能取樣：整場的最壞一幀與峰值敵人數寫進存檔（最近 5 筆），
+    // 之後玩家回報卡頓時可以直接讀，不必請他開 console 或猜機型。
+    // 放在結算最前面：後面的存檔／UI 流程就算拋例外，這筆診斷資料也已經留下。
+    save.recordPerfRun({
+      ...this._perfRun,
+      mode: this.modeId,
+      level: this.level && this.level.id,
+      time: this.gameTime,
+      cleared: isVictory,
+    });
     save.consumeBoosters(); // 本局結算了才真正消耗戰術興奮劑
     const lines = this.player.character.lines;
     const result = save.recordRun(this.level.id, {

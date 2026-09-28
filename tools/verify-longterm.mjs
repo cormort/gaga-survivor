@@ -205,8 +205,28 @@ const codex = await page.evaluate(async () => {
 
   // 里程碑：未達不能領；湊到 25% 領一次
   const early = save.claimCodexMilestone(0);
-  const cats = ['walker', 'bat', 'brute', 'boomer', 'runner', 'warden', 'spore_host', 'sporeling', 'spitter', 'hound', 'hatcher'];
-  for (const t of cats) c.enemies[t] = c.enemies[t] || 1;   // 已有的擊殺數保留
+
+  // 湊到 25%：門檻必須「向遊戲問」，不能寫死一份敵人清單。
+  // 原本寫死 11 種敵人（連同已解鎖的武器／超武／珠寶共 14 個條目）就以為到了 25%，
+  // 但條目總數會隨新增敵人／珠寶／武器成長 —— 現在總數 60，25% 要 15 個，
+  // 於是 14/60 = 23.33% 永遠領不到，測試就固定紅燈（不是遊戲壞了，是測試沒跟上內容）。
+  const { codexCategories } = await import(new URL('js/codex.js', document.baseURI).href);
+  const cats = codexCategories();
+  const needFound = Math.ceil(CODEX_MILESTONES[0].pct * (codexProgress(save.data).total));
+  // 先補被動方（敵人最多），不夠再補武器與珠寶
+  const fillOrder = [
+    ...cats.enemies.map((id) => ['enemies', id]),
+    ...cats.weapons.map((id) => ['weapons', id]),
+    ...cats.jewels.map((id) => ['jewels', id]),
+  ];
+  const beforeFill = codexProgress(save.data);
+  out.msFill = { total: beforeFill.total, needFound, before: beforeFill.found };
+  for (const [cat, id] of fillOrder) {
+    if (codexProgress(save.data).found >= needFound + 1) break;   // 多一個當餘裕
+    if (cat === 'enemies') c.enemies[id] = c.enemies[id] || 1;
+    else if (cat === 'weapons') { c.weapons[id] = c.weapons[id] || 1; }
+    else if (cat === 'jewels') { c.jewels[id] = c.jewels[id] || 1; }
+  }
   const p2 = codexProgress(save.data);
   save.data.gold = 0; save.data.dna = 0;
   const m0 = save.claimCodexMilestone(0);

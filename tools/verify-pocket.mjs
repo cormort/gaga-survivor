@@ -72,8 +72,22 @@ const out = await page.evaluate(async () => {
   const hp0 = dummy.hp; g.activateConsumable('holy_water');
   ok('聖水 8 分鐘傷害隨雜兵血量成長', hp0 - dummy.hp > 260 * 3, `${Math.round(hp0 - dummy.hp)}`);
 
-  clear(); g.gameTime = 480; const gold0 = g.gold; g.activateConsumable('magic_ticket');
-  ok('魔法門票 8 分鐘金幣 > 基礎 100', g.gold - gold0 > 250, g.gold - gold0);
+  // 魔法門票金幣隨時間成長：量「倍率」而不是絕對值。
+  //
+  // 為什麼不驗絕對值：金幣會被 facilityGoldMul 乘上存檔天賦 × 單局興奮劑 ×
+  // 關卡／難度規則（上限 ×8）。原本的門檻「8 分鐘 > 250」隱含 goldMul ≈ 1.65，
+  // 而這支測試跑在預設的生存者模式（goldMul 0.75，於是基礎 100 只給 75）→ 穩定紅燈。
+  // 門票的價值本來就該隨存檔強度變動，固定金額不是它該保證的事；它該保證的是
+  // 「同一組條件下，8 分鐘拿到的比開局明顯多」——測試名稱寫的就是這個。
+  // 絕對值只做下限（> 0）與倍率檢查，避免又把某個模式的乘數寫進斷言裡。
+  clear(); g.gameTime = 0; const goldT0 = g.gold; g.activateConsumable('magic_ticket');
+  const ticketBase = g.gold - goldT0;
+  clear(); g.gameTime = 480; const goldT8 = g.gold; g.activateConsumable('magic_ticket');
+  const ticket8 = g.gold - goldT8;
+  const ticketRatio = ticketBase > 0 ? ticket8 / ticketBase : 0;
+  ok('魔法門票金幣隨時間成長（8 分鐘 ≥ 開局的 2.5 倍）',
+    ticketBase > 0 && ticketRatio >= 2.5,
+    `開局 ${ticketBase} → 8 分鐘 ${ticket8}（×${ticketRatio.toFixed(2)}）`);
 
   clear(); give('luck_potion'); step(20);
   ok('幸運藥水：沒有怪時不浪費', slot0() === 'luck_potion', slot0());

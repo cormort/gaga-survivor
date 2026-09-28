@@ -33,6 +33,10 @@ const SLOT = activeSlot();
 const KEY = slotKey(SLOT);
 const VERSION = 4;
 
+// 存檔保留的效能取樣筆數（見 recordPerfRun）。5 筆足以看出「是不是每一局都卡」，
+// 又不會讓存檔無限膨脹。
+export const PERF_HISTORY = 5;
+
 // 兩種模式的進度分開記 (最佳紀錄與關卡解鎖)，但養成完全共用：
 // DNA、天賦、裝備倉庫、已解鎖特工都跨模式共享。
 export const MODE_IDS = ['survivor', 'defense'];
@@ -74,6 +78,9 @@ function blank() {
       guardian: 'zagreus',
       soccer: 'achilles',
     },
+    // 最近幾局的效能取樣（見 recordPerfRun）。舊存檔沒有這個欄位，
+    // ensureDefaults 會補上空陣列，所以讀取端一律用 Array.isArray 判斷。
+    perfHistory: [],
   };
 }
 
@@ -93,6 +100,11 @@ function migrate(save) {
 
 // 新版本補欄位：解鎖清單、天賦物件不存在時給預設值 (舊存檔直接升級)
 function ensureDefaults(d) {
+  // 效能取樣：舊存檔沒有這一欄。補上並限制長度，避免有人在舊存檔裡塞了
+  // 一份超大陣列時整個存檔寫不進 localStorage。
+  if (!Array.isArray(d.perfHistory)) d.perfHistory = [];
+  else if (d.perfHistory.length > PERF_HISTORY) d.perfHistory = d.perfHistory.slice(-PERF_HISTORY);
+
   // v3 → v4：best 與 unlocked 由「單一份」變成「依模式各一份」。
   // 舊紀錄搬進 survivor；解鎖清單兩個模式都複製一份，老玩家不會突然被鎖回第一關。
   if (Array.isArray(d.unlocked)) {
@@ -599,6 +611,38 @@ export const save = {
     delete this.data.equipped[slot];
     this.flush();
     return true;
+  },
+
+  // 單局效能紀錄（跨局保留最近 PERF_HISTORY 筆）。
+  //
+  // 為什麼要寫進存檔而不是只放記憶體：這是「玩家回報卡頓」時唯一的客觀線索。
+  // 沒有它就只能反問機型與畫質；有了它可以直接看「哪個模式、第幾秒、幾隻敵人、
+  // 掉到幾毫秒、當時的 devicePixelRatio」。資料量很小（每筆 8 個數字）。
+  //
+  // 只在結算時呼叫一次，所以不會造成每幀寫 localStorage 的成本。
+  recordPerfRun(entry) {
+    if (!entry || !(entry.worstMs > 0)) return null;
+    const rec = {
+      mode: entry.mode || 'survivor',
+      level: entry.level || 'street',
+      sec: Math.round(entry.time || 0),
+      worstMs: +entry.worstMs.toFixed(1),
+      updMs: +(entry.worstUpdateMs || 0).toFixed(1),
+      rndMs: +(entry.worstRenderMs || 0).toFixed(1),
+      atSec: Math.round(entry.worstAt || 0),
+      enemies: entry.worstEnemies || 0,
+      peak: entry.peakEnemies || 0,
+      dpr: entry.dpr || 0,
+      cleared: !!entry.cleared,
+      at: new Date().toISOString().slice(0, 10),
+    };
+    const hist = Array.isArray(this.data.perfHistory) ? this.data.perfHistory : [];
+    hist.push(rec);
+    // 保留最近幾筆就好：這是診斷用的取樣，不是統計資料庫
+    while (hist.length > PERF_HISTORY) hist.shift();
+    this.data.perfHistory = hist;
+    this.flush();
+    return rec;
   },
 
   // 單局結算：回傳這場拿到多少 DNA 與金幣、是否破紀錄、是否解鎖新關卡
