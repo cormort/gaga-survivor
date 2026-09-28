@@ -64,11 +64,13 @@ await page.goto(URL_, { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction(() => window.game, null, { timeout: 60000 });
 
 const out = await page.evaluate(async () => {
+  // 匯入路徑一律相對 document.baseURI：本機是 "/"、GitHub Pages 是 "/gaga-survivor/"，
+  // 寫死開頭斜線在線上會 404（這個 repo 的工具踩過不只一次，verify-art 也有同樣註記）。
   const imp = (p) => import(new URL(p, document.baseURI).href);
-  const { LEVEL_CACHE_KEEP } = await imp('/js/systems/LevelCache.js');
-  const { LEVEL_ORDER } = await imp('/js/levels.js');
-  const { TD_ORDER } = await imp('/js/tdlevels.js');
-  const { terrainCacheInfo } = await imp('/js/systems/Terrain.js');
+  const { LEVEL_CACHE_KEEP } = await imp('js/systems/LevelCache.js');
+  const { LEVEL_ORDER } = await imp('js/levels.js');
+  const { TD_ORDER } = await imp('js/tdlevels.js');
+  const { terrainCacheInfo } = await imp('js/systems/Terrain.js');
   const g = window.game;
 
   // 守塔關卡優先（td_* 可在 defense 模式下玩），再補生存者關卡湊到 8 關
