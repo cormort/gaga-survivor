@@ -269,9 +269,23 @@ export class Enemy {
       // 遠程怪邏輯：在射程外保持距離開火，太近則後撤；繞行方向逐隻隨機
       const desiredRange = this.ranged.range;
       const spd = this.speed * this.speedFactor();
-      const nx = dist > 0.1 ? dx / dist : 0;
-      const ny = dist > 0.1 ? dy / dist : 0;
-      if (dist > desiredRange) {
+      let nx = dist > 0.1 ? dx / dist : 0;
+      let ny = dist > 0.1 ? dy / dist : 0;
+      let aimDist = dist;
+      if (this.path) {
+        // 守塔路線上的遠程怪：一律沿路線前進（目標是路徑點，不能繞著它放風箏），
+        // 瞄準與射程改看 aimTarget（特工）
+        moveX = nx * spd;
+        moveY = ny * spd;
+        const at = this.aimTarget;
+        if (at) {
+          const ax = at.x - this.x;
+          const ay = at.y - this.y;
+          aimDist = Math.sqrt(ax * ax + ay * ay);
+          nx = aimDist > 0.1 ? ax / aimDist : 0;
+          ny = aimDist > 0.1 ? ay / aimDist : 0;
+        }
+      } else if (dist > desiredRange) {
         moveX = nx * spd;
         moveY = ny * spd;
       } else if (dist < desiredRange * 0.45) {
@@ -290,11 +304,11 @@ export class Enemy {
         this.windupTimer -= dt;
         if (this.windupTimer <= 0) {
           this.windupKind = null;
-          this.fireRanged(dist, nx, ny, cb);
+          this.fireRanged(aimDist, nx, ny, cb);
         }
       } else if (this.shootTimer >= this.ranged.cd) {
         this.shootTimer = 0;
-        if (dist > 0 && dist <= desiredRange * 1.6 && this.freezeTimer <= 0 && this.stunTimer <= 0) {
+        if (aimDist > 0 && aimDist <= desiredRange * 1.6 && this.freezeTimer <= 0 && this.stunTimer <= 0) {
           this.windupTimer = this.windupMax = this.ai.windup || 0.35;
           this.windupKind = 'shoot';
         }
@@ -481,7 +495,7 @@ export class Enemy {
       mx = nx - ny * s;
       my = ny + nx * s;
       speedMul *= 0.9 + (Math.sin(this.animTimer * 6 + this.wanderPhase) * 0.5 + 0.5) * 0.3;
-    } else if (kind === 'flank') {
+    } else if (kind === 'flank' && !this.path) {   // 守塔路線上的獵犬不繞圈，直接沿路走
       // 嗜血獵犬：保持在 standoff 半徑上側繞，再發起撲咬 (與狂奔感染者直衝區隔)
       const standoff = ai.standoff || 190;
       const err = Math.max(-1.2, Math.min(1.2, (dist - standoff) / standoff));

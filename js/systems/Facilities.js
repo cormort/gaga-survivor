@@ -14,6 +14,7 @@ import { Projectile } from '../entities/Projectile.js';
 import { sound } from '../audio.js';
 import { save } from '../save.js';
 import { nearestOnPaths } from '../tdlevels.js';
+import { enemyScale } from '../levels.js';
 
 // 金幣乘數的天花板。天賦財運 × 模式 × 祝福 × 每日規則 × 淘金潮是純乘法疊加、
 // 原本沒有上限 —— 實測空存檔 23 分鐘 5.8 萬金，帶滿 meta 加成的存檔同時間 142 萬，
@@ -205,6 +206,9 @@ export function hireMercenary(game) {
 }
 
 export function updateMercenaries(game, dt) {
+  // 傭兵傷害跟著雜兵血量成長：原本固定 30～138，開局皮厚 ×2.5 與時間成長一疊上去，
+  // 飛劍打在怪身上幾乎沒感覺（看起來像「傭兵不會攻擊」）。基準 3 = enemyScale 在 0 秒、無加成時的值。
+  const growth = Math.max(1, enemyScale(game.gameTime, game.level, game.rules).hp / 3 * (game.spawner?.adaptiveHpMul || 1));
   for (let i = game.mercenaries.length - 1; i >= 0; i--) {
     const m = game.mercenaries[i];
     m.update(dt, game.player, game.enemies, (merc, target) => {
@@ -218,9 +222,9 @@ export function updateMercenaries(game, dt) {
         y: merc.y + (dy / dist) * 10,
         vx: (dx / dist) * MERC.bulletSpeed,
         vy: (dy / dist) * MERC.bulletSpeed,
-        damage: merc.damage,
-        radius: 6,
-        pierce: 1,
+        damage: Math.round(merc.damage * growth),
+        radius: 9,
+        pierce: 2,
         life: 1.7,
         knockback: 1,
         mercOwner: merc,

@@ -68,9 +68,13 @@ export class TowerDefense {
     g.ui.say(`⚔️ 第 ${this.waveIdx}/${this.total} 波來襲！`, '#ff5e5e', 2);
     if (wave.boss) {
       g.spawner.spawnBoss({ ...wave.boss, final: true }, g.player, g.enemies, (boss) => g.onBossSpawned(boss));
-      const [x, y] = paths[0][0];
-      g.boss.x = x;
-      g.boss.y = y;
+      // 首領也從入口出發、沿路線走向核心（輪流挑一條路線）
+      const path = paths[(this.waveIdx - 1) % paths.length];
+      g.boss.x = path[0][0];
+      g.boss.y = path[0][1];
+      g.boss.path = path;
+      g.boss.pathIdx = 1;
+      g.boss._wp = { x: path[1][0], y: path[1][1], radius: 0 };
     }
   }
 
@@ -102,11 +106,18 @@ export class TowerDefense {
   }
 
   // 沿路線走的怪：目標是下一個路徑點，走完才朝核心
-  targetFor(e, core) {
+  targetFor(e, core, dt = 0) {
     if (!e.path) return null;
+    e.aimTarget = this.game.player;   // 遠程怪沿路走、但朝特工開火
     if (e.pathIdx >= e.path.length) return core;
     const [wx, wy] = e.path[e.pathIdx];
-    if (Math.hypot(e.x - wx, e.y - wy) < WAYPOINT_REACH) {
+    // 換下一個路徑點：夠近、或已經走過了這段（投影超出線段終點）、或卡太久
+    const [ax, ay] = e.path[e.pathIdx - 1];
+    const sx = wx - ax, sy = wy - ay;
+    const passed = ((e.x - ax) * sx + (e.y - ay) * sy) >= sx * sx + sy * sy;
+    e._wpTime = (e._wpTime || 0) + dt;
+    if (Math.hypot(e.x - wx, e.y - wy) < WAYPOINT_REACH || passed || e._wpTime > 25) {
+      e._wpTime = 0;
       e.pathIdx++;
       if (e.pathIdx >= e.path.length) return core;
       e._wp.x = e.path[e.pathIdx][0];
