@@ -8,7 +8,7 @@
 // 呼叫端：Game 建構子以 bindEvents(this) 接線；選單內部互呼直接走模組函式。
 
 import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
-import { DIFFICULTIES, LEVELS, LEVEL_ORDER, getDailyChallenge } from '../levels.js';
+import { DIFFICULTIES, LEVELS, getDailyChallenge } from '../levels.js';
 import { MODES, MODE_ORDER, getMode } from '../modes.js';
 import { RUN_CARDS, RUN_CARD_ORDER } from '../runcards.js';
 import { MAX_BOOSTER_STACK, MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXPANSION_STEP, stashExpandCost, shopItemLevel } from '../shop.js';
@@ -333,6 +333,7 @@ export function bindEvents(game) {
     if (e.key === 'b' || e.key === 'B') buildFacility(game, game.selectedFacility || 'turret');
     if (e.key === 't' || e.key === 'T') tryUpgradeNearestTurret(game);
     if (e.key === 'g' || e.key === 'G') hireMercenary(game);
+    if ((e.key === 'n' || e.key === 'N') && game.state === 'PLAYING') game.td?.startWave(true);   // 守塔：提前開戰
     if (e.key === 'e' || e.key === 'E') game.usePocketItem(0);
     if (e.key === 'f' || e.key === 'F') game.usePocketItem(1);
   });
@@ -357,6 +358,7 @@ export function bindEvents(game) {
 
   // 僱傭傭兵 (G / 行動端按鈕)
   game.ui.hireBtn?.addEventListener('click', () => hireMercenary(game));
+  document.getElementById('btn-next-wave')?.addEventListener('click', () => { if (game.state === 'PLAYING') game.td?.startWave(true); });
 
   // 砲塔進化專精按鈕 (UI 建構子已掛 click，走 _turretUpCb；這裡不要再掛，避免一次點擊雙重觸發)
 
@@ -399,16 +401,18 @@ export function refreshModeSelect(game) {
     game.mode = getMode(id);
     save.set({ mode: id });
     // 換模式後原本選的關卡可能還沒在這個模式解鎖
-    if (!save.isUnlocked(game.levelId, id)) {
-      game.levelId = 'street';
-      save.set({ lastLevel: 'street' });
+    // 守塔與生存者用不同的關卡表，換模式後退回該模式的第一關
+    const order = getMode(id).levelOrder;
+    if (!order.includes(game.levelId) || !save.isUnlocked(game.levelId, id)) {
+      game.levelId = order[0];
+      save.set({ lastLevel: order[0] });
     }
     refreshLevelSelect(game);
   });
 }
 
 export function refreshLevelSelect(game) {
-  game.ui.buildLevelSelect(LEVELS, LEVEL_ORDER, save, (id) => {
+  game.ui.buildLevelSelect(LEVELS, getMode(game.modeId).levelOrder, save, (id) => {
     game.levelId = id;
     save.set({ lastLevel: id });
   }, game.levelId);

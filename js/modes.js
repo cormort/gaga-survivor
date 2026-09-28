@@ -5,6 +5,9 @@
 // defense ：守塔。場中央有基地核心，雜兵改為朝核心進攻，核心被打爆即失敗；
 //           玩家武器輸出被壓低、金幣收入拉高、砲塔便宜，逼你靠佈防而不是靠走位輸出。
 
+import { LEVEL_ORDER } from './levels.js';
+import { TD_ORDER } from './tdlevels.js';
+
 export const MODES = {
   survivor: {
     id: 'survivor',
@@ -19,6 +22,7 @@ export const MODES = {
     core: null,
     enemyTarget: 'player',
     boundedMap: false,     // 無限地圖（守塔的核心在原點，才需要邊界）
+    levelOrder: LEVEL_ORDER,
 
     weaponMul: 1,
     goldMul: 1,
@@ -49,6 +53,7 @@ export const MODES = {
     // 真要調難度應該動 CORE_MAX_ATTACKERS 或守塔模式的生成密度。
     core: { hp: 14000, radius: 46, x: 0, y: 0 },
     boundedMap: true,      // 核心在世界原點：維持 4000×4000 的有邊界地圖
+    levelOrder: TD_ORDER,  // 守塔專屬關卡：固定路線＋分波（js/tdlevels.js）
     enemyTarget: 'core',
 
     weaponMul: 0.6,      // 自身武器變弱 → 砲塔才是主力
