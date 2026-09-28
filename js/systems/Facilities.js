@@ -13,6 +13,7 @@ import { Mercenary, MERC, REALM } from '../entities/Mercenary.js';
 import { Projectile } from '../entities/Projectile.js';
 import { sound } from '../audio.js';
 import { save } from '../save.js';
+import { nearestOnPaths } from '../tdlevels.js';
 
 // 金幣乘數的天花板。天賦財運 × 模式 × 祝福 × 每日規則 × 淘金潮是純乘法疊加、
 // 原本沒有上限 —— 實測空存檔 23 分鐘 5.8 萬金，帶滿 meta 加成的存檔同時間 142 萬，
@@ -49,6 +50,20 @@ export function buildFacility(game, type = 'turret') {
   if (game.gold < cost) {
     game.ui.say(`金幣不足，佈署【${conf.name}】需要 ${cost} 🪙`, '#ffb703', 1.6);
     return;
+  }
+
+  // 守塔關：只能蓋在路邊（不能擋在路上，也不能離路線太遠）
+  if (game.td) {
+    const near = nearestOnPaths(game.level, game.player.x, game.player.y);
+    const half = game.level.pathWidth / 2;
+    if (near.d < half + 10) {
+      game.ui.say('不能蓋在路上 —— 站到路邊再佈署', '#ffb703', 1.6);
+      return;
+    }
+    if (near.d > half + 240) {
+      game.ui.say('離路線太遠了，打不到怪物', '#ffb703', 1.6);
+      return;
+    }
   }
 
   const minD = conf.minSpacing || 40;

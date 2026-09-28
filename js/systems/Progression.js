@@ -403,6 +403,7 @@ export function checkAchievements(game, isVictory) {
 export function objectiveText(game) {
   const lv = game.level;
   if (!lv) return '';
+  if (game.td) return game.td.objective();
   const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   if (lv.id === 'endless') {
     const wait = Math.ceil(game.spawner.nextEndlessBossAt - game.gameTime);

@@ -19,6 +19,8 @@ import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
 import { DropItem } from './entities/DropItem.js';
 import { MERC } from './entities/Mercenary.js';
+import './tdlevels.js';   // 守塔專屬關卡併入 LEVELS（side effect）
+import { TowerDefense } from './systems/TowerDefense.js';
 
 
 import { InputController } from './input.js';
@@ -30,7 +32,6 @@ import { sound } from './audio.js';
 import { CHARACTERS } from './characters.js';
 import {
   LEVELS,
-  LEVEL_ORDER,
   currentWave,
   pickEnemy,
   enemyScale,
@@ -171,10 +172,15 @@ class Game {
     this.modeId = MODES[save.data.mode] ? save.data.mode : 'survivor';
     this.mode = getMode(this.modeId);
     setWorldBounded(!!this.mode.boundedMap);
-    this.levelId = save.isUnlocked(save.data.lastLevel, this.modeId) ? save.data.lastLevel : 'street';
+    {
+      const order = getMode(this.modeId).levelOrder;
+      this.levelId = order.includes(save.data.lastLevel) && save.isUnlocked(save.data.lastLevel, this.modeId)
+        ? save.data.lastLevel : order[0];
+    }
     this.core = null;
     this.player = new Player(0, 0, this.characterId);
     this.player.game = this;
+    this.td = null;   // 守塔路線與波次 (start() 依關卡建立)
     this.weaponManager = new WeaponManager(this.player);
     // 武器系統也要能呼叫回遊戲層 (宙斯連鎖閃電 game.chainShock、商人臨時增益
     // 在被動重算後補回)。先前只設了 player.game，WeaponManager 自己讀的
@@ -879,10 +885,12 @@ class Game {
     setWorldBounded(!!this.mode.boundedMap);   // 生存者：無限地圖；守塔：4000×4000 圍牆
     this._recycleTimer = 0;
     this._recycleFrom = null;
-    this.core = this.mode.core ? new Core(this.mode.core) : null;
+    // 守塔關卡可覆寫核心血量（只挨漏網之魚，血量比開放地圖時低）
+    this.core = this.mode.core ? new Core({ ...this.mode.core, hp: this.level.coreHp || this.mode.core.hp }) : null;
     const spawnY = this.core ? this.core.y + this.core.radius + 90 : 0;
     this.player = new Player(this.core ? this.core.x : 0, spawnY, this.characterId);
     this.player.game = this;
+    this.td = this.level.td && this.core ? new TowerDefense(this) : null;   // 守塔：路線＋分波
     this.weaponManager = new WeaponManager(this.player);
     // 武器系統也要能呼叫回遊戲層 (宙斯連鎖閃電 game.chainShock、商人臨時增益
     // 在被動重算後補回)。先前只設了 player.game，WeaponManager 自己讀的
@@ -1108,6 +1116,16 @@ class Game {
     const applied = enemy.lastDamageTaken || damage;
     if (weaponId) this.weaponManager.recordDamage(weaponId, applied);
     this.particles.createDamageText(enemy.x, enemy.y, applied, false);
+  }
+
+  onBossSpawned(boss) {
+    this.boss = boss;
+    this.camera.shake = 15;
+    this.ui.say(
+      boss.isFinal ? '終極首領降臨！擊敗它即可完成任務！' : this.player.character.lines.boss,
+      '#ff0055',
+      boss.isFinal ? 5 : 3.2
+    );
   }
 
   // 封印精英：靠近特工時鎖住一把武器，死亡（或被回收）就解封。至少留一把能用的武器。
@@ -1515,22 +1533,21 @@ class Game {
     }
 
     // 3. 怪物波次生成
-    this.spawner.update(dt, this.gameTime, this.player, this.enemies, (boss) => {
-      this.boss = boss;
-      this.camera.shake = 15;
-      this.ui.say(
-        boss.isFinal ? '終極首領降臨！擊敗它即可完成任務！' : this.player.character.lines.boss,
-        '#ff0055',
-        boss.isFinal ? 5 : 3.2
-      );
-    });
+    this.spawner.update(dt, this.gameTime, this.player, this.enemies, (boss) => this.onBossSpawned(boss));
+    if (this.td) this.td.update(dt);
+    const showNext = !!(this.td && this.td.phase === 'break');
+    if (showNext !== this._nextWaveShown) {
+      this._nextWaveShown = showNext;
+      document.getElementById('btn-next-wave')?.classList.toggle('hidden', !showNext);
+    }
 
     // 4. 更新怪物行動、遠程射擊與自爆回呼
     // 守塔模式：雜兵朝基地核心進攻；Boss 仍鎖玩家 (技能全以玩家為原點，且核心撐不住 Boss)
     const mobTarget = this.core && this.mode.enemyTarget === 'core' ? this.core : this.player;
     for (const enemy of this.enemies) {
       if (enemy.isDead) continue;
-      enemy.update(dt, enemy.isBoss ? this.player : mobTarget, {
+      const tdTarget = this.td && enemy.path ? this.td.targetFor(enemy, mobTarget) : null;
+      enemy.update(dt, enemy.isBoss ? this.player : (tdTarget || mobTarget), {
         onExplode: (boomer) => {
           // 自爆蟲引爆
           this.particles.createExplosion(boomer.x, boomer.y, 75);
@@ -1640,6 +1657,9 @@ class Game {
     // 推擠對所有貼上來的怪都生效 (物理阻擋)，但「打得到核心」的只有最外圈的
     // CORE_MAX_ATTACKERS 隻 —— 否則傷害會隨怪數無上限累加 (實測不防守時會衝到
     // 2,972 DPS、249 隻同時啃)，核心開多少血都是幾十秒內被秒。
+    // 守塔：沿路線走的怪被夾在路寬內（路兩側視為牆）
+    if (this.td) for (const e of this.enemies) if (!e.isDead) this.td.clamp(e);
+
     if (this.core) {
       this.core.update(dt);
       let attackers = 0;
@@ -3153,7 +3173,7 @@ class Game {
 
     // 解鎖新關卡後，選單要立刻反映
     if (result.unlockedNew) {
-      this.ui.buildLevelSelect(LEVELS, LEVEL_ORDER, save, (id) => {
+      this.ui.buildLevelSelect(LEVELS, getMode(this.modeId).levelOrder, save, (id) => {
         this.levelId = id;
         save.set({ lastLevel: id });
       }, this.levelId);
@@ -3182,6 +3202,7 @@ class Game {
 
     // 繪製地板漸層 + 網格 (本身即不透明滿版，不需另外清屏)
     this.ground.drawFloorGrid(this.ctx, this.level || LEVELS.street, renderCam, this.vw, this.vh, this.gameTime || 0);
+    if (this.td) this.td.draw(this.ctx, renderCam);   // 守塔路線
 
     // 繪製場景裝飾 (地板之上、掉落物之下)
     drawDecor(this.ctx, renderCam, this.level || LEVELS.street, this.vw, this.vh);

@@ -246,7 +246,8 @@ const results = await page.evaluate(async () => {
     // A1 LEVEL_ORDER ↔ LEVELS 完全對應
     {
       const missing = ORDER.filter((id) => !LEVELS[id]);
-      const orphans = Object.keys(LEVELS).filter((id) => !ORDER.includes(id));
+      // 守塔專屬關卡 (td: true) 由 modes.js 的 defense.levelOrder 列出，不在生存者的 LEVEL_ORDER 裡
+      const orphans = Object.keys(LEVELS).filter((id) => !ORDER.includes(id) && !LEVELS[id].td);
       ok('A1 LEVEL_ORDER 每個 id 都在 LEVELS，且沒有孤兒關卡',
         missing.length === 0 && orphans.length === 0,
         `LEVEL_ORDER ${ORDER.length} 關（${ORDER.join('→')}）；LEVELS ${Object.keys(LEVELS).length} 筆；`
