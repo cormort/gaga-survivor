@@ -17,6 +17,7 @@
 // 世界 → 宏觀畫布的縮尺。從 4 提高到 3：整張世界烘一次的成本只多 1.8 倍記憶體
 // (4000/3 ≈ 1334²)，但道路/板塊/渠道的邊緣銳利度明顯提升 (放大倍率從 4× 降到 3×)。
 import { worldBounds } from '../config.js';
+import { onPath } from '../tdlevels.js';
 
 const SCALE = 3;
 const LANDMARK_SPRITE = new Map();   // key: `${kind}:${seed}` → canvas
@@ -575,6 +576,7 @@ export function drawLandmarks(ctx, camera, level, vw, vh) {
       const sy = wy - camera.y;
       const sp = landmarkSprite(kind);
       if (sx < -sp.r || sx > vw + sp.r || sy < -sp.r || sy > vh + sp.r) continue;
+      if (onPath(level, wx, wy, sp.r * 0.8)) continue;   // 守塔：地標不壓在路上
 
       const scale = 0.8 + hash(cx, cy, seed + 105) * 0.45;
       const flip = hash(cx, cy, seed + 106) > 0.5 ? -1 : 1;

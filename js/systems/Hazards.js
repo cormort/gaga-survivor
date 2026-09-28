@@ -10,6 +10,7 @@
 
 import { GAME_CONFIG, FX, worldBounds, isWorldBounded } from '../config.js';
 import { LEVELS } from '../levels.js';
+import { onPath } from '../tdlevels.js';
 import { DropItem, DestructibleCrate } from '../entities/DropItem.js';
 import { JEWEL_DROP, rollJewel } from '../jewels.js';
 import { sound } from '../audio.js';
@@ -55,7 +56,7 @@ function spawnExplodableProp(game, minD) {
       px = bounds.minX + 250 + Math.random() * (bounds.maxX - bounds.minX - 500);
       py = bounds.minY + 250 + Math.random() * (bounds.maxY - bounds.minY - 500);
       tries++;
-    } while (Math.hypot(px, py) < minD && tries < 20);
+    } while ((Math.hypot(px, py) < minD || onPath(game.level, px, py, 32)) && tries < 40);   // 守塔：不擺在路上
   }
 
   const type = types[Math.floor(Math.random() * types.length)];
@@ -202,7 +203,7 @@ export function spawnSingleDestructible(game, minD = 200) {
       px = bounds.minX + 160 + Math.random() * (bounds.maxX - bounds.minX - 320);
       py = bounds.minY + 160 + Math.random() * (bounds.maxY - bounds.minY - 320);
       tries++;
-    } while (game.player && Math.hypot(px - game.player.x, py - game.player.y) < minD && tries < 25);
+    } while (((game.player && Math.hypot(px - game.player.x, py - game.player.y) < minD) || onPath(game.level, px, py, 24)) && tries < 40);   // 守塔：不擺在路上
   }
 
   const kind = Math.random() < 0.65 ? 'crate' : 'barrel';

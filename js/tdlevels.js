@@ -127,6 +127,13 @@ export const TD_ORDER = ['td_canyon', 'td_fork', 'td_fortress'];
 // 併入 LEVELS：Spawner、音樂、關卡選單等所有以 id 查關卡的地方都能直接用
 Object.assign(LEVELS, TD_LEVELS);
 
+// 場景物件避開路線：守塔關裡 (x,y) 半徑 r 的物件是否會壓到路（含 margin 路肩）。
+// 非守塔關一律回傳 false。
+export function onPath(level, x, y, r = 0, margin = 30) {
+  if (!level || !level.td) return false;
+  return nearestOnPaths(level, x, y).d < level.pathWidth / 2 + r + margin;
+}
+
 // 點到線段的距離與投影（路寬夾制、砲塔「只能蓋路邊」判定共用）
 export function nearestOnPaths(level, x, y) {
   let best = { d: Infinity, px: x, py: y };

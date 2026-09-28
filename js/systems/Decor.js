@@ -5,6 +5,7 @@
 // 同一組 CELL/DENSITY，裝飾只是「每格撒一個、換 sprite」，逛起來每關都一樣。
 
 import { getSprite, hasSprite } from '../sprites.js';
+import { onPath } from '../tdlevels.js';
 
 const CELL = 240;          // 每格最多一個裝飾物 (聚落時會多放 2 個)
 const DENSITY = 0.45;      // 有裝飾物的格子比例 (預設值，可被關卡覆寫)
@@ -84,6 +85,7 @@ export function drawDecor(ctx, camera, level, vw, vh) {
         const px = sx + ox;
         const py = sy + oy;
         if (px < -80 || px > vw + 80 || py < -80 || py > vh + 80) continue;
+        if (onPath(level, wx + ox, wy + oy, sp.w * scale * 0.5)) continue;   // 守塔：不擺在路上
 
         ctx.save();
         ctx.globalAlpha = 0.85;
