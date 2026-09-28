@@ -1547,7 +1547,8 @@ class Game {
     for (const enemy of this.enemies) {
       if (enemy.isDead) continue;
       const tdTarget = this.td && enemy.path ? this.td.targetFor(enemy, mobTarget) : null;
-      enemy.update(dt, enemy.isBoss ? this.player : (tdTarget || mobTarget), {
+      // 守塔關的首領也沿路線走（tdTarget）；其餘模式的首領照舊追玩家
+      enemy.update(dt, tdTarget || (enemy.isBoss ? this.player : mobTarget), {
         onExplode: (boomer) => {
           // 自爆蟲引爆
           this.particles.createExplosion(boomer.x, boomer.y, 75);

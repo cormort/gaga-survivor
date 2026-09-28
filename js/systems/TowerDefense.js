@@ -68,9 +68,13 @@ export class TowerDefense {
     g.ui.say(`⚔️ 第 ${this.waveIdx}/${this.total} 波來襲！`, '#ff5e5e', 2);
     if (wave.boss) {
       g.spawner.spawnBoss({ ...wave.boss, final: true }, g.player, g.enemies, (boss) => g.onBossSpawned(boss));
-      const [x, y] = paths[0][0];
-      g.boss.x = x;
-      g.boss.y = y;
+      // 首領也從入口出發、沿路線走向核心（輪流挑一條路線）
+      const path = paths[(this.waveIdx - 1) % paths.length];
+      g.boss.x = path[0][0];
+      g.boss.y = path[0][1];
+      g.boss.path = path;
+      g.boss.pathIdx = 1;
+      g.boss._wp = { x: path[1][0], y: path[1][1], radius: 0 };
     }
   }
 
