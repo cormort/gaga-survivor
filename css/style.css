@@ -794,6 +794,7 @@ body, html {
 #achievements-modal,
 #quest-modal,
 #codex-modal,
+#slot-modal,
 #recipe-modal,
 #shop-modal {
   z-index: 200;
@@ -3236,3 +3237,11 @@ body, html {
 .codex-name { font-size: 13px; font-weight: 700; color: #e9ecef; }
 .codex-sub { font-size: 11px; color: #9fb0c8; }
 .codex-tabs .shop-tab { padding: 6px 4px; font-size: 12px; white-space: nowrap; }
+
+/* 存檔欄位 */
+.slot-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.slot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+.slot-row.current { border-color: #00e5ff; box-shadow: 0 0 10px rgba(0,229,255,0.25); }
+.slot-info { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.slot-info span { opacity: 0.75; font-size: 12px; }
+.slot-actions { display: flex; gap: 6px; flex-shrink: 0; }

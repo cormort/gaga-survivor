@@ -157,7 +157,7 @@ export function tryUpgradeNearestTurret(game) {
 export function hireMercenary(game) {
   if (game.state !== 'PLAYING' || !game.player) return;
   if (!game.mode.mercs) {
-    game.ui.say('生存者模式沒有傭兵 —— 靠走位活下來', '#8a9bb0', 1.6);
+    game.ui.say('此模式沒有傭兵', '#8a9bb0', 1.6);
     return;
   }
   if (game.mercenaries.length >= MERC.maxCount) {
