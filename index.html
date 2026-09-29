@@ -221,6 +221,84 @@
       </button>
     </div>
 
+    <!-- 建築放置提示 HUD (Tower Defense Placement HUD) -->
+    <div id="placement-hud" class="placement-hud hidden">
+      <div class="placement-hud-content">
+        <span class="placement-hud-icon">🏗️</span>
+        <div class="placement-hud-text">
+          <div id="placement-hud-title" class="placement-hud-title">佈署防禦工事</div>
+          <div class="placement-hud-sub">點擊地面或戰術地基確認放置 • 靠近地基自動吸附 • 右鍵或 ESC 取消</div>
+        </div>
+        <button id="btn-cancel-placement" class="placement-cancel-btn">✕ 取消</button>
+      </div>
+    </div>
+
+    <!-- 設施檢查/升級/拆除彈窗 (Tower Defense Inspector) -->
+    <div id="facility-inspect-modal" class="overlay hidden">
+      <div class="modal-content facility-inspect-card">
+        <div class="modal-header inspect-header">
+          <div class="inspect-header-flex">
+            <span id="inspect-icon" class="inspect-icon">🔫</span>
+            <div class="inspect-header-info">
+              <h2 id="inspect-title" class="glow-text">機槍砲台</h2>
+              <div class="inspect-badges">
+                <span id="inspect-level" class="inspect-level-badge">LV.1</span>
+                <span id="inspect-type" class="inspect-type-badge">防禦工事</span>
+              </div>
+            </div>
+          </div>
+          <button id="btn-close-inspect" class="inspect-close-btn" title="關閉 (ESC)">✕</button>
+        </div>
+
+        <div id="inspect-socket-badge" class="inspect-socket-badge hidden">
+          <span id="inspect-socket-icon" class="socket-icon">🎯</span>
+          <div class="socket-info">
+            <b id="inspect-socket-name">戰術地基槽</b>
+            <span id="inspect-socket-desc">射程 +15%</span>
+          </div>
+        </div>
+
+        <div class="inspect-stats">
+          <div class="inspect-stat-row">
+            <span>❤️ 耐久度</span>
+            <span id="inspect-hp">900 / 900</span>
+          </div>
+          <div class="inspect-stat-bar-bg">
+            <div id="inspect-hp-bar" class="inspect-stat-bar-fill"></div>
+          </div>
+          <div class="inspect-stat-grid">
+            <div class="stat-cell">
+              <span class="stat-label">💥 威力/DPS</span>
+              <span id="inspect-dmg" class="stat-value">40</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-label">🎯 射程半徑</span>
+              <span id="inspect-range" class="stat-value">270</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-label">⏱️ 射速/週期</span>
+              <span id="inspect-rate" class="stat-value">0.18s</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-label">🛡️ 專精型態</span>
+              <span id="inspect-variant" class="stat-value">標準型</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="inspect-actions">
+          <button id="btn-inspect-upgrade" class="game-btn primary-btn inspect-btn">
+            <span>⚙️ 強化升級</span>
+            <span id="inspect-upgrade-cost" class="btn-cost-tag">50 🪙</span>
+          </button>
+          <button id="btn-inspect-recycle" class="game-btn danger-btn inspect-btn">
+            <span>♻️ 拆除回收 (70%)</span>
+            <span id="inspect-recycle-val" class="btn-cost-tag">+42 🪙</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 升級三選一卡牌彈窗 (Roguelike Modal) -->
     <div id="level-up-modal" class="overlay hidden">
       <div class="modal-content">

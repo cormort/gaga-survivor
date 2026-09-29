@@ -238,6 +238,44 @@ export class UIManager {
     this.aspectModal = document.getElementById('aspect-modal');
     this.aspectList = document.getElementById('aspect-list');
 
+    // 守塔建築放置預覽 HUD 與設施檢查面板
+    this.placementHud = document.getElementById('placement-hud');
+    this.placementHudTitle = document.getElementById('placement-hud-title');
+    this.btnCancelPlacement = document.getElementById('btn-cancel-placement');
+    this.facilityInspectModal = document.getElementById('facility-inspect-modal');
+    this.inspectIcon = document.getElementById('inspect-icon');
+    this.inspectTitle = document.getElementById('inspect-title');
+    this.inspectLevel = document.getElementById('inspect-level');
+    this.inspectType = document.getElementById('inspect-type');
+    this.btnCloseInspect = document.getElementById('btn-close-inspect');
+    this.inspectSocketBadge = document.getElementById('inspect-socket-badge');
+    this.inspectSocketIcon = document.getElementById('inspect-socket-icon');
+    this.inspectSocketName = document.getElementById('inspect-socket-name');
+    this.inspectSocketDesc = document.getElementById('inspect-socket-desc');
+    this.inspectHp = document.getElementById('inspect-hp');
+    this.inspectHpBar = document.getElementById('inspect-hp-bar');
+    this.inspectDmg = document.getElementById('inspect-dmg');
+    this.inspectRange = document.getElementById('inspect-range');
+    this.inspectRate = document.getElementById('inspect-rate');
+    this.inspectVariant = document.getElementById('inspect-variant');
+    this.btnInspectUpgrade = document.getElementById('btn-inspect-upgrade');
+    this.inspectUpgradeCost = document.getElementById('inspect-upgrade-cost');
+    this.btnInspectRecycle = document.getElementById('btn-inspect-recycle');
+    this.inspectRecycleVal = document.getElementById('inspect-recycle-val');
+
+    this.btnCancelPlacement?.addEventListener('click', () => {
+      if (typeof this._onCancelPlacement === 'function') this._onCancelPlacement();
+    });
+    this.btnCloseInspect?.addEventListener('click', () => {
+      this.showFacilityInspector(false);
+    });
+    this.btnInspectUpgrade?.addEventListener('click', () => {
+      if (typeof this._onInspectUpgrade === 'function') this._onInspectUpgrade();
+    });
+    this.btnInspectRecycle?.addEventListener('click', () => {
+      if (typeof this._onInspectRecycle === 'function') this._onInspectRecycle();
+    });
+
     this.charSelect = document.getElementById('character-select');
     this.levelSelect = document.getElementById('level-select');
     this.bubble = document.getElementById('dialogue-bubble');
@@ -1045,6 +1083,110 @@ export class UIManager {
     } else {
       this.turretUpBtn.classList.add('hidden');
       this._turretUpCb = null;
+    }
+  }
+
+  // 守塔建築放置預覽 HUD (顯示/隱藏與更新標題)
+  showPlacementHUD(show, conf = null, cost = 0, onCancel = null) {
+    if (!this.placementHud) return;
+    if (show) {
+      this.placementHud.classList.remove('hidden');
+      if (this.placementHudTitle && conf) {
+        this.placementHudTitle.textContent = `佈署【${conf.name}】(${cost} 🪙)`;
+      }
+      this._onCancelPlacement = onCancel;
+    } else {
+      this.placementHud.classList.add('hidden');
+      this._onCancelPlacement = null;
+    }
+  }
+
+  // 守塔設施詳細資訊、專精升級與拆除回收彈窗
+  showFacilityInspector(show, turret = null, callbacks = {}) {
+    if (!this.facilityInspectModal) return;
+    if (show && turret) {
+      this.facilityInspectModal.classList.remove('hidden');
+      const conf = turret.fConf || {};
+      if (this.inspectIcon) this.inspectIcon.textContent = conf.icon || '🔫';
+      if (this.inspectTitle) this.inspectTitle.textContent = conf.name || '防禦設施';
+      if (this.inspectLevel) this.inspectLevel.textContent = `LV.${turret.level || 1}`;
+      if (this.inspectType) {
+        this.inspectType.textContent = (turret.facilityType === 'barracks' || turret.facilityType === 'manufactorum') ? '帝皇軍工' : '防禦工事';
+      }
+
+      // 戰術地基槽狀態
+      if (turret.socket) {
+        this.inspectSocketBadge?.classList.remove('hidden');
+        if (this.inspectSocketName) this.inspectSocketName.textContent = turret.socket.label;
+        const bonusDesc = turret.socket.bonus === 'range' ? '射程 +15%' :
+                          turret.socket.bonus === 'haste' ? '攻擊冷卻 -15%' :
+                          turret.socket.bonus === 'damage' ? '傷害威力 +20%' :
+                          turret.socket.bonus === 'armor' ? '最大耐久 +30%' : '戰術增益';
+        if (this.inspectSocketDesc) this.inspectSocketDesc.textContent = bonusDesc;
+        const socketIcon = turret.socket.bonus === 'range' ? '🎯' :
+                           turret.socket.bonus === 'haste' ? '⚡' :
+                           turret.socket.bonus === 'damage' ? '⚔️' :
+                           turret.socket.bonus === 'armor' ? '🛡️' : '✨';
+        if (this.inspectSocketIcon) this.inspectSocketIcon.textContent = socketIcon;
+      } else {
+        this.inspectSocketBadge?.classList.add('hidden');
+      }
+
+      // 耐久度數值與進度條
+      if (this.inspectHp) this.inspectHp.textContent = `${Math.round(turret.hp)} / ${turret.maxHp}`;
+      if (this.inspectHpBar) {
+        const pct = Math.max(0, Math.min(100, (turret.hp / turret.maxHp) * 100));
+        this.inspectHpBar.style.width = `${pct}%`;
+        this.inspectHpBar.style.background = pct > 50 ? 'linear-gradient(90deg, #00f59b, #00e5ff)' : pct > 25 ? 'linear-gradient(90deg, #ffb703, #fd7e14)' : 'linear-gradient(90deg, #ff4757, #ff6b81)';
+      }
+
+      // 各項數據展示
+      if (this.inspectDmg) {
+        const dmgVal = turret.facilityType === 'electric_grid' ? `${conf.dps} DPS` :
+                       turret.facilityType === 'purifier' ? `回血 +${conf.healAmount}` :
+                       turret.facilityType === 'barricade' ? `${Math.round((conf.reflectPct || 1) * 100)}% 反傷` :
+                       `${Math.round((conf.damage || 40) * (turret.dmgMul || 1))}`;
+        this.inspectDmg.textContent = dmgVal;
+      }
+      if (this.inspectRange) {
+        const rangeVal = (turret.facilityType === 'turret' || turret.facilityType === 'heavy_bolter') ?
+                         Math.round((conf.range || 270) * (turret.rangeMul || 1)) :
+                         (conf.fieldRadius || conf.pulseRadius || 80);
+        this.inspectRange.textContent = `${rangeVal} px`;
+      }
+      if (this.inspectRate) {
+        const cd = conf.fireRate ? `${(conf.fireRate * (turret.cdrMulMod || 1)).toFixed(2)}s` :
+                   conf.pulseCd ? `${(conf.pulseCd * (turret.cdrMulMod || 1)).toFixed(1)}s` :
+                   conf.spawnCd ? `${(conf.spawnCd * (turret.cdrMulMod || 1)).toFixed(1)}s` :
+                   '常駐';
+        this.inspectRate.textContent = cd;
+      }
+      if (this.inspectVariant) {
+        const varLabel = turret.variant === 'flame' ? '烈焰模組' :
+                         turret.variant === 'cryo' ? '極寒模組' :
+                         turret.variant === 'tesla' ? '電漿模組' :
+                         '標準配置';
+        this.inspectVariant.textContent = varLabel;
+      }
+
+      // 按鈕回呼與花費標籤
+      const upCost = turret.getUpgradeCost ? turret.getUpgradeCost() : 60;
+      if (this.inspectUpgradeCost) this.inspectUpgradeCost.textContent = `${upCost} 🪙`;
+      const sellVal = turret.getSellValue ? turret.getSellValue() : Math.round((conf.baseCost || 60) * 0.7);
+      if (this.inspectRecycleVal) this.inspectRecycleVal.textContent = `+${sellVal} 🪙`;
+
+      this._onInspectUpgrade = callbacks.onUpgrade;
+      this._onInspectRecycle = callbacks.onRecycle;
+      this._onInspectClose = callbacks.onClose;
+    } else {
+      this.facilityInspectModal?.classList.add('hidden');
+      this._onInspectUpgrade = null;
+      this._onInspectRecycle = null;
+      if (typeof this._onInspectClose === 'function') {
+        const cb = this._onInspectClose;
+        this._onInspectClose = null;
+        cb();
+      }
     }
   }
 

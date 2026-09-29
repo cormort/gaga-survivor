@@ -158,17 +158,30 @@ export const TURRET = {
 };
 
 export class Turret {
-  constructor(x, y, facilityType = 'turret', variant = 'standard') {
+  constructor(x, y, facilityType = 'turret', variant = 'standard', socket = null) {
     this.x = x;
     this.y = y;
     this.facilityType = facilityType;
     this.fConf = FACILITY_TYPES[facilityType] || FACILITY_TYPES.turret;
     this.radius = this.fConf.radius;
     this.maxHp = this.fConf.maxHp;
-    this.hp = this.maxHp;
     this.variant = variant;
     this.conf = TURRET_VARIANTS[variant] || TURRET_VARIANTS.standard;
+    this.level = 1;
+    this.socket = socket;
+    this.socketId = socket ? socket.id : null;
+    this.socketBonus = socket ? socket.bonus : null;
 
+    // 戰術地基槽加成 (Tactical Socket Buffs)
+    this.rangeMul = 1.0;
+    this.cdrMulMod = 1.0;
+    this.dmgMul = 1.0;
+    if (this.socketBonus === 'range') this.rangeMul = 1.15;
+    if (this.socketBonus === 'haste') this.cdrMulMod = 0.85;
+    if (this.socketBonus === 'damage') this.dmgMul = 1.20;
+    if (this.socketBonus === 'armor') this.maxHp = Math.round(this.maxHp * 1.30);
+
+    this.hp = this.maxHp;
     this.cooldownTimer = 0;
     this.angle = 0;
     this.muzzleTimer = 0;
@@ -189,11 +202,31 @@ export class Turret {
     sound.playGem();
   }
 
-  // 砲塔冷卻倍率 (每日詞綴「淘金狂熱」的 turretCdr)。規則層在 mergeRules 之後
-  // 掛在 game.rules 上；先前 turretCdr 沒有任何讀者，README 的 -35% 從未生效。
+  upgradeLevel() {
+    this.level = (this.level || 1) + 1;
+    const hpBoost = Math.round(this.fConf.maxHp * 0.3);
+    this.maxHp += hpBoost;
+    this.hp = Math.min(this.maxHp, this.hp + hpBoost);
+    this.dmgMul = (this.dmgMul || 1) * 1.2;
+    sound.playEvoFanfare();
+  }
+
+  getUpgradeCost() {
+    const base = this.fConf.baseCost || 60;
+    return Math.round(base * 0.75 * (this.level || 1));
+  }
+
+  getSellValue() {
+    const base = this.fConf.baseCost || 60;
+    const levelInvested = (this.level > 1) ? (this.level - 1) * Math.round(base * 0.75) : 0;
+    return Math.round((base + levelInvested) * 0.7);
+  }
+
+  // 砲塔冷卻倍率 (每日詞綴「淘金狂熱」的 turretCdr + 地基加速)
   cdMul(game) {
     const m = game && game.rules && game.rules.turretCdr;
-    return typeof m === 'number' && m > 0 ? m : 1;
+    const base = typeof m === 'number' && m > 0 ? m : 1;
+    return base * (this.cdrMulMod || 1);
   }
 
   update(dt, enemies, onHit, player = null, game = null) {
@@ -865,4 +898,170 @@ export class Turret {
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a.toFixed(3)})`;
+}
+
+// 繪製地圖上的戰術地基槽 (Tactical Sockets)
+export function drawSocket(ctx, camera, socket, isOccupied = false, isHovered = false, animTimer = 0) {
+  const sx = socket.x - camera.x;
+  const sy = socket.y - camera.y;
+  if (sx < -80 || sx > window.innerWidth + 80 || sy < -80 || sy > window.innerHeight + 80) return;
+
+  const colorMap = {
+    range: '#00f5ff',
+    haste: '#b5179e',
+    damage: '#f39c12',
+    armor: '#2ecc71',
+  };
+  const iconMap = {
+    range: '🎯',
+    haste: '⚡',
+    damage: '⚔️',
+    armor: '🛡️',
+  };
+  const themeColor = colorMap[socket.bonus] || '#ffd166';
+  const icon = iconMap[socket.bonus] || '⚙️';
+
+  ctx.save();
+
+  // 六角形合金底座
+  const r = 30;
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const ang = (i * Math.PI) / 3;
+    const px = sx + Math.cos(ang) * r;
+    const py = sy + Math.sin(ang) * r;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = isOccupied ? 'rgba(20, 32, 48, 0.9)' : 'rgba(12, 20, 32, 0.85)';
+  ctx.fill();
+
+  // 外框高亮
+  ctx.lineWidth = isHovered ? 3 : 1.8;
+  ctx.strokeStyle = isHovered ? '#ffffff' : themeColor;
+  if (isHovered) {
+    ctx.shadowColor = themeColor;
+    ctx.shadowBlur = 14;
+  }
+  ctx.stroke();
+
+  // 若未佔用，繪製內部全息發光能量紋理與戰術標誌
+  if (!isOccupied) {
+    // 內縮六角形
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = `${themeColor}66`;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const ang = (i * Math.PI) / 3;
+      const px = sx + Math.cos(ang) * (r * 0.65);
+      const py = sy + Math.sin(ang) * (r * 0.65);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    // 全息浮動圖標
+    const floatY = Math.sin(animTimer * 4 + socket.x) * 3;
+    ctx.font = '16px "Segoe UI Emoji", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(icon, sx, sy + floatY);
+
+    // 戰術加成簡短標籤
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillStyle = themeColor;
+    ctx.fillText(socket.label.split(' ')[0], sx, sy + r + 13);
+  } else {
+    // 佔用時繪製精簡插槽指示燈
+    ctx.fillStyle = themeColor;
+    ctx.beginPath();
+    ctx.arc(sx - r + 8, sy - r + 8, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// 繪製滑鼠/觸控建造幽靈與射程範圍預覽 (Placement Ghost)
+export function drawPlacementGhost(ctx, camera, placement, game) {
+  if (!placement) return;
+  const sx = placement.x - camera.x;
+  const sy = placement.y - camera.y;
+
+  const conf = FACILITY_TYPES[placement.type] || FACILITY_TYPES.turret;
+  const isRangeType = placement.type === 'turret' || placement.type === 'heavy_bolter';
+  let range = isRangeType ? (conf.range || 270) : (conf.pulseRadius || conf.fieldRadius || 70);
+  if (placement.socket && placement.socket.bonus === 'range') range *= 1.15;
+
+  ctx.save();
+
+  // 1. 射程 / 影響範圍圈
+  const strokeColor = placement.valid ? '#2ecc71' : '#e74c3c';
+  const fillColor = placement.valid ? 'rgba(46, 204, 113, 0.14)' : 'rgba(231, 76, 60, 0.14)';
+
+  ctx.strokeStyle = strokeColor;
+  ctx.fillStyle = fillColor;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath();
+  ctx.arc(sx, sy, range, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 2. 吸附地基提示
+  if (placement.socket) {
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#ffd166';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 36, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // 3. 半透明幽靈本體
+  ctx.globalAlpha = 0.7;
+  if (!drawPlacementGhost._tempTurret || drawPlacementGhost._tempTurret.facilityType !== placement.type) {
+    drawPlacementGhost._tempTurret = new Turret(placement.x, placement.y, placement.type);
+  }
+  const temp = drawPlacementGhost._tempTurret;
+  temp.x = placement.x;
+  temp.y = placement.y;
+  temp.draw(ctx, camera);
+  ctx.globalAlpha = 1.0;
+
+  // 4. 浮動資訊徽章 (合法 / 錯誤原因 / 地基加成)
+  let badgeText = '';
+  let badgeColor = '';
+  if (!placement.valid) {
+    badgeText = placement.reason || '無法在此建造';
+    badgeColor = '#e74c3c';
+  } else if (placement.socket) {
+    badgeText = `✨ 已吸附：${placement.socket.label}`;
+    badgeColor = '#2ecc71';
+  } else {
+    badgeText = `建造【${conf.name}】(${placement.cost || conf.baseCost} 🪙)`;
+    badgeColor = '#00f5ff';
+  }
+
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  const textW = ctx.measureText(badgeText).width;
+
+  ctx.fillStyle = 'rgba(10, 16, 28, 0.88)';
+  ctx.strokeStyle = badgeColor;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(sx - textW / 2 - 10, sy - conf.radius - 28, textW + 20, 22, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = badgeColor;
+  ctx.fillText(badgeText, sx, sy - conf.radius - 12);
+
+  ctx.restore();
 }

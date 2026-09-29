@@ -20,6 +20,7 @@ import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
 import { DropItem } from './entities/DropItem.js';
 import { MERC } from './entities/Mercenary.js';
+import { drawSocket, drawPlacementGhost } from './entities/Turret.js';
 import './tdlevels.js';   // 守塔專屬關卡併入 LEVELS（side effect）
 import { TowerDefense } from './systems/TowerDefense.js';
 
@@ -204,6 +205,9 @@ class Game {
     this.pendingLevelUps = 0;
     this._levelUpHold = 0;
     this.turrets = [];
+    this.placement = null;
+    this.inspectedTurret = null;
+    this.lastPointer = null;
     this.selectedFacility = 'turret';
     this.mercenaries = [];
     this.alliedUnits = [];
@@ -1004,6 +1008,16 @@ class Game {
     this.pendingLevelUps = 0;
     this._levelUpHold = 0;
     this.turrets = [];
+    this.placement = null;
+    this.inspectedTurret = null;
+    this.ui.showPlacementHUD(false);
+    this.ui.showFacilityInspector(false);
+    if (this.level && this.level.sockets) {
+      for (const s of this.level.sockets) {
+        s.occupied = false;
+        s.turret = null;
+      }
+    }
     this.mercenaries = [];
     this.alliedUnits = [];
     this.decals = [];
@@ -3325,6 +3339,15 @@ class Game {
     // 繪製基地核心 (守塔模式)
     if (this.core) this.core.draw(this.ctx, renderCam);
 
+    // 繪製戰術地基槽 (Tactical Sockets)
+    if (this.level && this.level.sockets) {
+      for (const s of this.level.sockets) {
+        const isOccupied = this.turrets.some(t => t.socket === s || (Math.hypot(t.x - s.x, t.y - s.y) < 25));
+        const isHovered = this.placement && this.placement.socket === s;
+        drawSocket(this.ctx, renderCam, s, isOccupied, isHovered, this.gameTime);
+      }
+    }
+
     // 繪製砲塔
     for (const t of this.turrets) {
       t.draw(this.ctx, renderCam);
@@ -3388,6 +3411,11 @@ class Game {
 
     // 守塔模式的專屬指示 (威脅來向箭頭 + 核心危急的畫面回饋)
     this.drawDefenseIndicators(renderCam);
+
+    // 繪製滑鼠/觸控建造預覽幽靈與射程範圍 (Placement Ghost)
+    if (this.placement) {
+      drawPlacementGhost(this.ctx, renderCam, this.placement, this);
+    }
 
     // 小地圖
     this.drawMinimap();
@@ -3663,8 +3691,17 @@ class Game {
 }
 
 
-// 啟動遊戲
-window.addEventListener('DOMContentLoaded', () => {
-  // 掛在 window 上方便在 console 觀察/除錯遊戲狀態
-  window.game = new Game();
-});
+export { Game };
+
+// 啟動遊戲 (容錯 readyState：若 DOMContentLoaded 已觸發則立即初始化)
+function initGame() {
+  if (!window.game) {
+    window.game = new Game();
+  }
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initGame);
+} else {
+  initGame();
+}

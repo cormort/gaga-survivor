@@ -39,7 +39,281 @@ export function updateFacilityHUD(game) {
   game.ui.updateBuildBtn(game.gold, game.turretCost);
 }
 
-export function buildFacility(game, type = 'turret') {
+// 驗證放置位置是否合法
+export function checkPlacementValid(game, wx, wy, type, socket = null) {
+  const conf = FACILITY_TYPES[type] || FACILITY_TYPES.turret;
+  const cost = getFacilityCost(game, type);
+
+  // 1. 金幣檢驗
+  if (game.gold < cost) {
+    return { valid: false, reason: `金幣不足 (${cost} 🪙)`, cost };
+  }
+
+  // 2. 若吸附到戰術地基槽 (Tactical Socket)
+  if (socket) {
+    const occupied = game.turrets.some(t => t.socket === socket || (Math.hypot(t.x - socket.x, t.y - socket.y) < 25));
+    if (occupied) {
+      return { valid: false, reason: '此戰術地基已被佔用', cost };
+    }
+    return { valid: true, reason: `戰術地基 (${socket.label})`, cost };
+  }
+
+  // 3. 守塔關卡非地基點：必須在行軍道路兩側 (路肩)
+  if (game.td) {
+    const near = nearestOnPaths(game.level, wx, wy);
+    const half = (game.level.pathWidth || 80) / 2;
+    if (near.d < half + 10) {
+      return { valid: false, reason: '不能蓋在行軍路面上', cost };
+    }
+    if (near.d > half + 250) {
+      return { valid: false, reason: '離行軍路線太遠', cost };
+    }
+  }
+
+  // 4. 與其他設施的最小間隔
+  const minD = conf.minSpacing || 40;
+  const tooClose = game.turrets.some(t => Math.hypot(t.x - wx, t.y - wy) < minD);
+  if (tooClose) {
+    return { valid: false, reason: '離鄰近工事太近', cost };
+  }
+
+  // 5. 基地核心碰撞保護 (守塔模式)
+  if (game.core) {
+    const dCore = Math.hypot(game.core.x - wx, game.core.y - wy);
+    if (dCore < (game.core.radius || 40) + conf.radius + 8) {
+      return { valid: false, reason: '不能重疊基地核心', cost };
+    }
+  }
+
+  return { valid: true, reason: '可建造', cost };
+}
+
+// 開始建造預覽 (滑鼠/觸控拖曳放置模式)
+export function startPlacement(game, type = 'turret') {
+  if (game.state !== 'PLAYING' || !game.player) return;
+  if (!game.mode.turrets) {
+    game.ui.say('目前模式無法建造防禦工事', '#8a9bb0', 1.6);
+    return;
+  }
+
+  const cost = getFacilityCost(game, type);
+  const conf = FACILITY_TYPES[type] || FACILITY_TYPES.turret;
+  if (game.gold < cost) {
+    game.ui.say(`金幣不足，佈署【${conf.name}】需要 ${cost} 🪙`, '#ffb703', 1.6);
+    sound.playHurt();
+    return;
+  }
+
+  // 關閉目前正在檢查的設施彈窗
+  if (game.inspectedTurret) {
+    closeFacilityInspector(game);
+  }
+
+  // 初始化 placement 狀態
+  const initialX = game.lastPointer ? (game.lastPointer.x + game.camera.x) : game.player.x;
+  const initialY = game.lastPointer ? (game.lastPointer.y + game.camera.y) : game.player.y;
+  const initialScreenX = game.lastPointer ? game.lastPointer.x : (game.vw / 2);
+  const initialScreenY = game.lastPointer ? game.lastPointer.y : (game.vh / 2);
+
+  game.placement = {
+    type,
+    x: initialX,
+    y: initialY,
+    screenX: initialScreenX,
+    screenY: initialScreenY,
+    valid: false,
+    reason: '',
+    socket: null,
+    cost,
+  };
+
+  updatePlacement(game, initialScreenX, initialScreenY);
+  game.ui.showPlacementHUD(true, conf, cost, () => cancelPlacement(game));
+}
+
+// 取消建造預覽
+export function cancelPlacement(game) {
+  if (game.placement) {
+    game.placement = null;
+    game.ui.showPlacementHUD(false);
+    game.ui.say('已取消建造模式', '#8a9bb0', 1.0);
+  }
+}
+
+// 更新建造幽靈位置 (含戰術地基 55px 磁性吸附)
+export function updatePlacement(game, screenX, screenY) {
+  if (!game.placement) return;
+  game.lastPointer = { x: screenX, y: screenY };
+  game.placement.screenX = screenX;
+  game.placement.screenY = screenY;
+
+  let wx = screenX + game.camera.x;
+  let wy = screenY + game.camera.y;
+
+  // 戰術地基槽磁性吸附 (55px 範圍內自動吸附)
+  let snappedSocket = null;
+  if (game.level && game.level.sockets) {
+    let closestD = 55;
+    for (const s of game.level.sockets) {
+      const isOccupied = game.turrets.some(t => t.socket === s || (Math.hypot(t.x - s.x, t.y - s.y) < 25));
+      if (isOccupied) continue;
+      const d = Math.hypot(s.x - wx, s.y - wy);
+      if (d < closestD) {
+        closestD = d;
+        snappedSocket = s;
+      }
+    }
+  }
+
+  if (snappedSocket) {
+    wx = snappedSocket.x;
+    wy = snappedSocket.y;
+    game.placement.socket = snappedSocket;
+  } else {
+    game.placement.socket = null;
+  }
+
+  game.placement.x = wx;
+  game.placement.y = wy;
+
+  const check = checkPlacementValid(game, wx, wy, game.placement.type, game.placement.socket);
+  game.placement.valid = check.valid;
+  game.placement.reason = check.reason;
+  game.placement.cost = check.cost;
+}
+
+// 確認建造
+export function confirmPlacement(game) {
+  if (!game.placement) return false;
+  const p = game.placement;
+  const check = checkPlacementValid(game, p.x, p.y, p.type, p.socket);
+  if (!check.valid) {
+    game.ui.say(check.reason || '無法在此處建造', '#ff0055', 1.4);
+    sound.playHurt();
+    return false;
+  }
+
+  const cost = check.cost;
+  if (game.gold < cost) {
+    game.ui.say(`金幣不足 (${cost} 🪙)`, '#ffb703', 1.4);
+    sound.playHurt();
+    return false;
+  }
+
+  // 扣款並建造
+  game.gold -= cost;
+  const facility = new Turret(p.x, p.y, p.type, 'standard', p.socket);
+  if (p.socket) {
+    p.socket.occupied = true;
+    p.socket.turret = facility;
+  }
+  if (game.player && game.player.facilityHpMul) {
+    facility.maxHp = Math.round(facility.maxHp * game.player.facilityHpMul);
+    facility.hp = facility.maxHp;
+  }
+  game.turrets.push(facility);
+
+  const conf = FACILITY_TYPES[p.type] || FACILITY_TYPES.turret;
+  const fxColor = p.type === 'electric_grid' ? '#b5179e' : p.type === 'purifier' ? '#00f59b' : p.type === 'barricade' ? '#ffb703' : p.type === 'heavy_bolter' ? '#f39c12' : p.type === 'barracks' ? '#27ae60' : p.type === 'manufactorum' ? '#e67e22' : '#00e5ff';
+  game.particles.createShockwave(facility.x, facility.y, 85, fxColor);
+  sound.playEvoFanfare();
+
+  const socketBonusMsg = p.socket ? `（⚡ 錨定【${p.socket.label}】！）` : '';
+  game.ui.say(`已部署【${conf.name}】${socketBonusMsg}`, fxColor, 1.8);
+
+  game.placement = null;
+  game.ui.showPlacementHUD(false);
+  updateFacilityHUD(game);
+  return true;
+}
+
+// 拆除回收 (Demolish / Sell) - 70% 金幣返還
+export function recycleFacility(game, turret) {
+  if (!turret || !game.turrets) return;
+  const idx = game.turrets.indexOf(turret);
+  if (idx === -1) return;
+
+  const refund = turret.getSellValue ? turret.getSellValue() : Math.round((turret.fConf?.baseCost || 60) * 0.7);
+  game.gold += refund;
+
+  // 釋放地基槽
+  if (turret.socket) {
+    turret.socket.occupied = false;
+    turret.socket.turret = null;
+  }
+
+  // 特效與音效
+  game.particles.createExplosion(turret.x, turret.y, 60);
+  game.particles.createShockwave(turret.x, turret.y, 80, '#ffb703');
+  sound.playHit();
+  sound.playGem();
+
+  game.turrets.splice(idx, 1);
+  game.ui.say(`已拆除回收【${turret.fConf?.name || '防禦設施'}】，返還 ${refund} 🪙`, '#ffb703', 2.0);
+
+  closeFacilityInspector(game);
+  updateFacilityHUD(game);
+}
+
+// 升級設施 (Upgrade Facility)
+export function upgradeFacility(game, turret) {
+  if (!turret || turret.isDead) return;
+
+  // 標準機槍砲台可先進化型態
+  if (turret.facilityType === 'turret' && turret.variant === 'standard') {
+    const upgradeCost = 50;
+    if (game.gold < upgradeCost) {
+      game.ui.say(`金幣不足，砲塔進化需要 ${upgradeCost} 🪙`, '#ff0055', 1.8);
+      sound.playHurt();
+      return;
+    }
+    const variants = ['flame', 'cryo', 'tesla'];
+    const chosen = variants[Math.floor(Math.random() * variants.length)];
+    game.gold -= upgradeCost;
+    turret.upgrade(chosen);
+    game.particles.createShockwave(turret.x, turret.y, 140, TURRET_VARIANTS[chosen].color);
+    sound.playEvoFanfare();
+    game.ui.say(`砲塔進化完畢：【${TURRET_VARIANTS[chosen].name}】！`, TURRET_VARIANTS[chosen].color, 2.8);
+  } else {
+    // 等級提升 (Level Up)
+    const cost = turret.getUpgradeCost ? turret.getUpgradeCost() : 60;
+    if (game.gold < cost) {
+      game.ui.say(`金幣不足，升級需要 ${cost} 🪙`, '#ff0055', 1.8);
+      sound.playHurt();
+      return;
+    }
+    game.gold -= cost;
+    turret.upgradeLevel();
+    game.particles.createShockwave(turret.x, turret.y, 100, '#00f5ff');
+    sound.playEvoFanfare();
+    game.ui.say(`【${turret.fConf?.name}】升級至 LV.${turret.level}！耐久與威力提升`, '#00f5ff', 2.2);
+  }
+
+  updateFacilityHUD(game);
+  // 刷新檢查面板
+  if (game.inspectedTurret === turret) {
+    inspectFacility(game, turret);
+  }
+}
+
+// 開啟設施檢查面板
+export function inspectFacility(game, turret) {
+  if (!turret || turret.isDead) return;
+  game.inspectedTurret = turret;
+  game.ui.showFacilityInspector(true, turret, {
+    onUpgrade: () => upgradeFacility(game, turret),
+    onRecycle: () => recycleFacility(game, turret),
+    onClose: () => closeFacilityInspector(game),
+  });
+}
+
+// 關閉設施檢查面板
+export function closeFacilityInspector(game) {
+  game.inspectedTurret = null;
+  game.ui.showFacilityInspector(false);
+}
+
+export function buildFacility(game, type = 'turret', targetX = null, targetY = null, socket = null) {
   if (game.state !== 'PLAYING' || !game.player) return;
   const conf = FACILITY_TYPES[type] || FACILITY_TYPES.turret;
   if (!game.mode.turrets) {
@@ -53,10 +327,13 @@ export function buildFacility(game, type = 'turret') {
     return;
   }
 
-  // 守塔關：只能蓋在路邊（不能擋在路上，也不能離路線太遠）
-  if (game.td) {
-    const near = nearestOnPaths(game.level, game.player.x, game.player.y);
-    const half = game.level.pathWidth / 2;
+  const bx = targetX !== null ? targetX : game.player.x;
+  const by = targetY !== null ? targetY : game.player.y;
+
+  // 守塔關：若不是指定 socket，檢查只能蓋在路邊
+  if (game.td && !socket) {
+    const near = nearestOnPaths(game.level, bx, by);
+    const half = (game.level.pathWidth || 80) / 2;
     if (near.d < half + 10) {
       game.ui.say('不能蓋在路上 —— 站到路邊再佈署', '#ffb703', 1.6);
       return;
@@ -69,15 +346,19 @@ export function buildFacility(game, type = 'turret') {
 
   const minD = conf.minSpacing || 40;
   const tooClose = game.turrets.some(
-    (t) => Math.hypot(t.x - game.player.x, t.y - game.player.y) < minD
+    (t) => Math.hypot(t.x - bx, t.y - by) < minD
   );
-  if (tooClose) {
+  if (tooClose && !socket) {
     game.ui.say('這裡太靠近其他工事設施了', '#ffb703', 1.6);
     return;
   }
 
   game.gold -= cost;
-  const facility = new Turret(game.player.x, game.player.y, type);
+  const facility = new Turret(bx, by, type, 'standard', socket);
+  if (socket) {
+    socket.occupied = true;
+    socket.turret = facility;
+  }
   if (game.player && game.player.facilityHpMul) {
     facility.maxHp = Math.round(facility.maxHp * game.player.facilityHpMul);
     facility.hp = facility.maxHp;
@@ -85,7 +366,7 @@ export function buildFacility(game, type = 'turret') {
   game.turrets.push(facility);
 
   const fxColor = type === 'electric_grid' ? '#b5179e' : type === 'purifier' ? '#00f59b' : type === 'barricade' ? '#ffb703' : type === 'heavy_bolter' ? '#f39c12' : type === 'barracks' ? '#27ae60' : type === 'manufactorum' ? '#e67e22' : '#00e5ff';
-  game.particles.createShockwave(game.player.x, game.player.y, 80, fxColor);
+  game.particles.createShockwave(bx, by, 80, fxColor);
   sound.playEvoFanfare();
   game.ui.say(`已部署【${conf.name}】！`, fxColor, 1.4);
   updateFacilityHUD(game);

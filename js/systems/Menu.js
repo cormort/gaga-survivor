@@ -15,7 +15,17 @@ import { MAX_BOOSTER_STACK, MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXP
 import { itemName } from '../items.js';
 import { save, SLOT_COUNT } from '../save.js';
 import { sound } from '../audio.js';
-import { buildFacility, hireMercenary, tryUpgradeNearestTurret } from './Facilities.js';
+import {
+  buildFacility,
+  startPlacement,
+  cancelPlacement,
+  updatePlacement,
+  confirmPlacement,
+  inspectFacility,
+  closeFacilityInspector,
+  hireMercenary,
+  tryUpgradeNearestTurret,
+} from './Facilities.js';
 import { castSkill } from './Skills.js';
 
 export function bindEvents(game) {
@@ -322,19 +332,26 @@ export function bindEvents(game) {
   };
   renderSettings();
 
-  // 佈署戰場防禦設施 (1/2/3/4/B、HUD 按鈕)
+  // 佈署戰場防禦設施 (1/2/3/4/5/6/7/B、HUD 按鈕、滑鼠點擊/右鍵取消)
   window.addEventListener('keydown', (e) => {
-    // 這幾個呼叫原本寫的是 buildFacility(this, …)（還在 main.js 時 this 就是 Game）。
-    // 抽成模組後 this 是 undefined，點按鈕或按快捷鍵都會 TypeError —— 外觀上就是
-    // 「按了沒反應」。模組內一律用 game。
-    if (e.key === '1') buildFacility(game, 'turret');
-    if (e.key === '2') buildFacility(game, 'electric_grid');
-    if (e.key === '3') buildFacility(game, 'purifier');
-    if (e.key === '4') buildFacility(game, 'barricade');
-    if (e.key === '5') buildFacility(game, 'heavy_bolter');
-    if (e.key === '6') buildFacility(game, 'barracks');
-    if (e.key === '7') buildFacility(game, 'manufactorum');
-    if (e.key === 'b' || e.key === 'B') buildFacility(game, game.selectedFacility || 'turret');
+    if (e.key === 'Escape') {
+      if (game.placement) cancelPlacement(game);
+      if (game.inspectedTurret) closeFacilityInspector(game);
+    }
+    if (e.key === '1') { game.selectedFacility = 'turret'; startPlacement(game, 'turret'); }
+    if (e.key === '2') { game.selectedFacility = 'electric_grid'; startPlacement(game, 'electric_grid'); }
+    if (e.key === '3') { game.selectedFacility = 'purifier'; startPlacement(game, 'purifier'); }
+    if (e.key === '4') { game.selectedFacility = 'barricade'; startPlacement(game, 'barricade'); }
+    if (e.key === '5') { game.selectedFacility = 'heavy_bolter'; startPlacement(game, 'heavy_bolter'); }
+    if (e.key === '6') { game.selectedFacility = 'barracks'; startPlacement(game, 'barracks'); }
+    if (e.key === '7') { game.selectedFacility = 'manufactorum'; startPlacement(game, 'manufactorum'); }
+    if (e.key === 'b' || e.key === 'B') {
+      if (game.placement) {
+        confirmPlacement(game);
+      } else {
+        startPlacement(game, game.selectedFacility || 'turret');
+      }
+    }
     if (e.key === 't' || e.key === 'T') tryUpgradeNearestTurret(game);
     if (e.key === 'g' || e.key === 'G') hireMercenary(game);
     if ((e.key === 'n' || e.key === 'N') && game.state === 'PLAYING') game.td?.startWave(true);   // 守塔：提前開戰
@@ -344,6 +361,74 @@ export function bindEvents(game) {
     if (e.key === 'r' || e.key === 'R') castSkill(game, 1);
     if (e.key === 'c' || e.key === 'C') game.usePocketItem(2);
     if (e.key === 'v' || e.key === 'V') game.usePocketItem(3);
+  });
+
+  // 守塔建築放置預覽與點擊檢查 (Canvas Pointer Events)
+  const cv = game.canvas;
+  cv.addEventListener('pointermove', (e) => {
+    if (game.placement) {
+      updatePlacement(game, e.clientX, e.clientY);
+    } else {
+      game.lastPointer = { x: e.clientX, y: e.clientY };
+    }
+  });
+
+  cv.addEventListener('pointerdown', (e) => {
+    if (game.state !== 'PLAYING') return;
+
+    // 右鍵取消建造
+    if (e.button === 2) {
+      if (game.placement) {
+        cancelPlacement(game);
+      }
+      return;
+    }
+
+    // 左鍵處理
+    if (e.button === 0) {
+      if (game.placement) {
+        confirmPlacement(game);
+        return;
+      }
+
+      // 未在建造模式時：點擊檢查既有設施或空戰術地基
+      const wx = e.clientX + game.camera.x;
+      const wy = e.clientY + game.camera.y;
+
+      // 1. 優先檢查是否點擊既有防禦設施 (半徑 35px 判定)
+      const clickedTurret = game.turrets.find(
+        (t) => Math.hypot(t.x - wx, t.y - wy) <= (t.radius || 24) + 14
+      );
+      if (clickedTurret) {
+        inspectFacility(game, clickedTurret);
+        return;
+      }
+
+      // 2. 檢查是否點擊未佔用的戰術地基 (快速進入建造吸附)
+      if (game.level && game.level.sockets) {
+        const clickedSocket = game.level.sockets.find(
+          (s) => Math.hypot(s.x - wx, s.y - wy) <= 40 &&
+            !game.turrets.some((t) => t.socket === s || Math.hypot(t.x - s.x, t.y - s.y) < 25)
+        );
+        if (clickedSocket) {
+          startPlacement(game, game.selectedFacility || 'turret');
+          updatePlacement(game, e.clientX, e.clientY);
+          return;
+        }
+      }
+
+      // 若點擊空白地面且正在檢查設施，則關閉檢查面板
+      if (game.inspectedTurret) {
+        closeFacilityInspector(game);
+      }
+    }
+  });
+
+  cv.addEventListener('contextmenu', (e) => {
+    if (game.placement) {
+      e.preventDefault();
+      cancelPlacement(game);
+    }
   });
 
   // 戰術口袋道具點擊使用 (HUD 兩格口袋 / 行動端兩顆快捷鍵，都以 data-slot 分辨)
@@ -366,7 +451,7 @@ export function bindEvents(game) {
       item.btn.addEventListener('click', () => {
         setFacilityOpen(false);   // 手機：蓋完自動收起
         game.selectedFacility = type;
-        buildFacility(game, type);
+        startPlacement(game, type);
       });
     }
   }
