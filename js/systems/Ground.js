@@ -66,6 +66,29 @@ function isDarkTone(rgb) {
   return lum < 96 && chroma < 40;
 }
 
+
+// 近看的地面細節層（在程序化色塊與材質微粒之上再疊一層「有結構」的東西）。
+// 原本地面只有低頻色塊與半透明大面板，走近看是一片平的。每關指定一種結構：
+//   slabs   水泥板：格狀接縫 + 逐板明暗 + 碎角
+//   plates  金屬板：格狀接縫 + 逐板明暗 + 鉚釘 + 內嵌面板
+//   grate   格柵板：金屬板 + 平行散熱槽
+//   drift   起伏紋：整幅環繞的波紋（積雪堆、沙丘、水面漣漪），tint 為色調
+//   network 節點網：抖動格點連成的裂縫／符文網（glow = 發光色，node = 亮點機率）
+// size 必須整除磚寬 1024（64/128/256/512），整張才接得上。tint/glow 是 "r,g,b"。
+const GROUND_DETAIL = {
+  street:    { kind: 'slabs',   size: 256 },
+  lab:       { kind: 'plates',  size: 128 },
+  frost:     { kind: 'drift',   size: 512, tint: '225,240,255' },
+  core:      { kind: 'network', size: 256, glow: '255,110,30', node: 0.0 },
+  subway:    { kind: 'plates',  size: 256 },
+  swamp:     { kind: 'drift',   size: 256, tint: '110,190,130' },
+  storm:     { kind: 'drift',   size: 512, tint: '235,205,140' },
+  foundry:   { kind: 'grate',   size: 128 },
+  frostvoid: { kind: 'drift',   size: 512, tint: '190,200,255' },
+  voidroad:  { kind: 'network', size: 256, glow: '170,110,255', node: 0.35 },
+  endless:   { kind: 'network', size: 512, glow: '140,90,255', node: 0.5 },
+};
+
 export class GroundRenderer {
   constructor() {
     // 地表磚改用 LevelCache（容量 3 關）：每張 1024² ≈ 4 MB，只增不減的話
@@ -329,6 +352,9 @@ export class GroundRenderer {
     // 4) 材質大範圍特徵 (油漬裂縫、鉚釘、熔岩餘燼、星點…)
     if (g && g.material) this._groundMaterialAccents(bx, g, h, T, P, accentMul, nl, seed);
 
+    // 5) 近看的結構細節（板縫／鉚釘／波紋／裂縫網），整張以磚寬為週期環繞
+    if (g && GROUND_DETAIL[id]) this._groundDetail(bx, GROUND_DETAIL[id], h, T, P);
+
     const tile = document.createElement('canvas');
     tile.width = tile.height = T;
     tile.getContext('2d').drawImage(big, P, P, T, T, 0, 0, T, T);
@@ -336,6 +362,122 @@ export class GroundRenderer {
     // 同一關重複玩完全命中，把 11 關都玩過也不會累積到 44 MB。
     this._groundTextures.set(id, tile);
     return tile;
+  }
+
+
+  // 結構細節層。所有格點都以「環繞後的格號」取雜湊，所以磚的右緣與下一張的
+  // 左緣一定接得上（磚寬是 size 的整數倍）。
+  _groundDetail(ctx, d, h, T, P) {
+    const S = d.size;
+    const n = T / S;
+    const lo = -Math.ceil(P / S) - 1;
+    const hi = n + Math.ceil(P / S) + 1;
+    const wrapI = (i) => ((i % n) + n) % n;
+    const H = (i, j, k) => h(wrapI(i) + 1, wrapI(j) + 1, 60 + k);
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    if (d.kind === 'slabs' || d.kind === 'plates' || d.kind === 'grate') {
+      const metal = d.kind !== 'slabs';
+      for (let j = lo; j < hi; j++) {
+        for (let i = lo; i < hi; i++) {
+          const x = P + i * S;
+          const y = P + j * S;
+          const r = H(i, j, 0);
+          // 逐板明暗：讓每一塊看起來是獨立的一片
+          ctx.fillStyle = r > 0.5 ? `rgba(255,255,255,${(0.02 + (r - 0.5) * 0.09).toFixed(3)})`
+                                  : `rgba(0,0,0,${(0.03 + (0.5 - r) * 0.16).toFixed(3)})`;
+          ctx.fillRect(x, y, S, S);
+          // 接縫：暗溝 + 受光邊
+          bevelRect(ctx, x + 1, y + 1, S - 2, S - 2, 0.10, 0.34, 2);
+          if (metal) {
+            const m = Math.max(6, S * 0.07);
+            bevelRect(ctx, x + m, y + m, S - m * 2, S - m * 2, 0.06, 0.20, 1.4);
+            for (const [rx, ry] of [[x + m * 0.5, y + m * 0.5], [x + S - m * 0.5, y + m * 0.5],
+                                    [x + m * 0.5, y + S - m * 0.5], [x + S - m * 0.5, y + S - m * 0.5]]) {
+              reliefDot(ctx, rx, ry, Math.max(1.6, S * 0.014), '200,210,215', 0.3, 1);
+            }
+            if (d.kind === 'grate') {
+              ctx.fillStyle = 'rgba(0,0,0,0.42)';
+              const gm = S * 0.22;
+              for (let k = 0; k < 5; k++) ctx.fillRect(x + gm, y + gm + k * ((S - gm * 2) / 5), S - gm * 2, Math.max(2, S * 0.03));
+            }
+          } else if (H(i, j, 1) > 0.55) {
+            // 水泥板：一道橫跨半塊的細裂與一個碎角
+            const cx0 = x + H(i, j, 2) * S * 0.5;
+            const cy0 = y + H(i, j, 3) * S;
+            reliefCrack(ctx, [[cx0, cy0], [cx0 + S * 0.18, cy0 + S * 0.05 * (H(i, j, 4) - 0.5) * 6],
+              [cx0 + S * 0.36, cy0 + S * 0.03]], 1.3, 0.8);
+          }
+        }
+      }
+    } else if (d.kind === 'drift') {
+      const rgb = d.tint;
+      const rows = n * 3;
+      for (let k = 0; k < rows; k++) {
+        const by = P + (k + H(k, 0, 5)) * (T / rows);
+        const amp = 10 + H(k, 0, 6) * 26;
+        const freq = 1 + Math.floor(H(k, 0, 7) * 3);      // 整數週期：整幅環繞
+        const ph = H(k, 0, 8) * Math.PI * 2;
+        const trace = (dy) => {
+          ctx.beginPath();
+          for (let x = -P; x <= T + P; x += 16) {
+            const yy = by + dy + Math.sin((x / T) * Math.PI * 2 * freq + ph) * amp;
+            if (x === -P) ctx.moveTo(P + x, yy); else ctx.lineTo(P + x, yy);
+          }
+          ctx.stroke();
+        };
+        ctx.strokeStyle = `rgba(${rgb},0.10)`;
+        ctx.lineWidth = 4 + H(k, 0, 9) * 8;
+        trace(0);
+        ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+        ctx.lineWidth = 3;
+        trace(9);
+      }
+      // 亮點：積雪反光／沙粒閃點／水面波光
+      for (let k = 0; k < 90; k++) {
+        reliefDot(ctx, P + H(k, 1, 10) * T, P + H(k, 2, 11) * T, 1 + H(k, 3, 12) * 1.8, rgb, 0.22, 1);
+      }
+    } else if (d.kind === 'network') {
+      // 抖動格點：每個格點在自己的格子內隨機偏移，相鄰點連成多邊形裂縫網
+      const pt = (i, j) => [P + (i + 0.15 + H(i, j, 20) * 0.7) * S, P + (j + 0.15 + H(i, j, 21) * 0.7) * S];
+      const glowRgb = d.glow;
+      for (let j = lo; j < hi; j++) {
+        for (let i = lo; i < hi; i++) {
+          const a = pt(i, j);
+          for (const [di, dj, k] of [[1, 0, 22], [0, 1, 23]]) {
+            if (H(i, j, k) < 0.25) continue;                   // 有些邊斷開，網才不會太規則
+            const b = pt(i + di, j + dj);
+            const mx = (a[0] + b[0]) / 2 + (H(i, j, k + 4) - 0.5) * S * 0.12;
+            const my = (a[1] + b[1]) / 2 + (H(i, j, k + 5) - 0.5) * S * 0.12;
+            const path = [a, [mx, my], b];
+            if (d.node > 0) {
+              // 虛空：細發光線
+              ctx.save();
+              ctx.globalCompositeOperation = 'lighter';
+              ctx.strokeStyle = `rgba(${glowRgb},0.16)`;
+              ctx.lineWidth = 1.6;
+              ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(mx, my); ctx.lineTo(b[0], b[1]); ctx.stroke();
+              ctx.restore();
+            } else {
+              reliefCrack(ctx, path, 2.2, 1);
+              if (H(i, j, k + 8) > 0.45) {
+                // 熔岩：裂縫底下透出的餘燼
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.strokeStyle = `rgba(${glowRgb},0.30)`;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(mx, my); ctx.lineTo(b[0], b[1]); ctx.stroke();
+                ctx.restore();
+              }
+            }
+          }
+          if (d.node > 0 && H(i, j, 30) < d.node) starPoint(ctx, a[0], a[1], 3 + H(i, j, 31) * 3, 0.55, true);
+        }
+      }
+    }
+    ctx.restore();
   }
 
   _groundSeed(id) {
