@@ -3312,3 +3312,19 @@ body, html {
 .pocket-grid { display: grid; grid-template-columns: repeat(2, auto); gap: 8px; justify-items: center; }
 .pocket-grid:not(:has(.pocket-btn:not(.hidden))) { display: none; }
 .pocket-grid .action-btn { width: 48px; height: 48px; }
+
+/* 手機：動作欄整體縮小＋閒置半透明，避免直排過高壓到上方武器欄與 Boss 血條 */
+@media (max-width: 619px) {
+  #action-bar { gap: 8px; }
+  #action-bar .action-btn { width: 48px; height: 48px; }
+  #action-bar .action-btn .action-icon { font-size: 20px; }
+  #action-bar .action-btn .action-key { font-size: 9px; }
+  #action-bar #btn-dash { width: 54px; height: 54px; }
+  #action-bar .facility-bar { gap: 3px; padding-bottom: 6px; }
+  #action-bar .build-btn { width: 36px; height: 36px; font-size: 8px; }
+  #action-bar .build-icon { font-size: 13px; }
+  .pocket-grid { gap: 5px; }
+  #action-bar .pocket-grid .action-btn { width: 40px; height: 40px; }
+  #action-bar .build-btn, .pocket-grid .action-btn { opacity: 0.75; }
+  #action-bar .build-btn:active, .pocket-grid .action-btn:active { opacity: 1; }
+}
