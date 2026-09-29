@@ -98,6 +98,10 @@ const BOSS_ACCENT = [
   ['boss_inkape', '#c9443a'],
   ['boss_inkfox', '#f5962d'],
   ['boss_thunder', '#9fd8ff'],
+  // 戰鎚 40K Boss (排在泛用 ['boss', …] 之前)
+  ['boss_nob', '#1b4332'],
+  ['boss_broodlord', '#7b2cbf'],
+  ['boss_carnifex', '#3c096c'],
   ['boss', '#ff4d6d'],
 ];
 
@@ -4928,6 +4932,415 @@ function drawBossThunder(x, t, r, charging, final) {
   }
 }
 
+/* ==================== 戰鎚 40K 異形與綠皮敵軍繪製 ==================== */
+
+function drawHormagaunt(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2;
+  const leg = Math.sin(p) * 4;
+  shadow(x, r * 0.8, r * 0.9);
+
+  // 鞭狀長尾
+  x.strokeStyle = '#3a0ca3';
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(-r * 0.4, bob + 2);
+  x.quadraticCurveTo(-r * 1.3, bob + Math.sin(p) * 5, -r * 1.6, bob - 2);
+  x.stroke();
+
+  // 幾丁質幾何背甲與身體
+  x.fillStyle = sphere(x, '#7209b7', r * 0.85, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.8, r * 0.55, 0.2, 0, Math.PI * 2);
+  x.fill();
+
+  // 雙柄骨刃前肢 (Scything Talons)
+  x.fillStyle = '#f72585';
+  x.strokeStyle = '#3a0ca3';
+  x.lineWidth = 1.6;
+  for (const s of [-1, 1]) {
+    x.beginPath();
+    x.moveTo(r * 0.2, bob + s * 3);
+    x.lineTo(r * 1.1 + leg * s, bob + s * 8);
+    x.lineTo(r * 0.7, bob + s * 2);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  }
+
+  // 頭部與利齒
+  x.fillStyle = '#480ca8';
+  x.beginPath();
+  x.moveTo(r * 0.4, bob - 4);
+  x.lineTo(r * 1.2, bob);
+  x.lineTo(r * 0.5, bob + 5);
+  x.closePath();
+  x.fill();
+  // 紅色複眼
+  x.fillStyle = '#ff0055';
+  x.beginPath();
+  x.arc(r * 0.7, bob - 1, 1.8, 0, Math.PI * 2);
+  x.fill();
+}
+
+function drawTermagant(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 1.8;
+  shadow(x, r * 0.8, r * 0.9);
+
+  // 幾丁質身軀
+  x.fillStyle = sphere(x, '#3a0ca3', r * 0.8, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.8, r * 0.6, 0.1, 0, Math.PI * 2);
+  x.fill();
+
+  // 共生槍型生物兵器 (Fleshborer)
+  x.fillStyle = '#38b000';
+  x.beginPath();
+  x.roundRect(r * 0.2, bob, r * 0.8, 6, 2);
+  x.fill();
+  x.fillStyle = '#70e000';
+  x.beginPath();
+  x.arc(r * 0.5, bob + 3, 3, 0, Math.PI * 2);
+  x.fill();
+
+  // 頭部
+  x.fillStyle = '#560bad';
+  x.beginPath();
+  x.arc(r * 0.5, bob - 2, r * 0.45, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = '#ffff3f';
+  x.fillRect(r * 0.6, bob - 4, 2, 2);
+}
+
+function drawSporeMine(x, t, r) {
+  const p = t * Math.PI * 2;
+  const pulse = 1 + Math.sin(p * 2) * 0.12;
+  const bob = Math.sin(p) * 3;
+  shadow(x, r * 0.6, r * 1.2);
+
+  // 漂浮觸手
+  x.strokeStyle = '#38b000';
+  x.lineWidth = 1.8;
+  for (let i = -1; i <= 1; i++) {
+    const wave = Math.sin(p * 3 + i) * 3;
+    x.beginPath();
+    x.moveTo(i * 5, bob + 4);
+    x.quadraticCurveTo(i * 8 + wave, bob + 14, i * 4, bob + 20);
+    x.stroke();
+  }
+
+  // 充氣毒液氣囊本體
+  x.fillStyle = sphere(x, '#70e000', r * pulse, 0, bob);
+  x.beginPath();
+  x.arc(0, bob, r * pulse, 0, Math.PI * 2);
+  x.fill();
+
+  // 發光毒腺氣孔
+  x.fillStyle = '#ccff33';
+  for (let a = 0; a < Math.PI * 2; a += Math.PI * 0.6) {
+    x.beginPath();
+    x.arc(Math.cos(a + p) * (r * 0.5), bob + Math.sin(a + p) * (r * 0.5), 2.2, 0, Math.PI * 2);
+    x.fill();
+  }
+}
+
+function drawGenestealer(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2;
+  shadow(x, r * 0.85, r * 0.95);
+
+  // 突變四肢
+  x.fillStyle = '#480ca8';
+  x.strokeStyle = '#7209b7';
+  x.lineWidth = 2;
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + p;
+    x.beginPath();
+    x.moveTo(0, bob);
+    x.lineTo(Math.cos(a) * (r * 1.2), bob + Math.sin(a) * (r * 1.1));
+    x.stroke();
+  }
+
+  // 幾丁質頭胸部
+  x.fillStyle = sphere(x, '#3c096c', r * 0.85, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.75, r * 0.85, 0, 0, Math.PI * 2);
+  x.fill();
+
+  // 銳利鋸齒骨爪
+  x.fillStyle = '#f72585';
+  x.beginPath();
+  x.moveTo(r * 0.6, bob - 6);
+  x.lineTo(r * 1.3, bob - 2);
+  x.lineTo(r * 0.7, bob + 4);
+  x.closePath();
+  x.fill();
+}
+
+function drawOrkBoy(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2;
+  const swing = Math.sin(p) * 0.4;
+  shadow(x, r * 0.9, r * 0.95);
+
+  // 綠皮魁梧身軀
+  x.fillStyle = sphere(x, '#2d6a4f', r * 0.85, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob + 2, r * 0.8, r * 0.75, 0, 0, Math.PI * 2);
+  x.fill();
+
+  // 粗糙鐵甲鐵片
+  x.fillStyle = '#495057';
+  x.fillRect(-r * 0.6, bob - 2, r * 1.2, 7);
+
+  // 鐵頭盔與突出下顎獠牙
+  x.fillStyle = '#343a40';
+  x.beginPath();
+  x.arc(0, bob - r * 0.4, r * 0.6, Math.PI, Math.PI * 2);
+  x.fill();
+  // 獠牙
+  x.fillStyle = '#f8f9fa';
+  x.beginPath();
+  x.moveTo(-4, bob + 3); x.lineTo(-2, bob - 3); x.lineTo(0, bob + 3);
+  x.moveTo(2, bob + 3); x.lineTo(4, bob - 3); x.lineTo(6, bob + 3);
+  x.fill();
+
+  // 揮舞歐克砍刀 (Choppa)
+  x.save();
+  x.translate(r * 0.7, bob);
+  x.rotate(swing);
+  x.fillStyle = '#ced4da';
+  x.beginPath();
+  x.moveTo(0, -2);
+  x.lineTo(r * 0.9, -6);
+  x.lineTo(r * 0.7, 8);
+  x.lineTo(0, 4);
+  x.closePath();
+  x.fill();
+  x.stroke();
+  x.restore();
+}
+
+function drawSquigBomb(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.abs(Math.sin(p * 2)) * 6;
+  shadow(x, r * 0.75, r * 0.9);
+
+  // 奔跑雙爪
+  x.fillStyle = '#6a040f';
+  x.fillRect(-6, bob + r * 0.5, 4, 7);
+  x.fillRect(2, bob + r * 0.5, 4, 7);
+
+  // 紅色大嘴圓球身體
+  x.fillStyle = sphere(x, '#d00000', r * 0.9, 0, -bob);
+  x.beginPath();
+  x.arc(0, -bob, r * 0.9, 0, Math.PI * 2);
+  x.fill();
+
+  // 滿嘴利齒
+  x.fillStyle = '#ffffff';
+  for (let i = -r * 0.6; i <= r * 0.6; i += 4) {
+    x.beginPath();
+    x.moveTo(i, -bob + 2);
+    x.lineTo(i + 2, -bob - 4);
+    x.lineTo(i + 4, -bob + 2);
+    x.fill();
+  }
+
+  // 背上捆綁的炸藥與引信
+  x.fillStyle = '#9d0208';
+  x.fillRect(-5, -bob - r * 0.95, 10, 5);
+  x.strokeStyle = '#ffd166';
+  x.lineWidth = 1.5;
+  x.beginPath();
+  x.moveTo(0, -bob - r * 0.95);
+  x.lineTo(4, -bob - r * 1.3);
+  x.stroke();
+}
+
+function drawPoxwalker(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 1.5;
+  shadow(x, r * 0.8, r * 0.95);
+
+  // 腐爛枯槁身軀
+  x.fillStyle = sphere(x, '#606c38', r * 0.8, 0, bob);
+  x.beginPath();
+  x.arc(0, bob, r * 0.8, 0, Math.PI * 2);
+  x.fill();
+
+  // 膿瘡與腫瘤
+  x.fillStyle = '#aacc00';
+  x.beginPath();
+  x.arc(-r * 0.3, bob - 2, 3.5, 0, Math.PI * 2);
+  x.arc(r * 0.35, bob + 3, 2.8, 0, Math.PI * 2);
+  x.fill();
+
+  // 異變骨角
+  x.fillStyle = '#dda15e';
+  x.beginPath();
+  x.moveTo(0, bob - r * 0.7);
+  x.lineTo(r * 0.3, bob - r * 1.3);
+  x.lineTo(r * 0.15, bob - r * 0.6);
+  x.closePath();
+  x.fill();
+}
+
+/* ==================== 40K 三大 Boss ==================== */
+
+function drawBossNob(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 3;
+  shadow(x, r * 0.9, r * 0.95);
+
+  // 巨大歐克身軀與重型鐵甲
+  x.fillStyle = sphere(x, '#1b4332', r * 0.85, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.85, r * 0.8, 0, 0, Math.PI * 2);
+  x.fill();
+
+  // 黑黃警戒重肩甲
+  x.fillStyle = '#ffb703';
+  x.fillRect(-r * 0.95, bob - r * 0.6, r * 0.5, r * 0.6);
+  x.fillRect(r * 0.45, bob - r * 0.6, r * 0.5, r * 0.6);
+
+  // 動力鐵爪 (Power Klaw)
+  x.fillStyle = '#ced4da';
+  x.strokeStyle = '#1b1b1e';
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(r * 0.7, bob);
+  x.lineTo(r * 1.4, bob - 8);
+  x.lineTo(r * 1.5, bob + 8);
+  x.closePath();
+  x.fill();
+  x.stroke();
+}
+
+function drawBossBroodlord(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 3;
+  shadow(x, r * 0.9, r * 0.95);
+
+  // 靈能光環
+  const g = x.createRadialGradient(0, bob, r * 0.3, 0, bob, r * 1.4);
+  g.addColorStop(0, 'rgba(157, 78, 221, 0.4)');
+  g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  x.fillStyle = g;
+  x.beginPath();
+  x.arc(0, bob, r * 1.4, 0, Math.PI * 2);
+  x.fill();
+
+  // 幾丁質霸主身軀
+  x.fillStyle = sphere(x, '#240046', r * 0.85, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.75, r * 0.9, 0, 0, Math.PI * 2);
+  x.fill();
+
+  // 巨型四骨爪
+  x.fillStyle = '#e0aaff';
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + p * 0.8;
+    x.beginPath();
+    x.moveTo(0, bob);
+    x.lineTo(Math.cos(a) * (r * 1.4), bob + Math.sin(a) * (r * 1.2));
+    x.stroke();
+  }
+}
+
+function drawBossCarnifex(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2;
+  shadow(x, r * 0.95, r * 0.95);
+
+  // 巨型生物裝甲背甲
+  x.fillStyle = sphere(x, '#10002b', r * 0.9, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.95, r * 0.85, 0, 0, Math.PI * 2);
+  x.fill();
+
+  // 背部幾丁質散熱煙囪
+  x.fillStyle = '#3c096c';
+  for (const s of [-0.4, 0, 0.4]) {
+    x.fillRect(s * r * 0.8 - 4, bob - r * 0.95, 8, 12);
+  }
+
+  // 毀滅性攻城重鉗
+  x.fillStyle = '#7b2cbf';
+  x.beginPath();
+  x.arc(r * 0.8, bob + 4, r * 0.5, 0, Math.PI * 2);
+  x.fill();
+  x.beginPath();
+  x.arc(-r * 0.8, bob + 4, r * 0.5, 0, Math.PI * 2);
+  x.fill();
+}
+
+/* ==================== 守塔部隊：卡迪亞步兵與雷曼魯斯坦克 ==================== */
+
+function drawGuardsman(x, t, r = 12) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 1.8;
+  shadow(x, r * 0.8, r * 0.9);
+
+  // 防衛軍卡其綠制服
+  x.fillStyle = '#556b2f';
+  x.beginPath();
+  x.roundRect(-7, -4 + bob, 14, 15, 2);
+  x.fill();
+
+  // 防彈背心與頭盔
+  x.fillStyle = '#283618';
+  x.beginPath();
+  x.arc(0, -7 + bob, 8, Math.PI, Math.PI * 2);
+  x.fill();
+
+  // 雷射步槍與刺刀
+  x.fillStyle = '#11151c';
+  x.fillRect(2, -1 + bob, 16, 3.5);
+  x.fillStyle = '#ffffff';
+  x.beginPath();
+  x.moveTo(18, 0 + bob);
+  x.lineTo(24, 0 + bob);
+  x.lineTo(18, 2 + bob);
+  x.closePath();
+  x.fill();
+}
+
+function drawLemanRuss(x, t, w = 64, h = 48) {
+  const bob = Math.sin(t * Math.PI * 4) * 0.8;
+  shadow(x, w * 0.55, h * 0.45);
+
+  // 雙履帶 (Treads)
+  x.fillStyle = '#1b1b1e';
+  x.beginPath();
+  x.roundRect(-w * 0.5, -h * 0.5 + bob, w, 10, 3);
+  x.roundRect(-w * 0.5, h * 0.5 - 10 + bob, w, 10, 3);
+  x.fill();
+
+  // 軍綠色裝甲車身 (Hull)
+  x.fillStyle = '#3a4a3b';
+  x.strokeStyle = '#202b21';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.roundRect(-w * 0.4, -h * 0.35 + bob, w * 0.8, h * 0.7, 4);
+  x.fill();
+  x.stroke();
+
+  // 砲塔與長身管加農主砲
+  x.fillStyle = '#4a5d4b';
+  x.beginPath();
+  x.arc(0, 0 + bob, 14, 0, Math.PI * 2);
+  x.fill();
+  x.stroke();
+
+  // 主砲管與消焰器
+  x.fillStyle = '#1b261c';
+  x.fillRect(6, -3 + bob, 26, 6);
+  x.fillStyle = '#ffb703';
+  x.fillRect(28, -4 + bob, 6, 8);
+}
+
 function drawSnowMound(x) {
   x.fillStyle = 'rgba(200,230,255,0.22)';
   x.beginPath();
@@ -5978,6 +6391,25 @@ const BUILDERS = {
   ink_fox_guard:   { w: 76, h: 62, fn: (x, t) => drawInkFox(x, t, 16) },
   ink_fox_spirit:  { w: 76, h: 62, fn: (x, t) => drawInkFox(x, t, 16) },
   ink_ape_mother:  { w: 90, h: 84, fn: (x, t) => drawInkApe(x, t, 26) },
+
+  // 戰鎚 40K 敵軍
+  hormagaunt:  { w: 64, h: 56, fn: (x, t) => drawHormagaunt(x, t, 13) },
+  termagant:   { w: 66, h: 58, fn: (x, t) => drawTermagant(x, t, 14) },
+  spore_mine:  { w: 56, h: 64, fn: (x, t) => drawSporeMine(x, t, 16) },
+  genestealer: { w: 72, h: 68, fn: (x, t) => drawGenestealer(x, t, 16) },
+  ork_boy:     { w: 72, h: 64, fn: (x, t) => drawOrkBoy(x, t, 17) },
+  squig_bomb:  { w: 56, h: 52, fn: (x, t) => drawSquigBomb(x, t, 12) },
+  poxwalker:   { w: 58, h: 56, fn: (x, t) => drawPoxwalker(x, t, 15) },
+
+  // 40K 三大 Boss
+  boss_nob:       { w: 140, h: 140, fn: (x, t) => drawBossNob(x, t, 36) },
+  boss_broodlord: { w: 150, h: 150, fn: (x, t) => drawBossBroodlord(x, t, 38) },
+  boss_carnifex:  { w: 175, h: 175, fn: (x, t) => drawBossCarnifex(x, t, 48) },
+
+  // 40K 守塔部隊單位
+  guardsman:  { w: 56, h: 52, fn: (x, t) => drawGuardsman(x, t, 12) },
+  leman_russ: { w: 90, h: 72, fn: (x, t) => drawLemanRuss(x, t, 64, 48) },
+
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },
