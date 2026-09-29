@@ -4187,6 +4187,81 @@ function drawInkPine(x) {
   }
 }
 
+// ===== 修仙場景：石碑對聯、青焰燭台、插地古劍 (水墨仙山) =====
+function inkStele(text) {
+  return (x) => {
+    inkShadow(x, 16, 32);
+    // 碑身：淡墨灰石 + 濃墨描邊，碑首略圓
+    x.fillStyle = '#8d9690';
+    x.strokeStyle = 'rgba(30,36,34,0.85)';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(-13, 30); x.lineTo(-13, -24);
+    x.quadraticCurveTo(0, -36, 13, -24);
+    x.lineTo(13, 30); x.closePath();
+    x.fill(); x.stroke();
+    // 碑座
+    x.fillStyle = '#5f6964';
+    x.fillRect(-17, 26, 34, 7);
+    x.strokeRect(-17, 26, 34, 7);
+    // 直書碑文 (朱砂框內墨字)
+    x.strokeStyle = 'rgba(180,50,35,0.6)';
+    x.lineWidth = 1;
+    x.strokeRect(-8, -22, 16, 46);
+    x.fillStyle = '#1c2322';
+    x.font = 'bold 10px serif';
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    [...text].forEach((ch, i) => x.fillText(ch, 0, -16 + i * 11.3));
+  };
+}
+
+function drawInkLantern(x) {
+  inkShadow(x, 11, 28);
+  // 石燈座
+  x.fillStyle = '#4b5550';
+  x.strokeStyle = 'rgba(25,30,28,0.9)';
+  x.lineWidth = 1.5;
+  x.beginPath(); x.moveTo(-9, 28); x.lineTo(-5, 4); x.lineTo(5, 4); x.lineTo(9, 28); x.closePath();
+  x.fill(); x.stroke();
+  x.fillRect(-10, 0, 20, 5); x.strokeRect(-10, 0, 20, 5);
+  // 青色靈焰：外暈 → 焰身 → 白芯
+  const g = x.createRadialGradient(0, -10, 1, 0, -10, 18);
+  g.addColorStop(0, 'rgba(120,255,230,0.55)');
+  g.addColorStop(1, 'rgba(120,255,230,0)');
+  x.fillStyle = g;
+  x.beginPath(); x.arc(0, -10, 18, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#38d6c0';
+  x.beginPath(); x.moveTo(0, -26); x.quadraticCurveTo(8, -8, 0, -1); x.quadraticCurveTo(-8, -8, 0, -26); x.fill();
+  x.fillStyle = '#e8fffb';
+  x.beginPath(); x.ellipse(0, -7, 2.4, 4.5, 0, 0, Math.PI * 2); x.fill();
+}
+
+function drawInkSword(x) {
+  inkShadow(x, 10, 30);
+  // 劍尖斜插入土，劍柄朝上
+  x.save();
+  x.rotate(0.18);
+  x.fillStyle = '#d7dfdc';
+  x.strokeStyle = 'rgba(30,36,34,0.9)';
+  x.lineWidth = 1.2;
+  x.beginPath(); x.moveTo(0, 28); x.lineTo(-3, 14); x.lineTo(-3, -12); x.lineTo(3, -12); x.lineTo(3, 14); x.closePath();
+  x.fill(); x.stroke();
+  x.strokeStyle = 'rgba(56,214,192,0.8)';
+  x.beginPath(); x.moveTo(0, 22); x.lineTo(0, -10); x.stroke();
+  x.fillStyle = '#6b5a3a';
+  x.fillRect(-9, -15, 18, 3.5);
+  x.fillStyle = '#2a2320';
+  x.fillRect(-2, -27, 4, 12);
+  x.strokeStyle = '#c9443a';
+  x.lineWidth = 1.4;
+  x.beginPath(); x.moveTo(0, -27); x.quadraticCurveTo(6, -24, 7, -16); x.stroke();
+  x.restore();
+  // 土堆
+  x.fillStyle = 'rgba(60,70,64,0.55)';
+  x.beginPath(); x.ellipse(4, 29, 9, 3, 0, 0, Math.PI * 2); x.fill();
+}
+
 // ===== 水墨妖獸 (水墨仙山專用換皮)：濃墨身軀 + 淡墨暈邊 + 朱紅妖眼，朝右 =====
 function inkBody(x, cx, cy, rx, ry, rot = 0) {
   // 外圈淡墨暈 → 內層濃墨，像濕筆一筆落下
@@ -5726,6 +5801,11 @@ const BUILDERS = {
   ink_rock:   { w: 52, h: 46, static: true, fn: drawInkRock },
   ink_maple:  { w: 64, h: 70, static: true, fn: drawInkMaple },
   ink_pine:   { w: 40, h: 64, static: true, fn: drawInkPine },
+  ink_stele_a: { w: 40, h: 74, static: true, fn: inkStele('劍心通明') },
+  ink_stele_b: { w: 40, h: 74, static: true, fn: inkStele('萬劍歸宗') },
+  ink_stele_c: { w: 40, h: 74, static: true, fn: inkStele('心魔燼滅') },
+  ink_lantern: { w: 40, h: 62, static: true, fn: drawInkLantern },
+  ink_sword:   { w: 30, h: 64, static: true, fn: drawInkSword },
 };
 
 // 關卡主題 Boss：10 主題 × (一般/最終) × (待機/衝鋒)，尺寸與半徑照最終形放大
