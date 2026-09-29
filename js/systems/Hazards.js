@@ -17,12 +17,43 @@ import { sound } from '../audio.js';
 
 // '#rrggbb' + alpha → 'rgba(...)'（原本是 main.js 的模組層函式，只有這裡在用）
 function hexToRgba(hex, a) {
+  if (!hex || !hex.startsWith('#')) return `rgba(255,255,255,${a})`;
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-// 會改變移動速度的地形 (玩家與敵人一視同仁) → 預設倍率
-const SPEED_ZONES = { tar: 0.55, gale: 1.45 };
+// 會改變移動速度的地形 (玩家與敵人生效) → 預設倍率
+const SPEED_ZONES = {
+  tar: 0.55,
+  gale: 1.45,
+  lava: 0.85,
+  quicksand: 0.38,
+  sanctuary: 0.65, // 敵人踏入聖域受到神聖斥力減速
+};
+
+function defaultHazardColor(type) {
+  switch (type) {
+    case 'lava': return '#ff3c00';
+    case 'quicksand': return '#d4a373';
+    case 'electro': return '#00e5ff';
+    case 'sanctuary': return '#ffd700';
+    case 'tar': return '#3d2b1f';
+    case 'spring': return '#4cc9f0';
+    case 'gale': return '#ffffff';
+    default: return '#ffaa00';
+  }
+}
+
+function defaultHazardSource(type) {
+  switch (type) {
+    case 'lava': return '熔岩灼燒';
+    case 'quicksand': return '流沙陷阱';
+    case 'electro': return '感應過載';
+    case 'sanctuary': return '聖域靈氣';
+    case 'pool': return '地面毒池';
+    default: return null;
+  }
+}
 
 // 無限地圖的場景物件（油桶／車輛、木箱）：沒有固定的世界範圍可以撒，改成撒在玩家周圍的環帶，
 // 離太遠就回收、數量不足就在畫面外補 —— 場上數量固定，密度與原本 4000×4000 的地圖相當
@@ -350,6 +381,123 @@ export function updateHazards(game, dt) {
         if (dx * dx + dy * dy < h.r * h.r && p.hp < p.maxHp) p.heal(h.heal);
       }
       if (h.t >= h.dur) game.hazards.splice(i, 1);
+    } else if (h.kind === 'lava') {
+      // 熔岩裂隙：踏入持續受灼燒傷害，對敵人也是高額傷害殺傷區
+      h.tick -= dt;
+      if (h.tick <= 0) {
+        h.tick = 0.5;
+        const dx = p.x - h.x;
+        const dy = p.y - h.y;
+        const rr = h.r + p.radius;
+        if (dx * dx + dy * dy < rr * rr) {
+          if (p.takeDamage(h.dmg, h.source || '熔岩灼燒')) {
+            game.particles.createHurtText(p.x, p.y, h.dmg);
+            game.particles.createHitSpark(p.x, p.y, '#ff4500');
+          }
+        }
+        if (h.dmgEnemy > 0) {
+          const hrr = h.r;
+          for (const e of game.enemies) {
+            if (e.isDead) continue;
+            const edx = e.x - h.x;
+            const edy = e.y - h.y;
+            const err = hrr + e.radius;
+            if (edx * edx + edy * edy < err * err) {
+              e.takeDamage(h.dmgEnemy, 2, h.x, h.y);
+              game.particles.createDamageText(e.x, e.y, Math.round(h.dmgEnemy), false);
+              if (Math.random() < 0.25) game.particles.createHitSpark(e.x, e.y, '#ff6600');
+            }
+          }
+        }
+      }
+      if (h.t >= h.dur) game.hazards.splice(i, 1);
+    } else if (h.kind === 'quicksand') {
+      // 流沙泥濘：強烈向心牽引力（玩家與一般敵人均受牽引）
+      const dx = p.x - h.x;
+      const dy = p.y - h.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < h.r && dist > 1) {
+        const pull = (1 - dist / h.r) * (h.pullSpeed || 55) * dt;
+        p.x -= (dx / dist) * pull;
+        p.y -= (dy / dist) * pull;
+      }
+      for (const e of game.enemies) {
+        if (e.isDead || e.isBoss) continue;
+        const edx = e.x - h.x;
+        const edy = e.y - h.y;
+        const edist = Math.hypot(edx, edy);
+        if (edist < h.r && edist > 1) {
+          const epull = (1 - edist / h.r) * ((h.pullSpeed || 55) * 1.1) * dt;
+          e.x -= (edx / edist) * epull;
+          e.y -= (edy / edist) * epull;
+        }
+      }
+      if (h.t >= h.dur) game.hazards.splice(i, 1);
+    } else if (h.kind === 'electro') {
+      // 雷暴過載電場：週期性放電震撼
+      h.tick -= dt;
+      if (h.tick <= 0) {
+        h.tick = h.dischargeInterval || 1.2;
+        sound.playLightning();
+        game.camera.shake = Math.max(game.camera.shake, 4);
+        game.particles.createShockwave(h.x, h.y, h.r, '#00e5ff');
+        const dx = p.x - h.x;
+        const dy = p.y - h.y;
+        const rr = h.r + p.radius;
+        if (dx * dx + dy * dy < rr * rr) {
+          if (h.dmg > 0 && p.takeDamage(h.dmg, h.source || '感應過載')) {
+            game.particles.createHurtText(p.x, p.y, h.dmg);
+          }
+        }
+        if (h.dmgEnemy > 0) {
+          const hrr = h.r;
+          for (const e of game.enemies) {
+            if (e.isDead) continue;
+            const edx = e.x - h.x;
+            const edy = e.y - h.y;
+            const err = hrr + e.radius;
+            if (edx * edx + edy * edy < err * err) {
+              e.takeDamage(h.dmgEnemy, 4, h.x, h.y);
+              e.stunTimer = Math.max(e.stunTimer || 0, 0.35);
+              game.particles.createDamageText(e.x, e.y, Math.round(h.dmgEnemy), false);
+              game.particles.createHitSpark(e.x, e.y, '#00ffff');
+            }
+          }
+        }
+      }
+      if (h.t >= h.dur) game.hazards.splice(i, 1);
+    } else if (h.kind === 'sanctuary') {
+      // 聖域靈氣陣：陣內玩家獲得 40% 減傷庇護與每 0.5s 回血，敵人受到神聖壓制與斥力
+      const dx = p.x - h.x;
+      const dy = p.y - h.y;
+      const rr = h.r + p.radius;
+      if (dx * dx + dy * dy < rr * rr) {
+        p.sanctuaryTimer = 0.25;
+        p.sanctuaryResist = h.resist || 0.40;
+      }
+      h.tick -= dt;
+      if (h.tick <= 0) {
+        h.tick = 0.5;
+        if (dx * dx + dy * dy < rr * rr && p.hp < p.maxHp) {
+          p.heal(h.heal || 3);
+          game.particles.createHitSpark(p.x, p.y, '#ffd700');
+        }
+        if (h.dmgEnemy > 0) {
+          const hrr = h.r;
+          for (const e of game.enemies) {
+            if (e.isDead) continue;
+            const edx = e.x - h.x;
+            const edy = e.y - h.y;
+            const err = hrr + e.radius;
+            if (edx * edx + edy * edy < err * err) {
+              e.takeDamage(h.dmgEnemy, 2, h.x, h.y);
+              game.particles.createDamageText(e.x, e.y, Math.round(h.dmgEnemy), false);
+              game.particles.createHitSpark(e.x, e.y, '#ffe066');
+            }
+          }
+        }
+      }
+      if (h.t >= h.dur) game.hazards.splice(i, 1);
     } else if (h.kind === 'tar' || h.kind === 'gale') {
       if (h.t >= h.dur) game.hazards.splice(i, 1);
     }
@@ -364,9 +512,10 @@ function applySpeedZones(game) {
   const zones = game.hazards.filter((h) => h.speedMul);
   if (!zones.length && !game._speedZonesActive) return;
   game._speedZonesActive = zones.length > 0;
-  const mulAt = (x, y, r) => {
+  const mulAt = (x, y, r, isPlayer) => {
     let m = 1;
     for (const z of zones) {
+      if (z.kind === 'sanctuary' && isPlayer) continue; // 玩家在聖域不被減速
       const dx = x - z.x;
       const dy = y - z.y;
       const rr = z.r + r * 0.5;
@@ -375,9 +524,9 @@ function applySpeedZones(game) {
     return m;
   };
   const p = game.player;
-  p.terrainSpeedMul = mulAt(p.x, p.y, p.radius);
+  p.terrainSpeedMul = mulAt(p.x, p.y, p.radius, true);
   for (const e of game.enemies) {
-    if (!e.isDead) e.terrainSpeedMul = e.isBoss ? 1 : mulAt(e.x, e.y, e.radius);
+    if (!e.isDead) e.terrainSpeedMul = e.isBoss ? 1 : mulAt(e.x, e.y, e.radius, false);
   }
 }
 
@@ -401,20 +550,24 @@ export function spawnHazard(game, mech) {
 // 在指定位置放一個地面區域。關卡機制與敵人 (迫擊砲、焦油拖痕、死亡毒池) 共用這一條，
 // 所以敵人造成的地形與關卡地形的判定、畫法、死亡結算來源完全一致。
 export function placeHazard(game, mech, x, y) {
+  const type = mech.type;
   game.hazards.push({
-    kind: mech.type,
+    kind: type,
     x, y,
     r: mech.radius,
-    color: mech.color,
+    color: mech.color || defaultHazardColor(type),
     t: 0,
-    tick: 0.5,
+    tick: type === 'electro' ? (mech.dischargeInterval || 1.2) : 0.5,
+    dischargeInterval: mech.dischargeInterval || 1.2,
     fuse: mech.fuse || 0,
-    dur: mech.dur || mech.duration || 0,
-    dmg: mech.dmg || 0,
-    dmgEnemy: mech.dmgEnemy || 0,
-    heal: mech.heal || 0,                // 回復泉：每 0.5 秒回血量
-    speedMul: SPEED_ZONES[mech.type] ? (mech.speedMul || SPEED_ZONES[mech.type]) : 0,
-    source: mech.source || null,         // 死亡結算顯示的傷害來源
+    dur: mech.dur || mech.duration || 10,
+    dmg: mech.dmg !== undefined ? mech.dmg : (type === 'lava' ? 6 : (type === 'electro' ? 4 : 0)),
+    dmgEnemy: mech.dmgEnemy !== undefined ? mech.dmgEnemy : (type === 'lava' ? 80 : (type === 'electro' ? 140 : (type === 'sanctuary' ? 45 : 0))),
+    heal: mech.heal !== undefined ? mech.heal : (type === 'sanctuary' ? 3 : (type === 'spring' ? 3 : 0)),
+    resist: mech.resist !== undefined ? mech.resist : (type === 'sanctuary' ? 0.40 : 0),
+    pullSpeed: mech.pullSpeed || 55,
+    speedMul: SPEED_ZONES[type] ? (mech.speedMul || SPEED_ZONES[type]) : 0,
+    source: mech.source || defaultHazardSource(type),
   });
 }
 
@@ -510,7 +663,8 @@ export function drawHazards(game, cam) {
       ctx.arc(0, 0, 5 + prog * 13, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
-    } else if (h.kind === 'tar' || h.kind === 'spring' || h.kind === 'gale') {
+    } else if (h.kind === 'tar' || h.kind === 'spring' || h.kind === 'gale' ||
+               h.kind === 'lava' || h.kind === 'quicksand' || h.kind === 'electro' || h.kind === 'sanctuary') {
       const fadeIn = Math.min(1, h.t / 0.4);
       const fadeOut = Math.min(1, (h.dur - h.t) / 0.6);
       ctx.globalAlpha = Math.max(0, Math.min(fadeIn, fadeOut));
@@ -552,7 +706,7 @@ export function drawHazards(game, cam) {
         ctx.fillStyle = hexToRgba(h.color, 0.9);
         ctx.fillRect(-3, -11, 6, 22);
         ctx.fillRect(-11, -3, 22, 6);
-      } else {
+      } else if (h.kind === 'gale') {
         // 疾風帶：旋轉的虛線圈 + 三道流線，表示「進來會變快」
         ctx.strokeStyle = hexToRgba(h.color, 0.75);
         ctx.lineWidth = 2;
@@ -571,6 +725,180 @@ export function drawHazards(game, cam) {
           ctx.beginPath();
           ctx.arc(0, 0, h.r * 0.55, 0, 0.9);
           ctx.stroke();
+        }
+      } else if (h.kind === 'lava') {
+        // 熔岩裂隙：暗色焦黑外緣 + 熱烈橙紅岩漿核心 + 浮動冒泡與焦痕裂縫
+        const wob = 1 + Math.sin(h.t * 3.5 + Math.abs(h.x) % 10) * 0.03;
+        const g = ctx.createRadialGradient(0, 0, Math.max(1, h.r * 0.2), 0, 0, Math.max(2, h.r * wob));
+        g.addColorStop(0, 'rgba(255, 235, 150, 0.85)'); // 白熱核心
+        g.addColorStop(0.35, hexToRgba(h.color || '#ff4500', 0.75)); // 熾熱橙紅
+        g.addColorStop(0.75, 'rgba(180, 20, 0, 0.65)'); // 暗紅流體
+        g.addColorStop(1, 'rgba(40, 10, 5, 0.15)'); // 焦黑邊緣
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        for (let i = 0; i < 16; i++) {
+          const a = (i / 16) * Math.PI * 2;
+          const rPerturb = h.r * wob * (0.92 + ((Math.abs(Math.floor(h.x * 3 + i * 7)) % 10) / 10) * 0.12);
+          const px = Math.cos(a) * rPerturb;
+          const py = Math.sin(a) * rPerturb;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255, 120, 0, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 內部熔岩火泡
+        ctx.fillStyle = 'rgba(255, 240, 180, 0.85)';
+        for (let i = 0; i < 5; i++) {
+          const ph = (h.t * 1.1 + i * 0.23 + (Math.abs(Math.floor(h.x)) % 7) * 0.15) % 1;
+          const a = i * 1.4 + h.x * 0.1;
+          const dist = (0.2 + (i % 3) * 0.25) * h.r;
+          const bx = Math.cos(a) * dist;
+          const by = Math.sin(a) * dist;
+          ctx.beginPath();
+          ctx.arc(bx, by, Math.max(1, 2 + ph * 5), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (h.kind === 'quicksand') {
+        // 流沙泥濘陷阱：旋轉漏斗沙紋 + 內縮層次
+        const spin = -h.t * 1.4;
+        ctx.save();
+        ctx.rotate(spin);
+        // 沙色漸層
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(1, h.r));
+        g.addColorStop(0, 'rgba(45, 25, 10, 0.85)'); // 中心深陷漏斗
+        g.addColorStop(0.4, 'rgba(150, 105, 55, 0.7)'); // 流沙中層
+        g.addColorStop(0.85, 'rgba(210, 165, 95, 0.55)'); // 外圈沙浪
+        g.addColorStop(1, 'rgba(210, 165, 95, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 螺旋流沙臂 (3條流動螺旋)
+        ctx.strokeStyle = 'rgba(240, 200, 130, 0.45)';
+        ctx.lineWidth = 2.5;
+        for (let s = 0; s < 3; s++) {
+          const baseA = (s / 3) * Math.PI * 2;
+          ctx.beginPath();
+          for (let step = 0; step <= 16; step++) {
+            const tStep = step / 16;
+            const curR = h.r * tStep;
+            const curA = baseA + tStep * Math.PI * 1.6;
+            const px = Math.cos(curA) * curR;
+            const py = Math.sin(curA) * curR;
+            if (step === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // 外框流沙波紋
+        ctx.strokeStyle = 'rgba(160, 110, 60, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r * 0.95, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (h.kind === 'electro') {
+        // 雷暴過載電場：高壓電漿感應圈 + 閃爍雷電弧
+        const dischargeProg = Math.max(0, Math.min(1, ((h.dischargeInterval || 1.2) - h.tick) / (h.dischargeInterval || 1.2)));
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(1, h.r));
+        g.addColorStop(0, hexToRgba(h.color || '#00e5ff', 0.25 + dischargeProg * 0.25));
+        g.addColorStop(0.7, hexToRgba(h.color || '#00e5ff', 0.12));
+        g.addColorStop(1, hexToRgba(h.color || '#00e5ff', 0));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 外圈高壓電極環 (旋轉虛線)
+        ctx.strokeStyle = h.color || '#00e5ff';
+        ctx.lineWidth = 2.5 + dischargeProg * 2;
+        ctx.setLineDash([12, 10]);
+        ctx.lineDashOffset = -h.t * 75;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 電弧 (隨機折線)
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.8;
+        ctx.shadowColor = h.color || '#00e5ff';
+        ctx.shadowBlur = 10;
+        const arcCount = 3 + Math.floor((Math.abs(Math.floor(h.x)) + Math.floor(h.t * 20)) % 3);
+        for (let aIdx = 0; aIdx < arcCount; aIdx++) {
+          const aAngle = (aIdx / arcCount) * Math.PI * 2 + (h.t * 2.5);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          for (let seg = 1; seg <= 3; seg++) {
+            const segDist = (h.r * 0.85) * (seg / 3);
+            const jitter = Math.sin(h.t * 40 + aIdx * 10 + seg) * 18;
+            const curA = aAngle + (jitter * Math.PI / 180);
+            const cx = Math.cos(curA) * segDist;
+            const cy = Math.sin(curA) * segDist;
+            ctx.lineTo(cx, cy);
+          }
+          ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+
+        // 中心能量球
+        ctx.fillStyle = dischargeProg > 0.8 ? '#ffffff' : (h.color || '#00e5ff');
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(1, 6 + dischargeProg * 10), 0, Math.PI * 2);
+        ctx.fill();
+      } else if (h.kind === 'sanctuary') {
+        // 聖域靈氣陣：燦金八芒符文星陣 + 神聖光柱脈衝
+        const rot = h.t * 0.4;
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(1, h.r));
+        g.addColorStop(0, 'rgba(255, 235, 140, 0.45)');
+        g.addColorStop(0.6, 'rgba(255, 215, 0, 0.20)');
+        g.addColorStop(1, 'rgba(255, 215, 0, 0.02)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.rotate(rot);
+        // 外環符文細圈
+        ctx.strokeStyle = 'rgba(255, 220, 100, 0.75)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, h.r * 0.78, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 內嵌八角星 (兩個交錯正方形)
+        ctx.strokeStyle = 'rgba(255, 240, 170, 0.65)';
+        ctx.lineWidth = 2;
+        const starR = h.r * 0.65;
+        for (let sq = 0; sq < 2; sq++) {
+          ctx.save();
+          ctx.rotate((sq * Math.PI) / 4);
+          ctx.strokeRect(-starR * 0.7, -starR * 0.7, starR * 1.4, starR * 1.4);
+          ctx.restore();
+        }
+        ctx.restore();
+
+        // 8 點向外浮動的聖光粒子
+        ctx.fillStyle = 'rgba(255, 255, 220, 0.85)';
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + rot * 0.5;
+          const ph = (h.t * 0.6 + i * 0.125) % 1;
+          const pr = h.r * (0.2 + ph * 0.7);
+          ctx.beginPath();
+          ctx.arc(Math.cos(a) * pr, Math.sin(a) * pr, Math.max(1, 2 + (1 - ph) * 2.5), 0, Math.PI * 2);
+          ctx.fill();
         }
       }
     } else if (h.kind === 'safeZone') {

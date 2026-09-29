@@ -72,10 +72,57 @@ const out = await page.evaluate(async () => {
   const pool = g.hazards.find((h) => h.kind === 'pool');
   ok('腐屍氣囊：死亡留下毒池', pool && Math.hypot(pool.x - 200, pool.y) < 40, pool && `${Math.round(pool.x)},${Math.round(pool.y)}`);
 
+  // 熔岩裂隙：減速 + 灼燒
+  reset();
+  H.placeHazard(g, { type: 'lava', radius: 100, dur: 30, dmg: 6, dmgEnemy: 100, color: '#ff3c00' }, 0, 0);
+  const mobLava = new Enemy('walker', 20, 0, {}); g.enemies.push(mobLava);
+  const mobLavaHp0 = mobLava.hp;
+  H.updateHazards(g, 1 / 60);
+  ok('熔岩裂隙：玩家移速減緩 (0.85)', Math.abs(p.speed / base - 0.85) < 0.02, `${(p.speed / base).toFixed(2)}`);
+  ok('熔岩裂隙：敵人移速減緩 (0.85)', Math.abs(mobLava.speedFactor() - 0.85) < 0.02, `${mobLava.speedFactor().toFixed(2)}`);
+  for (let i = 0; i < 35; i++) H.updateHazards(g, 1 / 60);
+  ok('熔岩裂隙：對踏入的敵人造成灼燒傷害', mobLava.hp < mobLavaHp0, `${mobLavaHp0} → ${mobLava.hp}`);
+
+  // 流沙陷阱：強烈減速 + 向心牽引
+  reset();
+  H.placeHazard(g, { type: 'quicksand', radius: 120, dur: 30, pullSpeed: 60, color: '#d4a373' }, 0, 0);
+  p.x = 60; p.y = 0;
+  const sandMob = new Enemy('walker', 70, 0, {}); g.enemies.push(sandMob);
+  H.updateHazards(g, 1 / 60);
+  ok('流沙陷阱：玩家受到強烈減速 (0.38)', Math.abs(p.speed / base - 0.38) < 0.02, `${(p.speed / base).toFixed(2)}`);
+  ok('流沙陷阱：敵人受到強烈減速 (0.38)', Math.abs(sandMob.speedFactor() - 0.38) < 0.02, `${sandMob.speedFactor().toFixed(2)}`);
+  const px0 = p.x;
+  for (let i = 0; i < 20; i++) H.updateHazards(g, 1 / 60);
+  ok('流沙陷阱：將玩家向中心牽引', p.x < px0, `x: ${px0} → ${p.x.toFixed(1)}`);
+
+  // 雷暴過載電場：震撼放電與眩暈
+  reset();
+  H.placeHazard(g, { type: 'electro', radius: 110, dur: 30, dischargeInterval: 0.25, dmg: 4, dmgEnemy: 150, color: '#00e5ff' }, 0, 0);
+  const electroMob = new Enemy('walker', 30, 0, {}); g.enemies.push(electroMob);
+  const electroHp0 = electroMob.hp;
+  for (let i = 0; i < 16; i++) H.updateHazards(g, 1 / 60);
+  ok('雷暴電場：放電震撼造成電擊傷害', electroMob.hp < electroHp0, `${electroHp0} → ${electroMob.hp}`);
+  ok('雷暴電場：電擊附帶感電眩暈', electroMob.stunTimer > 0, `stunTimer: ${electroMob.stunTimer.toFixed(2)}`);
+
+  // 聖域靈氣陣：陣內加持減傷、回血與敵方神聖制裁
+  reset();
+  p.hp = p.maxHp - 30;
+  const pSancHp0 = p.hp;
+  H.placeHazard(g, { type: 'sanctuary', radius: 120, dur: 30, heal: 4, dmgEnemy: 60, color: '#ffd700' }, 0, 0);
+  const evilMob = new Enemy('walker', 40, 0, {}); g.enemies.push(evilMob);
+  const evilHp0 = evilMob.hp;
+  H.updateHazards(g, 1 / 60);
+  ok('聖域靈氣陣：玩家獲得聖域減傷加持 (40%)', p.sanctuaryTimer > 0 && Math.abs(p.sanctuaryResist - 0.40) < 0.01, `timer: ${p.sanctuaryTimer.toFixed(2)}, resist: ${p.sanctuaryResist}`);
+  ok('聖域靈氣陣：玩家不受減速限制', Math.abs(p.speed / base - 1.0) < 0.02, `${(p.speed / base).toFixed(2)}`);
+  ok('聖域靈氣陣：邪惡敵人受到神聖斥力減速 (0.65)', Math.abs(evilMob.speedFactor() - 0.65) < 0.02, `${evilMob.speedFactor().toFixed(2)}`);
+  for (let i = 0; i < 35; i++) H.updateHazards(g, 1 / 60);
+  ok('聖域靈氣陣：陣內玩家獲得生命回復', p.hp > pSancHp0, `${pSancHp0} → ${p.hp}`);
+  ok('聖域靈氣陣：陣內敵人受到神聖制裁傷害', evilMob.hp < evilHp0, `${evilHp0} → ${evilMob.hp}`);
+
   // 負座標也畫得出來 (曾經：Math.abs 前 h.x % 7 為負 → arc 半徑為負拋例外)
   reset();
   let drawErr = null;
-  for (const type of ['tar', 'spring', 'gale']) H.placeHazard(g, { type, radius: 80, dur: 30, heal: 1, color: '#888888' }, -123.4, -57.8);
+  for (const type of ['tar', 'spring', 'gale', 'lava', 'quicksand', 'electro', 'sanctuary']) H.placeHazard(g, { type, radius: 80, dur: 30, heal: 1, color: '#888888' }, -123.4, -57.8);
   try { g.render(); } catch (e) { drawErr = e.message; }
   ok('新地形在負座標繪製不拋例外', !drawErr, drawErr || 'ok');
   return r;
