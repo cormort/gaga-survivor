@@ -70,6 +70,8 @@ const FIXED_ACCENT = {
   penguin: '#7fd8ff',
   cat: '#ff5fd2',
   mechanic: '#ff9f45',
+  astartes_duck: '#0077b6',
+  techpriest_goose: '#d90429',
   turret: '#ffb703',
   gem_green: '#00f59b',
   gem_blue: '#00b4d8',
@@ -960,6 +962,207 @@ function drawMechanicDuck(x, t) {
   x.arc(17, 0, 4, -0.6, 0.6, true);
   x.stroke();
   x.restore();
+
+  x.restore();
+}
+
+/* ==================== 戰鎚 40K 阿斯塔特特工鴨 ==================== */
+
+function drawAstartesDuck(x, t) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2.0;
+  const step = Math.sin(p);
+
+  x.save();
+  shadow(x, 16, 9);
+
+  // 重型陶鋼動力戰靴
+  for (const s of [-1, 1]) {
+    const ph = p + (s === 1 ? Math.PI : 0);
+    const lift = Math.max(0, -Math.sin(ph)) * 3.5;
+    x.fillStyle = '#023e8a';
+    x.strokeStyle = '#03045e';
+    x.lineWidth = 1.4;
+    x.beginPath();
+    x.roundRect(-4 + s * 4, 13 + bob - lift, 8, 8, 2);
+    x.fill();
+    x.stroke();
+    // 金色靴底鑲邊
+    x.fillStyle = '#ffd166';
+    x.fillRect(-4 + s * 4, 19 + bob - lift, 8, 2);
+  }
+
+  // 陶鋼胸甲與阿斯塔特身軀
+  x.fillStyle = '#0077b6';
+  x.strokeStyle = '#023e8a';
+  x.lineWidth = 1.6;
+  x.beginPath();
+  x.roundRect(-12, -2 + bob, 24, 18, 4);
+  x.fill();
+  x.stroke();
+
+  // 金色帝國雙頭鷹胸甲徽飾 (Imperial Aquila)
+  x.fillStyle = '#ffd166';
+  x.beginPath();
+  x.moveTo(-7, 4 + bob);
+  x.lineTo(7, 4 + bob);
+  x.lineTo(9, 1 + bob);
+  x.lineTo(-9, 1 + bob);
+  x.closePath();
+  x.fill();
+  x.beginPath();
+  x.arc(0, 5 + bob, 3, 0, Math.PI * 2);
+  x.fill();
+
+  // 巨大肩甲 (Pauldrons)
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#0077b6';
+    x.strokeStyle = '#ffd166';
+    x.lineWidth = 2.0;
+    x.beginPath();
+    x.roundRect(-16 + (s === 1 ? 24 : 0), -6 + bob, 9, 12, 3);
+    x.fill();
+    x.stroke();
+  }
+
+  // 純潔印記 (Purity Seal) 與紅色印泥羊皮紙
+  x.fillStyle = '#9d0208';
+  x.beginPath();
+  x.arc(-11, 4 + bob, 3, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = '#f4e8c1';
+  x.fillRect(-12.5, 7 + bob, 3.2, 7);
+
+  // 鴨嘴 (嵌入戰術呼吸過濾面甲)
+  x.fillStyle = '#ff9e00';
+  x.beginPath();
+  x.moveTo(5, 0 + bob);
+  x.lineTo(19, 2 + bob);
+  x.lineTo(19, 4 + bob);
+  x.lineTo(5, 7 + bob);
+  x.closePath();
+  x.fill();
+  // 面甲格柵金屬排氣口
+  x.fillStyle = '#2b2d42';
+  x.fillRect(7, 2 + bob, 6, 4);
+  x.fillStyle = '#8d99ae';
+  x.fillRect(8, 3 + bob, 1.5, 2);
+  x.fillRect(11, 3 + bob, 1.5, 2);
+
+  // 動力頭盔
+  x.fillStyle = '#0077b6';
+  x.strokeStyle = '#023e8a';
+  x.lineWidth = 1.6;
+  x.beginPath();
+  x.arc(2, -9 + bob, 13, Math.PI * 0.85, Math.PI * 2.15);
+  x.fill();
+  x.stroke();
+
+  // 戰術紅色目鏡 (紅光瞄準鏡)
+  x.shadowColor = '#ff0055';
+  x.shadowBlur = 8;
+  x.fillStyle = '#ff0055';
+  x.fillRect(4, -8 + bob, 7, 3.5);
+  x.shadowBlur = 0;
+
+  x.restore();
+}
+
+/* ==================== 戰鎚 40K 機械主教鵝 ==================== */
+
+function drawTechpriestGoose(x, t) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2.5;
+  const step = Math.sin(p);
+
+  x.save();
+  shadow(x, 15, 8);
+
+  // 猩紅機械神教長袍下擺 (隨步態飄揚)
+  x.fillStyle = '#9b111e';
+  x.strokeStyle = '#590d22';
+  x.lineWidth = 1.4;
+  x.beginPath();
+  x.moveTo(-11, 10 + bob);
+  x.lineTo(11, 10 + bob);
+  x.lineTo(13 + step * 2, 20 + bob);
+  x.lineTo(-13 + step * 2, 20 + bob);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 黑白齒輪飾邊 (長袍下擺幾何紋)
+  x.fillStyle = '#f8f9fa';
+  for (let gx = -12; gx <= 10; gx += 5) {
+    x.fillRect(gx + step * 1.5, 18 + bob, 3, 2);
+  }
+
+  // 機械神教長袍身軀
+  x.fillStyle = '#ba181b';
+  x.beginPath();
+  x.roundRect(-10, -2 + bob, 20, 15, 4);
+  x.fill();
+
+  // 機械神教半黑半白齒輪骷髏徽記 (Cog & Skull)
+  x.fillStyle = '#f8f9fa';
+  x.beginPath();
+  x.arc(0, 4 + bob, 4.5, -Math.PI / 2, Math.PI / 2);
+  x.fill();
+  x.fillStyle = '#1b1b1e';
+  x.beginPath();
+  x.arc(0, 4 + bob, 4.5, Math.PI / 2, -Math.PI / 2);
+  x.fill();
+
+  // 鵝頸與長袍兜帽 (長頸帶紅兜帽)
+  x.fillStyle = '#f8f9fa';
+  x.beginPath();
+  x.roundRect(-3, -16 + bob, 6, 16, 3);
+  x.fill();
+
+  // 猩紅兜帽 (Hood)
+  x.fillStyle = '#9b111e';
+  x.beginPath();
+  x.arc(0, -16 + bob, 9, Math.PI * 0.7, Math.PI * 2.3);
+  x.fill();
+
+  // 鵝喙 (橘紅帶生化電子感應器)
+  x.fillStyle = '#ff7b00';
+  x.beginPath();
+  x.moveTo(4, -18 + bob);
+  x.lineTo(16, -16 + bob);
+  x.lineTo(16, -14 + bob);
+  x.lineTo(4, -12 + bob);
+  x.closePath();
+  x.fill();
+  x.fillStyle = '#1b1b1e';
+  x.fillRect(5, -17 + bob, 4, 3);
+
+  // 伺服機械觸手 (Mechadendrites) - 背後伸出兩條金屬臂
+  for (const dir of [-1, 1]) {
+    const wave = Math.sin(p * 2 + dir) * 3;
+    x.strokeStyle = '#adb5bd';
+    x.lineWidth = 2.2;
+    x.beginPath();
+    x.moveTo(dir * 6, -1 + bob);
+    x.quadraticCurveTo(dir * 18, -12 + bob + wave, dir * 12, -22 + bob);
+    x.stroke();
+    // 頂部鉗爪或焊槍
+    x.fillStyle = '#ffd166';
+    x.fillRect(dir * 12 - 2, -24 + bob, 4, 4);
+  }
+
+  // 懸浮伺服顱骨 (Floating Servo-Skull)
+  const skullX = -18 + Math.cos(p) * 2;
+  const skullY = -12 + bob + Math.sin(p * 2) * 3;
+  x.fillStyle = '#e9ecef';
+  x.beginPath();
+  x.arc(skullX, skullY, 4, 0, Math.PI * 2);
+  x.fill();
+  // 伺服顱骨紅色電子眼
+  x.fillStyle = '#ff0055';
+  x.beginPath();
+  x.arc(skullX + 1.5, skullY - 0.5, 1.2, 0, Math.PI * 2);
+  x.fill();
 
   x.restore();
 }
@@ -5739,6 +5942,8 @@ const BUILDERS = {
   penguin: { w: 64, h: 64, fn: (x, t) => drawPenguin(x, t) },
   cat:     { w: 68, h: 64, fn: (x, t) => drawCat(x, t) },
   mechanic: { w: 68, h: 64, fn: (x, t) => drawMechanicDuck(x, t) },
+  astartes_duck: { w: 68, h: 64, fn: (x, t) => drawAstartesDuck(x, t) },
+  techpriest_goose: { w: 68, h: 68, fn: (x, t) => drawTechpriestGoose(x, t) },
   walker: { w: 56, h: 52, fn: (x, t) => drawWalker(x, t, 14) },
   bat:    { w: 60, h: 48, fn: (x, t) => drawBat(x, t, 11) },
   brute:  { w: 76, h: 72, fn: (x, t) => drawBrute(x, t, 22) },
@@ -5858,11 +6063,110 @@ function imageBuilder(img, height, still) {
   };
 }
 
+function xianCharacterBuilder(key, img, height) {
+  const k = height / img.height;
+  const w = img.width * k;
+  return {
+    w: w + 16, h: height + 16, image: true,
+    fn: (x, t) => {
+      const p = t * Math.PI * 2;
+      // 靈動修仙步伐：呼吸、法袍微動與輕功踏步
+      const bob = Math.sin(p) * 2.2;
+      const tilt = Math.sin(p) * 0.032;
+      const foot = height / 2 + 3;
+
+      // 落地陰影隨起伏微調
+      x.fillStyle = 'rgba(0,0,0,0.32)';
+      x.beginPath();
+      x.ellipse(0, foot, (w * 0.34) * (1 - Math.abs(Math.sin(p)) * 0.12), w * 0.09, 0, 0, Math.PI * 2);
+      x.fill();
+
+      x.save();
+      x.translate(0, foot - 2 + bob);
+      x.rotate(tilt);
+      x.drawImage(img, -w / 2, -height, w, height);
+
+      // 各脈專屬護身靈寶動態 (隨 8 幀巡迴旋轉浮動)
+      const auraAngle = p;
+      if (key === 'xian_sword') {
+        // 靈劍護體：小青鋒飛劍環繞盤旋
+        const sx = Math.cos(auraAngle) * (w * 0.42);
+        const sy = -height * 0.55 + Math.sin(auraAngle) * 6;
+        x.save();
+        x.translate(sx, sy);
+        x.rotate(auraAngle + Math.PI / 2);
+        x.fillStyle = '#6ea8ff';
+        x.beginPath();
+        x.moveTo(0, -9);
+        x.lineTo(2.2, 5);
+        x.lineTo(-2.2, 5);
+        x.closePath();
+        x.fill();
+        x.fillStyle = '#ffffff';
+        x.fillRect(-0.8, -4, 1.6, 8);
+        x.restore();
+      } else if (key === 'xian_talisman') {
+        // 懸空靈符：金色真火符紙浮動
+        const fx = Math.sin(auraAngle) * 8 + (w * 0.32);
+        const fy = -height * 0.6 + Math.cos(auraAngle) * 4;
+        x.save();
+        x.translate(fx, fy);
+        x.rotate(Math.sin(auraAngle) * 0.2);
+        x.fillStyle = '#ffd166';
+        x.fillRect(-3, -6, 6, 12);
+        x.fillStyle = '#d90429';
+        x.fillRect(-1.5, -4, 3, 8);
+        x.restore();
+      } else if (key === 'xian_mage') {
+        // 五雷天罡：旋轉雷光珠
+        const lx = Math.cos(auraAngle * 2) * (w * 0.4);
+        const ly = -height * 0.5 + Math.sin(auraAngle * 2) * 5;
+        x.fillStyle = '#ffffff';
+        x.beginPath();
+        x.arc(lx, ly, 2.5, 0, Math.PI * 2);
+        x.fill();
+        x.strokeStyle = '#a2d2ff';
+        x.lineWidth = 1.5;
+        x.stroke();
+      } else if (key === 'xian_alchemy') {
+        // 青囊藥息：丹氣靈珠
+        const ax = Math.sin(auraAngle) * (w * 0.38);
+        const ay = -height * 0.48 + Math.cos(auraAngle) * 6;
+        x.fillStyle = '#3ddc84';
+        x.beginPath();
+        x.arc(ax, ay, 2.8, 0, Math.PI * 2);
+        x.fill();
+        x.fillStyle = '#ffffff';
+        x.beginPath();
+        x.arc(ax - 0.8, ay - 0.8, 1, 0, Math.PI * 2);
+        x.fill();
+      } else if (key === 'xian_zen') {
+        // 金剛佛光光環：微光梵輪
+        x.strokeStyle = 'rgba(255,209,102,0.45)';
+        x.lineWidth = 1.8;
+        x.beginPath();
+        x.arc(0, -height * 0.72, 9 + Math.sin(auraAngle) * 1.5, 0, Math.PI * 2);
+        x.stroke();
+      } else if (key === 'xian_demon') {
+        // 血煞天魔幽焰
+        const dx = Math.sin(auraAngle * 1.5) * (w * 0.35);
+        const dy = -height * 0.52 + Math.cos(auraAngle) * 5;
+        x.fillStyle = '#b388ff';
+        x.beginPath();
+        x.arc(dx, dy, 2.6, 0, Math.PI * 2);
+        x.fill();
+      }
+
+      x.restore();
+    },
+  };
+}
+
 export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve() : Promise.all(
   Object.entries(IMAGE_SPRITES).map(([key, height]) => new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      BUILDERS[key] = imageBuilder(img, height, key.startsWith('xian_'));
+      BUILDERS[key] = key.startsWith('xian_') ? xianCharacterBuilder(key, img, height) : imageBuilder(img, height, false);
       for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
       resolve();
     };

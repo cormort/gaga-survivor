@@ -238,6 +238,118 @@ export const CHARACTERS = {
       game.ui.say('🔧 工事大師：開局贈送一座機槍砲台（耐久 ×2）', '#00f59b', 4);
     },
   },
+
+  // ── 戰鎚 40K 遠征英雄 ─────────────────────────────────────────────
+  astartes_duck: {
+    id: 'astartes_duck',
+    sprite: 'astartes_duck',
+    codename: '阿斯塔特鴨',
+    title: '極限星際特工',
+    role: '重型陶鋼裝甲 / 陣地狂怒火力',
+    heroClass: '星際戰士',
+    classColor: '#0077b6',
+    classTitle: '為了帝皇 / 陣地壓制',
+    traitName: '卡迪亞不屈',
+    traitDesc: '常駐減免 20% 受到的傷害；原地站立超過 0.5 秒或生命低於 50% 時觸發【神聖狂怒】，攻速 +35%、武器擊退 +50%',
+    startWeapon: 'bolter',
+    unlockCost: 150,
+    accent: '#0077b6',
+    lines: {
+      start: '以帝皇與池塘之名，異形受死！嘎！',
+      levelup: '動力裝甲機魂共鳴，火力提升！',
+      evolve: '為了帝皇！品嚐神聖風暴的怒火吧！',
+      lowhp: '阿斯塔特絕不退縮！痛楚只是虔誠的證明！',
+      boss: '異形巨獸休得猖狂，帝皇的裁決降臨了！',
+      win: '陣線屹立不倒！勝利屬於帝皇與池塘，嘎！',
+      death: '我的職責……至死方休……為了帝皇……',
+    },
+    init(player) {
+      player.damageReduction = 0.2;
+      player.standTimer = 0;
+      player.maxHp = Math.round(player.maxHp * 1.25);
+      player.hp = player.maxHp;
+    },
+    tick(dt, game) {
+      const p = game.player;
+      if (p.walkCycle === 0) {
+        p.standTimer = (p.standTimer || 0) + dt;
+      } else {
+        p.standTimer = 0;
+      }
+      const isHolyFury = (p.standTimer >= 0.5) || (p.hp / p.maxHp < 0.5);
+      p.holyFury = isHolyFury;
+      p.cooldownMultiplier = isHolyFury ? 0.65 : 1.0;
+      p.knockbackMultiplier = isHolyFury ? 1.5 : 1.0;
+    },
+  },
+
+  techpriest_goose: {
+    id: 'techpriest_goose',
+    sprite: 'techpriest_goose',
+    codename: '機械主教鵝',
+    title: '萬機神之僕',
+    role: '機械修復 / 伺服灼光 / 減速冷卻液',
+    heroClass: '機械神教',
+    classColor: '#d90429',
+    classTitle: '血肉孱弱 / 機械飛昇',
+    traitName: '機魂安撫',
+    traitDesc: '每 2.5 秒伺服臂自動修復附近設施與坦克 70 HP，並向最近敵人激發熱熔射線；設施建造費用 -20%',
+    startWeapon: 'chainsword',
+    unlockCost: 180,
+    accent: '#d90429',
+    lines: {
+      start: '血肉孱弱，唯有機油與齒輪永恆……咕嘎！',
+      levelup: '讚美萬機神，神聖代碼重構完畢。',
+      evolve: '機魂大悅！神聖解離力場啟動！',
+      lowhp: '裝甲受損 35%……正在引導冷卻液……',
+      boss: '偵測到未被萬機神淨化的低等生物，執行物理銷毀！',
+      win: '協議達成。聖油已灑遍廢墟，讚美歐姆尼賽亞！',
+      death: '二進制信號……正在衰退……回歸萬機神……',
+    },
+    init(player) {
+      player.facilityCostMul = 0.8;
+      player.servoTimer = 0;
+    },
+    tick(dt, game) {
+      const p = game.player;
+      p.servoTimer = (p.servoTimer || 0) + dt;
+      if (p.servoTimer >= 2.5) {
+        p.servoTimer = 0;
+
+        // 1. 修復附近設施、坦克或核心
+        let targetHeal = null;
+        let minD = 300;
+        if (game.turrets) {
+          for (const t of game.turrets) {
+            if (t.isDead || t.hp >= t.maxHp) continue;
+            const d = Math.hypot(t.x - p.x, t.y - p.y);
+            if (d < minD) { minD = d; targetHeal = t; }
+          }
+        }
+        if (targetHeal) {
+          targetHeal.hp = Math.min(targetHeal.maxHp, targetHeal.hp + 70);
+          game.particles.createShockwave(targetHeal.x, targetHeal.y, 35, '#00f59b');
+        }
+
+        // 2. 伺服灼光熱熔射線攻擊最近敵人
+        if (game.enemies && game.enemies.length) {
+          let closest = null;
+          let closeD = 280;
+          for (const e of game.enemies) {
+            if (e.isDead) continue;
+            const d = Math.hypot(e.x - p.x, e.y - p.y);
+            if (d < closeD) { closeD = d; closest = e; }
+          }
+          if (closest) {
+            closest.takeDamage(65, 8, p.x, p.y);
+            game.particles.createDamageText(closest.x, closest.y, 65, true);
+            game.particles.createShockwave(closest.x, closest.y, 25, '#ff5400');
+          }
+        }
+      }
+    },
+  },
+
   // ── 修仙六脈 (貼圖來自 assets/xian/，攻擊沿用對應武器) ────────────────
   xian_sword: {
     id: 'xian_sword', sprite: 'xian_sword',
