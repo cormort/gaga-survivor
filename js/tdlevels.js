@@ -25,6 +25,41 @@ function genWaves(n, { main, fast, heavy, special, boss }) {
   return waves;
 }
 
+// 鑄造世界 40K 專屬波次生成器：融合泰倫蟲群、歐克蠻兵與納垢瘟疫行者
+function gen40kWaves() {
+  const waves = [];
+  const bossNob = { hp: 18000, name: '歐克戰爭頭目', speed: 64, damage: 38, behaviors: ['summon', 'barrage', 'ground'], skin: 'boss_nob' };
+  const bossBroodlord = { hp: 36000, name: '蟲群基因原體', speed: 78, damage: 45, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' };
+  const bossCarnifex = { hp: 72000, name: '泰倫劊子手暴君', speed: 52, damage: 60, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_carnifex' };
+
+  const mains = ['hormagaunt', 'ork_boy', 'termagant', 'genestealer'];
+  for (let w = 1; w <= 12; w++) {
+    const groups = [];
+    // 基礎主力潮
+    groups.push({ type: mains[(w - 1) % mains.length], count: 8 + w * 3, gap: Math.max(0.28, 0.78 - w * 0.03) });
+    // 自爆/快速突擊單位 (孢子地雷、跳跳炸彈)
+    if (w % 2 === 0) {
+      groups.push({ type: (w % 4 === 0) ? 'squig_bomb' : 'spore_mine', count: 4 + Math.floor(w * 0.8), gap: 0.35 });
+    }
+    // 重裝單位 (瘟疫行者、基因竊取者)
+    if (w >= 3) {
+      groups.push({ type: (w % 3 === 0) ? 'poxwalker' : 'genestealer', count: 3 + Math.floor(w / 3), gap: 0.9 });
+    }
+    // 遠程火力壓制單位 (槍蟲)
+    if (w >= 5) {
+      groups.push({ type: 'termagant', count: 4 + Math.floor(w / 2), gap: 0.65 });
+    }
+
+    let waveBoss = null;
+    if (w === 4) waveBoss = bossNob;
+    else if (w === 8) waveBoss = bossBroodlord;
+    else if (w === 12) waveBoss = bossCarnifex;
+
+    waves.push({ groups, boss: waveBoss });
+  }
+  return waves;
+}
+
 const base = (id) => LEVELS[id];
 
 export const TD_LEVELS = {
@@ -98,7 +133,7 @@ export const TD_LEVELS = {
     desc: '北、西南、東南三道城門同時被攻破。砲塔數量有限，看清每一波從哪裡來。',
     difficulty: 3,
     dnaMult: 2.0,
-    next: null,
+    next: 'td_forgeworld',
     td: true,
     coreHp: 4000,
     pathWidth: 130,
@@ -120,9 +155,58 @@ export const TD_LEVELS = {
     bosses: [],
     hpScale: 1.6,
   },
+
+  td_forgeworld: {
+    ...base('lab'),
+    id: 'td_forgeworld',
+    name: '鑄造世界 ‧ 卡迪亞防線',
+    sub: '守塔 ‧ 終極決戰',
+    icon: '⚙️',
+    desc: '歐姆尼賽亞的泰坦巨型反應爐遭受泰倫蟲群與歐克獸人聯手狂暴圍攻！指揮星界軍步兵營與黎曼魯斯坦克守衛核心。',
+    difficulty: 4,
+    dnaMult: 2.8,
+    next: null,
+    td: true,
+    coreHp: 5000,
+    pathWidth: 155,
+    breakTime: 14,
+    theme: {
+      top: '#180e07', mid: '#100904', bottom: '#080402',
+      grid: 'rgba(230,126,34,0.06)', major: 'rgba(243,156,18,0.14)',
+      gridStyle: { size: 64, major: 4 },
+      bounds: 'rgba(230,81,0,0.75)',
+      grade: { c1: '230,126,34', a1: 0.06, c2: '180,40,10', a2: 0.10 },
+      vignette: 1.2,
+      ground: {
+        patches: [{ c: '243,156,18', a: 0.04 }, { c: '230,81,0', a: 0.06 }],
+        material: 'metal',
+        motif: 'hazard',
+        motifColor: 'rgba(0,0,0,0.4)',
+        accent: 'rgba(243,156,18,0.2)',
+        density: { stain: 0.8, stainRadius: 1.2, motif: 1.5, grain: 1, accents: 1.2, base: 1.2 },
+        macro: {
+          kind: 'road', cell: 900,
+          base: 'rgba(230,126,34,0.05)', line: 'rgba(0,0,0,0.35)', accent: 'rgba(243,156,18,0.2)',
+          landmark: ['hazard', 'car'], landmarkCell: 1200, landmarkChance: 0.7,
+          escalate: { rgb: '230,81,0', count: 25 },
+        },
+      },
+    },
+    decor: ['hazard', 'car', 'bin'],
+    decorDensity: 0.5,
+    paths: [
+      [[-1900, -1450], [-1100, -1450], [-1100, -650], [-450, -650], [-450, -160], [0, 0]],
+      [[1900, -1450], [1100, -1450], [1100, -650], [450, -650], [450, -160], [0, 0]],
+    ],
+    waves: gen40kWaves(),
+    rules: { label: '卡迪亞死守令', desc: '兩條主要戰線遭受蟲群與綠皮猛烈衝擊；佈署星界軍兵營與機械製造廠構築阻絕陣線' },
+    mechs: [],
+    bosses: [],
+    hpScale: 1.8,
+  },
 };
 
-export const TD_ORDER = ['td_canyon', 'td_fork', 'td_fortress'];
+export const TD_ORDER = ['td_canyon', 'td_fork', 'td_fortress', 'td_forgeworld'];
 
 // 併入 LEVELS：Spawner、音樂、關卡選單等所有以 id 查關卡的地方都能直接用
 Object.assign(LEVELS, TD_LEVELS);
