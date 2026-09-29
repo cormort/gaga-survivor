@@ -16,6 +16,7 @@ import { itemName } from '../items.js';
 import { save, SLOT_COUNT } from '../save.js';
 import { sound } from '../audio.js';
 import { buildFacility, hireMercenary, tryUpgradeNearestTurret } from './Facilities.js';
+import { castSkill } from './Skills.js';
 
 export function bindEvents(game) {
   // 特工 / 關卡選擇 (可重繪：解鎖或回主選單時刷新)
@@ -336,6 +337,8 @@ export function bindEvents(game) {
     if ((e.key === 'n' || e.key === 'N') && game.state === 'PLAYING') game.td?.startWave(true);   // 守塔：提前開戰
     if (e.key === 'e' || e.key === 'E') game.usePocketItem(0);
     if (e.key === 'f' || e.key === 'F') game.usePocketItem(1);
+    if (e.key === 'q' || e.key === 'Q') castSkill(game, 0);
+    if (e.key === 'r' || e.key === 'R') castSkill(game, 1);
     if (e.key === 'c' || e.key === 'C') game.usePocketItem(2);
     if (e.key === 'v' || e.key === 'V') game.usePocketItem(3);
   });

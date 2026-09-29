@@ -15,6 +15,7 @@ import {
   setWorldBounded,
 } from './config.js';
 import { Player, MP_PER_KILL } from './entities/Player.js';
+import { updateSkills } from './systems/Skills.js';
 import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
 import { DropItem } from './entities/DropItem.js';
@@ -1552,6 +1553,7 @@ class Game {
 
     // 1. 更新特工玩家
     this.player.update(dt, this.input.vector);
+    updateSkills(this, dt);
     tickBlessingEffects(this, dt);
     updateMerchant(this, dt);
 

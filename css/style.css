@@ -3281,3 +3281,34 @@ body, html {
 .gear-cmp-diff.up { color: #3ddc84; }
 .gear-cmp-diff.down { color: #ff5e5e; }
 .gear-cmp-diff.same { color: #8a9bb0; }
+
+/* 修仙技能欄 (Q/R)：畫面底部中央 */
+.skill-bar {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  display: flex; gap: 10px; z-index: 100; pointer-events: auto;
+}
+.skill-slot {
+  position: relative; width: 58px; height: 58px; border-radius: 10px; overflow: hidden;
+  background: rgba(13, 22, 40, 0.88); border: 2px solid rgba(110, 168, 255, 0.6);
+  box-shadow: 0 0 12px rgba(77, 141, 255, 0.35); color: #fff; cursor: pointer; padding: 0;
+}
+.skill-slot.no-mp { filter: grayscale(0.8); opacity: 0.6; }
+.skill-icon { font-size: 26px; line-height: 58px; }
+.skill-key { position: absolute; top: 2px; left: 5px; font-size: 11px; font-weight: bold; color: #cfe0ff; }
+.skill-mp { position: absolute; bottom: 2px; right: 4px; font-size: 10px; color: #7fb0ff; font-weight: bold; }
+.skill-cd {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+  background: rgba(0, 0, 0, 0.62); display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: bold; color: #fff; pointer-events: none;
+}
+@media (max-width: 619px) {
+  .skill-bar { bottom: calc(10px + env(safe-area-inset-bottom)); gap: 8px; }
+  .skill-slot { width: 50px; height: 50px; }
+  .skill-icon { line-height: 50px; font-size: 22px; }
+}
+
+/* 四格道具鈕排成 2×2，避免動作欄過高把設施鈕擠出畫面 */
+.pocket-grid { display: grid; grid-template-columns: repeat(2, auto); gap: 8px; justify-items: center; }
+.pocket-grid:not(:has(.pocket-btn:not(.hidden))) { display: none; }
+.pocket-grid .action-btn { width: 48px; height: 48px; }

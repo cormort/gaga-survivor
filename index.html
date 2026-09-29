@@ -149,6 +149,8 @@
     </div>
 
     <!-- 戰術動作按鈕 (閃避翻滾 / 砲塔升級 / 戰術道具) -->
+    <!-- 修仙技能欄 (Q/R，耗靈力；內容由 Skills.js 依角色生成) -->
+    <div id="skill-bar" class="skill-bar hidden"></div>
     <div id="action-bar">
       <div id="facility-bar" class="facility-bar">
         <button id="btn-build" class="hud-btn build-btn" data-facility="turret" title="機槍砲台 (1/B)">
@@ -169,6 +171,7 @@
         <span class="action-key">SPACE</span>
         <div id="dash-cooldown-overlay"></div>
       </button>
+      <div class="pocket-grid">
       <button class="action-btn pocket-btn hidden" data-slot="0" title="使用戰術道具 1 (E)">
         <span class="action-icon">🎒</span>
         <span class="action-key">E</span>
@@ -189,6 +192,7 @@
         <span class="action-key">V</span>
         <span class="action-badge hidden">0</span>
       </button>
+      </div>
       <button id="btn-next-wave" class="action-btn hidden" title="提前開戰 (N)：剩餘休息秒數換成金幣">
         <span class="action-icon">⏩</span>
         <span class="action-key">N</span>
