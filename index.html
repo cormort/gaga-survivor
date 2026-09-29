@@ -152,6 +152,11 @@
     <!-- 修仙技能欄 (Q/R，耗靈力；內容由 Skills.js 依角色生成) -->
     <div id="skill-bar" class="skill-bar hidden"></div>
     <div id="action-bar">
+      <!-- 手機：設施鈕收成一顆展開鈕 (桌機隱藏，直接顯示整排) -->
+      <button id="btn-facility-toggle" class="action-btn facility-toggle" title="佈署設施" aria-expanded="false">
+        <span class="action-icon">🏗️</span>
+        <span class="action-key">設施</span>
+      </button>
       <div id="facility-bar" class="facility-bar">
         <button id="btn-build" class="hud-btn build-btn" data-facility="turret" title="機槍砲台 (1/B)">
             <span class="build-icon">🔫</span><span id="build-cost">60</span>

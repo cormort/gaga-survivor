@@ -3355,3 +3355,14 @@ body, html {
   .char-card { flex: 0 0 58%; min-width: 0; }
   .aspect-chips { flex-wrap: wrap; justify-content: center; overflow: visible; }
 }
+
+/* 設施展開鈕：桌機不顯示；手機預設收起設施列，點開才展開 */
+.facility-toggle { display: none; }
+@media (max-width: 619px) {
+  #action-bar .facility-toggle:not(.hidden) { display: flex; }
+  #action-bar:not(.fac-open) .facility-bar { display: none; }
+  #action-bar.fac-open .facility-toggle { border-color: #00e5ff; box-shadow: 0 0 14px rgba(0, 229, 255, 0.6); }
+  /* 有設施買得起時展開鈕亮金框 */
+  #action-bar:not(.fac-open):has(.build-btn.affordable) .facility-toggle { border-color: #ffd60a; box-shadow: 0 0 12px rgba(255, 214, 10, 0.55); }
+  #action-bar .facility-toggle .action-key { font-size: 9px; }
+}

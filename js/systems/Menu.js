@@ -347,10 +347,19 @@ export function bindEvents(game) {
   document.querySelectorAll('.pocket-slot[data-slot], .pocket-btn[data-slot]').forEach((el) => {
     el.addEventListener('click', () => game.usePocketItem(Number(el.dataset.slot)));
   });
+  // 手機設施展開鈕
+  const actionBar = document.getElementById('action-bar');
+  const facToggle = document.getElementById('btn-facility-toggle');
+  const setFacilityOpen = (open) => {
+    actionBar?.classList.toggle('fac-open', open);
+    facToggle?.setAttribute('aria-expanded', String(open));
+  };
+  facToggle?.addEventListener('click', () => setFacilityOpen(!actionBar.classList.contains('fac-open')));
   // 設施列各按鈕點擊
   for (const [type, item] of Object.entries(game.ui.facilityButtons || {})) {
     if (item && item.btn) {
       item.btn.addEventListener('click', () => {
+        setFacilityOpen(false);   // 手機：蓋完自動收起
         game.selectedFacility = type;
         buildFacility(game, type);
       });
