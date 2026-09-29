@@ -662,7 +662,7 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['ink_maple', 'ink_rock', 'ink_maple', 'ink_pine', 'ink_stele_a', 'ink_stele_b', 'ink_stele_c', 'ink_lantern', 'ink_sword', 'ink_lantern'],
+    decor: ['ink_maple', 'ink_rock', 'ink_pine', 'moss_stone', 'flower_patch_1', 'grass_tuft', 'ink_stele_a', 'ink_lantern'],
     decorDensity: 0.5,
     hpScale: 4.6,
     rules: {

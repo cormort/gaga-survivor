@@ -114,7 +114,14 @@ const BOSS_ACCENT = [
 // 可能還是 undefined（模組初始化順序問題），症狀是「有時有邊光、有時沒有」。
 // 貼圖 key 本來就跟 IMAGE_SPRITES 放在一起，這裡是它真正的歸屬。
 const PLAYER_SPRITE_KEYS = new Set([
+  'duck', 'rabbit', 'penguin', 'cat', 'mechanic',
+  'astartes_duck', 'techpriest_goose',
   'xian_sword', 'xian_talisman', 'xian_mage', 'xian_alchemy', 'xian_zen', 'xian_demon',
+]);
+
+const DECOR_SPRITE_KEYS = new Set([
+  'ink_pine', 'ink_rock', 'moss_stone', 'flower_patch_1', 'flower_patch_2', 'grass_tuft',
+  'pine_tree_1', 'pine_tree_2', 'pine_tree_3', 'mountain_rock_1', 'mountain_rock_2',
 ]);
 
 function accentFor(key, b) {
@@ -122,11 +129,15 @@ function accentFor(key, b) {
   if (b.static) return null;
   const m = key.match(/^([^:]+)/);
   const base = m ? m[1] : key;
+  if (DECOR_SPRITE_KEYS.has(base)) return null;
   if (b.image) {
-    // 圖片貼圖（assets/xian/）只有玩家角色要材質層。
-    // 顏色用角色自己的 accent：邊光是「光」，但色相跟著角色配色才不會每隻都冷白。
-    if (!PLAYER_SPRITE_KEYS.has(base)) return null;
-    return (CHARACTERS[base] && CHARACTERS[base].accent) || DEFAULT_ACCENT;
+    if (PLAYER_SPRITE_KEYS.has(base)) {
+      return (CHARACTERS[base] && CHARACTERS[base].accent) || DEFAULT_ACCENT;
+    }
+    for (const [prefix, color] of BOSS_ACCENT) {
+      if (base.startsWith(prefix)) return color;
+    }
+    return null;
   }
   if (FIXED_ACCENT[base]) return FIXED_ACCENT[base];
   for (const [prefix, color] of BOSS_ACCENT) {
@@ -6464,11 +6475,27 @@ for (const [theme, fn] of Object.entries({
 // 圖片非同步載入；載好之前沿用原本的程式繪圖，載好後替換 BUILDERS 並清掉已烘焙的快取。
 // 數值為遊戲內顯示高度 (px)。
 const IMAGE_SPRITES = {
+  // 基礎感染者與變異怪
+  walker: 52, boomer: 56, boomer_armed: 58, spore_host: 64, tar_slug: 50, sniper: 54, spore_mine: 48, poxwalker: 52,
+  // 奇幻妖獸 & 生化部隊 (24 種)
   hound: 50, runner: 50, ink_wolf: 54, ink_gale_wolf: 56, brute: 66, warden: 64, bloater: 60,
   ink_boar: 54, ink_boar_king: 62, ink_gas_boar: 56, bat: 40, blinker: 42, ink_crow: 44, ink_shadow_crow: 46,
   spitter: 50, mortar: 54, medic: 54, ink_fox: 48, ink_fox_guard: 58, ink_fox_spirit: 60,
   chimera: 86, hatcher: 62, ink_ape: 74, ink_ape_mother: 80,
+  // 戰鎚 40K 異形與綠皮軍團
+  hormagaunt: 50, termagant: 50, genestealer: 56, ork_boy: 66, squig_bomb: 52,
+  // 各大首領 Boss
+  boss: 110, boss_charging: 115, boss_nob: 105, boss_broodlord: 108, boss_carnifex: 120,
+  // 武俠敵人與門派頭目
+  wuxia_guard: 56, wuxia_rogue: 54, wuxia_archer: 54, wuxia_assassin: 52, wuxia_qingcheng: 52,
+  wuxia_zuo: 68, wuxia_yue: 66, wuxia_dongfang: 66, wuxia_lin: 52,
+  // 英雄特工 (13 位)
+  duck: 60, rabbit: 62, penguin: 60, cat: 60, mechanic: 62,
+  astartes_duck: 66, techpriest_goose: 66,
   xian_sword: 62, xian_talisman: 62, xian_mage: 62, xian_alchemy: 62, xian_zen: 60, xian_demon: 62,
+  // 地形地貌裝飾物 (靜態不跳動)
+  ink_pine: 96, ink_rock: 84, moss_stone: 56, flower_patch_1: 44, flower_patch_2: 44, grass_tuft: 40,
+  pine_tree_1: 96, pine_tree_2: 96, pine_tree_3: 96, mountain_rock_1: 84, mountain_rock_2: 84,
 };
 
 function imageBuilder(img, height, still) {
@@ -6598,7 +6625,13 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
   Object.entries(IMAGE_SPRITES).map(([key, height]) => new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      BUILDERS[key] = key.startsWith('xian_') ? xianCharacterBuilder(key, img, height) : imageBuilder(img, height, false);
+      if (PLAYER_SPRITE_KEYS.has(key)) {
+        BUILDERS[key] = xianCharacterBuilder(key, img, height);
+      } else if (DECOR_SPRITE_KEYS.has(key)) {
+        BUILDERS[key] = imageBuilder(img, height, true);
+      } else {
+        BUILDERS[key] = imageBuilder(img, height, false);
+      }
       for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
       resolve();
     };
@@ -6606,7 +6639,7 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
       console.warn(`[sprites] 貼圖載入失敗，沿用程式繪圖：${key}`);
       resolve();
     };
-    img.src = `./assets/xian/${key}.png`;
+    img.src = `./assets/xian/${key}.png?v=20260929`;
   })),
 );
 
