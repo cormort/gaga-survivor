@@ -84,7 +84,7 @@ export function buildFacility(game, type = 'turret') {
   }
   game.turrets.push(facility);
 
-  const fxColor = type === 'electric_grid' ? '#b5179e' : type === 'purifier' ? '#00f59b' : type === 'barricade' ? '#ffb703' : '#00e5ff';
+  const fxColor = type === 'electric_grid' ? '#b5179e' : type === 'purifier' ? '#00f59b' : type === 'barricade' ? '#ffb703' : type === 'heavy_bolter' ? '#f39c12' : type === 'barracks' ? '#27ae60' : type === 'manufactorum' ? '#e67e22' : '#00e5ff';
   game.particles.createShockwave(game.player.x, game.player.y, 80, fxColor);
   sound.playEvoFanfare();
   game.ui.say(`已部署【${conf.name}】！`, fxColor, 1.4);
@@ -282,6 +282,53 @@ export function updateMercenaries(game, dt) {
       save.flush();   // 陣亡不掉境界，經驗先寫回存檔
       game.mercenaries.splice(i, 1);
       game.ui.updateHireBtn(game.mercCost, game.gold >= (game.mercCost || 1e9));
+    }
+  }
+}
+
+export function updateAlliedUnits(game, dt) {
+  if (!game.alliedUnits) return;
+  for (let i = game.alliedUnits.length - 1; i >= 0; i--) {
+    const u = game.alliedUnits[i];
+    u.update(dt, game.enemies, game);
+
+    // 敵人貼近碰撞與推擠阻截
+    for (const e of game.enemies) {
+      if (e.isDead) continue;
+      const dx = e.x - u.x;
+      const dy = e.y - u.y;
+      const minD = u.radius + e.radius;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= minD * minD || d2 === 0) continue;
+
+      const d = Math.sqrt(d2);
+      // 實體阻絕：敵人無法穿越士兵或戰車，被推擠阻隔在陣線外
+      e.x = u.x + (dx / d) * minD;
+      e.y = u.y + (dy / d) * minD;
+
+      // 單位受傷
+      u.takeDamage(e.damage * dt * 1.5, e);
+
+      // 黎曼魯斯坦克履帶碾壓反傷
+      if (u.type === 'leman_russ') {
+        game.damageEnemy(e, 85 * dt, 2, u.x, u.y, 'ram');
+      }
+    }
+
+    if (u.isDead) {
+      if (u.type === 'leman_russ') {
+        if (game.particles) {
+          game.particles.createExplosion(u.x, u.y, 90);
+          game.particles.createShockwave(u.x, u.y, 140, '#e67e22');
+        }
+        sound.playExplosion();
+        if (game.camera) game.camera.shake = 10;
+        game.ui.say('💥 黎曼魯斯坦克殉爆！為帝皇盡忠！', '#e67e22', 2.0);
+      } else {
+        if (game.particles) game.particles.createExplosion(u.x, u.y, 25);
+        sound.playHurt();
+      }
+      game.alliedUnits.splice(i, 1);
     }
   }
 }

@@ -122,6 +122,7 @@ const PRECACHE = [
   './js/shop.js',
   './js/sprites.js',
   './js/entities/Core.js',
+  './js/entities/AlliedUnit.js',
   './js/entities/DropItem.js',
   './js/entities/Enemy.js',
   './js/entities/EnemyProjectile.js',
@@ -137,6 +138,7 @@ const PRECACHE = [
   './js/systems/Menu.js',
   './js/systems/Merchant.js',
   './js/systems/Progression.js',
+  './js/systems/Skills.js',
   './js/systems/ParticleSystem.js',
   './js/systems/Spawner.js',
   './js/systems/TowerDefense.js',
@@ -145,6 +147,7 @@ const PRECACHE = [
   './js/systems/UI.js',
   './js/weapons/WeaponManager.js',
   './js/weapons/WeaponArt.js',
+  './js/weapons/WeaponSprites.js',
   './js/weapons/ProjectileFX.js',
 ];
 

@@ -38,6 +38,7 @@ import {
   affixName,
 } from '../items.js';
 import { JEWELS, JEWEL_ORDER, jewelValue } from '../jewels.js';
+import { renderWeaponIconHtml } from '../weapons/WeaponSprites.js';
 import { questText } from '../quests.js';
 import { CODEX_MILESTONES, codexCategories, codexHas, codexProgress } from '../codex.js';
 import { save, STASH_CAP } from '../save.js';
@@ -211,6 +212,9 @@ export class UIManager {
       electric_grid: { btn: document.getElementById('btn-build-grid'), cost: document.getElementById('build-grid-cost') },
       purifier: { btn: document.getElementById('btn-build-purifier'), cost: document.getElementById('build-purifier-cost') },
       barricade: { btn: document.getElementById('btn-build-barricade'), cost: document.getElementById('build-barricade-cost') },
+      heavy_bolter: { btn: document.getElementById('btn-build-heavy-bolter'), cost: document.getElementById('build-heavy-bolter-cost') },
+      barracks: { btn: document.getElementById('btn-build-barracks'), cost: document.getElementById('build-barracks-cost') },
+      manufactorum: { btn: document.getElementById('btn-build-manufactorum'), cost: document.getElementById('build-manufactorum-cost') },
     };
 
     this.dashBtn = document.getElementById('btn-dash');
@@ -1118,17 +1122,21 @@ export class UIManager {
       const row = document.createElement('div');
       row.className = 'recipe-row';
 
-      const cell = (cls, icon, text) => {
+      const cell = (cls, id, icon, text) => {
         const span = document.createElement('span');
         span.className = cls;
-        span.textContent = icon ? `${icon} ${text}` : text;
+        if (id) {
+          span.innerHTML = `${renderWeaponIconHtml(id, icon, text)} ${text}`;
+        } else {
+          span.textContent = icon ? `${icon} ${text}` : text;
+        }
         return span;
       };
-      row.appendChild(cell('recipe-item', def.icon, def.name));
-      row.appendChild(cell('recipe-plus', null, '＋'));
-      row.appendChild(cell('recipe-item recipe-pair', pairDef.icon, `${pairDef.name} LV${pairDef.maxLevel}`));
-      row.appendChild(cell('recipe-equals', null, '＝'));
-      row.appendChild(cell('recipe-item recipe-evo', evoDef.icon, evoDef.name));
+      row.appendChild(cell('recipe-item', def.id, def.icon, def.name));
+      row.appendChild(cell('recipe-plus', null, null, '＋'));
+      row.appendChild(cell('recipe-item recipe-pair', def.pairPassive, pairDef.icon, `${pairDef.name} LV${pairDef.maxLevel}`));
+      row.appendChild(cell('recipe-equals', null, null, '＝'));
+      row.appendChild(cell('recipe-item recipe-evo', evoDef.id, evoDef.icon, evoDef.name));
 
       const chip = document.createElement('span');
       chip.className = 'recipe-chip' + (evolved.has(evoDef.id) ? ' done' : '');
@@ -1375,7 +1383,7 @@ export class UIManager {
       slot.className = `skill-slot filled ${item.isEvo ? 'evo' : ''} ${item.sealedBy ? 'sealed' : ''}`;
       slot.innerHTML = `
         ${item.sealedBy ? '<span class="slot-seal" title="被封印：擊殺封印精英解封">🔒</span>' : ''}
-        <span class="slot-emoji">${def.icon.split(' ')[0]}</span>
+        <span class="slot-emoji">${renderWeaponIconHtml(id, def.icon.split(' ')[0], def.name)}</span>
         <span class="slot-stars">${item.isEvo ? 'MAX' : '★'.repeat(item.level)}</span>
         ${aspectBadge}
       `;
@@ -1398,7 +1406,7 @@ export class UIManager {
       const def = PASSIVES[id];
       slot.className = 'skill-slot filled';
       slot.innerHTML = `
-        <span class="slot-emoji">${def.icon}</span>
+        <span class="slot-emoji">${renderWeaponIconHtml(id, def.icon, def.name)}</span>
         <span class="slot-stars">${item.level >= def.maxLevel ? 'MAX' : '★'.repeat(item.level)}</span>
       `;
       pIndex++;
@@ -1547,7 +1555,7 @@ export class UIManager {
       let sub = '';
       if (cat === 'weapons' || cat === 'evos') {
         const w = WEAPONS[id];
-        if (has) { icon = w.icon; name = w.name; sub = cat === 'evos' ? '已合成' : '已取得'; }
+        if (has) { icon = renderWeaponIconHtml(id, w.icon, w.name); name = w.name; sub = cat === 'evos' ? '已合成' : '已取得'; }
         else sub = cat === 'evos' ? '合成後解鎖' : '局內取得後解鎖';
       } else if (cat === 'enemies') {
         const e = ENEMY_TYPES[id];
@@ -1602,18 +1610,19 @@ export class UIManager {
         const pLv = pItem ? pItem.level : 0;
         const wOk = item.level >= def.maxLevel;
         const pOk = pDef && pLv >= pDef.maxLevel;
-        recipe = `<span class="pb-note">→ ${WEAPONS[def.evoTarget].icon} ${esc(WEAPONS[def.evoTarget].name)}：`
+        const evoD = WEAPONS[def.evoTarget];
+        recipe = `<span class="pb-note">→ ${renderWeaponIconHtml(def.evoTarget, evoD.icon, evoD.name)} ${esc(evoD.name)}：`
           + `武器 ${wOk ? '✓' : `${item.level}/${def.maxLevel}`} · `
-          + `${pDef ? `${pDef.icon}${esc(pDef.name)} ${pOk ? '✓' : `${pLv}/${pDef.maxLevel}`}` : '—'}`
+          + `${pDef ? `${renderWeaponIconHtml(pid, pDef.icon, pDef.name)} ${esc(pDef.name)} ${pOk ? '✓' : `${pLv}/${pDef.maxLevel}`}` : '—'}`
           + `${wOk && pOk ? ' <b class="pb-ready">可合成</b>' : ''}</span>`;
       }
-      return `<div class="pb-row"><span class="pb-name">${def.icon} ${esc(def.name)}</span>`
+      return `<div class="pb-row"><span class="pb-name">${renderWeaponIconHtml(id, def.icon, def.name)} ${esc(def.name)}</span>`
         + `<span class="pb-lv">LV ${item.level}/${def.maxLevel}</span>${recipe}</div>`;
     }).join('');
 
     const passiveRows = [...wm.passives.entries()].map(([id, item]) => {
       const def = PASSIVES[id];
-      return def ? `<div class="pb-row"><span class="pb-name">${def.icon} ${esc(def.name)}</span><span class="pb-lv">LV ${item.level}/${def.maxLevel}</span></div>` : '';
+      return def ? `<div class="pb-row"><span class="pb-name">${renderWeaponIconHtml(id, def.icon, def.name)} ${esc(def.name)}</span><span class="pb-lv">LV ${item.level}/${def.maxLevel}</span></div>` : '';
     }).join('');
 
     const crit = (p.critChance || 0) + (p.metaCrit || 0) + (p.luckPotionTimer > 0 ? 0.25 : 0);
@@ -1691,7 +1700,7 @@ export class UIManager {
         : '★'.repeat(opt.nextLevel || 1) + '☆'.repeat(Math.max(0, (opt.maxLevel || 1) - (opt.nextLevel || 1)));
 
       card.innerHTML = `
-        <div class="card-icon-box">${opt.icon}</div>
+        <div class="card-icon-box">${renderWeaponIconHtml(opt.targetId || opt.id, opt.icon, opt.name)}</div>
         <div class="card-info">
           <div class="card-title-row">
             <span class="card-name">${opt.name}</span>

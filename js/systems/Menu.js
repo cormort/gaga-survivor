@@ -331,6 +331,9 @@ export function bindEvents(game) {
     if (e.key === '2') buildFacility(game, 'electric_grid');
     if (e.key === '3') buildFacility(game, 'purifier');
     if (e.key === '4') buildFacility(game, 'barricade');
+    if (e.key === '5') buildFacility(game, 'heavy_bolter');
+    if (e.key === '6') buildFacility(game, 'barracks');
+    if (e.key === '7') buildFacility(game, 'manufactorum');
     if (e.key === 'b' || e.key === 'B') buildFacility(game, game.selectedFacility || 'turret');
     if (e.key === 't' || e.key === 'T') tryUpgradeNearestTurret(game);
     if (e.key === 'g' || e.key === 'G') hireMercenary(game);

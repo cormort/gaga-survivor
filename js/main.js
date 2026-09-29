@@ -73,6 +73,7 @@ import {
   updateTurrets,
   tryUpgradeNearestTurret,
   updateMercenaries,
+  updateAlliedUnits,
   facilityGoldMul,
 } from './systems/Facilities.js';
 import {
@@ -205,6 +206,7 @@ class Game {
     this.turrets = [];
     this.selectedFacility = 'turret';
     this.mercenaries = [];
+    this.alliedUnits = [];
     this.decals = []; // 地面殘跡 (血漬/焦痕)
     this.destructibles = []; // 街頭可破壞物件 (木箱/補給油桶)
 
@@ -1003,6 +1005,7 @@ class Game {
     this._levelUpHold = 0;
     this.turrets = [];
     this.mercenaries = [];
+    this.alliedUnits = [];
     this.decals = [];
     initExplodableProps(this);
     this.destructibles = [];
@@ -1743,6 +1746,8 @@ class Game {
 
     // 4.6 傭兵 AI (跟隨/索敵/被啃)
     updateMercenaries(this, dt);
+    // 4.65 星界軍盟軍部隊 (步兵、戰車)
+    updateAlliedUnits(this, dt);
     this.updateSeals();
 
     // 開局送的那一座之外，玩家還是不知道自己「可以再蓋」。金幣第一次夠的時候
@@ -3339,6 +3344,13 @@ class Game {
     // 繪製傭兵 (隊友，畫在敵人之上、特工之下)
     for (const m of this.mercenaries) {
       m.draw(this.ctx, renderCam);
+    }
+
+    // 繪製星界軍盟軍部隊 (步兵、戰車)
+    if (this.alliedUnits) {
+      for (const u of this.alliedUnits) {
+        u.draw(this.ctx, renderCam);
+      }
     }
 
     // 武器掛載：斜背/後腰的武器畫在角色「之下」（才會被身體擋住一部分，像真的背在身上），

@@ -2,6 +2,7 @@
 
 import { getSprite } from '../sprites.js';
 import { sound } from '../audio.js';
+import { GuardsmanUnit, LemanRussUnit } from './AlliedUnit.js';
 
 export const FACILITY_TYPES = {
   turret: {
@@ -57,6 +58,49 @@ export const FACILITY_TYPES = {
     reflectPct: 1.0,
     desc: '高耐久重裝路障，怪衝撞或啃咬時受到 100% 尖刺反傷',
     color: '#ffb703',
+  },
+  heavy_bolter: {
+    id: 'heavy_bolter',
+    name: '重型爆彈砲座',
+    icon: '🦅',
+    desc: '雙聯裝重型爆彈槍，射程極遠、射速極快，命中引爆穿甲高爆彈片',
+    baseCost: 90,
+    costGrowth: 45,
+    maxHp: 1400,
+    radius: 22,
+    range: 380,
+    cooldown: 0.22,
+    damage: 44,
+    minSpacing: 65,
+    color: '#f39c12',
+  },
+  barracks: {
+    id: 'barracks',
+    name: '星界軍兵營',
+    icon: '⛺',
+    desc: '卡迪亞星界軍前進兵營，定時訓練生產步兵衝向戰線阻截並射擊敵人 (最多 6 名士兵)',
+    baseCost: 110,
+    costGrowth: 55,
+    maxHp: 1800,
+    radius: 28,
+    minSpacing: 85,
+    spawnCd: 4.5,
+    maxUnits: 6,
+    color: '#27ae60',
+  },
+  manufactorum: {
+    id: 'manufactorum',
+    name: '機械製造廠',
+    icon: '🏭',
+    desc: '鑄造世界重型工廠，組裝黎曼魯斯主戰戰車推進戰線，重砲壓制敵陣 (最多 2 輛戰車)',
+    baseCost: 180,
+    costGrowth: 90,
+    maxHp: 2600,
+    radius: 32,
+    minSpacing: 100,
+    spawnCd: 12.0,
+    maxUnits: 2,
+    color: '#e67e22',
   },
 };
 
@@ -208,7 +252,76 @@ export class Turret {
       return;
     }
 
-    // 4. 基礎與進化砲台行為
+    // 4. 重型爆彈砲座 (Heavy Bolter Emplacement) 行為：雙聯高速爆彈射擊 + 小範圍高爆濺射
+    if (this.facilityType === 'heavy_bolter') {
+      this.cooldownTimer -= dt;
+      let target = null;
+      const range = this.fConf.range || 380;
+      const range2 = range * range;
+      let bestScore = range2;
+      for (const e of enemies) {
+        if (e.isDead) continue;
+        const dx = e.x - this.x;
+        const dy = e.y - this.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > range2) continue;
+        const score = e.isBoss ? d2 * 0.25 : d2;
+        if (score < bestScore) {
+          bestScore = score;
+          target = e;
+        }
+      }
+      if (!target) return;
+
+      this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+      if (this.cooldownTimer > 0) return;
+      this.cooldownTimer = (this.fConf.cooldown || 0.22) * this.cdMul(game);
+      this.muzzleTimer = 0.08;
+      this.barrelSide = 1 - (this.barrelSide || 0);
+
+      onHit(target, this.fConf.damage || 44);
+      if (game && game.particles) {
+        game.particles.createExplosion(target.x, target.y, 24);
+      }
+      // 爆彈彈片範圍破片傷害
+      const splashR = 48;
+      for (const e of enemies) {
+        if (e.isDead || e === target) continue;
+        if (Math.hypot(e.x - target.x, e.y - target.y) <= splashR) {
+          onHit(e, Math.round((this.fConf.damage || 44) * 0.45));
+        }
+      }
+      sound.playShoot();
+      return;
+    }
+
+    // 5. 星界軍兵營與機械製造廠行為：定時召喚部隊馳援前線
+    if (this.facilityType === 'barracks' || this.facilityType === 'manufactorum') {
+      if (game && game.alliedUnits) {
+        const myUnits = game.alliedUnits.filter((u) => u.facility === this && !u.isDead);
+        const maxU = this.fConf.maxUnits || 4;
+        if (myUnits.length < maxU) {
+          this.spawnTimer = (this.spawnTimer || 0) + dt;
+          if (this.spawnTimer >= (this.fConf.spawnCd || 5)) {
+            this.spawnTimer = 0;
+            if (this.facilityType === 'barracks') {
+              game.alliedUnits.push(new GuardsmanUnit(this.x, this.y, this, game));
+              game.ui.say('💂 星界軍步兵受命奔赴前線！', '#27ae60', 1.8);
+            } else {
+              game.alliedUnits.push(new LemanRussUnit(this.x, this.y, this, game));
+              game.ui.say('🚜 黎曼魯斯主戰戰車出廠推進！', '#e67e22', 2.2);
+            }
+            sound.playEvoFanfare();
+            if (game.particles) {
+              game.particles.createShockwave(this.x, this.y, 50, this.fConf.color);
+            }
+          }
+        }
+      }
+      return;
+    }
+
+    // 6. 基礎與進化砲台行為
     this.cooldownTimer -= dt;
 
     if (this.variant === 'cryo') {
@@ -442,6 +555,210 @@ export class Turret {
         ctx.lineTo(sx + ox, sy + 5);
       }
       ctx.stroke();
+      ctx.restore();
+      this.drawHpBar(ctx, sx, sy);
+      return;
+    }
+
+    // ── 繪製重型爆彈砲座 (Heavy Bolter Emplacement) ──
+    if (this.facilityType === 'heavy_bolter') {
+      const hurt = this.hp < this.maxHp * 0.6;
+      const pulseA = 0.25 + 0.1 * Math.sin(this.animTimer * 2.2);
+      ctx.save();
+      ctx.strokeStyle = hurt ? `rgba(255,59,92,${(pulseA + 0.16).toFixed(3)})` : `rgba(243,156,18,${pulseA.toFixed(3)})`;
+      ctx.lineWidth = hurt ? 2 : 1.4;
+      ctx.setLineDash([12, 10]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, this.fConf.range || 380, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 六角形鋼筋混凝土工事底座
+      ctx.fillStyle = '#243342';
+      ctx.strokeStyle = '#34495e';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const ang = (i * Math.PI) / 3;
+        const px = sx + Math.cos(ang) * 22;
+        const py = sy + Math.sin(ang) * 22;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 前沿環形沙包防壁
+      ctx.fillStyle = '#7f8c8d';
+      ctx.beginPath();
+      ctx.arc(sx, sy + 10, 16, Math.PI * 0.1, Math.PI * 0.9);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#95a5a6';
+      ctx.stroke();
+
+      // 旋轉雙聯爆彈砲身
+      ctx.translate(sx, sy);
+      ctx.rotate(this.angle);
+
+      // 雙聯砲管
+      ctx.fillStyle = '#1e272e';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1.2;
+      // 上槍管
+      ctx.fillRect(4, -7, 24, 5);
+      ctx.strokeRect(4, -7, 24, 5);
+      // 下槍管
+      ctx.fillRect(4, 2, 24, 5);
+      ctx.strokeRect(4, 2, 24, 5);
+
+      // 砲口制退擴焰筒
+      ctx.fillStyle = '#f39c12';
+      ctx.fillRect(26, -8, 4, 7);
+      ctx.fillRect(26, 1, 4, 7);
+
+      // 雙側大容量彈鼓
+      ctx.fillStyle = '#d35400';
+      ctx.beginPath();
+      ctx.arc(-2, -9, 6, 0, Math.PI * 2);
+      ctx.arc(-2, 9, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 槍盾 (金屬盾牌 + 帝國天鷹羽翼金飾)
+      ctx.fillStyle = '#2c3e50';
+      ctx.strokeStyle = '#f1c40f';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.roundRect(-8, -12, 12, 24, 3);
+      ctx.fill();
+      ctx.stroke();
+
+      // 開火槍口爆焰
+      if (this.muzzleTimer > 0) {
+        const my = this.barrelSide ? 4 : -5;
+        ctx.fillStyle = '#ffbe0b';
+        ctx.shadowColor = '#ff5400';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(33, my, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      this.drawHpBar(ctx, sx, sy);
+      return;
+    }
+
+    // ── 繪製星界軍兵營 (Astra Militarum Barracks) ──
+    if (this.facilityType === 'barracks') {
+      ctx.save();
+      // 地基加固鋼板
+      ctx.fillStyle = '#14231a';
+      ctx.strokeStyle = '#27ae60';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(sx - 26, sy - 20, 52, 40, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // 迷彩重裝營舍本體
+      ctx.fillStyle = '#1b382b';
+      ctx.beginPath();
+      ctx.roundRect(sx - 22, sy - 17, 44, 34, 4);
+      ctx.fill();
+
+      // 防暴升降閘門
+      ctx.fillStyle = '#0a140f';
+      ctx.fillRect(sx - 10, sy + 3, 20, 14);
+      ctx.strokeStyle = '#f39c12';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(sx - 10, sy + 3, 20, 14);
+
+      // 帝國骷髏徽記 (簡約金色天鷹標誌)
+      ctx.fillStyle = '#f1c40f';
+      ctx.beginPath();
+      ctx.arc(sx, sy - 6, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(sx - 7, sy - 8, 14, 2);
+
+      // 通訊雷達天線 (附帶閃爍綠燈)
+      ctx.strokeStyle = '#bdc3c7';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx + 14, sy - 17);
+      ctx.lineTo(sx + 14, sy - 28);
+      ctx.stroke();
+      const blink = Math.sin(this.animTimer * 5) > 0;
+      ctx.fillStyle = blink ? '#2ecc71' : '#145a32';
+      ctx.shadowColor = '#2ecc71';
+      ctx.shadowBlur = blink ? 6 : 0;
+      ctx.beginPath();
+      ctx.arc(sx + 14, sy - 29, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+      this.drawHpBar(ctx, sx, sy);
+      return;
+    }
+
+    // ── 繪製機械製造廠 (Adeptus Mechanicus Manufactorum) ──
+    if (this.facilityType === 'manufactorum') {
+      ctx.save();
+      // 工廠厚重基座
+      ctx.fillStyle = '#2c140a';
+      ctx.strokeStyle = '#d35400';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(sx - 30, sy - 24, 60, 48, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // 鍛造爐高溫外殼
+      ctx.fillStyle = '#442314';
+      ctx.beginPath();
+      ctx.roundRect(sx - 26, sy - 20, 52, 40, 4);
+      ctx.fill();
+
+      // 雙聯排煙巨管 (不斷冒出高溫蒸汽與黑煙)
+      ctx.fillStyle = '#1e272e';
+      ctx.fillRect(sx - 20, sy - 34, 9, 14);
+      ctx.fillRect(sx + 11, sy - 34, 9, 14);
+      // 排煙粒子
+      const pOff = (this.animTimer * 20) % 15;
+      ctx.fillStyle = 'rgba(180, 180, 180, 0.4)';
+      ctx.beginPath();
+      ctx.arc(sx - 15.5, sy - 36 - pOff, 4 + pOff * 0.4, 0, Math.PI * 2);
+      ctx.arc(sx + 15.5, sy - 36 - pOff, 4 + pOff * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 坦克出廠液壓防護閘門 (黑黃斜紋警示線)
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(sx - 16, sy + 2, 32, 18);
+      // 警示紋理
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(sx - 16, sy + 2, 32, 18);
+      ctx.clip();
+      ctx.strokeStyle = '#f1c40f';
+      ctx.lineWidth = 3;
+      for (let ox = -20; ox <= 40; ox += 8) {
+        ctx.beginPath();
+        ctx.moveTo(sx - 16 + ox, sy + 20);
+        ctx.lineTo(sx - 16 + ox + 10, sy + 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // 機械神教齒輪徽記 (Cog & Skull)
+      const pulse = 0.8 + 0.2 * Math.sin(this.animTimer * 3);
+      ctx.fillStyle = '#e67e22';
+      ctx.beginPath();
+      ctx.arc(sx, sy - 8, 7 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(sx, sy - 8, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.restore();
       this.drawHpBar(ctx, sx, sy);
       return;

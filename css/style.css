@@ -184,11 +184,13 @@ body, html {
 /* 工事建造鈕移到畫面右側，與頂端資訊列分開 —— 後期資訊列已經擠到兩排，
    建造是「操作」不是「資訊」，混在一起既難按也把遊戲視野壓掉。 */
 #action-bar .facility-bar {
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 48px);
   gap: 6px;
   padding-bottom: 12px;
   margin-bottom: 4px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  justify-content: center;
 }
 
 #action-bar .build-btn {
@@ -507,6 +509,53 @@ body, html {
   justify-content: center;
   font-size: 28px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.weapon-sprite-icon {
+  width: 100%;
+  height: 100%;
+  max-width: 46px;
+  max-height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.6));
+  display: block;
+  margin: auto;
+  pointer-events: none;
+  image-rendering: auto;
+}
+
+.skill-slot .weapon-sprite-icon {
+  max-width: 26px;
+  max-height: 26px;
+}
+
+.card-icon-box .weapon-sprite-icon {
+  max-width: 48px;
+  max-height: 48px;
+}
+
+.recipe-item .weapon-sprite-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.pb-row .weapon-sprite-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.codex-icon .weapon-sprite-icon {
+  width: 28px;
+  height: 28px;
+  display: block;
+  margin: auto;
 }
 
 .card-info {
@@ -3320,7 +3369,7 @@ body, html {
   #action-bar .action-btn .action-icon { font-size: 20px; }
   #action-bar .action-btn .action-key { font-size: 9px; }
   #action-bar #btn-dash { width: 54px; height: 54px; }
-  #action-bar .facility-bar { gap: 3px; padding-bottom: 6px; }
+  #action-bar .facility-bar { grid-template-columns: repeat(2, 36px); gap: 3px; padding-bottom: 6px; }
   #action-bar .build-btn { width: 36px; height: 36px; font-size: 8px; }
   #action-bar .build-icon { font-size: 13px; }
   .pocket-grid { gap: 5px; }
