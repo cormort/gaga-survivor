@@ -50,6 +50,12 @@ export const WEAPON_ART = {
   absolute_zero: { family: 'coil', len: 32, color: '#e0fbff', evoGlow: true },
   shotgun: { family: 'launcher', len: 30, color: '#ffb347' },
   dragon_breath: { family: 'launcher', len: 36, color: '#ff5722', evoGlow: true },
+
+  // 戰鎚 40K 擴充武器
+  bolter: { family: 'launcher', len: 32, color: '#ffb703' },
+  storm_bolter: { family: 'launcher', len: 38, color: '#ffd166', evoGlow: true },
+  chainsword: { family: 'blade', len: 36, color: '#ff3344' },
+  power_sword: { family: 'blade', len: 40, color: '#00d4ff', evoGlow: true },
 };
 
 // ── 四種家族 ────────────────────────────────────────────────────────────
@@ -360,6 +366,43 @@ export function drawHeldWeapon(ctx, id, opts) {
   else if (a.family === 'disc') tip = disc(ctx, a, spin);
   else if (a.family === 'launcher') tip = launcher(ctx, a);
   else tip = coil(ctx, a, spin);
+
+  // 刀刃揮砍弧光 (Slash Arc)
+  if (a.family === 'blade' && (muzzle > 0.05 || recoil > 0.05)) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const arcPower = Math.max(muzzle, recoil);
+    ctx.globalAlpha = arcPower * 0.85;
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.arc(tip * 0.6, 0, tip * 0.75, -Math.PI * 0.38, Math.PI * 0.38);
+    ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(tip * 0.6, 0, tip * 0.75, -Math.PI * 0.25, Math.PI * 0.25);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 電弧枝椏 (Electric Discharges)
+  if (a.family === 'coil' && muzzle > 0.05) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = muzzle * 0.9;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 3; i++) {
+      const off = (i - 1) * 3.5;
+      ctx.beginPath();
+      ctx.moveTo(tip, off);
+      ctx.lineTo(tip + 8 * muzzle, off + (i % 2 === 0 ? 4 : -4));
+      ctx.lineTo(tip + 16 * muzzle, off);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   // 槍口火光
   if (muzzle > 0.02) {

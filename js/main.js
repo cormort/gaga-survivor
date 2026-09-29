@@ -2311,6 +2311,26 @@ class Game {
         // 幽靈手裏劍：追到第一個目標後改直線穿透（不然會繞回怪群把穿透全部用完）
         if (p.type === 'shuriken') { p.homing = 0; p.target = null; }
 
+        // 爆彈槍 / 神聖風暴爆彈槍 / 坦克加農砲：命中引爆破片濺射
+        if (p.explosionRadius > 0 && (p.type === 'bolter' || p.type === 'storm_bolter' || p.type === 'tank_shell')) {
+          this.particles.createExplosion(p.x, p.y, p.explosionRadius);
+          if (p.type === 'storm_bolter') {
+            this.particles.createShockwave(p.x, p.y, p.explosionRadius, '#ffd166');
+          }
+          const splashDmg = Math.round(actualDmg * 0.65);
+          this._forEachNearbyEnemy(grid, p.x, p.y, p.explosionRadius + grid.maxR, (nearE) => {
+            if (nearE !== enemy && !nearE.isDead) {
+              const ndx = nearE.x - p.x;
+              const ndy = nearE.y - p.y;
+              if (ndx * ndx + ndy * ndy <= (p.explosionRadius + nearE.radius) ** 2) {
+                nearE.takeDamage(splashDmg, 8, p.x, p.y);
+                this.weaponManager.recordDamage(p.weaponId, splashDmg);
+                this.particles.createDamageText(nearE.x, nearE.y, splashDmg, false);
+              }
+            }
+          });
+        }
+
         p.pierce--;
         if (p.pierce <= 0) {
           p.isDead = true;

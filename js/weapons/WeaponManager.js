@@ -484,6 +484,16 @@ export class WeaponManager {
       case 'shotgun':
       case 'dragon_breath':
         return this.fireShotgun(def, item, finalDamage, enemies, crit);
+
+      case 'bolter':
+      case 'storm_bolter':
+        this.fireBolter(def, item, finalDamage, enemies, crit);
+        break;
+
+      case 'chainsword':
+      case 'power_sword':
+        this.fireChainsword(def, item, finalDamage, enemies, crit, particleSystem);
+        break;
     }
   }
 
@@ -1408,6 +1418,142 @@ export class WeaponManager {
       ctx.fillText('換彈', sx, cy - 11);
       ctx.restore();
       break;
+    }
+  }
+
+  // 11. 帝國爆彈槍 / 神聖風暴爆彈槍 (高爆火箭穿甲彈)
+  fireBolter(def, item, damage, enemies, crit = false) {
+    const target = this.getClosestEnemy(enemies);
+    if (!target) return;
+
+    const baseCount = Array.isArray(def.projectiles) ? def.projectiles[item.level - 1] : (def.projectiles || 1);
+    const pierce = Array.isArray(def.pierce) ? def.pierce[item.level - 1] : (def.pierce || 1);
+    const speed = def.speed || 760;
+    const expR = Array.isArray(def.explosionRadius) ? def.explosionRadius[item.level - 1] : (def.explosionRadius || 50);
+
+    const isStorm = def.id === 'storm_bolter';
+    const interval = isStorm ? 0.05 : 0.08;
+
+    for (let i = 0; i < baseCount; i++) {
+      this.schedule(i * interval, () => {
+        if (!target || target.isDead) return;
+        const ox = this.player.x;
+        const oy = this.player.y;
+        const dx = target.x - ox;
+        const dy = target.y - oy;
+        const dist = Math.hypot(dx, dy);
+        if (dist === 0) return;
+
+        // 風暴爆彈槍雙聯微幅散射
+        const spread = isStorm ? ((i % 2 === 0 ? -1 : 1) * 0.08 + (Math.random() - 0.5) * 0.05) : ((i - (baseCount - 1) / 2) * 0.06);
+        const baseAngle = Math.atan2(dy, dx) + spread;
+
+        item.aim = baseAngle;
+        item.recoil = 1;
+        item.muzzle = 1;
+
+        sound.playShoot(ox);
+
+        this.projectiles.push(
+          this.mkProjectile({
+            type: def.projType || 'bolter',
+            weaponId: def.id,
+            x: ox,
+            y: oy,
+            vx: Math.cos(baseAngle) * speed,
+            vy: Math.sin(baseAngle) * speed,
+            damage: Math.round(damage),
+            radius: isStorm ? 9 : 7,
+            pierce: pierce,
+            isCrit: crit,
+            isEvo: !!def.isEvo,
+            explosionRadius: expR,
+            maxLife: 2.0,
+            knockback: isStorm ? 16 : 11,
+          })
+        );
+      });
+    }
+  }
+
+  // 12. 咆哮鏈鋸劍 / 帝皇動力神劍
+  fireChainsword(def, item, damage, enemies, crit = false, particleSystem = null) {
+    const isPower = def.id === 'power_sword';
+    const radius = isPower ? def.radius : def.radius[item.level - 1];
+    const aim = item.aim != null ? item.aim : (this.player.facing < 0 ? Math.PI : 0);
+
+    // 撕裂次數與打擊
+    const hits = isPower ? 1 : def.hits[item.level - 1];
+    const arc = isPower ? Math.PI * 2 : def.arc[item.level - 1];
+    const hitDmg = Math.round(damage / (isPower ? 1 : Math.max(1, hits * 0.65)));
+
+    sound.playHit(this.player.x);
+
+    for (let h = 0; h < hits; h++) {
+      this.schedule(h * 0.07, () => {
+        const px = this.player.x;
+        const py = this.player.y;
+
+        // 視覺特效：斬擊弧光與火花
+        if (particleSystem) {
+          particleSystem.createShockwave(px + Math.cos(aim) * (radius * 0.5), py + Math.sin(aim) * (radius * 0.5), radius * 0.6, isPower ? '#00f5ff' : '#ffb703');
+        }
+
+        // 判定範圍內敵兵
+        for (const e of enemies) {
+          if (e.isDead) continue;
+          const ex = e.x - px;
+          const ey = e.y - py;
+          const d = Math.hypot(ex, ey);
+          if (d > radius + e.radius) continue;
+
+          if (!isPower) {
+            // 扇形夾角判定
+            const enemyAngle = Math.atan2(ey, ex);
+            let diff = enemyAngle - aim;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            if (Math.abs(diff) > arc / 2) continue;
+          }
+
+          const died = e.takeDamage(hitDmg, isPower ? 16 : 10, px, py);
+          this.recordDamage(def.id, hitDmg);
+          if (particleSystem) {
+            particleSystem.createDamageText(e.x, e.y, hitDmg, crit || isPower, crit);
+          }
+
+          // 鏈鋸劍流血效果
+          if (def.bleedDps && !died) {
+            if (e.applyBleed) e.applyBleed(def.bleedDps, def.bleedDur || 3, def.id);
+            else e.applyBurn(def.bleedDps, def.bleedDur || 3, def.id);
+          }
+        }
+      });
+    }
+
+    // 帝皇動力神劍額外激發 2 道月牙型解離空間衝擊波
+    if (isPower) {
+      [-0.18, 0.18].forEach((offset) => {
+        const waveAngle = aim + offset;
+        const sp = def.shockwaveSpeed || 520;
+        this.projectiles.push(
+          this.mkProjectile({
+            type: 'power_wave',
+            weaponId: def.id,
+            x: this.player.x,
+            y: this.player.y,
+            vx: Math.cos(waveAngle) * sp,
+            vy: Math.sin(waveAngle) * sp,
+            damage: def.shockwaveDmg || 85,
+            radius: 20,
+            pierce: def.shockwavePierce || 99,
+            isCrit: crit,
+            isEvo: true,
+            maxLife: 1.4,
+            knockback: 14,
+          })
+        );
+      });
     }
   }
 }

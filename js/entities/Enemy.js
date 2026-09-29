@@ -189,6 +189,9 @@ export class Enemy {
     this.poisonTimer = 0;   // 中毒剩餘秒數
     this.poisonStacks = 0;  // 中毒層數 (可疊，最多 CHARGE.poison.maxStacks)
     this.poisonSource = null;
+    this.bleedTimer = 0;    // 鏈鋸劍流血剩餘秒數
+    this.bleedDps = 0;
+    this.bleedSource = null;
     this.isDead = false;
     this.lastDamageTaken = 0;  // 實際扣除的傷害 (供飄字/傷害榜顯示減傷後的數字)
 
@@ -251,6 +254,12 @@ export class Enemy {
       dot += tick;
       cb.onBurn?.(this, tick, this.poisonSource);
       if (this.poisonTimer <= 0) this.poisonStacks = 0;
+    }
+    if (this.bleedTimer > 0) {
+      this.bleedTimer -= dt;
+      const bTick = this.bleedDps * dt;
+      dot += bTick;
+      cb.onBurn?.(this, bTick, this.bleedSource);
     }
     if (dot > 0) {
       this.hp -= dot;
@@ -667,6 +676,13 @@ export class Enemy {
     this.poisonStacks = Math.min(CHARGE.poison.maxStacks, this.poisonStacks + 1);
     this.poisonTimer = Math.max(this.poisonTimer, duration);
     this.poisonSource = weaponId || this.poisonSource;
+  }
+
+  // 流血 (鏈鋸劍)：高頻撕裂物理持續傷害
+  applyBleed(dps, duration, weaponId = null) {
+    this.bleedDps = Math.max(this.bleedDps || 0, dps);
+    this.bleedTimer = Math.max(this.bleedTimer || 0, duration);
+    this.bleedSource = weaponId || this.bleedSource;
   }
 
   takeDamage(amount, knockbackDist = 0, sourceX = 0, sourceY = 0) {

@@ -27,6 +27,10 @@ const FX = {
   shuriken:  { color: '#b98cff', glow: 1.9, trail: 0.05 },
   bottle:    { color: '#ffb703', glow: 1.2, trail: 0 },
   force_field: { color: '#ffd166', glow: 0, trail: 0 },
+  bolter:       { color: '#ffb703', glow: 2.0, trail: 0.08 },
+  storm_bolter: { color: '#ffd166', glow: 2.4, trail: 0.09 },
+  power_wave:   { color: '#00f5ff', glow: 2.2, trail: 0.06 },
+  tank_shell:   { color: '#ff6600', glow: 2.2, trail: 0.08 },
 };
 const FX_DEFAULT = { color: '#ffffff', glow: 1.8, trail: 0.05 };
 // 拖尾只在「真的在飛」時畫：環繞刀刃與地面积火是慢速/靜止實體
@@ -516,6 +520,16 @@ export class Projectile {
         this.drawForceField(ctx);
         break;
 
+      case 'bolter':
+      case 'storm_bolter':
+      case 'tank_shell':
+        this.drawBolter(ctx);
+        break;
+
+      case 'power_wave':
+        this.drawPowerWave(ctx);
+        break;
+
       default:
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
@@ -525,6 +539,51 @@ export class Projectile {
     }
 
     ctx.restore();
+  }
+
+  // 爆彈槍與坦克加農砲彈：粗壯火箭彈丸與穿甲高爆頭
+  drawBolter(ctx) {
+    const angle = Math.atan2(this.vy, this.vx);
+    ctx.rotate(angle);
+    const isTank = this.type === 'tank_shell';
+    const scale = isTank ? 1.6 : (this.isEvo ? 1.25 : 1.0);
+    ctx.scale(scale, scale);
+
+    // 彈身
+    ctx.fillStyle = isTank ? '#556b2f' : (this.isEvo ? '#ffd166' : '#ffb703');
+    ctx.beginPath();
+    ctx.roundRect(-8, -3.5, 16, 7, 2);
+    ctx.fill();
+    // 鋼芯穿甲頂部
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(8, -3.5);
+    ctx.lineTo(13, 0);
+    ctx.lineTo(8, 3.5);
+    ctx.closePath();
+    ctx.fill();
+    // 尾部推進燃燒
+    ctx.fillStyle = '#ff5400';
+    ctx.fillRect(-11, -2, 3, 4);
+  }
+
+  // 帝皇動力神劍：月牙型空間解離衝擊波
+  drawPowerWave(ctx) {
+    const angle = Math.atan2(this.vy, this.vx);
+    ctx.rotate(angle);
+    ctx.shadowColor = '#00f5ff';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#00d4ff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, -Math.PI * 0.45, Math.PI * 0.45, false);
+    ctx.quadraticCurveTo(8, 0, 0, -22 * Math.sin(Math.PI * 0.45));
+    ctx.fill();
+    // 核心亮白高光
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(2, 0, 16, -Math.PI * 0.35, Math.PI * 0.35, false);
+    ctx.quadraticCurveTo(8, 0, 2, -16 * Math.sin(Math.PI * 0.35));
+    ctx.fill();
   }
 
   // 幽靈手裏劍：半透明、旋轉的四角星（外圈淡紫幽光）
