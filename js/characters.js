@@ -514,4 +514,5 @@ export const CHARACTERS = {
 };
 
 export const CHARACTER_ORDER = ['duck', 'rabbit', 'penguin', 'cat', 'mechanic',
+  'astartes_duck', 'techpriest_goose',
   'xian_sword', 'xian_talisman', 'xian_mage', 'xian_alchemy', 'xian_zen', 'xian_demon'];
