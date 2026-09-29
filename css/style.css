@@ -3361,9 +3361,8 @@ body, html {
 @media (max-width: 619px) {
   #action-bar .facility-toggle:not(.hidden) { display: flex; }
   #action-bar:not(.fac-open) .facility-bar,
-  #action-bar:not(.fac-open) #btn-hire,
-  #action-bar:not(.fac-open) #btn-turret-upgrade { display: none; }
-  /* 展開時傭兵與砲塔升級排在設施列正下方，跟展開鈕放在一起 */
+  #action-bar:not(.fac-open) #btn-hire { display: none; }
+  /* 展開時傭兵排在設施列正下方；砲塔升級鈕只在靠近砲塔時出現，收起時也留在外面 */
   #action-bar .facility-toggle { order: 0; }
   #action-bar .facility-bar { order: 1; }
   #action-bar #btn-hire { order: 2; }
@@ -3373,6 +3372,6 @@ body, html {
   #action-bar #btn-next-wave { order: 6; }
   #action-bar.fac-open .facility-toggle { border-color: #00e5ff; box-shadow: 0 0 14px rgba(0, 229, 255, 0.6); }
   /* 有設施買得起時展開鈕亮金框 */
-  #action-bar:not(.fac-open):has(.build-btn.affordable:not(.hidden), #btn-hire:not(:disabled):not(.hidden), #btn-turret-upgrade:not(.hidden):not(:disabled)) .facility-toggle { border-color: #ffd60a; box-shadow: 0 0 12px rgba(255, 214, 10, 0.55); }
+  #action-bar:not(.fac-open):has(.build-btn.affordable:not(.hidden), #btn-hire:not(:disabled):not(.hidden)) .facility-toggle { border-color: #ffd60a; box-shadow: 0 0 12px rgba(255, 214, 10, 0.55); }
   #action-bar .facility-toggle .action-key { font-size: 9px; }
 }
