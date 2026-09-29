@@ -73,6 +73,7 @@ function isDarkTone(rgb) {
 //   plates  金屬板：格狀接縫 + 逐板明暗 + 鉚釘 + 內嵌面板
 //   grate   格柵板：金屬板 + 平行散熱槽
 //   drift   起伏紋：整幅環繞的波紋（積雪堆、沙丘、水面漣漪），tint 為色調
+//   paper   宣紙水墨：紙纖維 + 淡墨暈染 + 遠山等高墨線 + 飛白墨點（亮底，用暗墨色）
 //   network 節點網：抖動格點連成的裂縫／符文網（glow = 發光色，node = 亮點機率）
 // size 必須整除磚寬 1024（64/128/256/512），整張才接得上。tint/glow 是 "r,g,b"。
 const GROUND_DETAIL = {
@@ -87,6 +88,7 @@ const GROUND_DETAIL = {
   frostvoid: { kind: 'drift',   size: 512, tint: '190,200,255' },
   voidroad:  { kind: 'network', size: 256, glow: '170,110,255', node: 0.35 },
   endless:   { kind: 'network', size: 512, glow: '140,90,255', node: 0.5 },
+  inkmount:  { kind: 'paper',   size: 128, ink: '58,46,38' },
 };
 
 export class GroundRenderer {
@@ -438,6 +440,58 @@ export class GroundRenderer {
       // 亮點：積雪反光／沙粒閃點／水面波光
       for (let k = 0; k < 90; k++) {
         reliefDot(ctx, P + H(k, 1, 10) * T, P + H(k, 2, 11) * T, 1 + H(k, 3, 12) * 1.8, rgb, 0.22, 1);
+      }
+    } else if (d.kind === 'paper') {
+      const ink = d.ink;
+      for (let j = lo; j < hi; j++) {
+        for (let i = lo; i < hi; i++) {
+          const x = P + i * S;
+          const y = P + j * S;
+          // 淡墨暈染：偶爾一格有一團化開的墨
+          if (H(i, j, 0) > 0.72) {
+            const r = S * (0.6 + H(i, j, 1) * 0.7);
+            const cx = x + H(i, j, 2) * S;
+            const cy = y + H(i, j, 3) * S;
+            const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+            g.addColorStop(0, `rgba(${ink},0.085)`);
+            g.addColorStop(1, `rgba(${ink},0)`);
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+          }
+          // 紙纖維：短而細的隨機方向線
+          ctx.lineWidth = 0.8;
+          for (let k = 0; k < 7; k++) {
+            const fx = x + H(i, j, 10 + k) * S;
+            const fy = y + H(i, j, 20 + k) * S;
+            const a = H(i, j, 30 + k) * Math.PI;
+            const l = 6 + H(i, j, 40 + k) * 16;
+            ctx.strokeStyle = `rgba(${ink},${(0.07 + H(i, j, 50 + k) * 0.09).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(fx, fy);
+            ctx.quadraticCurveTo(fx + Math.cos(a + 0.6) * l * 0.5, fy + Math.sin(a + 0.6) * l * 0.5,
+              fx + Math.cos(a) * l, fy + Math.sin(a) * l);
+            ctx.stroke();
+          }
+          // 飛白墨點
+          if (H(i, j, 60) > 0.6) {
+            reliefDot(ctx, x + H(i, j, 61) * S, y + H(i, j, 62) * S, 1 + H(i, j, 63) * 2.2, ink, 0.22, 0.6);
+          }
+        }
+      }
+      // 遠山等高墨線：整幅環繞的長波紋，粗細與濃淡不一（毛筆的起收）
+      for (let k = 0; k < 7; k++) {
+        const by = P + (k + H(k, 0, 70)) * (T / 7);
+        const amp = 18 + H(k, 0, 71) * 38;
+        const freq = 1 + Math.floor(H(k, 0, 72) * 2);
+        const ph = H(k, 0, 73) * Math.PI * 2;
+        ctx.strokeStyle = `rgba(${ink},${(0.05 + H(k, 0, 74) * 0.05).toFixed(3)})`;
+        ctx.lineWidth = 1.5 + H(k, 0, 75) * 2.5;
+        ctx.beginPath();
+        for (let xx = -P; xx <= T + P; xx += 16) {
+          const yy = by + Math.sin((xx / T) * Math.PI * 2 * freq + ph) * amp;
+          if (xx === -P) ctx.moveTo(P + xx, yy); else ctx.lineTo(P + xx, yy);
+        }
+        ctx.stroke();
       }
     } else if (d.kind === 'network') {
       // 抖動格點：每個格點在自己的格子內隨機偏移，相鄰點連成多邊形裂縫網
