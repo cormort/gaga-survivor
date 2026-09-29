@@ -36,7 +36,7 @@ const out = await page.evaluate(async () => {
   g.ui.startScreen.classList.add('hidden');
   g.start();
   const p = g.player;
-  const give = (id, n = 1) => { p.pockets = [{ id, count: n }, null]; g._autoPocketTimer = 0; };
+  const give = (id, n = 1) => { p.pockets = [{ id, count: n }, null, null, null]; g._autoPocketTimer = 0; };
   const slot0 = () => p.pockets[0]?.id ?? null;
   // 真實遊戲迴圈仍在背景跑：若剛好升級，state 會變成 LEVEL_UP，按鍵與 g.update 都被（正確地）
   // 擋下 → 測試偶發失敗（實測修改前也會，約 1/8）。這裡驗的是口袋，不是升級流程，
@@ -97,18 +97,20 @@ const out = await page.evaluate(async () => {
   const el0 = document.querySelector('.pocket-slot[data-slot="0"]');
   ok('口袋顯示 AUTO 標記', el0.classList.contains('auto'), el0.className);
 
-  // ── 兩格口袋 ──
+  // ── 四格口袋 (E/F/C/V) ──
   const { DropItem } = await imp('js/entities/DropItem.js');
   const pick = (type) => { const d = new DropItem(p.x, p.y, type); g.handleItemPickup(d); };
   save.data.settings.autoPocket = false;
-  clear(); p.pockets = [null, null];
+  clear(); p.pockets = [null, null, null, null];
   pick('POTION'); pick('HOLY_WATER');
   ok('兩格各放不同道具', p.pockets[0]?.id === 'potion' && p.pockets[1]?.id === 'holy_water', JSON.stringify(p.pockets));
   pick('HOLY_WATER');
   ok('同款疊到自己那一格', p.pockets[1]?.count === 2 && p.pockets[0]?.count === 1, JSON.stringify(p.pockets));
+  pick('LUCK_POTION'); pick('MAGIC_TICKET');
+  ok('第 3、4 格接著放', p.pockets[2]?.id === 'luck_potion' && p.pockets[3]?.id === 'magic_ticket', JSON.stringify(p.pockets));
   p.hp = p.maxHp * 0.5; const hpBefore = p.hp;
   pick('ELIXIR');
-  ok('兩格都被占滿時新道具即拾即用', p.hp === p.maxHp && hpBefore < p.maxHp && p.pockets.every((s) => s && s.id !== 'elixir'), `${hpBefore} → ${p.hp}`);
+  ok('四格都被占滿時新道具即拾即用', p.hp === p.maxHp && hpBefore < p.maxHp && p.pockets.every((s) => s && s.id !== 'elixir'), `${hpBefore} → ${p.hp}`);
   const n1 = p.pockets[1].count;
   playing();
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' }));
@@ -119,9 +121,15 @@ const out = await page.evaluate(async () => {
   playing();
   document.querySelector('.pocket-slot[data-slot="1"]').click();
   ok('點擊第 2 格使用', p.pockets[1] === null, JSON.stringify(p.pockets));
+  playing();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }));
+  ok('C 使用第 3 格', p.pockets[2] === null, JSON.stringify(p.pockets));
+  playing();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' }));
+  ok('V 使用第 4 格', p.pockets[3] === null, JSON.stringify(p.pockets));
   save.data.settings.autoPocket = true;
 
-  clear(); p.pockets = [{ id: 'luck_potion', count: 1 }, { id: 'potion', count: 1 }]; g._autoPocketTimer = 0;
+  clear(); p.pockets = [{ id: 'luck_potion', count: 1 }, { id: 'potion', count: 1 }, null, null]; g._autoPocketTimer = 0;
   p.hp = p.maxHp * 0.3; step(20);
   ok('自動使用會檢查第 2 格 (第 1 格條件不成立)', p.pockets[1] === null && p.pockets[0]?.id === 'luck_potion', JSON.stringify(p.pockets));
   return r;

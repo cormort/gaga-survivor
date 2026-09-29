@@ -336,6 +336,8 @@ export function bindEvents(game) {
     if ((e.key === 'n' || e.key === 'N') && game.state === 'PLAYING') game.td?.startWave(true);   // 守塔：提前開戰
     if (e.key === 'e' || e.key === 'E') game.usePocketItem(0);
     if (e.key === 'f' || e.key === 'F') game.usePocketItem(1);
+    if (e.key === 'c' || e.key === 'C') game.usePocketItem(2);
+    if (e.key === 'v' || e.key === 'V') game.usePocketItem(3);
   });
 
   // 戰術口袋道具點擊使用 (HUD 兩格口袋 / 行動端兩顆快捷鍵，都以 data-slot 分辨)

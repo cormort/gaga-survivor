@@ -1041,7 +1041,7 @@ class Game {
     this._weaponsSeen = new Set(this.weaponManager.weapons.keys());
 
     // 戰術口袋與武器型態重設
-    this.player.pockets = [null, null];
+    this.player.pockets = [null, null, null, null];
     this._autoPocketTimer = 0;
     this.player.weaponAspects = { ...(save.data.weaponAspects || {}) };
     this.ui.updatePockets(this.player.pockets);

@@ -1415,7 +1415,7 @@ export class UIManager {
     this.peek(this.skillsTray);
     const auto = save.data.settings.autoPocket !== false;
     pockets.forEach((s, i) => {
-      const key = i === 0 ? 'E' : 'F';
+      const key = 'EFCV'[i];
       const conf = s && CONSUMABLE_ITEMS[s.id];
       const slotEl = document.querySelector(`.pocket-slot[data-slot="${i}"]`);
       const btnEl = document.querySelector(`.pocket-btn[data-slot="${i}"]`);
