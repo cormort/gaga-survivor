@@ -107,7 +107,19 @@ const results = await page.evaluate(async () => {
     reset();
     said = [];
     const before = g.mercenaries.length;
+    const gold0 = g.gold;
     click('btn-hire');
+    // 僱傭會先跳出三選一選單（遊戲暫停、還沒扣錢），選了才出場
+    const picks = document.querySelectorAll('#merc-list button');
+    ok('僱傭按鈕開出三名候選弟子', !document.getElementById('merc-modal').classList.contains('hidden')
+      && picks.length === 3 && g.state === 'MERC_MODAL' && g.gold === gold0,
+      `候選=${picks.length} state=${g.state} gold ${gold0}→${g.gold}`);
+    const pickedName = picks[1]?.closest('.slot-row').querySelector('b').textContent;
+    picks[1]?.click();
+    ok('選中的弟子出場（名字一致、選單關閉、回到遊戲）',
+      g.mercenaries[0]?.name === pickedName && g.state === 'PLAYING'
+      && document.getElementById('merc-modal').classList.contains('hidden'),
+      `選=${pickedName} 出場=${g.mercenaries[0]?.name} state=${g.state}`);
     ok('僱傭按鈕會增加傭兵', g.mercenaries.length > before,
       `${before} → ${g.mercenaries.length}｜state=${g.state} mercs=${g.mode.mercs} gold=${g.gold} `
       + `cost=${g.mercCost} 按鈕disabled=${document.getElementById('btn-hire')?.disabled}` 
