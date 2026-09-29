@@ -161,8 +161,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['ice_spike', 'snow', 'radar', 'steel'],
-    decorDensity: 0.4,
+    decor: ['ice_spike', 'snow', 'radar', 'steel', 'snow_pine', 'ice_rock', 'snow_crate'],
+    decorDensity: 0.65,
     hpScale: 1.6,
     // 凍原重甲：怪走得慢但更厚，加上冰面滑行 → 風箏走位關
     rules: {
@@ -223,8 +223,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['lava_crack', 'steel', 'gear', 'pipes'],
-    decorDensity: 0.5,
+    decor: ['lava_crack', 'steel', 'gear', 'pipes', 'lava_rock', 'vent', 'ingots'],
+    decorDensity: 0.7,
     hpScale: 2.0,
     // 熔爐試煉：高風險高報酬，玩家與敵人都變得極脆
     rules: {
@@ -291,8 +291,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['pipes', 'steel', 'tank', 'bin', 'hazard'],
-    decorDensity: 0.55,
+    decor: ['rail', 'pillar', 'bench', 'puddle', 'pipes', 'steel', 'bin', 'hazard'],
+    decorDensity: 0.75,
     hpScale: 2.3,
     // 鏽蝕圍殺：通道窄、獵犬快，靠密度而不是靠單體強度施壓
     rules: {
@@ -413,8 +413,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['car', 'tank', 'hazard', 'steel', 'radar'],
-    decorDensity: 0.5,
+    decor: ['dune', 'cactus', 'sandbags', 'wreck', 'car', 'hazard', 'radar'],
+    decorDensity: 0.7,
     hpScale: 3.0,
     // 沙暴侵襲：又快又多，靠金幣補償（這關是無盡之前的最終裝備檢查點）
     rules: {
@@ -481,8 +481,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['pipes', 'steel', 'gear', 'tank', 'lava_crack'],
-    decorDensity: 0.55,
+    decor: ['ingots', 'ladle', 'anvil', 'pipes', 'steel', 'gear', 'lava_crack', 'vent'],
+    decorDensity: 0.75,
     hpScale: 3.4,
     // 重甲產線：怪更厚、我方更脆，但金幣回報高（換裝備的關）
     rules: {
@@ -542,8 +542,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['ice_spike', 'snow', 'void_crystal', 'radar'],
-    decorDensity: 0.45,
+    decor: ['ice_spike', 'snow', 'void_crystal', 'snow_pine', 'ice_rock', 'rune_stone', 'rune_circle'],
+    decorDensity: 0.65,
     hpScale: 3.8,
     // 冰面 + 符文池：慢怪厚血，靠滑行與走位
     rules: {
@@ -601,8 +601,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['void_crystal', 'void_obelisk', 'neon', 'hazard'],
-    decorDensity: 0.48,
+    decor: ['void_crystal', 'void_obelisk', 'rift', 'rune_circle', 'void_shard', 'tendril', 'hazard'],
+    decorDensity: 0.7,
     hpScale: 4.2,
     // 無盡之前的最終檢查點：又快又多，金幣爆量
     rules: {
@@ -721,8 +721,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['void_crystal', 'void_obelisk', 'gear'],
-    decorDensity: 0.42,
+    decor: ['void_crystal', 'void_obelisk', 'gear', 'rift', 'rune_circle', 'void_shard', 'tendril'],
+    decorDensity: 0.65,
     hpScale: 1,
     // 無盡深淵：全面加壓，用經驗加成補償
     rules: {

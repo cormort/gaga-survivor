@@ -200,6 +200,266 @@ function drawCables(x) {
   glow(x, 20, -2, 9, '110,220,255', 0.7);
 }
 
+
+// ── 極寒基地／霜封虛空 ──
+function drawSnowPine(x) {
+  shadow(x, 16, 26);
+  x.fillStyle = '#4a3324';
+  x.fillRect(-2.5, 14, 5, 12);
+  for (const [y, w, c] of [[8, 20, '#274a44'], [-4, 16, '#2f5a52'], [-16, 11, '#3a6b60']]) {
+    x.fillStyle = c;
+    x.strokeStyle = '#0d1f1c';
+    x.lineWidth = 1.3;
+    x.beginPath(); x.moveTo(-w, y + 8); x.lineTo(0, y - 12); x.lineTo(w, y + 8); x.closePath(); x.fill(); x.stroke();
+    x.fillStyle = '#e8f4ff';
+    x.beginPath(); x.moveTo(-w * 0.7, y - 1); x.lineTo(0, y - 12); x.lineTo(w * 0.7, y - 1); x.quadraticCurveTo(0, y + 3, -w * 0.7, y - 1); x.fill();
+  }
+}
+
+function drawIceRock(x) {
+  shadow(x, 22, 12);
+  x.fillStyle = '#7fb6d6';
+  x.strokeStyle = '#1b3b52';
+  x.lineWidth = 1.5;
+  x.beginPath(); x.moveTo(-22, 12); x.lineTo(-16, -6); x.lineTo(-4, -14); x.lineTo(12, -8); x.lineTo(22, 12); x.closePath(); x.fill(); x.stroke();
+  x.fillStyle = 'rgba(255,255,255,0.55)';
+  x.beginPath(); x.moveTo(-16, -6); x.lineTo(-4, -14); x.lineTo(0, -4); x.lineTo(-10, 2); x.closePath(); x.fill();
+  x.fillStyle = '#eaf6ff';
+  x.beginPath(); x.ellipse(-2, -12, 10, 3, 0, 0, Math.PI * 2); x.fill();
+}
+
+function drawSnowCrate(x) {
+  shadow(x, 16, 13);
+  x.fillStyle = '#5b6a4a';
+  x.strokeStyle = '#1a2014';
+  x.lineWidth = 1.6;
+  x.beginPath(); x.roundRect(-15, -10, 30, 22, 2); x.fill(); x.stroke();
+  x.fillStyle = '#3f4a33';
+  x.fillRect(-15, -1, 30, 3);
+  x.fillStyle = '#f2f8ff';
+  x.beginPath(); x.moveTo(-17, -10); x.quadraticCurveTo(-4, -18, 17, -10); x.lineTo(17, -7); x.quadraticCurveTo(0, -12, -17, -7); x.closePath(); x.fill();
+}
+
+function drawRuneStone(x) {
+  shadow(x, 14, 22);
+  glow(x, 0, 0, 30, '160,110,255', 0.28);
+  x.fillStyle = '#5d6f92';
+  x.strokeStyle = '#141a2a';
+  x.lineWidth = 1.5;
+  x.beginPath(); x.moveTo(-12, 22); x.lineTo(-14, -8); x.lineTo(-4, -24); x.lineTo(10, -20); x.lineTo(14, 22); x.closePath(); x.fill(); x.stroke();
+  x.strokeStyle = '#c9a4ff';
+  x.lineWidth = 1.6;
+  x.beginPath(); x.moveTo(-4, -12); x.lineTo(4, -12); x.moveTo(0, -12); x.lineTo(0, 6); x.moveTo(-5, 0); x.lineTo(5, -4); x.stroke();
+}
+
+// ── 熔岩核心／鑄造廠 ──
+function drawLavaRock(x) {
+  shadow(x, 20, 12);
+  glow(x, 0, 2, 26, '255,90,20', 0.25);
+  x.fillStyle = '#2a2320';
+  x.strokeStyle = '#0d0a09';
+  x.lineWidth = 1.5;
+  x.beginPath(); x.moveTo(-20, 12); x.lineTo(-14, -8); x.lineTo(2, -14); x.lineTo(16, -4); x.lineTo(20, 12); x.closePath(); x.fill(); x.stroke();
+  x.strokeStyle = '#ff7a1a';
+  x.lineWidth = 1.8;
+  x.beginPath(); x.moveTo(-8, 10); x.lineTo(-4, -2); x.lineTo(4, -6); x.moveTo(6, 10); x.lineTo(8, 2); x.stroke();
+}
+
+function drawVent(x) {
+  shadow(x, 20, 8);
+  glow(x, 0, -2, 28, '255,110,40', 0.3);
+  x.fillStyle = '#2f343d';
+  x.strokeStyle = '#0c0e12';
+  x.lineWidth = 1.6;
+  x.beginPath(); x.roundRect(-20, -8, 40, 18, 3); x.fill(); x.stroke();
+  x.fillStyle = '#ff8a2a';
+  for (let i = -14; i <= 10; i += 8) x.fillRect(i, -4, 5, 10);
+  x.strokeStyle = 'rgba(255,255,255,0.35)';
+  x.lineWidth = 3;
+  x.beginPath(); x.moveTo(-6, -10); x.quadraticCurveTo(-12, -20, -4, -28); x.moveTo(8, -10); x.quadraticCurveTo(14, -18, 8, -26); x.stroke();
+}
+
+function drawIngots(x) {
+  shadow(x, 22, 10);
+  const rows = [[-14, 4, 3], [2, 4, 3], [-6, -6, 2]];
+  for (const [px, py] of rows) {
+    x.fillStyle = '#a0a6b0';
+    x.strokeStyle = '#20242c';
+    x.lineWidth = 1.3;
+    x.beginPath(); x.moveTo(px - 12, py + 6); x.lineTo(px - 9, py - 4); x.lineTo(px + 9, py - 4); x.lineTo(px + 12, py + 6); x.closePath(); x.fill(); x.stroke();
+    x.fillStyle = 'rgba(255,255,255,0.35)';
+    x.fillRect(px - 8, py - 3, 14, 2);
+  }
+}
+
+function drawLadle(x) {
+  shadow(x, 16, 20);
+  glow(x, 0, -4, 26, '255,140,30', 0.35);
+  x.strokeStyle = '#3a3f49';
+  x.lineWidth = 3;
+  x.beginPath(); x.moveTo(-14, 20); x.lineTo(-12, -14); x.moveTo(14, 20); x.lineTo(12, -14); x.stroke();
+  x.fillStyle = '#4a505c';
+  x.strokeStyle = '#111318';
+  x.lineWidth = 1.6;
+  x.beginPath(); x.moveTo(-16, -10); x.lineTo(-10, 8); x.lineTo(10, 8); x.lineTo(16, -10); x.closePath(); x.fill(); x.stroke();
+  x.fillStyle = '#ffb040';
+  x.beginPath(); x.ellipse(0, -10, 16, 4, 0, 0, Math.PI * 2); x.fill();
+}
+
+function drawAnvil(x) {
+  shadow(x, 18, 14);
+  x.fillStyle = '#3a3f49';
+  x.strokeStyle = '#0d0f13';
+  x.lineWidth = 1.6;
+  x.beginPath(); x.moveTo(-18, -8); x.lineTo(14, -8); x.lineTo(20, -2); x.lineTo(8, -2); x.lineTo(6, 4); x.lineTo(12, 12); x.lineTo(-12, 12); x.lineTo(-6, 4); x.lineTo(-8, -2); x.lineTo(-18, -2); x.closePath(); x.fill(); x.stroke();
+  x.fillStyle = 'rgba(255,255,255,0.25)';
+  x.fillRect(-15, -7, 26, 2);
+}
+
+// ── 地下鐵 ──
+function drawRail(x) {
+  shadow(x, 28, 8);
+  x.fillStyle = '#4a3a2c';
+  for (let i = -24; i <= 20; i += 12) x.fillRect(i, -6, 6, 14);
+  x.fillStyle = '#7c828c';
+  x.fillRect(-30, -4, 60, 3);
+  x.fillRect(-30, 3, 60, 3);
+  x.fillStyle = '#a9afb9';
+  x.fillRect(-30, -4, 60, 1);
+  x.fillRect(-30, 3, 60, 1);
+}
+
+function drawPillar(x) {
+  shadow(x, 14, 26);
+  x.fillStyle = '#5a5f68';
+  x.strokeStyle = '#15181d';
+  x.lineWidth = 1.6;
+  x.beginPath(); x.roundRect(-11, -26, 22, 52, 2); x.fill(); x.stroke();
+  x.fillStyle = '#ffcc00';
+  for (let i = -20; i < 20; i += 10) { x.beginPath(); x.moveTo(-11, i); x.lineTo(-11, i + 5); x.lineTo(11, i + 10); x.lineTo(11, i + 5); x.closePath(); x.fill(); }
+  x.fillStyle = 'rgba(0,0,0,0.3)';
+  x.fillRect(4, -26, 7, 52);
+}
+
+function drawBench(x) {
+  shadow(x, 24, 10);
+  x.fillStyle = '#6a4a2c';
+  x.strokeStyle = '#1c1208';
+  x.lineWidth = 1.4;
+  x.beginPath(); x.roundRect(-22, -6, 44, 6, 1.5); x.fill(); x.stroke();
+  x.beginPath(); x.roundRect(-22, -14, 44, 6, 1.5); x.fill(); x.stroke();
+  x.fillStyle = '#2a2f38';
+  x.fillRect(-18, 0, 4, 10);
+  x.fillRect(14, 0, 4, 10);
+}
+
+function drawPuddle(x) {
+  x.fillStyle = 'rgba(30,50,70,0.55)';
+  x.beginPath(); x.ellipse(0, 2, 24, 9, 0, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = 'rgba(140,190,230,0.5)';
+  x.lineWidth = 1.2;
+  x.beginPath(); x.ellipse(-4, 1, 14, 4, 0, 0, Math.PI * 2); x.stroke();
+  x.beginPath(); x.ellipse(6, 3, 6, 2, 0, 0, Math.PI * 2); x.stroke();
+}
+
+// ── 沙暴要塞 ──
+function drawDune(x) {
+  x.fillStyle = 'rgba(0,0,0,0.25)';
+  x.beginPath(); x.ellipse(2, 8, 28, 7, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#c9a56a';
+  x.strokeStyle = '#7a5f36';
+  x.lineWidth = 1.2;
+  x.beginPath(); x.moveTo(-28, 8); x.quadraticCurveTo(-8, -18, 8, -6); x.quadraticCurveTo(20, -12, 28, 8); x.closePath(); x.fill(); x.stroke();
+  x.fillStyle = 'rgba(255,240,200,0.45)';
+  x.beginPath(); x.moveTo(-20, 4); x.quadraticCurveTo(-8, -12, 4, -4); x.quadraticCurveTo(-6, -2, -20, 4); x.fill();
+}
+
+function drawCactus(x) {
+  shadow(x, 12, 22);
+  x.fillStyle = '#4c8a4a';
+  x.strokeStyle = '#173818';
+  x.lineWidth = 1.5;
+  x.beginPath(); x.roundRect(-5, -22, 10, 44, 5); x.fill(); x.stroke();
+  x.beginPath(); x.roundRect(-16, -8, 8, 5, 2); x.roundRect(-16, -14, 5, 10, 2); x.fill(); x.stroke();
+  x.beginPath(); x.roundRect(8, -2, 8, 5, 2); x.roundRect(11, -10, 5, 12, 2); x.fill(); x.stroke();
+}
+
+function drawSandbags(x) {
+  shadow(x, 24, 10);
+  for (const [px, py] of [[-14, 3], [0, 3], [14, 3], [-7, -6], [7, -6]]) {
+    x.fillStyle = '#b39762';
+    x.strokeStyle = '#4a3c20';
+    x.lineWidth = 1.2;
+    x.beginPath(); x.ellipse(px, py, 8.5, 5.5, 0, 0, Math.PI * 2); x.fill(); x.stroke();
+  }
+}
+
+function drawWreck(x) {
+  shadow(x, 26, 14);
+  x.fillStyle = '#6b5a45';
+  x.strokeStyle = '#1e1810';
+  x.lineWidth = 1.6;
+  x.beginPath(); x.roundRect(-26, -6, 52, 18, 3); x.fill(); x.stroke();
+  x.fillStyle = '#4a3f30';
+  x.beginPath(); x.roundRect(-14, -16, 26, 12, 2); x.fill(); x.stroke();
+  x.fillStyle = '#c9a56a';
+  x.beginPath(); x.ellipse(-4, 12, 26, 4, 0, 0, Math.PI, true); x.fill();
+  x.fillStyle = '#20180f';
+  x.beginPath(); x.arc(-16, 12, 5, 0, Math.PI * 2); x.arc(16, 12, 5, 0, Math.PI * 2); x.fill();
+}
+
+// ── 虛空裂道／無盡 ──
+function drawRift(x) {
+  glow(x, 0, 0, 30, '170,90,255', 0.35);
+  x.strokeStyle = '#e6c9ff';
+  x.lineWidth = 2.4;
+  x.lineJoin = 'round';
+  x.beginPath(); x.moveTo(-26, 4); x.lineTo(-12, -4); x.lineTo(-4, 4); x.lineTo(8, -6); x.lineTo(26, 2); x.stroke();
+  x.strokeStyle = '#7a2fd4';
+  x.lineWidth = 5;
+  x.globalAlpha = 0.5;
+  x.stroke();
+  x.globalAlpha = 1;
+}
+
+function drawRuneCircle(x) {
+  x.strokeStyle = 'rgba(190,140,255,0.75)';
+  x.lineWidth = 1.6;
+  x.beginPath(); x.ellipse(0, 0, 30, 14, 0, 0, Math.PI * 2); x.stroke();
+  x.beginPath(); x.ellipse(0, 0, 20, 9, 0, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = 'rgba(190,140,255,0.8)';
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    x.fillRect(Math.cos(a) * 25 - 1.5, Math.sin(a) * 11.5 - 1.5, 3, 3);
+  }
+  glow(x, 0, 0, 24, '150,90,255', 0.2);
+}
+
+function drawVoidShard(x) {
+  shadow(x, 10, 24);
+  glow(x, 0, -4, 24, '140,80,255', 0.3);
+  for (const [px, h, w, c] of [[-8, 26, 6, '#5b2fa0'], [2, 36, 8, '#7a45d0'], [11, 20, 5, '#5b2fa0']]) {
+    x.fillStyle = c;
+    x.strokeStyle = '#1a0a33';
+    x.lineWidth = 1.3;
+    x.beginPath(); x.moveTo(px - w, 22); x.lineTo(px, 22 - h); x.lineTo(px + w, 22); x.closePath(); x.fill(); x.stroke();
+    x.fillStyle = 'rgba(255,255,255,0.3)';
+    x.beginPath(); x.moveTo(px - w, 22); x.lineTo(px, 22 - h); x.lineTo(px - 1, 22); x.closePath(); x.fill();
+  }
+}
+
+function drawTendril(x) {
+  shadow(x, 14, 8);
+  x.strokeStyle = '#3a1a66';
+  x.lineCap = 'round';
+  for (const [dx, lean, h] of [[-8, -6, 26], [0, 4, 34], [8, 8, 24]]) {
+    x.lineWidth = 4;
+    x.beginPath(); x.moveTo(dx, 8); x.quadraticCurveTo(dx + lean * 1.5, 8 - h * 0.5, dx + lean, 8 - h); x.stroke();
+    x.fillStyle = '#b48cff';
+    x.beginPath(); x.arc(dx + lean, 8 - h, 2.6, 0, Math.PI * 2); x.fill();
+  }
+}
+
 export const DECOR_BUILDERS = {
   cone:      { w: 24, h: 30, static: true, fn: drawCone },
   lamp:      { w: 36, h: 60, static: true, fn: drawLamp },
@@ -214,4 +474,25 @@ export const DECOR_BUILDERS = {
   rack:      { w: 34, h: 56, static: true, fn: drawRack },
   lab_crate: { w: 36, h: 32, static: true, fn: drawLabCrate },
   cables:    { w: 56, h: 26, static: true, fn: drawCables },
+  snow_pine: { w: 44, h: 60, static: true, fn: drawSnowPine },
+  ice_rock:  { w: 52, h: 34, static: true, fn: drawIceRock },
+  snow_crate: { w: 40, h: 32, static: true, fn: drawSnowCrate },
+  rune_stone: { w: 40, h: 60, static: true, fn: drawRuneStone },
+  lava_rock: { w: 52, h: 34, static: true, fn: drawLavaRock },
+  vent:      { w: 52, h: 50, static: true, fn: drawVent },
+  ingots:    { w: 52, h: 26, static: true, fn: drawIngots },
+  ladle:     { w: 40, h: 50, static: true, fn: drawLadle },
+  anvil:     { w: 48, h: 32, static: true, fn: drawAnvil },
+  rail:      { w: 68, h: 24, static: true, fn: drawRail },
+  pillar:    { w: 34, h: 60, static: true, fn: drawPillar },
+  bench:     { w: 54, h: 30, static: true, fn: drawBench },
+  puddle:    { w: 56, h: 22, static: true, fn: drawPuddle },
+  dune:      { w: 64, h: 32, static: true, fn: drawDune },
+  cactus:    { w: 40, h: 56, static: true, fn: drawCactus },
+  sandbags:  { w: 58, h: 28, static: true, fn: drawSandbags },
+  wreck:     { w: 64, h: 40, static: true, fn: drawWreck },
+  rift:      { w: 68, h: 30, static: true, fn: drawRift },
+  rune_circle: { w: 72, h: 34, static: true, fn: drawRuneCircle },
+  void_shard: { w: 40, h: 56, static: true, fn: drawVoidShard },
+  tendril:   { w: 36, h: 48, static: true, fn: drawTendril },
 };
