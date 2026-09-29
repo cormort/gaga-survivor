@@ -43,8 +43,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['car', 'bin', 'neon', 'hazard'],
-    decorDensity: 0.45,
+    decor: ['car', 'bin', 'neon', 'hazard', 'cone', 'lamp', 'rubble', 'barrier'],
+    decorDensity: 0.7,
     hpScale: 1.0,
     // 基準關：不加任何規則，讓新手先熟悉底層手感
     rules: { label: '標準交戰規則', desc: '沒有額外環境修正，適合熟悉操作' },
@@ -101,8 +101,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['tank', 'pipes', 'hazard', 'steel'],
-    decorDensity: 0.5,
+    decor: ['tank', 'pipes', 'hazard', 'steel', 'console', 'rack', 'lab_crate', 'cables'],
+    decorDensity: 0.7,
     hpScale: 1.3,
     // 蟲海壓迫：怪多而脆，考驗清群面積而非單體輸出
     rules: {
@@ -353,8 +353,8 @@ export const LEVELS = {
         },
       },
     },
-    decor: ['void_crystal', 'bin', 'hazard', 'pipes'],
-    decorDensity: 0.5,
+    decor: ['reed', 'lily', 'swamp_log', 'mushroom', 'bones', 'hazard', 'bin'],
+    decorDensity: 0.75,
     hpScale: 2.6,
     // 劇毒領域：怪更厚、變異體更多，但經驗補償
     rules: {

@@ -166,6 +166,7 @@ const PRECACHE = [
   './js/save.js',
   './js/shop.js',
   './js/sprites.js',
+  './js/decorsprites.js',
   './js/entities/Core.js',
   './js/entities/AlliedUnit.js',
   './js/entities/DropItem.js',

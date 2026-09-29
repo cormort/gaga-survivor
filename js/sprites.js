@@ -4,6 +4,7 @@
 // 只為了讀角色自己的 accent（邊光顏色）。這條 import 是安全的：characters.js 不 import
 // sprites.js，而且我們只在烘焙時（遊戲啟動後）取值，不在模組初始化時讀。
 import { CHARACTERS } from './characters.js';
+import { DECOR_BUILDERS } from './decorsprites.js';
 
 const SS = 2;          // 超取樣倍率 (retina 上不糊)
 export const FRAMES = 8;
@@ -6432,6 +6433,7 @@ const BUILDERS = {
   gem_gold:   { w: 44, h: 44, static: true, fn: (x) => drawGem(x, '#ffb703', 7) },
 
   // 場景裝飾 (只需一格，不做動畫)
+  ...DECOR_BUILDERS,
   car:        { w: 64, h: 40, static: true, fn: drawCar },
   bin:        { w: 30, h: 40, static: true, fn: drawBin },
   neon:       { w: 48, h: 56, static: true, fn: drawNeonSign },
