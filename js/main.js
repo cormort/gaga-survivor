@@ -3605,10 +3605,12 @@ class Game {
       }
     }
 
-    // 玩家
+    // 玩家：守塔模式小地圖以核心為中心，玩家不一定在正中央；超出範圍時貼邊
+    const px = Math.max(ox + 5, Math.min(ox + size - 5, toX(this.player.x)));
+    const py = Math.max(oy + 5, Math.min(oy + size - 5, toY(this.player.y)));
     ctx.fillStyle = '#ffd60a';
     ctx.beginPath();
-    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.arc(px, py, 3.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,0.75)';
     ctx.lineWidth = 1;
