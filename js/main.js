@@ -3357,6 +3357,7 @@ class Game {
     for (const enemy of this.enemies) {
       enemy.draw(this.ctx, renderCam);
     }
+    Enemy.drawStatusGlows(this.ctx, renderCam, this.enemies);
     this.drawSealChains(renderCam);
 
     // 繪製敵方投射物

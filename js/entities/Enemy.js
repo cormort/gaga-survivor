@@ -740,6 +740,46 @@ export class Enemy {
     return this.baseSpriteKey;
   }
 
+  // 灼燒／中毒光暈：整批一次畫完。原本每隻怪各自 save/translate/切 'lighter'/restore，
+  // 250 隻怪就是 250 次合成模式切換；改成全場只切一次、直接用螢幕座標。
+  static drawStatusGlows(ctx, camera, enemies) {
+    const W = window.innerWidth, H = window.innerHeight;
+    let on = false;
+    // 光暈是加色混合，成本在塗抹面積：中狀態的怪越多，光暈越小 (<=40 隻原尺寸，>=160 隻 0.55 倍)
+    let n = 0;
+    for (const e of enemies) if (e.burnTimer > 0 || e.poisonTimer > 0) n++;
+    const k = n <= 40 ? 1 : Math.max(0.55, 1 - (n - 40) * 0.0038);
+    for (const e of enemies) {
+      if (!(e.burnTimer > 0 || e.poisonTimer > 0)) continue;
+      const sx = e.x - camera.x, sy = e.y - camera.y;
+      if (sx < -90 || sx > W + 90 || sy < -90 || sy > H + 90) continue;
+      if (!on) { ctx.globalCompositeOperation = 'lighter'; on = true; }
+      const r = e.radius;
+      if (e.burnTimer > 0) {
+        const f = e.animTimer * 6;
+        const glow = statusGlow('burn', r);
+        ctx.globalAlpha = 0.5 + Math.sin(f) * 0.15;
+        ctx.drawImage(glow.cv, sx - glow.rad * k, sy + r * 0.3 - glow.rad * k, glow.rad * 2 * k, glow.rad * 2 * k);
+        for (let i = 0; i < 3; i++) {
+          const p = ((f * 0.12 + i * 0.33) % 1);
+          blitSpark(ctx, i, sx + Math.sin(f * 0.7 + i * 2.1) * r * 0.6,
+            sy + r * 0.3 - p * r * 2, r * 0.14 * (1 - p * 0.5), (1 - p) * 0.9);
+        }
+      }
+      if (e.poisonTimer > 0) {
+        const glow = statusGlow('poison', r);
+        ctx.globalAlpha = 0.2 + (e.poisonStacks / 5) * 0.3;
+        ctx.drawImage(glow.cv, sx - glow.rad * k, sy - glow.rad * k, glow.rad * 2 * k, glow.rad * 2 * k);
+        for (let i = 0; i < e.poisonStacks; i++) {
+          const p = ((e.animTimer * 0.35 + i * 0.27) % 1);
+          blitSpark(ctx, 3, sx + Math.sin(e.animTimer * 1.4 + i * 2.4) * r * 0.7,
+            sy + r * 0.3 - p * r * 1.8, r * 0.11, (1 - p) * 0.85);
+        }
+      }
+    }
+    if (on) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
+  }
+
   draw(ctx, camera) {
     const screenX = this.x - camera.x;
     const screenY = this.y - camera.y;
@@ -800,27 +840,6 @@ export class Enemy {
       ctx.globalAlpha = 1;
     }
 
-    // 灼燒中：加色疊上橘紅火光 + 竄升火星 (加色混合才不會被深色 sprite 吃掉)
-    if (this.burnTimer > 0) {
-      ctx.save();
-      ctx.translate(screenX, screenY);
-      ctx.globalCompositeOperation = 'lighter';
-      const f = this.animTimer * 6;
-      const glow = statusGlow('burn', this.radius);
-      ctx.globalAlpha = 0.5 + Math.sin(f) * 0.15;
-      ctx.drawImage(glow.cv, -glow.rad, this.radius * 0.3 - glow.rad);
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < 3; i++) {
-        const p = ((f * 0.12 + i * 0.33) % 1);
-        blitSpark(ctx, i,
-          Math.sin(f * 0.7 + i * 2.1) * this.radius * 0.6,
-          this.radius * 0.3 - p * this.radius * 2,
-          this.radius * 0.14 * (1 - p * 0.5), (1 - p) * 0.9);
-      }
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    }
-
     // 冰凍中：冰藍結晶包覆 + 外圈實線
     if (this.freezeTimer > 0) {
       ctx.save();
@@ -861,27 +880,6 @@ export class Enemy {
         ctx.lineTo(Math.cos(a + 0.9) * r2, Math.sin(a + 0.9) * r2);
       }
       ctx.stroke();
-      ctx.restore();
-    }
-
-    // 中毒中：綠色毒霧氣泡，層數越多越濃
-    if (this.poisonTimer > 0) {
-      ctx.save();
-      ctx.translate(screenX, screenY);
-      ctx.globalCompositeOperation = 'lighter';
-      const density = this.poisonStacks / 5;
-      const glow = statusGlow('poison', this.radius);
-      ctx.globalAlpha = 0.2 + density * 0.3;
-      ctx.drawImage(glow.cv, -glow.rad, -glow.rad);
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < this.poisonStacks; i++) {
-        const p = ((this.animTimer * 0.35 + i * 0.27) % 1);
-        blitSpark(ctx, 3,
-          Math.sin(this.animTimer * 1.4 + i * 2.4) * this.radius * 0.7,
-          this.radius * 0.3 - p * this.radius * 1.8,
-          this.radius * 0.11, (1 - p) * 0.85);
-      }
-      ctx.globalAlpha = 1;
       ctx.restore();
     }
 
