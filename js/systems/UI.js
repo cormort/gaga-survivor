@@ -1256,7 +1256,7 @@ export class UIManager {
   // 依模式顯示/隱藏砲塔與傭兵按鈕
   setModeButtons(mode) {
     this.facilityBar?.classList.toggle('hidden', !mode.turrets);
-    document.getElementById('btn-facility-toggle')?.classList.toggle('hidden', !mode.turrets);
+    document.getElementById('btn-facility-toggle')?.classList.toggle('hidden', !mode.turrets && !mode.mercs);
     this.buildBtn?.classList.toggle('hidden', !mode.turrets);
     this.hireBtn?.classList.toggle('hidden', !mode.mercs);
     if (!mode.turrets) this.showTurretUpgrade(false);

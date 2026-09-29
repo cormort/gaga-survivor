@@ -355,6 +355,10 @@ export function bindEvents(game) {
     facToggle?.setAttribute('aria-expanded', String(open));
   };
   facToggle?.addEventListener('click', () => setFacilityOpen(!actionBar.classList.contains('fac-open')));
+  // 傭兵與砲塔升級也收在展開鈕裡，按下後一樣自動收起
+  for (const id of ['btn-hire', 'btn-turret-upgrade']) {
+    document.getElementById(id)?.addEventListener('click', () => setFacilityOpen(false));
+  }
   // 設施列各按鈕點擊
   for (const [type, item] of Object.entries(game.ui.facilityButtons || {})) {
     if (item && item.btn) {
