@@ -32,14 +32,32 @@ export const REALM = ['煉氣期', '築基期', '金丹期', '元嬰期', '化�
 const REALM_COLOR = ['#ff6b5e', '#6ea8ff', '#e8e8e8', '#ffe45e', '#e8e8e8', '#c77dff', '#ffd166', '#e8e8e8', '#3ddc84', '#ff6b5e'];
 
 // 六脈弟子 (貼圖 = 修仙角色)，雇用時隨機抽一脈；qi = 劍氣顏色
-const SECTS = [
-  { sprite: 'xian_sword', qi: '#6ea8ff' },
-  { sprite: 'xian_talisman', qi: '#ff6b5e' },
-  { sprite: 'xian_mage', qi: '#e8f0ff' },
-  { sprite: 'xian_alchemy', qi: '#3ddc84' },
-  { sprite: 'xian_zen', qi: '#ffd166' },
-  { sprite: 'xian_demon', qi: '#b388ff' },
+export const SECTS = [
+  { sprite: 'xian_sword', qi: '#6ea8ff', label: '劍修' },
+  { sprite: 'xian_talisman', qi: '#ff6b5e', label: '符修' },
+  { sprite: 'xian_mage', qi: '#e8f0ff', label: '法修' },
+  { sprite: 'xian_alchemy', qi: '#3ddc84', label: '丹修' },
+  { sprite: 'xian_zen', qi: '#ffd166', label: '禪修' },
+  { sprite: 'xian_demon', qi: '#b388ff', label: '魔修' },
 ];
+
+// 小說風人名：姓 + 名，雇用時隨機組合
+const SURNAMES = ['林', '蕭', '沈', '陸', '顧', '葉', '楚', '秦', '慕容', '上官', '謝', '蘇', '韓', '柳', '白', '江'];
+const GIVEN = ['清遠', '無塵', '長歌', '若雪', '雲舒', '寒星', '子衿', '逸風', '晚晴', '承影', '青竹', '聽瀾', '玄霜', '千尋', '驚鴻', '夜白'];
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+// 產生 n 名候選弟子 (名字不重複)，給雇用選單挑
+export function rollMercCandidates(n = 3) {
+  const out = [];
+  const used = new Set();
+  while (out.length < n) {
+    const name = pick(SURNAMES) + pick(GIVEN);
+    if (used.has(name)) continue;
+    used.add(name);
+    out.push({ name, sect: pick(SECTS) });
+  }
+  return out;
+}
 
 // 本命飛劍 (傭兵手上懸浮的與射出去的共用同一把)：劍尖朝 +x
 export function drawFlyingSword(ctx, k, qi, glow = 1) {
@@ -90,7 +108,7 @@ const FORMATION = [
 
 export class Mercenary {
   // progress = save.data.merc ({ level, exp })：同一個物件，經驗直接寫回存檔
-  constructor(x, y, index = 0, progress = { level: 1, exp: 0 }) {
+  constructor(x, y, index = 0, progress = { level: 1, exp: 0 }, cand = rollMercCandidates(1)[0]) {
     this.x = x;
     this.y = y;
     this.index = index;
@@ -103,7 +121,8 @@ export class Mercenary {
     this.flashTimer = 0;
     this.sway = Math.random() * Math.PI * 2;
     this.isDead = false;
-    this.sect = SECTS[Math.floor(Math.random() * SECTS.length)];
+    this.sect = cand.sect;
+    this.name = cand.name;
   }
 
   get level() {
@@ -261,7 +280,7 @@ export class Mercenary {
     ctx.textBaseline = 'bottom';
     ctx.lineWidth = 2.5;
     ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-    const label = REALM[this.level - 1] || REALM[REALM.length - 1];
+    const label = `${this.name}·${REALM[this.level - 1] || REALM[REALM.length - 1]}`;
     ctx.strokeText(label, 0, -36);
     ctx.fillStyle = REALM_COLOR[this.level - 1] || '#ffd60a';
     ctx.fillText(label, 0, -36);

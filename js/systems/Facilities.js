@@ -9,7 +9,7 @@
 // `game.turretCost` / `game.mercCost` 這兩個屬性存取由主檔既有的 getter 維持。
 
 import { Turret, TURRET_VARIANTS, FACILITY_TYPES } from '../entities/Turret.js';
-import { Mercenary, MERC, REALM } from '../entities/Mercenary.js';
+import { Mercenary, MERC, REALM, rollMercCandidates } from '../entities/Mercenary.js';
 import { Projectile } from '../entities/Projectile.js';
 import { sound } from '../audio.js';
 import { save } from '../save.js';
@@ -187,17 +187,44 @@ export function hireMercenary(game) {
     sound.playHurt();
     return;
   }
+  // 暫停遊戲，讓玩家從三名候選弟子中挑一位
+  game.state = 'MERC_MODAL';
+  sound.pauseBGM();
+  const modal = document.getElementById('merc-modal');
+  const list = document.getElementById('merc-list');
+  const close = () => {
+    modal.classList.add('hidden');
+    if (game.state === 'MERC_MODAL') { game.state = 'PLAYING'; sound.resumeBGM(); }
+  };
+  list.innerHTML = '';
+  for (const c of rollMercCandidates(3)) {
+    const row = document.createElement('div');
+    row.className = 'slot-row';
+    row.innerHTML = `<div class="slot-info"><b style="color:${c.sect.qi}">${c.name}</b><span>${c.sect.label}弟子</span></div>`;
+    const btn = document.createElement('button');
+    btn.className = 'game-btn primary-btn';
+    btn.textContent = '僱傭';
+    btn.addEventListener('click', () => { close(); spawnMercenary(game, cost, c); });
+    row.appendChild(btn);
+    list.appendChild(row);
+  }
+  document.getElementById('btn-close-merc').onclick = close;
+  modal.classList.remove('hidden');
+}
+
+function spawnMercenary(game, cost, cand) {
+  if (game.state !== 'PLAYING' || !game.player || game.gold < cost) return;
   game.gold -= cost;
-  const m = new Mercenary(game.player.x, game.player.y, game.mercenaries.length, save.data.merc);
+  const m = new Mercenary(game.player.x, game.player.y, game.mercenaries.length, save.data.merc, cand);
   m.onLevelUp = (merc) => {
     save.flush();
     game.particles.createShockwave(merc.x, merc.y, 110, merc.qiColor);
-    game.ui.say(`⚡ 傭兵突破境界：【${REALM[merc.level - 1]}】！血量與傷害提升`, merc.qiColor, 2.6);
+    game.ui.say(`⚡ ${merc.name}突破境界：【${REALM[merc.level - 1]}】！血量與傷害提升`, merc.qiColor, 2.6);
   };
   game.mercenaries.push(m);
   game.particles.createShockwave(game.player.x, game.player.y, 90, '#3ddc84');
   sound.playEvoFanfare();
-  game.ui.say(`🗡️ ${REALM[m.level - 1]}弟子報到！(${cost} 🪙) 斬妖累積經驗、突破境界`, '#3ddc84', 2.4);
+  game.ui.say(`🗡️ ${REALM[m.level - 1]}${m.sect.label}${m.name}報到！(${cost} 🪙) 斬妖累積經驗、突破境界`, '#3ddc84', 2.4);
   game.ui.updateHUD(game.player, game.gameTime, game.kills, game.gold);
   game.ui.updateBuildBtn(game.gold, game.turretCost);
   // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)
@@ -251,7 +278,7 @@ export function updateMercenaries(game, dt) {
       game.particles.createExplosion(m.x, m.y, 40);
       game.particles.createShockwave(m.x, m.y, 80, m.qiColor);
       sound.playHurt();
-      game.ui.say('🗡️ 弟子兵解！境界與經驗保留，重新僱傭即可', '#ff5e5e', 2.2);
+      game.ui.say(`🗡️ ${m.name}兵解！境界與經驗保留，重新僱傭即可`, '#ff5e5e', 2.2);
       save.flush();   // 陣亡不掉境界，經驗先寫回存檔
       game.mercenaries.splice(i, 1);
       game.ui.updateHireBtn(game.mercCost, game.gold >= (game.mercCost || 1e9));
