@@ -270,9 +270,10 @@ export function rerollAffixes(item) {
 }
 
 export function itemName(item) {
-  const setDef = item.setKey ? SETS[item.setKey] : null;
-  const setPrefix = setDef ? `[${setDef.name}] ` : '';
-  return `${setPrefix}${RARITIES[item.rarity].name} ${SLOTS[item.slot].name} ${ilvlText(item)}`;
+  const setPrefix = item.setKey && SETS[item.setKey] ? `[${setName(item.setKey)}] ` : '';
+  const lore = itemLore(item);
+  const base = lore ? `${lore.name}` : slotInfo(item.slot).name;
+  return `${setPrefix}${RARITIES[item.rarity].name} ${base} ${ilvlText(item)}`;
 }
 
 // 裝備等級標記：詞條數值 = 基礎隨機值 × ilvl，所以這個數字直接代表這件裝備多強
@@ -288,7 +289,7 @@ export function legendaryEffectText(effectKey) {
 export function affixText(a) {
   const def = AFFIXES[a.key];
   if (!def) return '';
-  return def.pct ? `${def.name} +${Math.round(a.value * 100)}%` : `${def.name} +${a.value}`;
+  return def.pct ? `${affixName(a.key)} +${Math.round(a.value * 100)}%` : `${affixName(a.key)} +${a.value}`;
 }
 
 // 粗略戰力值：只用來排序倉庫與比較好壞，不參與實際計算
@@ -385,3 +386,74 @@ export function gearBonuses(stash = [], equipped = {}) {
   return m;
 }
 
+
+// ── 修仙主題 (僅顯示層)：修仙六脈角色看到的是法器／道袍／雲履、修仙詞條名與法寶名號 ──
+// 資料模型、數值與存檔完全不變；同一件裝備換成特工角色就顯示回特工名稱。
+const XIAN_SLOTS = {
+  goggles: { name: '本命法器', icon: '🗡️' },
+  coat:    { name: '護身道袍', icon: '🥋' },
+  boots:   { name: '踏雲履',   icon: '🥾' },
+};
+const XIAN_AFFIX_NAMES = {
+  dmg: '劍意', hp: '氣血', speed: '身法', magnet: '御物', cdr: '靈動',
+  gold: '機緣', crit: '會心', critdmg: '破魂', armor: '護體', exp: '悟性',
+};
+const XIAN_SETS = { agent: '青雲', shadow: '幽冥', core: '赤焰' };
+// 法寶名號與典故：以裝備 id 雜湊挑選，同一件永遠同名
+const XIAN_NAMES = {
+  goggles: [
+    ['青霜劍', '上古寒鐵與千年玄冰鑄成，劍鋒寒氣可斬凡魂。'],
+    ['紫電劍', '引九天雷火淬煉，出鞘時紫芒如電。'],
+    ['秋水劍', '劍身澄澈如一泓秋水，映照心魔無所遁形。'],
+    ['赤霄劍', '以赤銅精與朱雀羽合鑄，揮劍帶起烈焰。'],
+    ['承影劍', '劍身無形，唯有日影可見，傷人於無聲。'],
+    ['龍淵劍', '傳為龍淵湖底古劍，劍鳴似龍吟。'],
+    ['太虛拂塵', '萬縷天蠶絲束成，一拂可散百里妖霧。'],
+    ['九霄雷印', '天師代代相傳的法印，蓋下即引雷霆。'],
+  ],
+  coat: [
+    ['玄冰道袍', '玄冰絲與靈蠶所織，可穩固心神、增進劍意。'],
+    ['雲紋鶴氅', '白鶴翎羽綴以雲紋，穿之身輕如燕。'],
+    ['紫綬仙衣', '仙門長老所賜，衣上符紋自成護陣。'],
+    ['金縷禪衣', '金絲織就，經佛前供奉百年，刀劍難侵。'],
+    ['赤焰法袍', '以火蠶絲織成，寒暑不侵、邪祟不近。'],
+    ['星斗道衣', '衣上繡北斗七星，夜間可引星力護體。'],
+  ],
+  boots: [
+    ['踏雲履', '鞋底雲紋暗藏風訣，一步可越十丈。'],
+    ['凌波靴', '行於水面如履平地，身法飄逸難捉。'],
+    ['追風屐', '木屐刻有神行符，奔走時耳畔生風。'],
+    ['縮地鞋', '暗合縮地成寸之術，進退只在一念。'],
+    ['逍遙靴', '逍遙派遺物，穿之心無罣礙、步步生蓮。'],
+  ],
+};
+
+let xianTheme = false;
+export function setGearTheme(characterId) {
+  xianTheme = String(characterId || '').startsWith('xian_');
+}
+export function isXianTheme() { return xianTheme; }
+
+export function slotInfo(slotKey) {
+  return xianTheme ? { ...SLOTS[slotKey], ...XIAN_SLOTS[slotKey] } : SLOTS[slotKey];
+}
+export function affixName(key) {
+  return (xianTheme && XIAN_AFFIX_NAMES[key]) || AFFIXES[key]?.name || key;
+}
+export function setName(setKey) {
+  if (!SETS[setKey]) return '';
+  return xianTheme ? `${XIAN_SETS[setKey]}套` : SETS[setKey].name;
+}
+
+function hashId(id) {
+  let h = 0;
+  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return Math.abs(h);
+}
+// 修仙法寶名號與典故 (特工主題回傳 null)
+export function itemLore(item) {
+  if (!xianTheme) return null;
+  const pool = XIAN_NAMES[item.slot] || XIAN_NAMES.goggles;
+  const [name, lore] = pool[hashId(item.id) % pool.length];
+  return { name, lore };
+}

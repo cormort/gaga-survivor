@@ -88,6 +88,7 @@ import {
   rollRarity,
   itemLevelFor,
   itemName,
+  setGearTheme,
   gearBonuses,
   salvageValue,
   salvageGold,
@@ -910,6 +911,7 @@ class Game {
     this.core = this.mode.core ? new Core({ ...this.mode.core, hp: this.level.coreHp || this.mode.core.hp }) : null;
     const spawnY = this.core ? this.core.y + this.core.radius + 90 : 0;
     this.player = new Player(this.core ? this.core.x : 0, spawnY, this.characterId);
+    setGearTheme(this.characterId);
     this.player.game = this;
     this.td = this.level.td && this.core ? new TowerDefense(this) : null;   // 守塔：路線＋分波
     this.weaponManager = new WeaponManager(this.player);

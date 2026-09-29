@@ -3266,3 +3266,18 @@ body, html {
 .slot-info { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
 .slot-info span { opacity: 0.75; font-size: 12px; }
 .slot-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* 修仙裝備典故與比較卡 */
+.gear-row-lore { font-size: 11px; opacity: 0.6; font-style: italic; margin-top: 2px; }
+.gear-row { cursor: pointer; }
+.gear-compare { margin: -2px 0 8px; padding: 10px; border-radius: 10px; background: rgba(0,0,0,0.35); border: 1px solid rgba(110,168,255,0.35); }
+.gear-cmp-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gear-cmp-card { padding: 8px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--rarity, rgba(255,255,255,0.15)); font-size: 12px; min-width: 0; }
+.gear-cmp-card.empty { opacity: 0.6; }
+.gear-cmp-title { font-size: 11px; opacity: 0.6; margin-bottom: 2px; }
+.gear-cmp-name { font-weight: bold; color: var(--rarity, #fff); font-size: 14px; }
+.gear-cmp-meta { opacity: 0.75; margin-bottom: 4px; }
+.gear-cmp-diffs { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 12px; }
+.gear-cmp-diff.up { color: #3ddc84; }
+.gear-cmp-diff.down { color: #ff5e5e; }
+.gear-cmp-diff.same { color: #8a9bb0; }

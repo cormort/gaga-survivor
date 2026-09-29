@@ -31,6 +31,11 @@ import {
   legendaryEffectText,
   FUSION_COST,
   fuseItems,
+  slotInfo,
+  setName,
+  itemLore,
+  setGearTheme,
+  affixName,
 } from '../items.js';
 import { JEWELS, JEWEL_ORDER, jewelValue } from '../jewels.js';
 import { questText } from '../quests.js';
@@ -94,6 +99,41 @@ function pairedWeaponNote(passiveId, weaponManager) {
     }
   }
   return '';
+}
+
+// 裝備比較卡：左 = 這件、右 = 同部位已穿，底下逐條詞條列出差值
+function gearCardHtml(item, title) {
+  if (!item) return `<div class="gear-cmp-card empty"><div class="gear-cmp-title">${title}</div><div class="gear-slot-empty">未裝備</div></div>`;
+  const lore = itemLore(item);
+  return `<div class="gear-cmp-card" style="--rarity:${RARITIES[item.rarity].color}">
+    <div class="gear-cmp-title">${title}</div>
+    <div class="gear-cmp-name">${slotInfo(item.slot).icon} ${lore ? lore.name : slotInfo(item.slot).name}</div>
+    <div class="gear-cmp-meta">${RARITIES[item.rarity].name} · ${ilvlText(item)}</div>
+    <div class="gear-cmp-affixes">${item.affixes.map(affixText).join('<br>') || '無詞條'}</div>
+    ${item.legendaryEffect ? `<div class="gear-legendary-tag">${legendaryEffectText(item.legendaryEffect)}</div>` : ''}
+    ${lore ? `<div class="gear-row-lore">${lore.lore}</div>` : ''}
+  </div>`;
+}
+
+function gearCompareEl(item, current) {
+  const sum = (it) => {
+    const m = {};
+    for (const a of it?.affixes || []) m[a.key] = (m[a.key] || 0) + a.value;
+    return m;
+  };
+  const a = sum(item);
+  const b = sum(current);
+  const diffs = AFFIX_ORDER.filter((k) => a[k] || b[k]).map((k) => {
+    const d = (a[k] || 0) - (b[k] || 0);
+    const v = AFFIXES[k].pct ? `${Math.round(Math.abs(d) * 100)}%` : `${Math.round(Math.abs(d))}`;
+    const cls = d > 0 ? 'up' : d < 0 ? 'down' : 'same';
+    return `<span class="gear-cmp-diff ${cls}">${affixName(k)} ${d > 0 ? '▲ +' : d < 0 ? '▼ -' : '＝ '}${d === 0 ? '' : v}</span>`;
+  });
+  const el = document.createElement('div');
+  el.className = 'gear-compare';
+  el.innerHTML = `<div class="gear-cmp-cards">${gearCardHtml(item, '這件')}${gearCardHtml(current, '已裝備')}</div>
+    <div class="gear-cmp-diffs">${diffs.join('') || '<span class="gear-cmp-diff same">沒有詞條可比較</span>'}</div>`;
+  return el;
 }
 
 export class UIManager {
@@ -657,11 +697,12 @@ export class UIManager {
     const stash = save.data.stash;
     const equipped = save.data.equipped;
     const byId = new Map(stash.map((it) => [it.id, it]));
+    setGearTheme(save.data.character);
 
     // 三個裝備槽
     this.gearSlots.innerHTML = '';
     SLOT_ORDER.forEach((slotKey) => {
-      const def = SLOTS[slotKey];
+      const def = slotInfo(slotKey);
       const item = byId.get(equipped[slotKey]);
       const cell = document.createElement('div');
       cell.className = 'gear-slot' + (item ? ' filled' : '');
@@ -670,7 +711,7 @@ export class UIManager {
         <div class="gear-slot-icon">${def.icon}</div>
         <div class="gear-slot-name">${def.name}</div>
         ${item
-          ? `<div class="gear-slot-item">${RARITIES[item.rarity].name} <span class="gear-ilvl">${ilvlText(item)}</span></div>
+          ? `<div class="gear-slot-item">${RARITIES[item.rarity].name}${itemLore(item) ? ' ' + itemLore(item).name : ''} <span class="gear-ilvl">${ilvlText(item)}</span></div>
              <div class="gear-slot-affixes">${item.affixes.map(affixText).join('<br>')}</div>
              <button class="gear-mini-btn" data-unequip="${slotKey}">脫下</button>`
           : '<div class="gear-slot-empty">未裝備</div>'}
@@ -699,14 +740,14 @@ export class UIManager {
         const def = AFFIXES[key];
         const v = g[def.stat] || 0;
         if (v <= 0.0001) continue;
-        parts.push(def.pct ? `${def.name} +${(v * 100).toFixed(1)}%` : `${def.name} +${Math.round(v)}`);
+        parts.push(def.pct ? `${affixName(key)} +${(v * 100).toFixed(1)}%` : `${affixName(key)} +${Math.round(v)}`);
       }
       const crit = Math.min(1, g.crit || 0);
       const critFactor = 1 + crit * (1 + (g.critdmg || 0));
       const effective = (1 + (g.dmg || 0)) * critFactor;
       const eff = `等效傷害 ×${effective.toFixed(2)}（+${((effective - 1) * 100).toFixed(0)}%）`;
       const fx = (g.effects || []).map((k) => LEGENDARY_EFFECTS[k]?.name).filter(Boolean);
-      const sets = (g.activeSets || []).map((s) => `★${s.name}`).join(' ');
+      const sets = (g.activeSets || []).map((s) => `★${setName(s.key)}`).join(' ');
       summary.innerHTML = parts.length
         ? `<div class="gear-summary-line"><strong>裝備總和</strong>：${parts.join('、')}</div>`
           + `<div class="gear-summary-line accent">${eff}${sets ? '　' + sets : ''}${fx.length ? '　特效：' + fx.join('、') : ''}</div>`
@@ -726,9 +767,9 @@ export class UIManager {
         const sDef = SETS[k];
         if (!sDef) continue;
         if (count >= 3) {
-          badges.push(`<span class="set-badge active" style="--set-c:${sDef.color}">★ ${sDef.name} (3/3 已激活：${sDef.bonusText})</span>`);
+          badges.push(`<span class="set-badge active" style="--set-c:${sDef.color}">★ ${setName(k)} (3/3 已激活：${sDef.bonusText})</span>`);
         } else {
-          badges.push(`<span class="set-badge inactive" style="--set-c:${sDef.color}">${sDef.name} (${count}/3)</span>`);
+          badges.push(`<span class="set-badge inactive" style="--set-c:${sDef.color}">${setName(k)} (${count}/3)</span>`);
         }
       }
       setStatus.innerHTML = badges.length > 0
@@ -837,7 +878,7 @@ export class UIManager {
         lastSlot = item.slot;
         const head = document.createElement('div');
         head.className = 'gear-slot-header';
-        head.textContent = `${SLOTS[item.slot].icon} ${SLOTS[item.slot].name}`;
+        head.textContent = `${slotInfo(item.slot).icon} ${slotInfo(item.slot).name}`;
         this.gearList.appendChild(head);
       }
       const isOn = equipped[item.slot] === item.id;
@@ -858,15 +899,17 @@ export class UIManager {
 
       // 套裝標記與傳奇特效標籤
       const setDef = item.setKey ? SETS[item.setKey] : null;
-      const setHtml = setDef ? `<span class="gear-set-tag" style="color:${setDef.color}">[${setDef.name}]</span>` : '';
+      const setHtml = setDef ? `<span class="gear-set-tag" style="color:${setDef.color}">[${setName(item.setKey)}]</span>` : '';
+      const lore = itemLore(item);
       const legHtml = item.legendaryEffect ? `<div class="gear-legendary-tag">${legendaryEffectText(item.legendaryEffect)}</div>` : '';
 
       row.innerHTML = `
-        <span class="gear-row-icon">${SLOTS[item.slot].icon}</span>
+        <span class="gear-row-icon">${slotInfo(item.slot).icon}</span>
         <div class="gear-row-info">
-          <div class="gear-row-name">${setHtml}${RARITIES[item.rarity].name} ${SLOTS[item.slot].name} <span class="gear-ilvl" title="裝備等級：詞條數值的倍率，深入高難度關卡並撐得越久掉得越高">${ilvlText(item)}</span>${isOn ? ' <span class="gear-on">裝備中</span>' : ''}</div>
+          <div class="gear-row-name">${setHtml}${RARITIES[item.rarity].name} ${lore ? lore.name : slotInfo(item.slot).name} <span class="gear-ilvl" title="裝備等級：詞條數值的倍率，深入高難度關卡並撐得越久掉得越高">${ilvlText(item)}</span>${isOn ? ' <span class="gear-on">裝備中</span>' : ''}</div>
           <div class="gear-row-affixes">${item.affixes.length > 0 ? item.affixes.map(affixText).join(' ‧ ') : '無詞條 (可分解)'}</div>
           ${legHtml}
+          ${lore ? `<div class="gear-row-lore">${lore.lore}</div>` : ''}
         </div>
         <div class="gear-row-actions">
           ${this._fuseMode
@@ -884,6 +927,16 @@ export class UIManager {
             `}
         </div>
       `;
+
+      // 點一下（非按鈕處）展開與已穿裝備的比較
+      if (!this._fuseMode && !isOn) {
+        row.addEventListener('click', (ev) => {
+          if (ev.target.tagName === 'BUTTON') return;
+          const open = row.nextElementSibling?.classList.contains('gear-compare');
+          this.gearList.querySelectorAll('.gear-compare').forEach((el) => el.remove());
+          if (!open) row.after(gearCompareEl(item, byId.get(equipped[item.slot])));
+        });
+      }
 
       if (this._fuseMode && !isOn) {
         row.addEventListener('click', (ev) => {
