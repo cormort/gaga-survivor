@@ -3574,8 +3574,19 @@ class Game {
     const ctx = this.ctx;
     const size = this.vw < 620 ? 96 : 136;
     const pad = this.vw < 620 ? 10 : 18;
-    const ox = this.vw - size - pad;
-    const oy = this.vh - size - pad;
+    // 安全區：瀏海機/圓角/Home 條會吃掉右下角，CSS 的動作欄有讓開 env(safe-area-inset-*)，
+    // 但 canvas 小地圖原本沒有，於是在手機上被裁切、位置與動作欄對不上。
+    if (this._mmInsetKey !== this.vw + 'x' + this.vh) {
+      this._mmInsetKey = this.vw + 'x' + this.vh;
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) 0';
+      document.body.appendChild(probe);
+      const cs = getComputedStyle(probe);
+      this._mmInset = { r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0 };
+      probe.remove();
+    }
+    const ox = this.vw - size - pad - this._mmInset.r;
+    const oy = this.vh - size - pad - this._mmInset.b;
 
     // 以「守塔目標」為中心的局部視野。整張地圖 4000 單位縮到 136px 的話所有東西
     // 會擠成一團，只顯示周圍 RANGE 單位才看得出敵人分佈與 Boss 方位。
@@ -3598,6 +3609,45 @@ class Game {
     ctx.fill();
     ctx.stroke();
     ctx.clip();
+
+    // 地形底色：取關卡主題色，小地圖才會跟主畫面同一個氣氛（原本每關都是同一塊深藍黑）
+    const th = (this.level || LEVELS.street).theme;
+    if (th) {
+      ctx.fillStyle = th.mid;
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(ox, oy, size, size);
+      ctx.globalAlpha = 1;
+    }
+
+    // 世界座標格線 (每 500 單位一格，隨錨點移動)：讓玩家從格線的滑動感知自己在移動，
+    // 以及兩圈距離環 (約 1/3、2/3 視野半徑) 估算敵群離自己多遠
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.lineWidth = 1;
+    const G = 500;
+    ctx.beginPath();
+    for (let wx = Math.floor((anchor.x - RANGE) / G) * G; wx <= anchor.x + RANGE; wx += G) {
+      ctx.moveTo(toX(wx), oy); ctx.lineTo(toX(wx), oy + size);
+    }
+    for (let wy = Math.floor((anchor.y - RANGE) / G) * G; wy <= anchor.y + RANGE; wy += G) {
+      ctx.moveTo(ox, toY(wy)); ctx.lineTo(ox + size, toY(wy));
+    }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.10)';
+    for (const rr of [RANGE * 0.34, RANGE * 0.67]) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, rr * k, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // 地形區域 (毒池／熔岩／流沙等)：用各自的顏色標出範圍，走位前先看得到危險區
+    for (const hz of this.hazards) {
+      ctx.fillStyle = hz.color || '#ffffff';
+      ctx.globalAlpha = 0.28;
+      ctx.beginPath();
+      ctx.arc(toX(hz.x), toY(hz.y), Math.max(2, hz.r * k), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
 
     // 地圖邊界 (走近時才會出現在小地圖上，提示別撞牆)；無限地圖沒有邊界
     if (isWorldBounded()) {
@@ -3646,6 +3696,7 @@ class Game {
     ctx.fillStyle = 'rgba(255, 90, 90, 0.9)';
     for (const e of this.enemies) {
       if (e.isDead || e.isBoss) continue;
+      if (e.isElite) { ctx.fillStyle = e.eliteColor || '#ffb703'; ctx.fillRect(toX(e.x) - 2.5, toY(e.y) - 2.5, 5, 5); ctx.fillStyle = 'rgba(255, 90, 90, 0.9)'; continue; }
       ctx.fillRect(toX(e.x) - 1.5, toY(e.y) - 1.5, 3, 3);
     }
 
