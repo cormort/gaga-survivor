@@ -236,7 +236,8 @@ export const LEVELS = {
     mechs: [
       { type: 'geyser', interval: 22, jitter: 8, radius: 170, fuse: 1.5, dmg: 14, dmgEnemy: 1300, color: '#ff7700' },
       { type: 'safeZone', interval: 25, jitter: 8, radius: 130, duration: 8, dmg: 6, color: '#ff9500' },
-      { type: 'tar', interval: 20, jitter: 6, radius: 130, dur: 10, color: '#2b1d14' },
+      { type: 'lava', interval: 18, jitter: 6, radius: 135, dur: 11, dmg: 6, dmgEnemy: 90, color: '#ff3c00' },
+      { type: 'electro', interval: 20, jitter: 7, radius: 140, dur: 10, dischargeInterval: 1.2, dmg: 4, dmgEnemy: 160, color: '#00e5ff' },
     ],
     waves: [
       { until: 45, pool: [['walker', 0.491], ['boomer', 0.402], ['spitter', 0.107]], interval: 0.72, batch: 1 },
@@ -426,6 +427,9 @@ export const LEVELS = {
       { type: 'geyser', interval: 18, jitter: 6, radius: 190, fuse: 1.2, dmg: 18, dmgEnemy: 2200, color: '#ffd166' },
       { type: 'safeZone', interval: 22, jitter: 8, radius: 120, duration: 7, dmg: 8, color: '#ffb703' },
       { type: 'gale', interval: 20, jitter: 6, radius: 170, dur: 8, color: '#ffe8a3' },
+      { type: 'quicksand', interval: 24, jitter: 8, radius: 150, dur: 10, pullSpeed: 55, color: '#d4a373' },
+      { type: 'lava', interval: 22, jitter: 8, radius: 130, dur: 10, dmg: 7, dmgEnemy: 110, color: '#ff4800' },
+      { type: 'sanctuary', interval: 30, jitter: 10, radius: 130, dur: 10, heal: 3, dmgEnemy: 50, color: '#ffd700' },
     ],
     waves: [
       { until: 40, pool: [['runner', 0.536], ['walker', 0.357], ['spitter', 0.107]], interval: 0.6, batch: 1 },
