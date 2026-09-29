@@ -3328,3 +3328,30 @@ body, html {
   #action-bar .build-btn, .pocket-grid .action-btn { opacity: 0.75; }
   #action-bar .build-btn:active, .pocket-grid .action-btn:active { opacity: 1; }
 }
+
+/* 手機起始畫面重新配置：黏底操作列原本高 312px（佔螢幕 37%），蓋住特工與關卡清單。
+   難度與規則卡並排成一列、說明文字收起；模式卡只留圖示與名稱；特工卡縮窄露出下一張。 */
+@media (max-width: 619px) {
+  .start-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px 14px 12px;
+    background: #0c1220;
+  }
+  .start-actions .difficulty-row { margin: 0; display: block; }
+  .start-actions .difficulty-label,
+  .start-actions .difficulty-desc { display: none; }
+  #difficulty-select, #runcard-select { width: 100%; min-height: 44px; font-size: 13px; padding: 6px 28px 6px 10px; background-position: right 9px center; }
+  .start-actions #start-status { grid-column: 1 / -1; margin: 0; }
+  .start-actions #start-status:empty { display: none; }
+  .start-actions #btn-start-game { grid-column: 1 / -1; margin: 0; padding: 12px; font-size: 17px; }
+
+  .mode-select { gap: 8px; }
+  .mode-card { padding: 10px 8px; gap: 2px; }
+  .mode-icon { font-size: 22px; }
+  .mode-desc { display: none; }
+
+  .char-card { flex: 0 0 58%; min-width: 0; }
+  .aspect-chips { flex-wrap: wrap; justify-content: center; overflow: visible; }
+}

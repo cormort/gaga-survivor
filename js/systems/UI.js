@@ -1235,6 +1235,7 @@ export class UIManager {
       const m = modes[id];
       const card = document.createElement('button');
       card.className = 'mode-card' + (id === currentId ? ' selected' : '');
+      card.title = m.desc;   // 手機版隱藏說明文字，長按/滑過仍看得到
       card.style.setProperty('--mode-accent', m.accent);
       card.innerHTML = `
         <span class="mode-icon">${m.icon}</span>
