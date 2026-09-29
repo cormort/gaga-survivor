@@ -14,7 +14,7 @@ import {
   isWorldBounded,
   setWorldBounded,
 } from './config.js';
-import { Player } from './entities/Player.js';
+import { Player, MP_PER_KILL } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
 import { DropItem } from './entities/DropItem.js';
@@ -2398,6 +2398,7 @@ class Game {
       if (enemy.isDead) {
         this.kills++;
         this.addCombo();
+        if (this.player.maxMp) this.player.mp = Math.min(this.player.maxMp, this.player.mp + MP_PER_KILL);
         // 傳奇特效：擊殺汲取生命
         if (this.player.legendaryEffects?.includes('kill_heal')) {
           this.player.heal(3);

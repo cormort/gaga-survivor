@@ -5,9 +5,16 @@ import { sound } from '../audio.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
 import { CHARACTERS } from '../characters.js';
 
+const MP_REGEN = 8;        // 靈力每秒回復
+const MP_DASH_COST = 50;   // 御劍遁消耗
+export const MP_PER_KILL = 1;
+
 export class Player {
   constructor(x = 0, y = 0, characterId = 'duck') {
     this.character = CHARACTERS[characterId] || CHARACTERS.duck;
+    // 靈力 (修仙六脈專屬)：自然回復＋擊殺回靈；翻滾冷卻中可耗靈力「御劍遁」強行閃避
+    this.maxMp = String(characterId).startsWith('xian_') ? 100 : 0;
+    this.mp = this.maxMp;
     this.x = x;
     this.y = y;
     this.radius = 18;
@@ -142,7 +149,10 @@ export class Player {
 
   // 觸發戰術閃避翻滾
   dash(inputVector) {
-    if (this.dashTimer > 0 || this.dashTimeLeft > 0 || this.isDead) return false;
+    if (this.dashTimeLeft > 0 || this.isDead) return false;
+    // 冷卻中：修仙角色靈力足夠就御劍遁 (不重置冷卻)
+    const spiritDash = this.dashTimer > 0;
+    if (spiritDash && !(this.maxMp && this.mp >= MP_DASH_COST)) return false;
 
     // 依當前移動方向翻滾，無輸入則依面向
     const dirX = inputVector.x;
@@ -155,6 +165,12 @@ export class Player {
     }
 
     this.dashTimeLeft = this.dashDuration;
+    this.invulnerableTimer = Math.max(this.invulnerableTimer, this.dashDuration + 0.1);
+    if (spiritDash) {
+      this.mp -= MP_DASH_COST;
+      sound.playDash();
+      return true;
+    }
     // 局外 CDR 可微幅減免翻滾冷卻，至多 -30%；幽靈步伐祝福可進一步降低 40%
     const cdrMod = Math.max(0.4, (1 - (this.metaCdr || 0) * 0.5) * (this.blessingDashCdr || 1));
     this.dashMaxTimer = this.dashCooldown * cdrMod * (this.dashCooldownMul || 1);
@@ -175,6 +191,7 @@ export class Player {
 
     // 閃避冷卻計時
     if (this.dashTimer > 0) this.dashTimer -= dt;
+    if (this.maxMp) this.mp = Math.min(this.maxMp, this.mp + MP_REGEN * dt);
 
     // 藥劑與型態 Buff 計時
     if (this.atkPotionTimer > 0) this.atkPotionTimer -= dt;
@@ -477,6 +494,15 @@ export class Player {
       ctx.shadowBlur = 6;
       ctx.fillStyle = '#00d2ff';
       ctx.fillRect(barX, sBarY, barW * shieldPct, 3);
+    }
+    // 靈力條 (修仙角色)：貼在血條下方
+    if (this.maxMp) {
+      const mBarY = barY + barH + 3;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(6, 10, 18, 0.85)';
+      ctx.fillRect(barX - 1, mBarY - 1, barW + 2, 5);
+      ctx.fillStyle = this.mp >= MP_DASH_COST ? '#4d8dff' : '#2b4a80';
+      ctx.fillRect(barX, mBarY, barW * (this.mp / this.maxMp), 3);
     }
     ctx.restore();
   }
