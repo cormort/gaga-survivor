@@ -6683,13 +6683,13 @@ function xianCharacterBuilder(key, img, height) {
   };
 }
 
-// 24 款全新地圖專屬裝飾物貼圖 (assets/decor/*.png)
+// 25 款全新地圖專屬裝飾物貼圖 (assets/decor/*.png)
 const DECOR_PNG_SPRITES = {
   cone: 34, lamp: 64, barrier: 36, swamp_log: 34, mushroom: 38, console: 58,
   rack: 60, snow_pine: 70, lava_rock: 40, vent: 52, anvil: 36, pillar: 64,
   bench: 36, cactus: 58, sandbags: 36, neon: 46, car: 56, steel: 40,
   ice_spike: 48, void_crystal: 48, void_obelisk: 70, ink_rock: 84,
-  ink_maple: 62, ink_lantern: 56,
+  ink_maple: 62, ink_lantern: 56, ink_stele_a: 78,
 };
 
 // 24 款 12 生肖角色與魔怪貼圖 (assets/zodiac/*.png，正邪各 12 款)

@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v54';
+const FALLBACK_VERSION = 'gaga-v55';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -219,6 +219,7 @@ const PRECACHE = [
   './assets/decor/ink_lantern.png',
   './assets/decor/ink_maple.png',
   './assets/decor/ink_rock.png',
+  './assets/decor/ink_stele_a.png',
   './assets/decor/lamp.png',
   './assets/decor/lava_rock.png',
   './assets/decor/mushroom.png',
