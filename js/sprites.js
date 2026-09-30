@@ -78,6 +78,32 @@ const FIXED_ACCENT = {
   gem_blue: '#00b4d8',
   gem_purple: '#b5179e',
   gem_gold: '#ffb703',
+  // 12 生肖正道特工 (Hero) 邊光
+  rat_hero: '#00f5d4',
+  ox_hero: '#ffb703',
+  tiger_hero: '#7fd8ff',
+  rabbit_hero: '#ff758f',
+  dragon_hero: '#00f59b',
+  snake_hero: '#52b788',
+  horse_hero: '#ffd166',
+  goat_hero: '#b8c0ff',
+  monkey_hero: '#ff9e00',
+  rooster_hero: '#e63946',
+  dog_hero: '#48cae4',
+  pig_hero: '#ff758f',
+  // 12 生肖邪煞魔怪 (Evil) 邊光
+  rat_evil: '#a700ff',
+  ox_evil: '#ff3300',
+  tiger_evil: '#9d0208',
+  rabbit_evil: '#d00000',
+  dragon_evil: '#7209b7',
+  snake_evil: '#38b000',
+  horse_evil: '#ff4800',
+  goat_evil: '#9c19e6',
+  monkey_evil: '#e01e37',
+  rooster_evil: '#6a040f',
+  dog_evil: '#dc2f02',
+  pig_evil: '#b5179e',
 };
 // Boss 的 key 是動態組出來的 (boss_<theme>[_final][_charging])，用前綴比對
 const BOSS_ACCENT = [
@@ -118,11 +144,18 @@ const PLAYER_SPRITE_KEYS = new Set([
   'duck', 'rabbit', 'penguin', 'cat', 'mechanic',
   'astartes_duck', 'techpriest_goose',
   'xian_sword', 'xian_talisman', 'xian_mage', 'xian_alchemy', 'xian_zen', 'xian_demon',
+  // 12 生肖正道特工 (Hero)
+  'rat_hero', 'ox_hero', 'tiger_hero', 'rabbit_hero', 'dragon_hero', 'snake_hero',
+  'horse_hero', 'goat_hero', 'monkey_hero', 'rooster_hero', 'dog_hero', 'pig_hero',
 ]);
 
 const DECOR_SPRITE_KEYS = new Set([
   'ink_pine', 'ink_rock', 'moss_stone', 'flower_patch_1', 'flower_patch_2', 'grass_tuft',
   'pine_tree_1', 'pine_tree_2', 'pine_tree_3', 'mountain_rock_1', 'mountain_rock_2',
+  'cone', 'lamp', 'barrier', 'swamp_log', 'mushroom', 'console', 'rack',
+  'snow_pine', 'lava_rock', 'vent', 'anvil', 'pillar', 'bench', 'cactus',
+  'sandbags', 'neon', 'car', 'steel', 'ice_spike', 'void_crystal', 'void_obelisk',
+  'ink_maple', 'ink_lantern'
 ]);
 
 function accentFor(key, b) {
@@ -6422,6 +6455,33 @@ const BUILDERS = {
   guardsman:  { w: 56, h: 52, fn: (x, t) => drawGuardsman(x, t, 12) },
   leman_russ: { w: 90, h: 72, fn: (x, t) => drawLemanRuss(x, t, 64, 48) },
 
+  // 12 生肖正道特工 (Hero 貼圖載入前備援)
+  rat_hero:     { w: 64, h: 62, fn: (x, t) => drawWalker(x, t, 15) },
+  ox_hero:      { w: 72, h: 66, fn: (x, t) => drawBrute(x, t, 20) },
+  tiger_hero:   { w: 72, h: 66, fn: (x, t) => drawBrute(x, t, 20) },
+  rabbit_hero:  { w: 64, h: 62, fn: (x, t) => drawRabbit(x, t) },
+  dragon_hero:  { w: 76, h: 68, fn: (x, t) => drawBrute(x, t, 22) },
+  snake_hero:   { w: 64, h: 62, fn: (x, t) => drawWalker(x, t, 15) },
+  horse_hero:   { w: 72, h: 66, fn: (x, t) => drawHound(x, t, 16) },
+  goat_hero:    { w: 68, h: 64, fn: (x, t) => drawWalker(x, t, 16) },
+  monkey_hero:  { w: 68, h: 64, fn: (x, t) => drawCat(x, t) },
+  rooster_hero: { w: 64, h: 62, fn: (x, t) => drawDuck(x, t) },
+  dog_hero:     { w: 68, h: 64, fn: (x, t) => drawHound(x, t, 16) },
+  pig_hero:     { w: 72, h: 66, fn: (x, t) => drawBrute(x, t, 20) },
+  // 12 生肖邪煞魔怪 (Evil 貼圖載入前備援)
+  rat_evil:     { w: 64, h: 56, fn: (x, t) => drawWalker(x, t, 14) },
+  ox_evil:      { w: 80, h: 72, fn: (x, t) => drawBrute(x, t, 22) },
+  tiger_evil:   { w: 78, h: 70, fn: (x, t) => drawBrute(x, t, 21) },
+  rabbit_evil:  { w: 64, h: 60, fn: (x, t) => drawRabbit(x, t) },
+  dragon_evil:  { w: 86, h: 78, fn: (x, t) => drawBrute(x, t, 24) },
+  snake_evil:   { w: 74, h: 68, fn: (x, t) => drawSpitter(x, t, 18) },
+  horse_evil:   { w: 80, h: 72, fn: (x, t) => drawHound(x, t, 18) },
+  goat_evil:    { w: 76, h: 68, fn: (x, t) => drawBrute(x, t, 20) },
+  monkey_evil:  { w: 76, h: 68, fn: (x, t) => drawInkApe(x, t, 22) },
+  rooster_evil: { w: 68, h: 62, fn: (x, t) => drawBat(x, t, 14) },
+  dog_evil:     { w: 74, h: 66, fn: (x, t) => drawHound(x, t, 17) },
+  pig_evil:     { w: 80, h: 72, fn: (x, t) => drawInkBoar(x, t, 22) },
+
   boss:   { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, false) },
   boss_charging: { w: 168, h: 168, fn: (x, t) => drawBoss(x, t, 40, true) },
   turret:  { w: 60, h: 56, fn: (x) => drawTurret(x) },
@@ -6504,7 +6564,7 @@ function imageBuilder(img, height, still) {
   const k = height / img.height;
   const w = img.width * k;
   return {
-    w: w + 10, h: height + 12, image: true,
+    w: w + 10, h: height + 12, image: true, static: still,
     fn: (x, t) => {
       const p = t * Math.PI * 2;
       // 角色 (xian_*) 由 Player 自己做步伐擠壓，這裡只有怪物加跳動
@@ -6623,8 +6683,141 @@ function xianCharacterBuilder(key, img, height) {
   };
 }
 
-export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve() : Promise.all(
-  Object.entries(IMAGE_SPRITES).map(([key, height]) => new Promise((resolve) => {
+// 24 款全新地圖專屬裝飾物貼圖 (assets/decor/*.png)
+const DECOR_PNG_SPRITES = {
+  cone: 34, lamp: 64, barrier: 36, swamp_log: 34, mushroom: 38, console: 58,
+  rack: 60, snow_pine: 70, lava_rock: 40, vent: 52, anvil: 36, pillar: 64,
+  bench: 36, cactus: 58, sandbags: 36, neon: 46, car: 56, steel: 40,
+  ice_spike: 48, void_crystal: 48, void_obelisk: 70, ink_rock: 84,
+  ink_maple: 62, ink_lantern: 56,
+};
+
+// 24 款 12 生肖角色與魔怪貼圖 (assets/zodiac/*.png，正邪各 12 款)
+const ZODIAC_SPRITES = {
+  // 12 生肖正道特工 (Hero)
+  rat_hero: 62, ox_hero: 66, tiger_hero: 66, rabbit_hero: 62,
+  dragon_hero: 68, snake_hero: 62, horse_hero: 66, goat_hero: 64,
+  monkey_hero: 64, rooster_hero: 62, dog_hero: 64, pig_hero: 66,
+  // 12 生肖邪煞魔怪 (Evil)
+  rat_evil: 56, ox_evil: 72, tiger_evil: 70, rabbit_evil: 60,
+  dragon_evil: 78, snake_evil: 68, horse_evil: 72, goat_evil: 68,
+  monkey_evil: 68, rooster_evil: 62, dog_evil: 66, pig_evil: 72,
+};
+
+function zodiacHeroBuilder(key, img, height) {
+  const k = height / img.height;
+  const w = img.width * k;
+  return {
+    w: w + 16, h: height + 16, image: true,
+    fn: (x, t) => {
+      const p = t * Math.PI * 2;
+      const bob = Math.sin(p) * 2.4;
+      const tilt = Math.sin(p) * 0.032;
+      const foot = height / 2 + 3;
+
+      // 落地動態陰影
+      x.fillStyle = 'rgba(0,0,0,0.32)';
+      x.beginPath();
+      x.ellipse(0, foot, (w * 0.35) * (1 - Math.abs(Math.sin(p)) * 0.12), w * 0.09, 0, 0, Math.PI * 2);
+      x.fill();
+
+      x.save();
+      x.translate(0, foot - 2 + bob);
+      x.rotate(tilt);
+      x.drawImage(img, -w / 2, -height, w, height);
+
+      // 各生肖英雄專屬靈韻微粒與光環動態 (隨幀旋轉浮動)
+      const auraAngle = p;
+      if (key === 'dragon_hero') {
+        const ax = Math.cos(auraAngle * 2) * (w * 0.44);
+        const ay = -height * 0.65 + Math.sin(auraAngle * 2) * 8;
+        x.fillStyle = '#00f59b';
+        x.beginPath();
+        x.arc(ax, ay, 2.5, 0, Math.PI * 2);
+        x.fill();
+        x.strokeStyle = 'rgba(0, 245, 155, 0.45)';
+        x.lineWidth = 1.5;
+        x.beginPath();
+        x.arc(0, -height * 0.55, w * 0.42 + Math.sin(auraAngle) * 3, 0, Math.PI * 2);
+        x.stroke();
+      } else if (key === 'monkey_hero') {
+        const mx = Math.sin(auraAngle) * (w * 0.4);
+        const my = -height * 0.7 + Math.cos(auraAngle) * 6;
+        x.fillStyle = '#ff9e00';
+        x.beginPath();
+        x.arc(mx, my, 3, 0, Math.PI * 2);
+        x.fill();
+      } else if (key === 'tiger_hero') {
+        x.strokeStyle = 'rgba(127, 216, 255, 0.5)';
+        x.lineWidth = 1.8;
+        x.beginPath();
+        x.arc(0, -height * 0.45, w * 0.38 + Math.cos(auraAngle) * 4, -0.4, 0.4);
+        x.stroke();
+      } else if (key === 'ox_hero') {
+        x.strokeStyle = 'rgba(255, 183, 3, 0.4)';
+        x.lineWidth = 2.0;
+        x.beginPath();
+        x.arc(0, 0, w * 0.36 + Math.sin(auraAngle) * 2, 0, Math.PI * 2);
+        x.stroke();
+      } else if (key === 'rat_hero') {
+        const rx = Math.cos(auraAngle * 3) * (w * 0.38);
+        const ry = -height * 0.5 + Math.sin(auraAngle * 3) * 6;
+        x.fillStyle = '#00f5d4';
+        x.fillRect(rx - 2, ry - 2, 4, 4);
+      } else if (key === 'rabbit_hero') {
+        const bx = Math.sin(auraAngle * 2) * (w * 0.36);
+        const by = -height * 0.72 + Math.cos(auraAngle * 2) * 4;
+        x.fillStyle = '#ff758f';
+        x.beginPath();
+        x.arc(bx, by, 2.4, 0, Math.PI * 2);
+        x.fill();
+      } else if (key === 'snake_hero') {
+        const sx = Math.sin(auraAngle) * (w * 0.4);
+        const sy = -height * 0.5 + Math.cos(auraAngle) * 7;
+        x.fillStyle = '#52b788';
+        x.beginPath();
+        x.arc(sx, sy, 2.6, 0, Math.PI * 2);
+        x.fill();
+      } else if (key === 'horse_hero') {
+        const hx = Math.cos(auraAngle) * (w * 0.42);
+        const hy = -height * 0.6 + Math.sin(auraAngle) * 5;
+        x.fillStyle = '#ffd166';
+        x.fillRect(hx - 2, hy - 2, 4, 4);
+      } else if (key === 'goat_hero') {
+        const gx = Math.sin(auraAngle * 1.5) * (w * 0.38);
+        const gy = -height * 0.55 + Math.cos(auraAngle * 1.5) * 5;
+        x.fillStyle = '#b8c0ff';
+        x.beginPath();
+        x.arc(gx, gy, 2.5, 0, Math.PI * 2);
+        x.fill();
+      } else if (key === 'rooster_hero') {
+        const kx = Math.cos(auraAngle * 2) * (w * 0.38);
+        const ky = -height * 0.6 + Math.sin(auraAngle * 2) * 6;
+        x.fillStyle = '#e63946';
+        x.beginPath();
+        x.arc(kx, ky, 2.8, 0, Math.PI * 2);
+        x.fill();
+      } else if (key === 'dog_hero') {
+        const dx = Math.sin(auraAngle * 2) * (w * 0.4);
+        const dy = -height * 0.62 + Math.cos(auraAngle * 2) * 5;
+        x.fillStyle = '#48cae4';
+        x.fillRect(dx - 2, dy - 2, 4, 4);
+      } else if (key === 'pig_hero') {
+        const px = Math.cos(auraAngle) * (w * 0.42);
+        const py = -height * 0.52 + Math.sin(auraAngle) * 6;
+        x.fillStyle = '#ff758f';
+        x.beginPath();
+        x.arc(px, py, 2.6, 0, Math.PI * 2);
+        x.fill();
+      }
+
+      x.restore();
+    },
+  };
+}
+
+export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve() : Promise.all([
+  ...Object.entries(IMAGE_SPRITES).map(([key, height]) => new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       if (PLAYER_SPRITE_KEYS.has(key)) {
@@ -6643,7 +6836,37 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
     };
     img.src = `./assets/xian/${key}.png?v=20260929`;
   })),
-);
+  ...Object.entries(DECOR_PNG_SPRITES).map(([key, height]) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      BUILDERS[key] = imageBuilder(img, height, true);
+      for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
+      resolve();
+    };
+    img.onerror = () => {
+      console.warn(`[sprites] 場景裝飾貼圖載入失敗，沿用程式繪圖：${key}`);
+      resolve();
+    };
+    img.src = `./assets/decor/${key}.png?v=20261001`;
+  })),
+  ...Object.entries(ZODIAC_SPRITES).map(([key, height]) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      if (key.endsWith('_hero')) {
+        BUILDERS[key] = zodiacHeroBuilder(key, img, height);
+      } else {
+        BUILDERS[key] = imageBuilder(img, height, false);
+      }
+      for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
+      resolve();
+    };
+    img.onerror = () => {
+      console.warn(`[sprites] 生肖貼圖載入失敗，沿用程式繪圖：${key}`);
+      resolve();
+    };
+    img.src = `./assets/zodiac/${key}.png?v=20261001`;
+  })),
+]);
 
 // 查詢 sprite key 是否真的存在。getSprite 對未知 key 會靜默退回 walker，
 // 裝飾物 key 打錯就會在場景裡畫出一隻殭屍而完全沒有錯誤訊息 —— 這個查詢讓

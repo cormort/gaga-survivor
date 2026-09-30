@@ -14,6 +14,23 @@ const GEM_SPRITE = {
   EXP_GOLD: 'gem_gold',
 };
 
+// 高解析度道具、寶箱、油桶、木箱貼圖
+export const DROP_ITEM_IMAGES = {};
+const DROP_ITEM_KEYS = [
+  'chest_gold', 'chest_boss', 'crate_supply', 'crate_wood',
+  'battery', 'fuel_can', 'pickup_magnet', 'pickup_bomb',
+  'pickup_chicken', 'pickup_gold', 'barrel_red'
+];
+
+if (typeof Image !== 'undefined') {
+  for (const k of DROP_ITEM_KEYS) {
+    const img = new Image();
+    const dir = (k === 'barrel_red' || k === 'crate_wood') ? 'assets/decor' : 'assets/items';
+    img.src = `${dir}/${k}.png`;
+    DROP_ITEM_IMAGES[k] = img;
+  }
+}
+
 // 會過期的掉落物類型：場上量最大、玩家不會特地繞路去撿的雜物。
 // 裝備/寶箱/消費道具/補給這類「值得繞路」的掉落物不設時限，讓它們消失只會變成懲罰。
 const EXPIRING_TYPES = new Set(['exp', 'gold']);
@@ -137,10 +154,10 @@ export class DropItem {
     if (this.type === 'exp') {
       // 光暈與稜面都已烘進 sprite，這裡只剩一次 drawImage
       blit(ctx, getSprite(GEM_SPRITE[this.kind] || 'gem_green'), 0, 0, 0);
-    } else if (this.type === 'gear') {
-      // 裝備：稀有度光暈 + 寶箱圖示，遠遠就看得出值不值得繞路
+    } else if (this.type === 'gear' || this.type === 'supply') {
+      // 裝備／物資空投：稀有度光暈 + 高解析補給箱
       const g = ctx.createRadialGradient(0, 0, 2, 0, 0, this.radius * 2.6);
-      g.addColorStop(0, this.color);
+      g.addColorStop(0, this.color || '#4cc9f0');
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.globalAlpha = 0.55 + Math.sin(this.animTime * 1.4) * 0.15;
       ctx.fillStyle = g;
@@ -149,20 +166,26 @@ export class DropItem {
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      ctx.strokeStyle = this.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, this.radius * 1.35, 0, Math.PI * 2);
-      ctx.stroke();
+      const img = DROP_ITEM_IMAGES.crate_supply;
+      if (img && img.naturalWidth > 0) {
+        ctx.drawImage(img, -this.radius * 1.3, -this.radius * 1.3, this.radius * 2.6, this.radius * 2.6);
+      } else {
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 1.35, 0, Math.PI * 2);
+        ctx.stroke();
 
-      ctx.font = `${this.radius * 1.7}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(this.icon, 0, 0);
+        ctx.font = `${this.radius * 1.7}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.icon || '🎁', 0, 0);
+      }
     } else if (this.type === 'chest') {
-      // 幸運補給箱：奪目金黃光暈與外圈旋轉金環
+      // 幸運補給箱 / 首領王冠箱：奪目金黃光暈與高解析度金屬寶箱
+      const isBoss = (this.payload === 'boss' || this.item === 'boss' || this.icon === '👑');
       const g = ctx.createRadialGradient(0, 0, 4, 0, 0, this.radius * 3.2);
-      g.addColorStop(0, '#ffb703');
+      g.addColorStop(0, isBoss ? '#ff0055' : '#ffb703');
       g.addColorStop(1, 'rgba(255, 183, 3, 0)');
       ctx.globalAlpha = 0.65 + Math.sin(this.animTime * 2) * 0.2;
       ctx.fillStyle = g;
@@ -171,16 +194,21 @@ export class DropItem {
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      ctx.strokeStyle = '#ffe066';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, this.radius * 1.5, 0, Math.PI * 2);
-      ctx.stroke();
+      const img = isBoss ? DROP_ITEM_IMAGES.chest_boss : DROP_ITEM_IMAGES.chest_gold;
+      if (img && img.naturalWidth > 0) {
+        ctx.drawImage(img, -this.radius * 1.4, -this.radius * 1.4, this.radius * 2.8, this.radius * 2.8);
+      } else {
+        ctx.strokeStyle = '#ffe066';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
 
-      ctx.font = `${this.radius * 2.2}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(this.icon || '🧰', 0, 0);
+        ctx.font = `${this.radius * 2.2}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.icon || '🧰', 0, 0);
+      }
     } else if (this.type === 'consumable' || this.type === 'jewel') {
       // 惡魔城風格消費道具：絢麗光暈與旋轉星環
       const g = ctx.createRadialGradient(0, 0, 2, 0, 0, this.radius * 2.8);
@@ -204,11 +232,24 @@ export class DropItem {
       ctx.textBaseline = 'middle';
       ctx.fillText(this.icon, 0, 0);
     } else {
-      // 道具 (磁鐵、炸彈、烤雞、金幣)
-      ctx.font = `${this.radius * 2}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(this.icon, 0, 0);
+      // 道具 (磁鐵、炸彈、烤雞、金幣、電池、油桶)
+      let itemImg = null;
+      if (this.kind === 'MAGNET' || this.type === 'magnet') itemImg = DROP_ITEM_IMAGES.pickup_magnet;
+      else if (this.kind === 'BOMB' || this.type === 'bomb') itemImg = DROP_ITEM_IMAGES.pickup_bomb;
+      else if (this.kind === 'ROAST_CHICKEN' || this.type === 'heal') itemImg = DROP_ITEM_IMAGES.pickup_chicken;
+      else if (this.kind === 'GOLD_COIN' || this.type === 'gold') itemImg = DROP_ITEM_IMAGES.pickup_gold;
+      else if (this.subType === 'battery' || this.item === 'battery') itemImg = DROP_ITEM_IMAGES.battery;
+      else if (this.subType === 'fuel_can' || this.item === 'fuel_can') itemImg = DROP_ITEM_IMAGES.fuel_can;
+
+      if (itemImg && itemImg.naturalWidth > 0) {
+        const sz = this.radius * 2.4;
+        ctx.drawImage(itemImg, -sz / 2, -sz / 2, sz, sz);
+      } else {
+        ctx.font = `${this.radius * 2}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.icon, 0, 0);
+      }
     }
 
     ctx.restore();
@@ -261,41 +302,51 @@ export class DestructibleCrate {
     ctx.translate(sx + (Math.random() - 0.5) * this.shake, sy + (Math.random() - 0.5) * this.shake);
 
     if (this.kind === 'barrel') {
-      // 鋼鐵油桶 / 科技物資桶
-      ctx.fillStyle = '#2b2d42';
-      ctx.beginPath();
-      ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#4cc9f0';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
+      // 鋼鐵高爆油桶
+      const bImg = DROP_ITEM_IMAGES.barrel_red;
+      if (bImg && bImg.naturalWidth > 0) {
+        ctx.drawImage(bImg, -16, -24, 32, 48);
+      } else {
+        ctx.fillStyle = '#2b2d42';
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#4cc9f0';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
 
-      ctx.font = '18px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('🛢️', 0, 0);
+        ctx.font = '18px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🛢️', 0, 0);
+      }
     } else {
       // 復古木箱
-      const size = this.radius * 2;
-      ctx.fillStyle = '#8d5b4c';
-      ctx.fillRect(-this.radius, -this.radius, size, size);
-      ctx.strokeStyle = '#d4a373';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(-this.radius, -this.radius, size, size);
+      const cImg = DROP_ITEM_IMAGES.crate_wood;
+      if (cImg && cImg.naturalWidth > 0) {
+        ctx.drawImage(cImg, -18, -18, 36, 36);
+      } else {
+        const size = this.radius * 2;
+        ctx.fillStyle = '#8d5b4c';
+        ctx.fillRect(-this.radius, -this.radius, size, size);
+        ctx.strokeStyle = '#d4a373';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-this.radius, -this.radius, size, size);
 
-      // 對角交叉木條
-      ctx.beginPath();
-      ctx.moveTo(-this.radius, -this.radius);
-      ctx.lineTo(this.radius, this.radius);
-      ctx.moveTo(this.radius, -this.radius);
-      ctx.lineTo(-this.radius, this.radius);
-      ctx.strokeStyle = '#582f0e';
-      ctx.stroke();
+        // 對角交叉木條
+        ctx.beginPath();
+        ctx.moveTo(-this.radius, -this.radius);
+        ctx.lineTo(this.radius, this.radius);
+        ctx.moveTo(this.radius, -this.radius);
+        ctx.lineTo(-this.radius, this.radius);
+        ctx.strokeStyle = '#582f0e';
+        ctx.stroke();
 
-      ctx.font = '16px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('📦', 0, 0);
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('📦', 0, 0);
+      }
     }
 
     // 若受損，顯示微型血條

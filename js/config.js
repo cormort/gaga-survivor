@@ -1087,6 +1087,77 @@ export const ENEMY_TYPES = {
     exp: 25,
     isBoss: true,
   },
+
+  // ── 12 生肖邪煞魔怪 (Zodiac Evil Monsters) ──
+  rat_evil: {
+    name: '疫病魔鼠',
+    ai: { kind: 'lunge', lunge: { every: 2.8, windup: 0.3, dur: 0.45, mul: 3.2 }, animSpeed: 12, sepMul: 0.6 },
+    hp: 48, speed: 130, damage: 14, color: '#a700ff', radius: 14, exp: 3,
+    deathZone: { radius: 70, dur: 3.5, dmg: 8, color: '#a700ff' },
+  },
+  ox_evil: {
+    name: '熔岩煞牛',
+    ai: { kind: 'plod', kbResist: 0.65, lunge: { every: 3.6, windup: 0.7, dur: 0.9, mul: 4.2 }, animSpeed: 5.5, sepMul: 1.5 },
+    hp: 220, speed: 60, damage: 26, color: '#ff3300', radius: 24, exp: 5,
+  },
+  tiger_evil: {
+    name: '幽冥魔虎',
+    ai: { kind: 'flank', standoff: 175, lunge: { every: 2.5, windup: 0.35, dur: 0.48, mul: 3.8 }, animSpeed: 12, sepMul: 0.7 },
+    hp: 160, speed: 145, damage: 24, color: '#9d0208', radius: 22, exp: 5,
+  },
+  rabbit_evil: {
+    name: '血月狂兔',
+    ai: { kind: 'weave', weaveAmp: 55, weaveFreq: 4.2, hoverAmp: 0.4, hoverFreq: 3, animSpeed: 14, sepMul: 0.5 },
+    hp: 55, speed: 175, damage: 18, color: '#d00000', radius: 13, exp: 3,
+  },
+  dragon_evil: {
+    name: '深淵邪龍',
+    ai: { kind: 'kite', windup: 0.5, animSpeed: 6.5, sepMul: 1.2 },
+    hp: 450, speed: 70, damage: 32, color: '#7209b7', radius: 28, exp: 12,
+    damageTakenMul: 0.75,
+    ranged: { range: 420, cd: 2.5, speed: 280, damage: 22, radius: 9, color: '#7209b7', count: 3, spread: 0.28 },
+  },
+  snake_evil: {
+    name: '五毒巨蟒',
+    ai: { kind: 'kite', windup: 0.4, animSpeed: 7, sepMul: 0.8 },
+    hp: 140, speed: 85, damage: 16, color: '#38b000', radius: 18, exp: 4,
+    ranged: { range: 340, cd: 2.2, speed: 240, damage: 14, radius: 8, color: '#38b000', count: 5, spread: 0.35 },
+  },
+  horse_evil: {
+    name: '煉獄魔駒',
+    ai: { kind: 'lunge', lunge: { every: 3.2, windup: 0.5, dur: 0.85, mul: 4.0 }, animSpeed: 10, sepMul: 1.1 },
+    hp: 180, speed: 125, damage: 22, color: '#ff4800', radius: 22, exp: 5,
+    trail: { every: 0.8, radius: 45, dur: 4, color: '#ff4800' },
+  },
+  goat_evil: {
+    name: '巴弗煞羊',
+    ai: { kind: 'plod', kbResist: 0.4, animSpeed: 6, sepMul: 1.2 },
+    hp: 190, speed: 72, damage: 20, color: '#9c19e6', radius: 21, exp: 5,
+    mortar: { every: 4.0, range: 480, radius: 65, fuse: 1.1, dmg: 20, color: '#9c19e6' },
+  },
+  monkey_evil: {
+    name: '六耳魔猿',
+    ai: { kind: 'slam', slam: { every: 3.4, windup: 0.65, radius: 135, dmg: 26 }, kbResist: 0.55, animSpeed: 6.5, sepMul: 1.6 },
+    hp: 280, speed: 88, damage: 24, color: '#e01e37', radius: 25, exp: 7,
+  },
+  rooster_evil: {
+    name: '亡骨魔雞',
+    ai: { kind: 'kite', windup: 0.35, animSpeed: 8, sepMul: 0.7 },
+    hp: 85, speed: 110, damage: 18, color: '#6a040f', radius: 15, exp: 4,
+    ranged: { range: 360, cd: 2.0, speed: 380, damage: 18, radius: 7, color: '#6a040f' },
+  },
+  dog_evil: {
+    name: '地獄狂犬',
+    ai: { kind: 'lunge', lunge: { every: 2.2, windup: 0.25, dur: 0.5, mul: 3.6 }, animSpeed: 13, sepMul: 0.6 },
+    hp: 95, speed: 165, damage: 20, color: '#dc2f02', radius: 16, exp: 4,
+  },
+  pig_evil: {
+    name: '嗜血戰彘',
+    ai: { kind: 'plod', kbResist: 0.6, animSpeed: 5, sepMul: 1.6 },
+    hp: 310, speed: 65, damage: 28, color: '#b5179e', radius: 26, exp: 7,
+    explodes: true,
+    deathZone: { radius: 90, dur: 3.0, dmg: 25, color: '#b5179e' },
+  },
 };
 
 // 精英詞綴：普通怪低機率帶詞綴，體型/顏色/掉落與行為都升級

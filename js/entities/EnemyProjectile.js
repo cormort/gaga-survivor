@@ -46,6 +46,21 @@ function boltSprite(color, glow, radius, scale) {
   return spr;
 }
 
+// 8 款敵方高解析度重繪投射物貼圖
+export const ENEMY_BULLET_IMAGES = {};
+const ENEMY_BULLET_KEYS = [
+  'bullet_acid', 'bullet_plasma', 'bullet_foxfire', 'bullet_blood_eye',
+  'bullet_spore', 'bullet_skull', 'bullet_blood_spike', 'bullet_void'
+];
+
+if (typeof Image !== 'undefined') {
+  for (const k of ENEMY_BULLET_KEYS) {
+    const img = new Image();
+    img.src = `assets/bullets/${k}.png`;
+    ENEMY_BULLET_IMAGES[k] = img;
+  }
+}
+
 export class EnemyProjectile {
   constructor(options = {}) {
     this.x = options.x || 0;
@@ -59,12 +74,26 @@ export class EnemyProjectile {
     this.color = options.color || '#06d6a0';
     this.glow = options.glow || options.color || '#06d6a0';
     this.isDead = false;
+    this.animTimer = Math.random() * 10;
+    this.bulletType = options.bulletType || this.inferBulletType(options);
+  }
+
+  inferBulletType(options) {
+    const col = String(options.color || '').toLowerCase();
+    if (options.source && options.source.includes('spore')) return 'bullet_spore';
+    if (col.includes('4cc9f0') || col.includes('00f5ff') || col.includes('00b4d8')) return 'bullet_plasma';
+    if (col.includes('ff9a3c') || col.includes('ffd166') || col.includes('ffb703')) return 'bullet_foxfire';
+    if (col.includes('ff0055') || col.includes('ef233c') || col.includes('d90429')) return 'bullet_blood_eye';
+    if (col.includes('7209b7') || col.includes('b5179e') || col.includes('9d4edd') || col.includes('7a45d0')) return 'bullet_void';
+    if (col.includes('38b000') || col.includes('06d6a0') || col.includes('7dff8f')) return 'bullet_acid';
+    return 'bullet_acid';
   }
 
   update(dt) {
     if (this.isDead) return;
 
     this.life -= dt;
+    this.animTimer += dt;
     if (this.life <= 0) {
       this.isDead = true;
       return;
@@ -91,7 +120,38 @@ export class EnemyProjectile {
       return;
     }
 
-    // 主畫布目前只做了 setTransform(dpr,...) 的等比縮放，取 .a 即裝置倍率
+    const img = ENEMY_BULLET_IMAGES[this.bulletType];
+    if (img && img.naturalWidth > 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+
+      const angle = Math.atan2(this.vy, this.vx);
+      if (this.bulletType === 'bullet_plasma' || this.bulletType === 'bullet_blood_spike') {
+        // 指向性針刺/等離子狙擊彈：對齊速度方向
+        ctx.rotate(angle);
+      } else if (this.bulletType === 'bullet_skull') {
+        // 幽魂骷髏：朝向飛行方向
+        ctx.rotate(angle);
+        if (Math.cos(angle) < 0) {
+          ctx.scale(1, -1);
+        }
+      } else {
+        // 法球/旋渦/酸液球：持續自轉
+        ctx.rotate(this.animTimer * 4.5);
+      }
+
+      // 依碰撞半徑決定繪製大小
+      const drawSize = Math.max(20, this.radius * 3.2);
+      const aspect = img.naturalWidth / img.naturalHeight;
+      const dw = aspect >= 1 ? drawSize * aspect : drawSize;
+      const dh = aspect >= 1 ? drawSize : drawSize / aspect;
+
+      ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+      ctx.restore();
+      return;
+    }
+
+    // 備援：原程序化烘焙繪圖
     const spr = boltSprite(this.color, this.glow, this.radius, ctx.getTransform().a || 1);
     ctx.drawImage(spr.cv, screenX - spr.size / 2, screenY - spr.size / 2, spr.size, spr.size);
   }

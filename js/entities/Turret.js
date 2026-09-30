@@ -4,6 +4,21 @@ import { getSprite } from '../sprites.js';
 import { sound } from '../audio.js';
 import { GuardsmanUnit, LemanRussUnit } from './AlliedUnit.js';
 
+// 高解析度設施與防禦塔貼圖 (Banana 2D Game Assets)
+export const FACILITY_IMAGES = {};
+const FACILITY_IMAGE_KEYS = [
+  'turret', 'turret_flame', 'turret_cryo',
+  'electric_grid', 'purifier', 'barricade',
+  'heavy_bolter', 'barracks', 'manufactorum'
+];
+if (typeof Image !== 'undefined') {
+  for (const k of FACILITY_IMAGE_KEYS) {
+    const img = new Image();
+    img.src = `assets/facilities/${k}.png`;
+    FACILITY_IMAGES[k] = img;
+  }
+}
+
 export const FACILITY_TYPES = {
   turret: {
     id: 'turret',
@@ -485,37 +500,44 @@ export class Turret {
       ctx.arc(sx, sy, r, 0, Math.PI * 2);
       ctx.fill();
 
-      // 四根絕緣電極柱與高壓電弧
-      const pCount = 4;
-      const arcPoints = [];
-      for (let i = 0; i < pCount; i++) {
-        const ang = (i * Math.PI * 2) / pCount + this.animTimer * 0.3;
-        const px = sx + Math.cos(ang) * (r * 0.7);
-        const py = sy + Math.sin(ang) * (r * 0.7);
-        arcPoints.push({ x: px, y: py });
-        ctx.fillStyle = '#3a0ca3';
-        ctx.strokeStyle = '#b5179e';
-        ctx.lineWidth = 2;
+      // 高壓電網設施本體
+      const egImg = FACILITY_IMAGES.electric_grid;
+      if (egImg && egImg.naturalWidth > 0) {
+        const iw = 44, ih = 68;
+        ctx.drawImage(egImg, sx - iw / 2, sy - ih * 0.72, iw, ih);
+      } else {
+        // 四根絕緣電極柱與高壓電弧
+        const pCount = 4;
+        const arcPoints = [];
+        for (let i = 0; i < pCount; i++) {
+          const ang = (i * Math.PI * 2) / pCount + this.animTimer * 0.3;
+          const px = sx + Math.cos(ang) * (r * 0.7);
+          const py = sy + Math.sin(ang) * (r * 0.7);
+          arcPoints.push({ x: px, y: py });
+          ctx.fillStyle = '#3a0ca3';
+          ctx.strokeStyle = '#b5179e';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(px, py, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // 電弧閃爍
+        ctx.strokeStyle = '#00f5ff';
+        ctx.lineWidth = 1.8;
         ctx.beginPath();
-        ctx.arc(px, py, 6, 0, Math.PI * 2);
-        ctx.fill();
+        for (let i = 0; i < arcPoints.length; i++) {
+          const p1 = arcPoints[i];
+          const p2 = arcPoints[(i + 1) % arcPoints.length];
+          ctx.moveTo(p1.x, p1.y);
+          const midX = (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 12;
+          const midY = (p1.y + p2.y) / 2 + (Math.random() - 0.5) * 12;
+          ctx.lineTo(midX, midY);
+          ctx.lineTo(p2.x, p2.y);
+        }
         ctx.stroke();
       }
-
-      // 電弧閃爍
-      ctx.strokeStyle = '#00f5ff';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      for (let i = 0; i < arcPoints.length; i++) {
-        const p1 = arcPoints[i];
-        const p2 = arcPoints[(i + 1) % arcPoints.length];
-        ctx.moveTo(p1.x, p1.y);
-        const midX = (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 12;
-        const midY = (p1.y + p2.y) / 2 + (Math.random() - 0.5) * 12;
-        ctx.lineTo(midX, midY);
-        ctx.lineTo(p2.x, p2.y);
-      }
-      ctx.stroke();
       ctx.restore();
       this.drawHpBar(ctx, sx, sy);
       return;
@@ -541,23 +563,30 @@ export class Turret {
         ctx.stroke();
       }
 
-      // 底座與發光球體
-      ctx.fillStyle = '#14281d';
-      ctx.strokeStyle = '#00f59b';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 18, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      // 高解析度淨化燈塔本體
+      const purImg = FACILITY_IMAGES.purifier;
+      if (purImg && purImg.naturalWidth > 0) {
+        const iw = 50, ih = 58;
+        ctx.drawImage(purImg, sx - iw / 2, sy - ih * 0.68, iw, ih);
+      } else {
+        // 底座與發光球體
+        ctx.fillStyle = '#14281d';
+        ctx.strokeStyle = '#00f59b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
 
-      // 綠色生化核心
-      const pulse = 1 + Math.sin(this.animTimer * 5) * 0.15;
-      ctx.fillStyle = '#00f59b';
-      ctx.shadowColor = '#00f59b';
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 8 * pulse, 0, Math.PI * 2);
-      ctx.fill();
+        // 綠色生化核心
+        const pulse = 1 + Math.sin(this.animTimer * 5) * 0.15;
+        ctx.fillStyle = '#00f59b';
+        ctx.shadowColor = '#00f59b';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 8 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
       this.drawHpBar(ctx, sx, sy);
       return;
@@ -566,28 +595,34 @@ export class Turret {
     // ── 繪製反傷拒馬 ──
     if (this.facilityType === 'barricade') {
       ctx.save();
-      // 金屬 X 型拒馬
-      ctx.strokeStyle = '#ffb703';
-      ctx.lineWidth = 5;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(sx - 16, sy - 14);
-      ctx.lineTo(sx + 16, sy + 14);
-      ctx.moveTo(sx + 16, sy - 14);
-      ctx.lineTo(sx - 16, sy + 14);
-      ctx.stroke();
+      const barImg = FACILITY_IMAGES.barricade;
+      if (barImg && barImg.naturalWidth > 0) {
+        const iw = 58, ih = 52;
+        ctx.drawImage(barImg, sx - iw / 2, sy - ih * 0.62, iw, ih);
+      } else {
+        // 金屬 X 型拒馬
+        ctx.strokeStyle = '#ffb703';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sx - 16, sy - 14);
+        ctx.lineTo(sx + 16, sy + 14);
+        ctx.moveTo(sx + 16, sy - 14);
+        ctx.lineTo(sx - 16, sy + 14);
+        ctx.stroke();
 
-      // 橫向鐵棘刺
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(sx - 20, sy);
-      ctx.lineTo(sx + 20, sy);
-      for (let ox = -15; ox <= 15; ox += 10) {
-        ctx.moveTo(sx + ox, sy - 5);
-        ctx.lineTo(sx + ox, sy + 5);
+        // 橫向鐵棘刺
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx - 20, sy);
+        ctx.lineTo(sx + 20, sy);
+        for (let ox = -15; ox <= 15; ox += 10) {
+          ctx.moveTo(sx + ox, sy - 5);
+          ctx.lineTo(sx + ox, sy + 5);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
       ctx.restore();
       this.drawHpBar(ctx, sx, sy);
       return;
@@ -606,74 +641,77 @@ export class Turret {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // 六角形鋼筋混凝土工事底座
-      ctx.fillStyle = '#243342';
-      ctx.strokeStyle = '#34495e';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const ang = (i * Math.PI) / 3;
-        const px = sx + Math.cos(ang) * 22;
-        const py = sy + Math.sin(ang) * 22;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+      const hbImg = FACILITY_IMAGES.heavy_bolter;
+      if (hbImg && hbImg.naturalWidth > 0) {
+        const iw = 64, ih = 56;
+        ctx.drawImage(hbImg, sx - iw / 2, sy - ih * 0.65, iw, ih);
+      } else {
+        // 六角形鋼筋混凝土工事底座
+        ctx.fillStyle = '#243342';
+        ctx.strokeStyle = '#34495e';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const ang = (i * Math.PI) / 3;
+          const px = sx + Math.cos(ang) * 22;
+          const py = sy + Math.sin(ang) * 22;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // 前沿環形沙包防壁
+        ctx.fillStyle = '#7f8c8d';
+        ctx.beginPath();
+        ctx.arc(sx, sy + 10, 16, Math.PI * 0.1, Math.PI * 0.9);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#95a5a6';
+        ctx.stroke();
+
+        // 旋轉雙聯爆彈砲身
+        ctx.translate(sx, sy);
+        ctx.rotate(this.angle);
+
+        // 雙聯砲管
+        ctx.fillStyle = '#1e272e';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.2;
+        ctx.fillRect(4, -7, 24, 5);
+        ctx.strokeRect(4, -7, 24, 5);
+        ctx.fillRect(4, 2, 24, 5);
+        ctx.strokeRect(4, 2, 24, 5);
+
+        // 砲口制退擴焰筒
+        ctx.fillStyle = '#f39c12';
+        ctx.fillRect(26, -8, 4, 7);
+        ctx.fillRect(26, 1, 4, 7);
+
+        // 雙側大容量彈鼓
+        ctx.fillStyle = '#d35400';
+        ctx.beginPath();
+        ctx.arc(-2, -9, 6, 0, Math.PI * 2);
+        ctx.arc(-2, 9, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 槍盾 (金屬盾牌 + 帝國天鷹羽翼金飾)
+        ctx.fillStyle = '#2c3e50';
+        ctx.strokeStyle = '#f1c40f';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.roundRect(-8, -12, 12, 24, 3);
+        ctx.fill();
+        ctx.stroke();
       }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // 前沿環形沙包防壁
-      ctx.fillStyle = '#7f8c8d';
-      ctx.beginPath();
-      ctx.arc(sx, sy + 10, 16, Math.PI * 0.1, Math.PI * 0.9);
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#95a5a6';
-      ctx.stroke();
-
-      // 旋轉雙聯爆彈砲身
-      ctx.translate(sx, sy);
-      ctx.rotate(this.angle);
-
-      // 雙聯砲管
-      ctx.fillStyle = '#1e272e';
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 1.2;
-      // 上槍管
-      ctx.fillRect(4, -7, 24, 5);
-      ctx.strokeRect(4, -7, 24, 5);
-      // 下槍管
-      ctx.fillRect(4, 2, 24, 5);
-      ctx.strokeRect(4, 2, 24, 5);
-
-      // 砲口制退擴焰筒
-      ctx.fillStyle = '#f39c12';
-      ctx.fillRect(26, -8, 4, 7);
-      ctx.fillRect(26, 1, 4, 7);
-
-      // 雙側大容量彈鼓
-      ctx.fillStyle = '#d35400';
-      ctx.beginPath();
-      ctx.arc(-2, -9, 6, 0, Math.PI * 2);
-      ctx.arc(-2, 9, 6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 槍盾 (金屬盾牌 + 帝國天鷹羽翼金飾)
-      ctx.fillStyle = '#2c3e50';
-      ctx.strokeStyle = '#f1c40f';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.roundRect(-8, -12, 12, 24, 3);
-      ctx.fill();
-      ctx.stroke();
 
       // 開火槍口爆焰
       if (this.muzzleTimer > 0) {
-        const my = this.barrelSide ? 4 : -5;
         ctx.fillStyle = '#ffbe0b';
         ctx.shadowColor = '#ff5400';
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 12;
         ctx.beginPath();
-        ctx.arc(33, my, 8, 0, Math.PI * 2);
+        ctx.arc(sx + Math.cos(this.angle) * 32, sy + Math.sin(this.angle) * 32, 10, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -684,50 +722,63 @@ export class Turret {
     // ── 繪製星界軍兵營 (Astra Militarum Barracks) ──
     if (this.facilityType === 'barracks') {
       ctx.save();
-      // 地基加固鋼板
-      ctx.fillStyle = '#14231a';
-      ctx.strokeStyle = '#27ae60';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(sx - 26, sy - 20, 52, 40, 6);
-      ctx.fill();
-      ctx.stroke();
+      const bkImg = FACILITY_IMAGES.barracks;
+      if (bkImg && bkImg.naturalWidth > 0) {
+        const iw = 66, ih = 66;
+        ctx.drawImage(bkImg, sx - iw / 2, sy - ih * 0.65, iw, ih);
+        // 通訊雷達天線綠燈閃爍
+        const blink = Math.sin(this.animTimer * 5) > 0;
+        ctx.fillStyle = blink ? '#2ecc71' : '#145a32';
+        ctx.shadowColor = '#2ecc71';
+        ctx.shadowBlur = blink ? 8 : 0;
+        ctx.beginPath();
+        ctx.arc(sx + 10, sy - 32, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // 地基加固鋼板
+        ctx.fillStyle = '#14231a';
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(sx - 26, sy - 20, 52, 40, 6);
+        ctx.fill();
+        ctx.stroke();
 
-      // 迷彩重裝營舍本體
-      ctx.fillStyle = '#1b382b';
-      ctx.beginPath();
-      ctx.roundRect(sx - 22, sy - 17, 44, 34, 4);
-      ctx.fill();
+        // 迷彩重裝營舍本體
+        ctx.fillStyle = '#1b382b';
+        ctx.beginPath();
+        ctx.roundRect(sx - 22, sy - 17, 44, 34, 4);
+        ctx.fill();
 
-      // 防暴升降閘門
-      ctx.fillStyle = '#0a140f';
-      ctx.fillRect(sx - 10, sy + 3, 20, 14);
-      ctx.strokeStyle = '#f39c12';
-      ctx.lineWidth = 1.2;
-      ctx.strokeRect(sx - 10, sy + 3, 20, 14);
+        // 防暴升降閘門
+        ctx.fillStyle = '#0a140f';
+        ctx.fillRect(sx - 10, sy + 3, 20, 14);
+        ctx.strokeStyle = '#f39c12';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(sx - 10, sy + 3, 20, 14);
 
-      // 帝國骷髏徽記 (簡約金色天鷹標誌)
-      ctx.fillStyle = '#f1c40f';
-      ctx.beginPath();
-      ctx.arc(sx, sy - 6, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillRect(sx - 7, sy - 8, 14, 2);
+        // 帝國骷髏徽記
+        ctx.fillStyle = '#f1c40f';
+        ctx.beginPath();
+        ctx.arc(sx, sy - 6, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(sx - 7, sy - 8, 14, 2);
 
-      // 通訊雷達天線 (附帶閃爍綠燈)
-      ctx.strokeStyle = '#bdc3c7';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(sx + 14, sy - 17);
-      ctx.lineTo(sx + 14, sy - 28);
-      ctx.stroke();
-      const blink = Math.sin(this.animTimer * 5) > 0;
-      ctx.fillStyle = blink ? '#2ecc71' : '#145a32';
-      ctx.shadowColor = '#2ecc71';
-      ctx.shadowBlur = blink ? 6 : 0;
-      ctx.beginPath();
-      ctx.arc(sx + 14, sy - 29, 3, 0, Math.PI * 2);
-      ctx.fill();
-
+        // 通訊雷達天線
+        ctx.strokeStyle = '#bdc3c7';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx + 14, sy - 17);
+        ctx.lineTo(sx + 14, sy - 28);
+        ctx.stroke();
+        const blink = Math.sin(this.animTimer * 5) > 0;
+        ctx.fillStyle = blink ? '#2ecc71' : '#145a32';
+        ctx.shadowColor = '#2ecc71';
+        ctx.shadowBlur = blink ? 6 : 0;
+        ctx.beginPath();
+        ctx.arc(sx + 14, sy - 29, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
       this.drawHpBar(ctx, sx, sy);
       return;
@@ -736,71 +787,78 @@ export class Turret {
     // ── 繪製機械製造廠 (Adeptus Mechanicus Manufactorum) ──
     if (this.facilityType === 'manufactorum') {
       ctx.save();
-      // 工廠厚重基座
-      ctx.fillStyle = '#2c140a';
-      ctx.strokeStyle = '#d35400';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.roundRect(sx - 30, sy - 24, 60, 48, 6);
-      ctx.fill();
-      ctx.stroke();
-
-      // 鍛造爐高溫外殼
-      ctx.fillStyle = '#442314';
-      ctx.beginPath();
-      ctx.roundRect(sx - 26, sy - 20, 52, 40, 4);
-      ctx.fill();
-
-      // 雙聯排煙巨管 (不斷冒出高溫蒸汽與黑煙)
-      ctx.fillStyle = '#1e272e';
-      ctx.fillRect(sx - 20, sy - 34, 9, 14);
-      ctx.fillRect(sx + 11, sy - 34, 9, 14);
-      // 排煙粒子
-      const pOff = (this.animTimer * 20) % 15;
-      ctx.fillStyle = 'rgba(180, 180, 180, 0.4)';
-      ctx.beginPath();
-      ctx.arc(sx - 15.5, sy - 36 - pOff, 4 + pOff * 0.4, 0, Math.PI * 2);
-      ctx.arc(sx + 15.5, sy - 36 - pOff, 4 + pOff * 0.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 坦克出廠液壓防護閘門 (黑黃斜紋警示線)
-      ctx.fillStyle = '#111827';
-      ctx.fillRect(sx - 16, sy + 2, 32, 18);
-      // 警示紋理
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(sx - 16, sy + 2, 32, 18);
-      ctx.clip();
-      ctx.strokeStyle = '#f1c40f';
-      ctx.lineWidth = 3;
-      for (let ox = -20; ox <= 40; ox += 8) {
+      const mfImg = FACILITY_IMAGES.manufactorum;
+      if (mfImg && mfImg.naturalWidth > 0) {
+        const iw = 72, ih = 72;
+        ctx.drawImage(mfImg, sx - iw / 2, sy - ih * 0.65, iw, ih);
+        // 排煙粒子
+        const pOff = (this.animTimer * 20) % 15;
+        ctx.fillStyle = 'rgba(180, 180, 180, 0.4)';
         ctx.beginPath();
-        ctx.moveTo(sx - 16 + ox, sy + 20);
-        ctx.lineTo(sx - 16 + ox + 10, sy + 2);
+        ctx.arc(sx - 18, sy - 36 - pOff, 4 + pOff * 0.4, 0, Math.PI * 2);
+        ctx.arc(sx + 18, sy - 36 - pOff, 4 + pOff * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // 工廠厚重基座
+        ctx.fillStyle = '#2c140a';
+        ctx.strokeStyle = '#d35400';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect(sx - 30, sy - 24, 60, 48, 6);
+        ctx.fill();
         ctx.stroke();
+
+        // 鍛造爐高溫外殼
+        ctx.fillStyle = '#442314';
+        ctx.beginPath();
+        ctx.roundRect(sx - 26, sy - 20, 52, 40, 4);
+        ctx.fill();
+
+        // 雙聯排煙巨管
+        ctx.fillStyle = '#1e272e';
+        ctx.fillRect(sx - 20, sy - 34, 9, 14);
+        ctx.fillRect(sx + 11, sy - 34, 9, 14);
+        const pOff = (this.animTimer * 20) % 15;
+        ctx.fillStyle = 'rgba(180, 180, 180, 0.4)';
+        ctx.beginPath();
+        ctx.arc(sx - 15.5, sy - 36 - pOff, 4 + pOff * 0.4, 0, Math.PI * 2);
+        ctx.arc(sx + 15.5, sy - 36 - pOff, 4 + pOff * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 坦克出廠液壓防護閘門
+        ctx.fillStyle = '#111827';
+        ctx.fillRect(sx - 16, sy + 2, 32, 18);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(sx - 16, sy + 2, 32, 18);
+        ctx.clip();
+        ctx.strokeStyle = '#f1c40f';
+        ctx.lineWidth = 3;
+        for (let ox = -20; ox <= 40; ox += 8) {
+          ctx.beginPath();
+          ctx.moveTo(sx - 16 + ox, sy + 20);
+          ctx.lineTo(sx - 16 + ox + 10, sy + 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // 機械神教齒輪徽記
+        const pulse = 0.8 + 0.2 * Math.sin(this.animTimer * 3);
+        ctx.fillStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.arc(sx, sy - 8, 7 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sx, sy - 8, 3.5, 0, Math.PI * 2);
+        ctx.fill();
       }
-      ctx.restore();
-
-      // 機械神教齒輪徽記 (Cog & Skull)
-      const pulse = 0.8 + 0.2 * Math.sin(this.animTimer * 3);
-      ctx.fillStyle = '#e67e22';
-      ctx.beginPath();
-      ctx.arc(sx, sy - 8, 7 * pulse, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(sx, sy - 8, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-
       ctx.restore();
       this.drawHpBar(ctx, sx, sy);
       return;
     }
 
     // ── 繪製機槍砲台 ──
-    // 射程圈：原本是 6% alpha 的細實線，疊在深色地板上幾乎不可見 ——
-    // 而「這座塔到底守到哪裡」正是守塔模式最需要的資訊。改成虛線 + 可讀的
-    // alpha，並在塔本身被打時轉為警示色（受擊代表敵人已經進到這裡了）。
     const hurt = this.hp < this.maxHp * 0.6;
     const pulseA = 0.26 + 0.1 * Math.sin(this.animTimer * 2.2);
     ctx.strokeStyle = hurt ? `rgba(255,59,92,${(pulseA + 0.16).toFixed(3)})` : hexA(this.conf.color, pulseA);
@@ -845,9 +903,16 @@ export class Turret {
       }
     }
 
-    // 底座
-    const sp = getSprite('turret');
-    ctx.drawImage(sp.frames[0], sx - sp.w / 2, sy - sp.h / 2, sp.w, sp.h);
+    // 高解析度砲台貼圖
+    const imgKey = this.variant === 'flame' ? 'turret_flame' : this.variant === 'cryo' ? 'turret_cryo' : 'turret';
+    const tImg = FACILITY_IMAGES[imgKey];
+    if (tImg && tImg.naturalWidth > 0) {
+      const iw = 54, ih = 54;
+      ctx.drawImage(tImg, sx - iw / 2, sy - ih * 0.65, iw, ih);
+    } else {
+      const sp = getSprite('turret');
+      ctx.drawImage(sp.frames[0], sx - sp.w / 2, sy - sp.h / 2, sp.w, sp.h);
+    }
 
     // 砲管
     ctx.save();

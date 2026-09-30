@@ -22,6 +22,21 @@ function hexToRgba(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+// 可引爆物件貼圖
+export const HAZARD_PROP_IMAGES = {};
+if (typeof Image !== 'undefined') {
+  const sources = {
+    tank: 'assets/decor/barrel_red.png',
+    hazard: 'assets/decor/barrel_bio.png',
+    vehicle: 'assets/decor/car.png',
+  };
+  for (const [key, src] of Object.entries(sources)) {
+    const img = new Image();
+    img.src = src;
+    HAZARD_PROP_IMAGES[key] = img;
+  }
+}
+
 // 會改變移動速度的地形 (玩家與敵人生效) → 預設倍率
 const SPEED_ZONES = {
   tar: 0.55,
@@ -152,53 +167,68 @@ export function drawExplodableProps(game, camera) {
 
     if (p.type === 'tank') {
       // 紅色高爆汽油桶
-      ctx.fillStyle = '#d90429';
-      ctx.strokeStyle = '#2b2d42';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.roundRect(-16, -22, 32, 44, 5);
-      ctx.fill();
-      ctx.stroke();
+      const img = HAZARD_PROP_IMAGES.tank;
+      if (img && img.naturalWidth > 0) {
+        ctx.drawImage(img, -18, -26, 36, 52);
+      } else {
+        ctx.fillStyle = '#d90429';
+        ctx.strokeStyle = '#2b2d42';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect(-16, -22, 32, 44, 5);
+        ctx.fill();
+        ctx.stroke();
 
-      ctx.fillStyle = '#ffd166';
-      ctx.fillRect(-14, -8, 28, 6);
-      ctx.fillRect(-14, 6, 28, 6);
+        ctx.fillStyle = '#ffd166';
+        ctx.fillRect(-14, -8, 28, 6);
+        ctx.fillRect(-14, 6, 28, 6);
 
-      ctx.font = '14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('🛢️', 0, 0);
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🛢️', 0, 0);
+      }
     } else if (p.type === 'hazard') {
       // 毒素生化廢料桶
-      ctx.fillStyle = '#06d6a0';
-      ctx.strokeStyle = '#073b4c';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.roundRect(-18, -20, 36, 40, 6);
-      ctx.fill();
-      ctx.stroke();
+      const img = HAZARD_PROP_IMAGES.hazard;
+      if (img && img.naturalWidth > 0) {
+        ctx.drawImage(img, -20, -26, 40, 52);
+      } else {
+        ctx.fillStyle = '#06d6a0';
+        ctx.strokeStyle = '#073b4c';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect(-18, -20, 36, 40, 6);
+        ctx.fill();
+        ctx.stroke();
 
-      ctx.font = '14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('☣️', 0, 0);
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('☣️', 0, 0);
+      }
     } else {
       // 廢棄裝甲車
-      ctx.fillStyle = '#3a5a40';
-      ctx.strokeStyle = '#1b263b';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.roundRect(-28, -18, 56, 36, 8);
-      ctx.fill();
-      ctx.stroke();
+      const img = HAZARD_PROP_IMAGES.vehicle;
+      if (img && img.naturalWidth > 0) {
+        ctx.drawImage(img, -36, -26, 72, 52);
+      } else {
+        ctx.fillStyle = '#3a5a40';
+        ctx.strokeStyle = '#1b263b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(-28, -18, 56, 36, 8);
+        ctx.fill();
+        ctx.stroke();
 
-      ctx.fillStyle = '#1b263b';
-      ctx.fillRect(-20, -10, 40, 20);
+        ctx.fillStyle = '#1b263b';
+        ctx.fillRect(-20, -10, 40, 20);
 
-      ctx.font = '14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('🚨', 0, 0);
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🚨', 0, 0);
+      }
     }
 
     // 血條
