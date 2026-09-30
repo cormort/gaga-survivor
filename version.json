@@ -1,5 +1,5 @@
 {
-  "version": "56",
+  "version": "57",
   "releasedAt": "2026-10-01",
-  "note": "手機安裝修復：iOS 與 App 內建瀏覽器現在會給出可照著做的安裝步驟（以前完全看不到安裝入口），首頁新增常駐『📲 安裝成 App』按鈕；同時修掉地表貼圖載入時每張 PNG 各噴一次的 _groundTextures.delete 未捕捉例外"
+  "note": "修正 Android 無法安裝：v55 重繪的 PWA 圖示帶了透明色（四角 alpha=0、maskable 圖示 52% 羽化），而 App 圖示依規範必須完全不透明 —— 已全部壓平成不透明的調色盤 PNG（與 v54 同格式）"
 }

@@ -30,6 +30,13 @@ python3 -m http.server 8791
 - **更新**：偵測到新版 Service Worker 時，HUD 下方出現「有新版本可用／重新載入」，點下去送 `SKIP_WAITING` 並在 `controllerchange` 後重載；舊版快取在 activate 時清除。
 - **限制**：Service Worker 只在 HTTPS 或 `localhost` 生效；用區網 IP 以 HTTP 開啟時註冊會靜默失敗（遊戲照常運行，只是沒有離線與安裝）。
 - 檔案：`manifest.webmanifest`、`sw.js`、`js/pwa.js`、`icons/`（SVG 原稿 + 192/512/maskable-512/apple-touch-180）。
+
+> **圖示必須完全不透明**。`tools/flatten-icons.py` 會把重繪後的圖示壓平成不透明的調色盤 PNG
+> （合成到 manifest 的 `background_color`），`python3 tools/flatten-icons.py --check` 可單獨檢查。
+> `verify-pwa.mjs` 也會把關：圖示不得有 alpha 通道或 `tRNS`。
+> 理由：maskable 圖示依規範**必須 opaque**（MDN：give your maskable icon an opaque background
+> color to fill the entire icon area），而透明的 `purpose: any` 圖示在 Android 會被塞進白色圓圈。
+> 用 AI 工具重繪圖示時很容易產出「透明圓角 + 羽化邊」，改完務必跑一次 `--check`。
 - 回歸測試：`node tools/verify-pwa.mjs`（61 項，含「Chrome 可安裝性」CDP 判定、各手機環境的安裝指引矩陣、關掉伺服器後的離線啟動）、`node tools/verify-pwa-update.mjs`（v1→v2 更新流程）、`node tools/bannerbox.mjs`（三種螢幕尺寸的橫幅版面）。
 
 > **可安裝性要怎麼驗才準**：光看 manifest/圖示/SW 的靜態檢查驗不出「Chrome 願不願意給安裝」。

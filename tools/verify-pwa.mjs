@@ -97,11 +97,25 @@ ok('activate 會主動廣播 SW_UPDATED 給所有分頁',
 
 ok('預快取清單沒有列出不存在的檔案', ghost.length === 0, ghost.join(', ') || `${precache.length} 筆都存在`);
 
-/* ── 1) 圖示 PNG：檔頭尺寸 ── */
+/* ── 1) 圖示 PNG：檔頭尺寸 + 必須完全不透明 ── */
 function pngSize(buf) {
   if (buf.slice(0, 8).toString('hex') !== '89504e470d0a1a0a') return null;
   if (buf.slice(12, 16).toString('ascii') !== 'IHDR') return null;
   return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+}
+// IHDR colour type：0/2/3(無 tRNS) 不透明；4/6 有 alpha 通道；3 + tRNS 有透明色
+function pngInfo(buf) {
+  const size = pngSize(buf);
+  if (!size) return null;
+  const colorType = buf.readUInt8(25);
+  const chunks = [];
+  let i = 8;
+  while (i < buf.length - 8) {
+    const len = buf.readUInt32BE(i);
+    chunks.push(buf.slice(i + 4, i + 8).toString('ascii'));
+    i += 12 + len;
+  }
+  return { ...size, colorType, chunks, hasTrns: chunks.includes('tRNS') };
 }
 const ICONS = [
   ['icons/icon-192.png', 192], ['icons/icon-512.png', 512],
@@ -111,9 +125,15 @@ let iconBytes = 0;
 for (const [rel, size] of ICONS) {
   const buf = await readFile(path.join(ROOT, rel));
   iconBytes += buf.length;
-  const dim = pngSize(buf);
-  ok(`${rel} 是 ${size}x${size} PNG`, !!dim && dim.w === size && dim.h === size,
-    dim ? `${dim.w}x${dim.h}, ${buf.length} bytes` : '不是合法 PNG');
+  const info = pngInfo(buf);
+  ok(`${rel} 是 ${size}x${size} PNG`, !!info && info.w === size && info.h === size,
+    info ? `${info.w}x${info.h}, ${buf.length} bytes` : '不是合法 PNG');
+  // App 圖示必須完全不透明：maskable 依規範要是 opaque，透明的 purpose:any 圖示在
+  // Android 會被塞進白色圓圈。v55 的重繪圖示帶了 tRNS（四角 alpha=0、39~53% 羽化），
+  // 這是「之前可以安裝、改版後不行」的嫌疑點 —— 讓它在這裡就紅，不要靠肉眼。
+  ok(`${rel} 完全不透明（無 alpha 通道、無 tRNS）`,
+    !!info && info.colorType !== 4 && info.colorType !== 6 && !info.hasTrns,
+    info ? `colorType=${info.colorType} tRNS=${info.hasTrns}` : '無法解析');
 }
 const svgBytes = (await readFile(path.join(ROOT, 'icons/icon.svg'))).length
   + (await readFile(path.join(ROOT, 'icons/icon-maskable.svg'))).length;
