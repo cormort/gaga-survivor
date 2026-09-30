@@ -22,13 +22,22 @@ python3 -m http.server 8791
 
 線上版可直接「安裝」到桌面／主畫面，之後**離線也能玩**（第一次載入後全部資源進快取）。
 
-- **Android / Chrome**：網址列右側的安裝圖示，或選單「安裝應用程式」；遊戲內偵測到可安裝時，HUD 下方會出現一次性的「安裝成 App」橫幅（可關閉）。
-- **iOS / Safari**：分享選單 → 「加入主畫面」。iOS 不會觸發安裝提示，所以那裡顯示的是一次性的操作提示，不是按鈕。
-- **離線**：`js/pwa.js` 註冊 `sw.js`，安裝時預cache 51 項（`./`、`index.html`、`css/style.css`、`manifest.webmanifest`、6 個圖示、**全部 40 個 JS 模組**等）。抓取策略是**快取優先 + 背景重新驗證**（同源 GET 才攔截，跨網域完全不碰），失敗時導覽回快取外殼、其他資源回 503。
+- **Android / Chrome**：網址列右側的安裝圖示，或選單「安裝應用程式」；遊戲內偵測到可安裝時，HUD 下方會出現「安裝成 App」橫幅並帶一顆「安裝」按鈕（真的攔到 `beforeinstallprompt` 才給按鈕）。
+- **iOS / Safari**：分享選單 → 「加入主畫面」。iOS 不會觸發安裝提示，所以橫幅給的是操作步驟、不給按鈕（按了沒反應比不給更糟）。
+- **iOS 上的非 Safari 瀏覽器（Chrome/Edge/Firefox）與 App 內建瀏覽器（LINE / Messenger / IG…）**：這些環境**完全無法**加入主畫面（iOS 只有 Safari 做得到；App 內建瀏覽器沒有任何安裝途徑）。橫幅會直接講明要改用 Safari／用瀏覽器開啟，而不是安靜地什麼都不給。
+- **常駐入口**：「🏠 養成基地」裡的「📲 安裝成 App」隨時可以再叫出安裝說明（已安裝成 App 時自動隱藏）。自動橫幅每個工作階段最多跳一次，關掉也不會從此找不到入口。
+- **離線**：`js/pwa.js` 註冊 `sw.js`，安裝時預cache 253 項（`./`、`index.html`、`css/style.css`、`manifest.webmanifest`、`version.json`、6 個圖示、**全部 47 個 JS 模組**、196 個美術素材，約 40 MB）。抓取策略是**快取優先 + 背景重新驗證**（同源 GET 才攔截，跨網域完全不碰），失敗時導覽回快取外殼、其他資源回 503。
 - **更新**：偵測到新版 Service Worker 時，HUD 下方出現「有新版本可用／重新載入」，點下去送 `SKIP_WAITING` 並在 `controllerchange` 後重載；舊版快取在 activate 時清除。
 - **限制**：Service Worker 只在 HTTPS 或 `localhost` 生效；用區網 IP 以 HTTP 開啟時註冊會靜默失敗（遊戲照常運行，只是沒有離線與安裝）。
-- 檔案：`manifest.webmanifest`、`sw.js`、`js/pwa.js`、`icons/`（SVG 原稿 + 192/512/maskable-512/apple-touch-180，共 144KB）。
-- 回歸測試：`node tools/verify-pwa.mjs`（38 項，含關掉伺服器後的離線啟動）、`node tools/verify-pwa-update.mjs`（v1→v2 更新流程）、`node tools/bannerbox.mjs`（三種螢幕尺寸的橫幅版面）。
+- 檔案：`manifest.webmanifest`、`sw.js`、`js/pwa.js`、`icons/`（SVG 原稿 + 192/512/maskable-512/apple-touch-180）。
+- 回歸測試：`node tools/verify-pwa.mjs`（61 項，含「Chrome 可安裝性」CDP 判定、各手機環境的安裝指引矩陣、關掉伺服器後的離線啟動）、`node tools/verify-pwa-update.mjs`（v1→v2 更新流程）、`node tools/bannerbox.mjs`（三種螢幕尺寸的橫幅版面）。
+
+> **可安裝性要怎麼驗才準**：光看 manifest/圖示/SW 的靜態檢查驗不出「Chrome 願不願意給安裝」。
+> `Playwright` 的 `browser.newContext()` 是無痕情境，`Page.getInstallabilityErrors` 只會回
+> `in-incognito`，真正的問題會被同一個錯誤蓋掉；而且**不指定 `executablePath` 時回傳的永遠是空陣列**
+> （連沒有 manifest 的頁面都不會被判失敗）。`verify-pwa.mjs` 因此改用持久化 profile（非無痕）
+> ＋明確指定執行檔，並先跑一次「無 manifest 頁面必須被判 `no-manifest`」的控制組自我檢查。
+
 
 > 若日後新增 `js/**` 模組，記得同步加進 `sw.js` 的 precache 清單，否則首次離線載入會少一支。
 > 檢查指令：`comm -23 <(find js -name '*.js' | sed 's|^|./|' | sort) <(grep -o "'\./js/[^']*'" sw.js | tr -d "'" | sort -u)`

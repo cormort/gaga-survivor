@@ -43,6 +43,20 @@ export class LevelCache {
     return value;
   }
 
+  // 主動作廢某一關的磚（例如高解析度 PNG 地表載入完成後，要丟掉先前程序化烘出來的磚，
+  // 下一幀才會改用 PNG）。淘汰回呼要照樣通知，否則貼圖資源不會被釋放。
+  // 這裡漏掉的話呼叫端會拋 TypeError，而且是在 img.onload 裡 —— 例外會直接變成
+  // 未捕捉錯誤，載入時每一張地表 PNG 各噴一次。
+  delete(id) {
+    if (!this.map.has(id)) return false;
+    const value = this.map.get(id);
+    this.map.delete(id);
+    if (this.onEvict) {
+      try { this.onEvict(id, value); } catch (e) { /* 同 _trim */ }
+    }
+    return true;
+  }
+
   // 只回傳已存在或由 factory 產生的值，呼叫端不必自己寫 has/get/set 三段
   ensure(id, factory) {
     const hit = this.get(id);

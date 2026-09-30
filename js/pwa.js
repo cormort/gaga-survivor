@@ -12,7 +12,7 @@
 // 不用 alert()/confirm()；橫幅固定在頂部 HUD 下方、不覆蓋左下搖桿與右下動作列。
 
 const BANNER_ID = 'pwa-banner';
-const IOS_HINT_KEY = 'gaga.pwa.iosHintDismissed';
+const INSTALL_BTN_ID = 'btn-install-app';
 
 let banner = null;            // 橫幅 DOM 參照 (延後建立，避免影響首次繪製)
 let currentAction = null;     // 目前橫幅主按鈕的處理函式
@@ -40,20 +40,40 @@ function isIOS() {
   return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
 }
 
-function readFlag(key) {
-  try {
-    return window.localStorage.getItem(key) === '1';
-  } catch (err) {
-    return false; // 無痕模式等情況 localStorage 會直接丟例外
-  }
+// iOS/iPadOS 上**只有 Safari** 能加入主畫面 —— Chrome / Edge / Firefox 在 iOS 都是
+// 包 WebKit 的自製殼，分享選單裡沒有「加入主畫面」，所以那些環境等於無法安裝。
+function isIOSSafari() {
+  if (!isIOS()) return false;
+  const ua = navigator.userAgent || '';
+  if (!/Safari/.test(ua)) return false;
+  return !/(CriOS|FxiOS|EdgiOS|OPiOS|YaBrowser|DuckDuckGo|Brave|Arc)/i.test(ua);
 }
 
-function writeFlag(key) {
-  try {
-    window.localStorage.setItem(key, '1');
-  } catch (err) {
-    /* 寫不進去就算了，下次再提示一次而已 */
-  }
+// App 內建瀏覽器（LINE / Messenger / Instagram / WeChat / TikTok / Android WebView …）。
+// 這些環境沒有任何安裝途徑，唯一的補救是「請改用 Safari / Chrome 開啟」——
+// 不明講的話使用者只會覺得「這頁就是不能安裝」，找不到按鈕。
+function isInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  return /FBAN|FBAV|FB_IAB|Instagram|Line\/|LIFF|MicroMessenger|Twitter|TikTok|SnapChat|Pinterest|GSA\/|; wv\)|WebView/i.test(ua);
+}
+
+// 這台裝置／這個瀏覽器到底能不能安裝，以及要用哪條路：
+//   installed   已經在主畫面執行了，不用再提示
+//   native      有 beforeinstallprompt（Android Chrome/Edge、桌機 Chrome/Edge）
+//   ios         iOS Safari，只能「分享 → 加入主畫面」
+//   unsupported App 內建瀏覽器，或 iOS 上的非 Safari 瀏覽器 —— 這裡真的裝不了
+function installMode() {
+  if (isStandalone()) return 'installed';
+  if (isInAppBrowser()) return 'unsupported';
+  if (isIOS()) return isIOSSafari() ? 'ios' : 'unsupported';
+  return 'native';
+}
+
+// unsupported 時要講清楚「改成哪個瀏覽器」。iOS 要指名 Safari，其餘指名 Chrome。
+function browserAdvice() {
+  return isIOS()
+    ? 'iPhone / iPad 只有 Safari 能加入主畫面 —— 請複製網址改用 Safari 開啟'
+    : '請點右上角「⋯」→ 用瀏覽器開啟，再於 Chrome 安裝';
 }
 
 /* ── 橫幅 (與 .event-banner 同一套視覺語言) ── */
@@ -196,27 +216,52 @@ function watchRegistration(reg) {
 
 /* ── 安裝提示 ── */
 
+// 依「這台裝置實際能做什麼」給對應文案。重點是**無論如何都要給可行動的指示**：
+// 舊版對 iOS 直接 return false、而且那個提示用 localStorage 記住「提示過」就永久不再出現，
+// 於是使用者完全看不到任何安裝入口 —— 這就是「手機無法安裝 PWA」的來源。
+const INSTALL_COPY = {
+  native: { icon: '📲', title: '安裝嘎嘎特攻隊', desc: '加入主畫面，離線也能出擊' },
+  'native-manual': { icon: '📲', title: '安裝嘎嘎特攻隊', desc: '點瀏覽器右上角「⋮」→ 安裝應用程式' },
+  ios: { icon: '🧭', title: '裝到 iPhone 主畫面', desc: '點下方「分享」鈕 → 加入主畫面' },
+  unsupported: { icon: '🧭', title: '這個瀏覽器無法安裝' },
+};
+
+function installCopy() {
+  const mode = installMode();
+  if (mode === 'unsupported') return { ...INSTALL_COPY.unsupported, desc: browserAdvice() };
+  if (mode === 'native') return deferredInstall ? INSTALL_COPY.native : INSTALL_COPY['native-manual'];
+  return INSTALL_COPY[mode];
+}
+
+// 任何平台都能叫出安裝說明（不再對 iOS 直接回 false）。
+// 首頁的「📲 安裝成 App」按鈕與 console 的 gagaPWA.showInstallBanner() 都走這裡；
+// 只有在「真的有 beforeinstallprompt 可攔」時才給按鈕，其餘情況給步驟 —— 按了沒反應比不給按鈕更糟。
 function showInstallBanner() {
-  if (installDismissed || isStandalone() || isIOS()) return false;
+  const mode = installMode();
+  if (mode === 'installed') return false;
+  const copy = installCopy();
+  const canPrompt = mode === 'native' && !!deferredInstall;
   showBanner({
-    icon: '📲',
-    title: '安裝嘎嘎特攻隊',
-    desc: '加入主畫面，離線也能出擊',
-    actionLabel: '安裝',
-    tone: 'install',
+    icon: copy.icon,
+    title: copy.title,
+    desc: copy.desc,
+    actionLabel: canPrompt ? '安裝' : '',
+    tone: mode === 'native' ? 'install' : 'ios',
     onAction: () => { promptInstall(); },
   });
   return true;
 }
 
 /**
- * 安裝入口：有 beforeinstallprompt 就走原生安裝流程，沒有則退回 iOS 說明。
+ * 安裝入口：有 beforeinstallprompt 就走原生安裝流程；沒有的話（iOS Safari、
+ * App 內建瀏覽器、還沒收到事件的 Chrome）一律把「該怎麼安裝」留在畫面上，
+ * 而不是安靜地什麼都不做。
  * 也可以在 console 用 gagaPWA.promptInstall() 手動叫出來。
  */
 export async function promptInstall() {
   const evt = deferredInstall;
   if (!evt) {
-    if (isIOS()) showIosHint();
+    showInstallBanner();
     return false;
   }
   deferredInstall = null;
@@ -224,23 +269,27 @@ export async function promptInstall() {
     evt.prompt();
     const choice = await evt.userChoice;
     const accepted = !!choice && choice.outcome === 'accepted';
-    if (accepted) hideBanner();
+    // 不論接受或取消，都把原生事件消耗掉；取消後改顯示手動步驟，避免按鈕從此失效。
+    if (!accepted) showInstallBanner();
+    else hideBanner();
     return accepted;
   } catch (err) {
     console.warn('[pwa] 安裝提示失敗：', err);
+    showInstallBanner();
     return false;
   }
 }
 
-// iOS Safari 沒得攔安裝事件，只能在分享選單裡自己按 —— 提示一次就好，而且不打擾。
-function showIosHint() {
-  if (readFlag(IOS_HINT_KEY) || isStandalone()) return;
-  showBanner({
-    icon: '🧭',
-    title: '想裝到主畫面？',
-    desc: '在 Safari 分享選單選「加入主畫面」',
-    tone: 'ios',
-  });
+// 自動提示：只有「這個環境沒有安裝事件可攔」時才主動講一次（native 由
+// beforeinstallprompt 驅動，不需要吵）。每個工作階段最多一次，關掉就算了；
+// 首頁常駐的安裝按鈕是保底入口，所以這裡不再用 localStorage 永久封鎖提示。
+let installHintShown = false;
+function showMobileInstallHint() {
+  if (installHintShown || installDismissed || isStandalone()) return;
+  const mode = installMode();
+  if (mode !== 'ios' && mode !== 'unsupported') return;
+  installHintShown = true;
+  showInstallBanner();
 }
 
 /* ── Service Worker 註冊 ── */
@@ -308,23 +357,43 @@ function initInstallPrompt() {
   });
 }
 
+/* ── 首頁常駐安裝入口 ── */
+
+// 使用者「想安裝卻找不到入口」時的保底路徑：首頁固定一顆「📲 安裝成 App」。
+// 已經在主畫面執行（standalone）就隱藏 —— 那時安裝已經完成，按鈕只會誤導。
+function updateInstallButton() {
+  const btn = document.getElementById(INSTALL_BTN_ID);
+  if (!btn) return;
+  btn.classList.toggle('hidden', installMode() === 'installed');
+}
+
+function initInstallButton() {
+  const btn = document.getElementById(INSTALL_BTN_ID);
+  if (!btn) return;
+  btn.addEventListener('click', () => { showInstallBanner(); });
+  updateInstallButton();
+}
+
 function init() {
   initInstallPrompt();
+  initInstallButton();
 
   registerServiceWorker();
 
-  // iOS 的一次性提示：等畫面穩定後再出現，避免和首次繪製搶注意力
-  if (isIOS() && !isStandalone()) {
-    window.setTimeout(() => {
-      if (!bannerVisible()) showIosHint();
-    }, 4000);
-  }
+  // 手機上的安裝說明：等畫面穩定後再出現，避免和首次繪製搶注意力。
+  // 只有「攔不到安裝事件」的環境會自動跳（iOS、App 內建瀏覽器）。
+  window.setTimeout(() => {
+    if (!bannerVisible()) showMobileInstallHint();
+  }, 4000);
 
   // 從瀏覽器分頁切回已安裝的 App、或反之，重新校正安裝提示
   try {
     const mq = window.matchMedia('(display-mode: standalone)');
     if (mq && mq.addEventListener) {
-      mq.addEventListener('change', () => { if (isStandalone()) hideBanner(); });
+      mq.addEventListener('change', () => {
+        if (isStandalone()) hideBanner();
+        updateInstallButton();
+      });
     }
   } catch (err) {
     /* 舊瀏覽器沒有 matchMedia 事件，忽略 */
@@ -332,7 +401,10 @@ function init() {
 }
 
 // console 除錯入口 (與 window.game 同一個慣例)
-window.gagaPWA = { promptInstall, showInstallBanner, hideBanner, isStandalone, isIOS };
+window.gagaPWA = {
+  promptInstall, showInstallBanner, hideBanner,
+  isStandalone, isIOS, installMode, showMobileInstallHint,
+};
 
 if (document.readyState === 'complete') init();
 else window.addEventListener('load', init, { once: true });

@@ -53,6 +53,35 @@ const ok = (name, pass, detail = '') => {
   let threw = false;
   try { c2.set('b', 2); } catch (e) { threw = true; }
   ok('onEvict 拋例外不會弄壞快取', !threw && c2.has('b') && c2.size === 1);
+
+  // delete(id)：Ground.js 的 PNG onload 靠它把先前程序化烘出來的磚作廢。
+  // 少了這個方法呼叫端會拋 TypeError，而且是在 img.onload 裡 —— 每次載入噴 12 次
+  // 未捕捉例外（每張地表 PNG 一次），地表也不會換成高解析度版本。
+  const c3 = new LevelCache(3);
+  const delEvicted = [];
+  c3.onEvict = (id) => delEvicted.push(id);
+  c3.set('x', 'proc-tile');
+  // 呼叫端要能安全地只問「有沒有這個方法」，所以先擋掉不存在的形況再實際呼叫，
+  // 免得驗證腳本本身直接 TypeError 中斷（那就只剩 exit code，看不出是哪條壞了）
+  const hasDelete = typeof c3.delete === 'function';
+  ok('LevelCache 有 delete(id) 且會通知 onEvict',
+    hasDelete && c3.delete('x') === true
+    && !c3.has('x') && c3.size === 0 && delEvicted.includes('x'),
+    hasDelete ? `has=${c3.has('x')} onEvict=${delEvicted}` : 'delete 不是函式（Ground.js 的 PNG onload 會拋例外）');
+  ok('delete 不存在的鍵回 false 且不拋例外',
+    hasDelete && c3.delete('never') === false);
+
+  // 契約同步：Ground.js 對 _groundTextures 呼叫的每個方法都必須真的存在。
+  // 這條是針對「Map 換成 LevelCache 時漏掉 delete」那類重構而加的 —— 漏掉不會有任何
+  // 測試變紅（快取照樣運作），只會在使用者機器上噴未捕捉例外。
+  const { readFile: readF } = await import('node:fs/promises');
+  const groundSrc = await readF(new URL('../js/systems/Ground.js', import.meta.url), 'utf8');
+  const called = [...new Set([...groundSrc.matchAll(/_groundTextures\.(\w+)\s*\(/g)].map((m) => m[1]))];
+  const probe = new LevelCache();
+  const absent = called.filter((m) => typeof probe[m] !== 'function');
+  ok('Ground.js 呼叫的 _groundTextures 方法 LevelCache 都有',
+    called.length > 0 && absent.length === 0,
+    `呼叫 ${called.join('/')}｜缺少 ${absent.join(',') || '無'}`);
 }
 
 // ── 2、3) 實機連玩多關 ──

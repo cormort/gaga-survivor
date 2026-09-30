@@ -11,7 +11,7 @@
 // 離開碼 1 = 有項目失敗。
 
 import { readFile } from 'node:fs/promises';
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync, rmSync, mkdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 
@@ -19,6 +19,11 @@ const pw = (await import(process.env.PW_MODULE || 'playwright')).default;
 const ROOT = process.cwd();
 const PORT = Number(process.env.PWA_PORT || 8901);
 const BASE = `http://127.0.0.1:${PORT}`;
+
+// 可安裝性判定（CDP Page.getInstallabilityErrors）只在「明確指定 executablePath」時才可信：
+// 不指定時 Playwright 會用它的舊式 headless 啟動參數，回傳的永遠是空陣列 ——
+// 連「無 manifest 的頁面」都不會被判失敗，等於沒在檢查。下面的控制組就是在防這件事。
+const CHROME = process.env.CHROMIUM || pw.chromium.executablePath();
 
 const results = [];
 const ok = (name, pass, detail = '') => {
@@ -246,6 +251,125 @@ try {
 }
 ok('window.game 建立成功 (main.js 啟動)', gameBooted, gameBooted ? 'ok' : '未建立 — 見 pageerror');
 
+/* ── 真可安裝性：非無痕 profile + CDP ──
+   只看 manifest/圖示/SW 的靜態檢查**驗不出**「Chrome 願不願意給安裝」：
+   `browser.newContext()` 開的是無痕情境，`Page.getInstallabilityErrors` 會回
+   `in-incognito`，於是真正該擋下來的問題（圖示解不開、start_url 出界、SW 沒有 fetch
+   事件）全被同一個錯誤蓋掉、看起來永遠是「只有 in-incognito，其他都過」。
+   要拿到真判定就得用持久化 profile（非無痕）＋ 明確指定 executablePath（見 CHROME 註解）。 */
+{
+  const PROFILES = path.join(ROOT, '.pwa-install-profiles');
+  const withProfile = async (name, fn) => {
+    const dir = path.join(PROFILES, name);
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const c = await pw.chromium.launchPersistentContext(dir, {
+      executablePath: CHROME,
+      viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true,
+    });
+    try { return await fn(c); } finally {
+      await c.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  // 控制組：同一套判定流程對「沒有 manifest 的頁面」必須回報 no-manifest。
+  // 沒有這一條，「errors 為空」可能只是「這個啟動方式根本不做檢查」。
+  await withProfile('control', async (c) => {
+    const p = c.pages()[0] || (await c.newPage());
+    const cdp = await c.newCDPSession(p);
+    await cdp.send('Page.enable');
+    await p.goto(`${BASE}/no-such-page-control.html`, { waitUntil: 'load' });
+    await p.waitForTimeout(1200);
+    const ctl = await cdp.send('Page.getInstallabilityErrors');
+    const ids = ctl.installabilityErrors.map((e) => e.errorId);
+    ok('控制組：無 manifest 的頁面會被判 no-manifest（證明這項檢查真的在運作）',
+      ids.includes('no-manifest'), JSON.stringify(ids));
+  });
+
+  await withProfile('app', async (c) => {
+    const p = c.pages()[0] || (await c.newPage());
+    await p.addInitScript(() => {
+      window.__bipFired = false;
+      window.addEventListener('beforeinstallprompt', () => { window.__bipFired = true; });
+    });
+    const cdp = await c.newCDPSession(p);
+    await cdp.send('Page.enable');
+    await p.goto(`${BASE}/index.html`, { waitUntil: 'load' });
+    await p.evaluate(async () => {
+      await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 20000))]);
+      await new Promise((r) => setTimeout(r, 2500));
+    });
+    const inst = await cdp.send('Page.getInstallabilityErrors');
+    ok('Chrome 判定本站台可安裝 (CDP Page.getInstallabilityErrors 為空)',
+      inst.installabilityErrors.length === 0,
+      JSON.stringify(inst.installabilityErrors));
+    ok('beforeinstallprompt 真的會觸發 (安裝橫幅才有東西可按)',
+      (await p.evaluate(() => window.__bipFired)) === true);
+    const nativeBanner = await p.evaluate(() => {
+      const shown = window.gagaPWA.installMode() === 'native' && window.gagaPWA.showInstallBanner();
+      const el = document.getElementById('pwa-banner');
+      const act = el.querySelector('.pwa-action');
+      return { shown, actionLabel: act.classList.contains('hidden') ? '' : act.textContent };
+    });
+    ok('native 環境的安裝橫幅帶「安裝」按鈕 (可以一鍵安裝)',
+      nativeBanner.shown === true && nativeBanner.actionLabel === '安裝',
+      JSON.stringify(nativeBanner));
+  });
+  rmSync(PROFILES, { recursive: true, force: true });
+}
+
+/* ── 各種手機環境的安裝指引矩陣 ──
+   iOS 上只有 Safari 能加入主畫面，App 內建瀏覽器更是完全不行。
+   這些環境攔不到 beforeinstallprompt，所以「有沒有把步驟講出來」就是唯一的安裝入口 ——
+   舊版對 iOS 直接 return false，使用者於是什麼都看不到。
+   註：這裡用的是普通（無痕）context，beforeinstallprompt 不會觸發，所以按鈕一律不該出現；
+   「有 prompt 時給按鈕」由上一個區塊的持久化 profile 負責驗。 */
+{
+  const DESKTOP = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+  const CASES = [
+    ['Android Chrome', 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36', 'native', '安裝應用程式'],
+    ['iPhone Safari', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1', 'ios', '加入主畫面'],
+    ['iPhone Chrome (iOS 上無法安裝)', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.0.0 Mobile/15E148 Safari/604.1', 'unsupported', 'Safari'],
+    ['LINE 內建瀏覽器', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Safari/604.1 Line/14.6.0', 'unsupported', 'Safari'],
+  ];
+  for (const [label, ua, expect, descMustHave] of CASES) {
+    const c = await browser.newContext({ userAgent: ua, viewport: { width: 390, height: 844 } });
+    const cp = await c.newPage();
+    await cp.goto(`${BASE}/index.html`, { waitUntil: 'load' });
+    await cp.waitForFunction(() => window.gagaPWA, null, { timeout: 15000 });
+    const mode = await cp.evaluate(() => window.gagaPWA.installMode());
+    const info = await cp.evaluate(() => {
+      const shown = window.gagaPWA.showInstallBanner();
+      const el = document.getElementById('pwa-banner');
+      const act = el.querySelector('.pwa-action');
+      return {
+        shown,
+        visible: !el.classList.contains('hidden'),
+        desc: el.querySelector('.pwa-desc').textContent,
+        actionLabel: act.classList.contains('hidden') ? '' : act.textContent,
+      };
+    });
+    ok(`${label} → installMode=${expect}`, mode === expect, `實測 ${mode}`);
+    ok(`${label} 一定看得到可行動的安裝指示 (不是安靜地不給)`,
+      info.shown === true && info.visible === true
+      && info.desc.includes(descMustHave),
+      JSON.stringify(info));
+    // 沒攔到 beforeinstallprompt 就不該給按鈕 —— 按了沒反應比不給更糟
+    ok(`${label} 沒有 prompt 時不給「安裝」按鈕`, info.actionLabel === '',
+      `actionLabel="${info.actionLabel}"`);
+    await c.close();
+  }
+  // 桌機 Chrome 不該被誤判成手機環境
+  const dc = await browser.newContext({ userAgent: DESKTOP, viewport: { width: 390, height: 844 } });
+  const dp = await dc.newPage();
+  await dp.goto(`${BASE}/index.html`, { waitUntil: 'load' });
+  await dp.waitForFunction(() => window.gagaPWA, null, { timeout: 15000 });
+  ok('桌機 Chrome 不被誤判成 iOS / App 內建瀏覽器',
+    (await dp.evaluate(() => window.gagaPWA.installMode())) === 'native');
+  await dc.close();
+}
+
 /* ── 真的離線：關掉伺服器 + context.setOffline(true)，再 reload ── */
 await ctx.setOffline(true);
 killServer();
@@ -392,8 +516,16 @@ ok('pwa.js 具備 SKIP_WAITING / controllerchange / beforeinstallprompt / appins
   && /beforeinstallprompt/.test(pwaSrc) && /appinstalled/.test(pwaSrc)
   && /'serviceWorker' in navigator/.test(pwaSrc) && /try\s*\{/.test(pwaSrc),
   'register + message + beforeinstallprompt + appinstalled 都在');
-ok('pwa.js 不在 iOS 顯示安裝按鈕、且有 Safari 加入主畫面提示',
-  /isIOS\(\)/.test(pwaSrc) && /加入主畫面/.test(pwaSrc), 'ok');
+ok('pwa.js 對 iOS / App 內建瀏覽器一律給安裝步驟，且不再被 localStorage 永久封鎖',
+  /isIOSSafari\(\)/.test(pwaSrc) && /isInAppBrowser\(\)/.test(pwaSrc)
+  && /加入主畫面/.test(pwaSrc) && !/iosHintDismissed/.test(pwaSrc), 'ok');
+ok('pwa.js 區分 native / ios / unsupported 三種安裝能力',
+  /function installMode\(\)/.test(pwaSrc)
+  && /'installed'/.test(pwaSrc) && /'unsupported'/.test(pwaSrc) && /'native'/.test(pwaSrc), 'ok');
+ok('index.html 有常駐安裝入口，且 pwa.js 有接上它',
+  /id="btn-install-app"/.test(await readFile(path.join(ROOT, 'index.html'), 'utf8'))
+  && /btn-install-app/.test(pwaSrc) && /initInstallButton/.test(pwaSrc),
+  '「🏠 養成基地」裡的「📲 安裝成 App」— 攔不到 beforeinstallprompt 的環境的保底入口');
 ok('sw.js 有 skipWaiting / clients.claim / 版本化快取 / message / 同源過濾',
   /skipWaiting\(\)/.test(swSrc) && /clients\.claim\(\)/.test(swSrc)
   && swSrc.includes(cacheVersion) && /SKIP_WAITING/.test(swSrc)
