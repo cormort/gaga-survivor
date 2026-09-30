@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v48';
+const FALLBACK_VERSION = 'gaga-v52';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -170,6 +170,19 @@ const PRECACHE = [
   './assets/weapons/soccer.png',
   './assets/weapons/storm_bolter.png',
   './assets/weapons/twin_storm.png',
+  // 地圖無接縫高畫質地表貼圖 (Ground.js)
+  './assets/ground/ground_core.png',
+  './assets/ground/ground_endless.png',
+  './assets/ground/ground_foundry.png',
+  './assets/ground/ground_frost.png',
+  './assets/ground/ground_frostvoid.png',
+  './assets/ground/ground_inkmount.png',
+  './assets/ground/ground_lab.png',
+  './assets/ground/ground_storm.png',
+  './assets/ground/ground_street.png',
+  './assets/ground/ground_subway.png',
+  './assets/ground/ground_swamp.png',
+  './assets/ground/ground_voidroad.png',
   // 圖示 (manifest 與 apple-touch-icon 會用到；SVG 是維護用的原始檔)
   './icons/icon.svg',
   './icons/icon-maskable.svg',

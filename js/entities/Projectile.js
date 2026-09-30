@@ -3,6 +3,16 @@
 import { GAME_CONFIG, CHARGE, worldBounds } from '../config.js';
 import { drawGlow, drawStreak } from '../weapons/ProjectileFX.js';
 import { drawFlyingSword } from './Mercenary.js';
+import { weaponImages } from '../weapons/WeaponArt.js';
+
+function drawWeaponSprite(ctx, id, targetW, targetH) {
+  const img = weaponImages.get(id);
+  if (!img || !(img.complete || img.width > 0)) return false;
+  const w = targetW;
+  const h = targetH || (targetW * (img.height / img.width));
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  return true;
+}
 
 // ── 飛行光暈與拖尾 ─────────────────────────────────────────────────
 // 為什麼要這張表：投射物先前只有「本體」，高速彈體在深色場景裡是一顆顆小點，
@@ -588,25 +598,34 @@ export class Projectile {
 
   // 幽靈手裏劍：半透明、旋轉的四角星（外圈淡紫幽光）
   drawShuriken(ctx) {
-    const r = this.radius * 1.8;
     ctx.rotate(this.spin);
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = '#e0d4ff';
-    ctx.shadowColor = '#b98cff';
-    ctx.shadowBlur = 12;
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = (i * Math.PI) / 4;
-      const rr = i % 2 === 0 ? r : r * 0.32;
-      ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    const size = this.radius * 3.2;
+    const drawn = drawWeaponSprite(ctx, 'ghost_shuriken', size, size);
+
+    if (!drawn) {
+      const r = this.radius * 1.8;
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = '#e0d4ff';
+      ctx.shadowColor = '#b98cff';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4;
+        const rr = i % 2 === 0 ? r : r * 0.32;
+        ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      ctx.closePath();
+      ctx.fill();
     }
-    ctx.closePath();
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#2b1d4a';
+
+    // 幽靈虛空暗能量輝光
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(185, 140, 255, 0.45)';
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+    ctx.arc(0, 0, this.radius * 1.25, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   }
 
   // 燃燒瓶：沿拋物線旋轉飛行的玻璃瓶，地面有落點預告圈與影子
@@ -616,31 +635,40 @@ export class Projectile {
     // 落點預告（隨飛行進度收縮）與瓶子影子
     ctx.save();
     ctx.translate(this.toX - this.x, this.toY - this.y);
-    ctx.strokeStyle = this.isEvo ? 'rgba(80,160,255,0.55)' : 'rgba(255,140,40,0.55)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = this.isEvo ? 'rgba(80,160,255,0.65)' : 'rgba(255,140,40,0.65)';
+    ctx.lineWidth = 2.2;
     ctx.setLineDash([5, 5]);
     ctx.beginPath();
     ctx.arc(0, 0, 10 + 26 * (1 - k), 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
     ctx.beginPath();
-    ctx.ellipse(0, 4, 7, 3, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 4, 8, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.translate(0, -lift);
     ctx.rotate(this.spin);
-    ctx.fillStyle = this.isEvo ? '#4cc9f0' : '#7cb518';
+    const spriteId = this.isEvo ? 'napalm_sea' : 'molotov';
+    const drawn = drawWeaponSprite(ctx, spriteId, 26, 32);
+
+    if (!drawn) {
+      ctx.fillStyle = this.isEvo ? '#4cc9f0' : '#7cb518';
+      ctx.beginPath();
+      ctx.roundRect(-4, -6, 8, 12, 3);
+      ctx.fill();
+      ctx.fillStyle = '#e9ecef';
+      ctx.fillRect(-1.6, -11, 3.2, 5);
+    }
+
+    // 瓶口的動態火布
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = this.isEvo ? '#00f5ff' : '#ffb703';
     ctx.beginPath();
-    ctx.roundRect(-4, -6, 8, 12, 3);
+    ctx.arc(0, -14, 3.2 + Math.sin(this.spin * 4) * 1.0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#e9ecef';
-    ctx.fillRect(-1.6, -11, 3.2, 5);
-    // 瓶口的火布
-    ctx.fillStyle = this.isEvo ? '#90e0ff' : '#ffb703';
-    ctx.beginPath();
-    ctx.arc(0, -12, 2.6 + Math.sin(this.spin * 3) * 0.8, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.restore();
   }
 
   // 永恆守護力場：金色光罩 + 旋轉的六角符文環
@@ -716,61 +744,83 @@ export class Projectile {
     const angle = Math.atan2(this.vy, this.vx);
     ctx.rotate(angle);
 
-    if (this.isEvo) {
-      // 幽靈手裏劍 (藍色發光飛刀)
-      ctx.fillStyle = '#00f5ff';
-      ctx.shadowColor = '#00e5ff';
-      ctx.shadowBlur = 10;
-    } else {
-      ctx.fillStyle = '#e2e8f0';
+    const spriteId = this.isEvo ? 'ghost_shuriken' : 'kunai';
+    const targetW = this.isEvo ? this.radius * 3.4 : this.radius * 3.6;
+    const targetH = this.isEvo ? targetW * 1.0 : targetW * 0.28;
+    const drawn = drawWeaponSprite(ctx, spriteId, targetW, targetH);
+
+    if (!drawn) {
+      if (this.isEvo) {
+        ctx.fillStyle = '#00f5ff';
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 10;
+      } else {
+        ctx.fillStyle = '#e2e8f0';
+      }
+      ctx.beginPath();
+      ctx.moveTo(14, 0);
+      ctx.lineTo(-8, -4);
+      ctx.lineTo(-4, 0);
+      ctx.lineTo(-8, 4);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = '#ff0055';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-4, 0);
+      ctx.lineTo(-12, 0);
+      ctx.stroke();
     }
 
-    ctx.beginPath();
-    ctx.moveTo(14, 0);
-    ctx.lineTo(-8, -4);
-    ctx.lineTo(-4, 0);
-    ctx.lineTo(-8, 4);
-    ctx.closePath();
-    ctx.fill();
-
-    // 苦無握柄
-    ctx.strokeStyle = '#ff0055';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-4, 0);
-    ctx.lineTo(-12, 0);
-    ctx.stroke();
+    // 飛行破空高光線
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = this.isEvo ? 'rgba(0, 245, 255, 0.45)' : 'rgba(255, 255, 255, 0.55)';
+    ctx.fillRect(targetW * 0.15, -1.2, targetW * 0.28, 2.4);
+    ctx.restore();
   }
 
   drawGuardian(ctx) {
     ctx.rotate(this.orbitAngle * 4);
 
-    if (this.isEvo) {
-      // 永恆守護力場 (金光炫目光盾)
-      ctx.fillStyle = '#ffb703';
-      ctx.shadowColor = '#ffe066';
-      ctx.shadowBlur = 12;
-    } else {
-      ctx.fillStyle = '#00e5ff';
-      ctx.shadowColor = '#00b4d8';
-      ctx.shadowBlur = 6;
-    }
+    const spriteId = this.isEvo ? 'eternal_domain' : 'guardian';
+    const size = this.radius * 2.3;
+    const drawn = drawWeaponSprite(ctx, spriteId, size, size);
 
-    // 圓形鋒利轉輪
-    ctx.beginPath();
-    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 外圈鋸齒旋轉刀刃
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 4; i++) {
-      const a = (i * Math.PI) / 2;
+    if (!drawn) {
+      if (this.isEvo) {
+        ctx.fillStyle = '#ffb703';
+        ctx.shadowColor = '#ffe066';
+        ctx.shadowBlur = 12;
+      } else {
+        ctx.fillStyle = '#00e5ff';
+        ctx.shadowColor = '#00b4d8';
+        ctx.shadowBlur = 6;
+      }
       ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
-      ctx.lineTo(Math.cos(a) * (this.radius + 6), Math.sin(a) * (this.radius + 6));
-      ctx.stroke();
+      ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
+        ctx.lineTo(Math.cos(a) * (this.radius + 6), Math.sin(a) * (this.radius + 6));
+        ctx.stroke();
+      }
     }
+
+    // 護盾力場外環光暈
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = this.isEvo ? 'rgba(255, 209, 102, 0.5)' : 'rgba(76, 201, 240, 0.45)';
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius * 1.15, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // 相位飛刃 (旋轉鑽刃)
@@ -778,107 +828,146 @@ export class Projectile {
     const angle = Math.atan2(this.vy, this.vx);
     ctx.rotate(angle);
 
-    if (this.isEvo) {
-      ctx.fillStyle = '#b5179e';
-      ctx.shadowColor = '#e0aaff';
-      ctx.shadowBlur = 10;
-    } else {
-      ctx.fillStyle = '#7fb2a5';
-      ctx.shadowColor = '#4a7c3f';
-      ctx.shadowBlur = 4;
-    }
-    ctx.beginPath();
-    ctx.moveTo(16, 0);
-    ctx.lineTo(-6, -4);
-    ctx.lineTo(-2, 0);
-    ctx.lineTo(-6, 4);
-    ctx.closePath();
-    ctx.fill();
+    const targetW = this.radius * 3.2;
+    const drawn = drawWeaponSprite(ctx, 'drill', targetW);
 
-    ctx.fillStyle = '#ffffff';
+    if (!drawn) {
+      if (this.isEvo) {
+        ctx.fillStyle = '#b5179e';
+        ctx.shadowColor = '#e0aaff';
+        ctx.shadowBlur = 10;
+      } else {
+        ctx.fillStyle = '#7fb2a5';
+        ctx.shadowColor = '#4a7c3f';
+        ctx.shadowBlur = 4;
+      }
+      ctx.beginPath();
+      ctx.moveTo(16, 0);
+      ctx.lineTo(-6, -4);
+      ctx.lineTo(-2, 0);
+      ctx.lineTo(-6, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(9, 0, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 鑽頭渦流尖端火花
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(255, 224, 102, 0.7)';
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.arc(9, 0, 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(targetW * 0.45, 0);
+    ctx.lineTo(targetW * 0.65, 0);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // 重力環鋸 (紫色旋轉鋸輪)
   drawSaw(ctx) {
-    ctx.rotate(this.orbitAngle * 5);
+    ctx.rotate(this.orbitAngle * 6);
 
-    if (this.isEvo) {
-      // 重力奇點環 (金色)
-      ctx.fillStyle = '#ffd60a';
-      ctx.shadowColor = '#ffe066';
-      ctx.shadowBlur = 12;
-    } else {
-      ctx.fillStyle = '#9d4edd';
-      ctx.shadowColor = '#c77dff';
-      ctx.shadowBlur = 6;
+    const spriteId = this.isEvo ? 'singularity_ring' : 'orbit_saw';
+    const size = this.radius * 2.4;
+    const drawn = drawWeaponSprite(ctx, spriteId, size, size);
+
+    if (!drawn) {
+      if (this.isEvo) {
+        ctx.fillStyle = '#ffd60a';
+        ctx.shadowColor = '#ffe066';
+        ctx.shadowBlur = 12;
+      } else {
+        ctx.fillStyle = '#9d4edd';
+        ctx.shadowColor = '#c77dff';
+        ctx.shadowBlur = 6;
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
+        ctx.lineTo(Math.cos(a) * (this.radius + 5), Math.sin(a) * (this.radius + 5));
+        ctx.stroke();
+      }
     }
 
-    ctx.beginPath();
-    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 外圈鋸齒刀刃
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 6; i++) {
-      const a = (i * Math.PI) / 3;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
-      ctx.lineTo(Math.cos(a) * (this.radius + 5), Math.sin(a) * (this.radius + 5));
-      ctx.stroke();
+    // 旋轉切削火花環
+    if (!this.isEvo) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-this.radius * 1.05, -this.radius * 1.05, this.radius * 2.1, this.radius * 2.1);
+      ctx.restore();
     }
   }
 
   // 鯊魚核彈：擺尾的鯊魚魚雷（背鰭、尾鰭、眼睛、核彈警示紋）
   drawShark(ctx) {
-    const wag = Math.sin(this.age * 16) * 0.35;
+    const wag = Math.sin(this.age * 16) * 0.12;
     ctx.translate(0, Math.sin(this.age * 8) * 3);
-    ctx.shadowColor = '#4cc9f0';
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = '#5c7c99';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 20, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    // 尾鰭（擺動）
-    ctx.save();
-    ctx.translate(-18, 0);
     ctx.rotate(wag);
+
+    const targetW = this.radius * 4.2;
+    const drawn = drawWeaponSprite(ctx, 'shark_torpedo', targetW);
+
+    if (!drawn) {
+      ctx.shadowColor = '#4cc9f0';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = '#5c7c99';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 20, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.save();
+      ctx.translate(-18, 0);
+      ctx.rotate(wag);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-11, -9);
+      ctx.lineTo(-7, 0);
+      ctx.lineTo(-11, 9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = '#3d5a73';
+      ctx.beginPath();
+      ctx.moveTo(-2, -6);
+      ctx.lineTo(-10, -15);
+      ctx.lineTo(-10, -5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#dbe7f0';
+      ctx.beginPath();
+      ctx.ellipse(4, 3.5, 13, 3.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff0055';
+      ctx.beginPath();
+      ctx.arc(12, -2.5, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffe066';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-6, -7.5);
+      ctx.lineTo(-6, 7.5);
+      ctx.stroke();
+    }
+
+    // 水下氣泡/火箭推進尾焰
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(76, 201, 240, 0.7)';
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(-11, -9);
-    ctx.lineTo(-7, 0);
-    ctx.lineTo(-11, 9);
-    ctx.closePath();
+    ctx.arc(-targetW * 0.48, 0, 5 + Math.sin(this.age * 25) * 2, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-    // 背鰭
-    ctx.fillStyle = '#3d5a73';
-    ctx.beginPath();
-    ctx.moveTo(-2, -6);
-    ctx.lineTo(-10, -15);
-    ctx.lineTo(-10, -5);
-    ctx.closePath();
-    ctx.fill();
-    // 肚子與眼睛
-    ctx.fillStyle = '#dbe7f0';
-    ctx.beginPath();
-    ctx.ellipse(4, 3.5, 13, 3.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ff0055';
-    ctx.beginPath();
-    ctx.arc(12, -2.5, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    // 核彈警示環
-    ctx.strokeStyle = '#ffe066';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-6, -7.5);
-    ctx.lineTo(-6, 7.5);
-    ctx.stroke();
   }
 
   drawRocket(ctx) {
@@ -889,31 +978,39 @@ export class Projectile {
       return;
     }
 
-    if (this.isEvo) {
-      // 鯊魚核彈
-      ctx.fillStyle = '#ff0055';
-      ctx.shadowColor = '#ff0055';
-      ctx.shadowBlur = 14;
-    } else {
-      ctx.fillStyle = '#ff9900';
+    const spriteId = this.isEvo ? 'shark_torpedo' : 'rocket';
+    const targetW = this.radius * 4.0;
+    const targetH = targetW * (this.isEvo ? 0.41 : 0.46);
+    const drawn = drawWeaponSprite(ctx, spriteId, targetW, targetH);
+
+    if (!drawn) {
+      if (this.isEvo) {
+        ctx.fillStyle = '#ff0055';
+        ctx.shadowColor = '#ff0055';
+        ctx.shadowBlur = 14;
+      } else {
+        ctx.fillStyle = '#ff9900';
+      }
+      ctx.beginPath();
+      ctx.moveTo(16, 0);
+      ctx.lineTo(-10, -6);
+      ctx.lineTo(-8, 0);
+      ctx.lineTo(-10, 6);
+      ctx.closePath();
+      ctx.fill();
     }
 
-    // 彈頭
+    // 動態推進噴射火焰
+    const flameLen = 12 + Math.sin(Date.now() * 0.04 + this.seed) * 5;
+    const fg = ctx.createLinearGradient(-targetW / 2, 0, -targetW / 2 - flameLen, 0);
+    fg.addColorStop(0, '#ffffff');
+    fg.addColorStop(0.3, this.isEvo ? '#00f5ff' : '#ffb703');
+    fg.addColorStop(1, 'rgba(255, 50, 0, 0)');
+    ctx.fillStyle = fg;
     ctx.beginPath();
-    ctx.moveTo(16, 0);
-    ctx.lineTo(-10, -6);
-    ctx.lineTo(-8, 0);
-    ctx.lineTo(-10, 6);
-    ctx.closePath();
-    ctx.fill();
-
-    // 噴射火焰
-    ctx.fillStyle = '#ffff00';
-    ctx.beginPath();
-    ctx.moveTo(-8, 0);
-    ctx.lineTo(-18, -3);
-    ctx.lineTo(-14, 0);
-    ctx.lineTo(-18, 3);
+    ctx.moveTo(-targetW / 2 + 2, -targetH * 0.22);
+    ctx.lineTo(-targetW / 2 - flameLen, 0);
+    ctx.lineTo(-targetW / 2 + 2, targetH * 0.22);
     ctx.closePath();
     ctx.fill();
   }
@@ -1021,31 +1118,35 @@ export class Projectile {
   drawBoomerang(ctx) {
     ctx.save();
     ctx.rotate(this.spin);
-    const r = this.radius;
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    for (let i = 0; i < 3; i++) {
-      ctx.rotate((Math.PI * 2) / 3);
+    const spriteId = this.isEvo ? 'twin_storm' : 'boomerang';
+    const size = this.radius * 2.6;
+    const drawn = drawWeaponSprite(ctx, spriteId, size, size);
+
+    if (!drawn) {
+      const r = this.radius;
+      ctx.fillStyle = this.isEvo ? '#ffe066' : '#d9c7a3';
+      for (let i = 0; i < 3; i++) {
+        ctx.rotate((Math.PI * 2) / 3);
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 0.22);
+        ctx.lineTo(r * 1.34, 0);
+        ctx.lineTo(0, r * 0.22);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.beginPath();
-      ctx.moveTo(0, -r * 0.32);
-      ctx.lineTo(r * 1.5, 0);
-      ctx.lineTo(0, r * 0.32);
-      ctx.closePath();
+      ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = this.isEvo ? '#ffe066' : '#d9c7a3';
-    for (let i = 0; i < 3; i++) {
-      ctx.rotate((Math.PI * 2) / 3);
-      ctx.beginPath();
-      ctx.moveTo(0, -r * 0.22);
-      ctx.lineTo(r * 1.34, 0);
-      ctx.lineTo(0, r * 0.22);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+
+    // 氣動風刃光環
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = this.isEvo ? 'rgba(255, 224, 102, 0.55)' : 'rgba(255, 209, 102, 0.38)';
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(0, 0, this.radius * 1.25, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -1070,24 +1171,40 @@ export class Projectile {
   }
 
   drawSoccer(ctx) {
-    ctx.rotate(this.x * 0.05);
+    const spin = this.spin != null ? this.spin : (this.x * 0.05 + this.y * 0.05);
+    ctx.rotate(spin);
 
-    if (this.isEvo) {
-      ctx.fillStyle = '#00f59b';
-      ctx.shadowColor = '#00f59b';
-      ctx.shadowBlur = 10;
-    } else {
-      ctx.fillStyle = '#ffffff';
+    const spriteId = this.isEvo ? 'quantum_sphere' : 'soccer';
+    const size = this.radius * 2.3;
+    const drawn = drawWeaponSprite(ctx, spriteId, size, size);
+
+    if (!drawn) {
+      if (this.isEvo) {
+        ctx.fillStyle = '#00f59b';
+        ctx.shadowColor = '#00f59b';
+        ctx.shadowBlur = 10;
+      } else {
+        ctx.fillStyle = '#ffffff';
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 足球黑白幾何五邊形
+      ctx.fillStyle = '#11141a';
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 0.45, 0, Math.PI * 2);
+      ctx.fill();
     }
 
+    // 動能環
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = this.isEvo ? 'rgba(0, 245, 155, 0.45)' : 'rgba(0, 229, 255, 0.4)';
+    ctx.lineWidth = 2.0;
     ctx.beginPath();
-    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 足球黑白幾何五邊形
-    ctx.fillStyle = '#11141a';
-    ctx.beginPath();
-    ctx.arc(0, 0, this.radius * 0.45, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(0, 0, this.radius * 1.1, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 }

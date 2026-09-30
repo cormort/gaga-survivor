@@ -96,10 +96,8 @@ function drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h, n) {
   const accent = macro.accent || 'rgba(255,255,255,0.10)';
   const wrap = (i) => ((i % n) + n) % n;
   const cell = macro.cell || 1000;
-  // 格線位置（磚內世界座標）：0, cell, …, n*cell —— 兩端都畫，拼接後剛好接上
   const lines = [];
   for (let k = 0; k <= n; k++) lines.push(k * cell);
-  // 每格一個的特徵：多畫外框一圈（-1..n）
   const eachCell = (fn) => {
     for (let i = -1; i <= n; i++) {
       for (let j = -1; j <= n; j++) fn(i * cell, j * cell, wrap(i), wrap(j));
@@ -107,102 +105,318 @@ function drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h, n) {
   };
 
   if (kind === 'road') {
-    // 淪陷商業街：棋盤式街廓。路面比底色亮一階、帶路緣與中央虛線，
-    // 十字路口畫斑馬線 —— 這是玩家唯一能拿來定位的結構。
-    const roadW = cell * 0.3;
-    ctx.fillStyle = base;
-    for (const gx of lines) ctx.fillRect(X(gx) - S(roadW) / 2, 0, S(roadW), h);
-    for (const gy of lines) ctx.fillRect(0, Y(gy) - S(roadW) / 2, w, S(roadW));
-    ctx.strokeStyle = line;
+    // 淪陷商業街 / 虛空裂道：高質感賽博夜景街廓
+    // 人行道磚、3D立體路緣石、深色瀝青路面、分道虛線、十字路口斑馬線、暖色街燈光暈與路口人孔蓋
+    const roadW = cell * 0.36;
+    const swW = cell * 0.10;
+    const halfR = S(roadW) / 2;
+    const halfTotal = halfR + S(swW);
+
+    // 1) 人行道基底 (冷色調混凝土步道)
+    ctx.fillStyle = 'rgba(28, 38, 54, 0.65)';
+    for (const gx of lines) ctx.fillRect(X(gx) - halfTotal, 0, halfTotal * 2, h);
+    for (const gy of lines) ctx.fillRect(0, Y(gy) - halfTotal, w, halfTotal * 2);
+
+    // 2) 人行道地磚格紋 (每隔 48 單位一道細縫)
+    ctx.strokeStyle = 'rgba(12, 16, 24, 0.45)';
     ctx.lineWidth = 1;
+    const paverStep = S(48);
+    for (const gx of lines) {
+      const x = X(gx);
+      for (let py = 0; py <= h; py += paverStep) {
+        ctx.beginPath();
+        ctx.moveTo(x - halfTotal, py); ctx.lineTo(x - halfR, py);
+        ctx.moveTo(x + halfR, py); ctx.lineTo(x + halfTotal, py);
+        ctx.stroke();
+      }
+    }
+    for (const gy of lines) {
+      const y = Y(gy);
+      for (let px = 0; px <= w; px += paverStep) {
+        ctx.beginPath();
+        ctx.moveTo(px, y - halfTotal); ctx.lineTo(px, y - halfR);
+        ctx.moveTo(px, y + halfR); ctx.lineTo(px, y + halfTotal);
+        ctx.stroke();
+      }
+    }
+
+    // 3) 瀝青柏油路面 (深色微粒柏油)
+    ctx.fillStyle = 'rgba(14, 20, 30, 0.88)';
+    for (const gx of lines) ctx.fillRect(X(gx) - halfR, 0, S(roadW), h);
+    for (const gy of lines) ctx.fillRect(0, Y(gy) - halfR, w, S(roadW));
+
+    // 4) 3D 立體路緣石 (內側暗陰影 + 外側微亮高光)
+    for (const gx of lines) {
+      const x = X(gx);
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.lineWidth = Math.max(1, S(3.5));
+      ctx.beginPath();
+      ctx.moveTo(x - halfR + S(1.5), 0); ctx.lineTo(x - halfR + S(1.5), h);
+      ctx.moveTo(x + halfR - S(1.5), 0); ctx.lineTo(x + halfR - S(1.5), h);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(190, 215, 245, 0.35)';
+      ctx.lineWidth = Math.max(1, S(2));
+      ctx.beginPath();
+      ctx.moveTo(x - halfR - S(1), 0); ctx.lineTo(x - halfR - S(1), h);
+      ctx.moveTo(x + halfR + S(1), 0); ctx.lineTo(x + halfR + S(1), h);
+      ctx.stroke();
+    }
+    for (const gy of lines) {
+      const y = Y(gy);
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.lineWidth = Math.max(1, S(3.5));
+      ctx.beginPath();
+      ctx.moveTo(0, y - halfR + S(1.5)); ctx.lineTo(w, y - halfR + S(1.5));
+      ctx.moveTo(0, y + halfR - S(1.5)); ctx.lineTo(w, y + halfR - S(1.5));
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(190, 215, 245, 0.35)';
+      ctx.lineWidth = Math.max(1, S(2));
+      ctx.beginPath();
+      ctx.moveTo(0, y - halfR - S(1)); ctx.lineTo(w, y - halfR - S(1));
+      ctx.moveTo(0, y + halfR + S(1)); ctx.lineTo(w, y + halfR + S(1));
+      ctx.stroke();
+    }
+
+    // 5) 路肩白實線
+    const shoulderOff = S(12);
+    ctx.strokeStyle = 'rgba(220, 235, 255, 0.35)';
+    ctx.lineWidth = Math.max(1, S(3));
     for (const gx of lines) {
       const x = X(gx);
       ctx.beginPath();
-      ctx.moveTo(x - S(roadW) / 2, 0);
-      ctx.lineTo(x - S(roadW) / 2, h);
-      ctx.moveTo(x + S(roadW) / 2, 0);
-      ctx.lineTo(x + S(roadW) / 2, h);
+      ctx.moveTo(x - halfR + shoulderOff, 0); ctx.lineTo(x - halfR + shoulderOff, h);
+      ctx.moveTo(x + halfR - shoulderOff, 0); ctx.lineTo(x + halfR - shoulderOff, h);
       ctx.stroke();
     }
     for (const gy of lines) {
       const y = Y(gy);
       ctx.beginPath();
-      ctx.moveTo(0, y - S(roadW) / 2);
-      ctx.lineTo(w, y - S(roadW) / 2);
-      ctx.moveTo(0, y + S(roadW) / 2);
-      ctx.lineTo(w, y + S(roadW) / 2);
+      ctx.moveTo(0, y - halfR + shoulderOff); ctx.lineTo(w, y - halfR + shoulderOff);
+      ctx.moveTo(0, y + halfR - shoulderOff); ctx.lineTo(w, y + halfR - shoulderOff);
       ctx.stroke();
     }
-    // 中央虛線 + 斑馬線（虛線週期 56 世界單位；格距不一定整除，接縫處虛線相位可能差一點，肉眼幾乎看不出）
-    ctx.setLineDash([S(30), S(26)]);
+
+    // 6) 中央車道分道標線 (發光微粒質感)
+    ctx.save();
+    ctx.setLineDash([S(32), S(24)]);
     ctx.strokeStyle = accent;
-    ctx.lineWidth = Math.max(1, S(6));
+    ctx.lineWidth = Math.max(1.5, S(5.5));
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = S(8);
     for (const gx of lines) {
       const x = X(gx);
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
     }
     for (const gy of lines) {
       const y = Y(gy);
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
     }
-    ctx.setLineDash([]);
-    ctx.fillStyle = accent;
+    ctx.restore();
+
+    // 7) 十字路口：斑馬線 + 停止線 + 街角路燈暖光 + 中央人孔蓋
     for (const gx of lines) {
       for (const gy of lines) {
         const cx = X(gx);
         const cy = Y(gy);
-        for (let i = -3; i <= 3; i++) {
-          ctx.fillRect(cx + S(roadW) * 0.18, cy + S(i * 22) - S(4), S(roadW * 0.64), S(7));
+
+        // A. 街角環境光暈 (4 個街角的路燈照射出溫暖柔光)
+        const cornerOff = halfR + S(swW * 0.5);
+        for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          const lx = cx + dx * cornerOff;
+          const ly = cy + dy * cornerOff;
+          const rg = ctx.createRadialGradient(lx, ly, 0, lx, ly, S(140));
+          rg.addColorStop(0, 'rgba(255, 195, 100, 0.16)');
+          rg.addColorStop(0.5, 'rgba(255, 180, 80, 0.06)');
+          rg.addColorStop(1, 'rgba(255, 180, 80, 0)');
+          ctx.fillStyle = rg;
+          ctx.fillRect(lx - S(140), ly - S(140), S(280), S(280));
+        }
+
+        // B. 斑馬線 (四方向條紋)
+        const stripeW = S(8);
+        const stripeGap = S(7);
+        const crosswalkDist = halfR + S(16);
+        const crosswalkLen = S(32);
+        ctx.fillStyle = 'rgba(240, 246, 255, 0.72)';
+
+        for (let s = -3; s <= 3; s++) {
+          const sx = cx + s * (stripeW + stripeGap) - stripeW / 2;
+          ctx.fillRect(sx, cy - crosswalkDist - crosswalkLen, stripeW, crosswalkLen);
+          ctx.fillRect(sx, cy + crosswalkDist, stripeW, crosswalkLen);
+        }
+        for (let s = -3; s <= 3; s++) {
+          const sy = cy + s * (stripeW + stripeGap) - stripeW / 2;
+          ctx.fillRect(cx - crosswalkDist - crosswalkLen, sy, crosswalkLen, stripeW);
+          ctx.fillRect(cx + crosswalkDist, sy, crosswalkLen, stripeW);
+        }
+
+        // C. 停止線 (Stop line)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.lineWidth = Math.max(1.5, S(5));
+        const stopSpan = halfR - shoulderOff;
+        ctx.beginPath();
+        ctx.moveTo(cx - stopSpan, cy - crosswalkDist - crosswalkLen - S(10));
+        ctx.lineTo(cx + stopSpan, cy - crosswalkDist - crosswalkLen - S(10));
+        ctx.moveTo(cx - stopSpan, cy + crosswalkDist + crosswalkLen + S(10));
+        ctx.lineTo(cx + stopSpan, cy + crosswalkDist + crosswalkLen + S(10));
+        ctx.moveTo(cx - crosswalkDist - crosswalkLen - S(10), cy - stopSpan);
+        ctx.lineTo(cx - crosswalkDist - crosswalkLen - S(10), cy + stopSpan);
+        ctx.moveTo(cx + crosswalkDist + crosswalkLen + S(10), cy - stopSpan);
+        ctx.lineTo(cx + crosswalkDist + crosswalkLen + S(10), cy + stopSpan);
+        ctx.stroke();
+
+        // D. 路口中央人孔蓋
+        ctx.fillStyle = 'rgba(26, 32, 42, 0.85)';
+        ctx.beginPath(); ctx.arc(cx, cy, S(20), 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(180, 195, 215, 0.4)';
+        ctx.lineWidth = Math.max(1, S(2.5));
+        ctx.beginPath(); ctx.arc(cx, cy, S(16), 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.lineWidth = Math.max(1, S(2));
+        for (let a = 0; a < 6; a++) {
+          const ang = (a / 6) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(ang) * S(6), cy + Math.sin(ang) * S(6));
+          ctx.lineTo(cx + Math.cos(ang) * S(15), cy + Math.sin(ang) * S(15));
+          ctx.stroke();
         }
       }
     }
   } else if (kind === 'plates') {
-    // 廢棄生化實驗室：大型金屬地板，板與板之間有明顯接縫與警示條。
+    // 廢棄生化實驗室/沙暴要塞/熔毀鑄造廠：工業高科技裝甲金屬地板
     eachCell((gx, gy, gi, gj) => {
       const r = hash(gi, gj, seed + 7);
-      // 板材本身：明暗交替，讓大區塊看得出來
-      ctx.fillStyle = r > 0.5 ? base : 'rgba(255,255,255,0.015)';
-      ctx.fillRect(X(gx) + 1, Y(gy) + 1, S(cell) - 2, S(cell) - 2);
-      // 接縫
+      const px = X(gx) + 1;
+      const py = Y(gy) + 1;
+      const pw = S(cell) - 2;
+      const ph = S(cell) - 2;
+
+      // 1) 裝甲主鋼板：細微金屬漸層
+      const pg = ctx.createLinearGradient(px, py, px + pw, py + ph);
+      pg.addColorStop(0, r > 0.5 ? 'rgba(38, 52, 45, 0.45)' : 'rgba(24, 34, 30, 0.5)');
+      pg.addColorStop(0.5, r > 0.5 ? 'rgba(48, 66, 56, 0.55)' : 'rgba(30, 42, 36, 0.6)');
+      pg.addColorStop(1, r > 0.5 ? 'rgba(28, 40, 34, 0.45)' : 'rgba(18, 26, 22, 0.5)');
+      ctx.fillStyle = pg;
+      ctx.fillRect(px, py, pw, ph);
+
+      // 2) 接縫與內嵌邊框
       ctx.strokeStyle = line;
       ctx.lineWidth = Math.max(1, S(5));
-      ctx.strokeRect(X(gx) + 1, Y(gy) + 1, S(cell) - 2, S(cell) - 2);
-      // 一部分板塊帶警示斜紋邊
-      if (r > 0.8) {
-        ctx.fillStyle = 'rgba(255,190,60,0.10)';
-        ctx.fillRect(X(gx) + S(10), Y(gy) + S(10), S(cell) - S(20), S(9));
+      ctx.strokeRect(px, py, pw, ph);
+
+      const inset = S(26);
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.lineWidth = Math.max(1, S(2));
+      ctx.strokeRect(px + inset, py + inset, pw - inset * 2, ph - inset * 2);
+      ctx.strokeStyle = 'rgba(180, 255, 220, 0.12)';
+      ctx.strokeRect(px + inset + 1, py + inset + 1, pw - inset * 2, ph - inset * 2);
+
+      // 3) 四角工業鉚釘
+      const boltOff = S(14);
+      const boltR = Math.max(1.8, S(4));
+      for (const [bx, by] of [
+        [px + boltOff, py + boltOff],
+        [px + pw - boltOff, py + boltOff],
+        [px + boltOff, py + ph - boltOff],
+        [px + pw - boltOff, py + ph - boltOff]
+      ]) {
+        ctx.fillStyle = 'rgba(180, 230, 210, 0.55)';
+        ctx.beginPath(); ctx.arc(bx - 0.5, by - 0.5, boltR, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(10, 16, 12, 0.8)';
+        ctx.beginPath(); ctx.arc(bx + 0.7, by + 0.7, boltR * 0.75, 0, Math.PI * 2); ctx.fill();
       }
-      // 大型模板噴字 (圓形艙位標記)
-      if (r < 0.18) {
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = Math.max(1, S(6));
+
+      // 4) 黃黑危險警戒斜線 (Hazard Stripes)
+      if (r > 0.65) {
+        ctx.save();
         ctx.beginPath();
-        ctx.arc(X(gx + cell / 2), Y(gy + cell / 2), S(cell * 0.3), 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.rect(px + S(8), py + S(8), pw - S(16), S(14));
+        ctx.clip();
+        ctx.fillStyle = '#1c1b18';
+        ctx.fillRect(px + S(8), py + S(8), pw - S(16), S(14));
+        ctx.fillStyle = '#ffbe1a';
+        for (let st = -S(20); st < pw; st += S(22)) {
+          ctx.beginPath();
+          ctx.moveTo(px + S(8) + st, py + S(8) + S(14));
+          ctx.lineTo(px + S(8) + st + S(12), py + S(8));
+          ctx.lineTo(px + S(8) + st + S(22), py + S(8));
+          ctx.lineTo(px + S(8) + st + S(10), py + S(8) + S(14));
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // 5) 工業散熱通風格柵 (Cooling Grate)
+      if (r < 0.28) {
+        const gw = S(cell * 0.36);
+        const gh = S(cell * 0.26);
+        const gx0 = px + (pw - gw) / 2;
+        const gy0 = py + (ph - gh) / 2;
+        ctx.fillStyle = 'rgba(8, 14, 11, 0.9)';
+        ctx.fillRect(gx0, gy0, gw, gh);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = Math.max(1, S(3));
+        const slats = 7;
+        for (let k = 0; k < slats; k++) {
+          const sy = gy0 + (k + 0.5) * (gh / slats);
+          ctx.beginPath(); ctx.moveTo(gx0 + S(4), sy); ctx.lineTo(gx0 + gw - S(4), sy); ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(160, 240, 200, 0.25)';
+        ctx.lineWidth = Math.max(1, S(1.5));
+        ctx.strokeRect(gx0, gy0, gw, gh);
+      }
+
+      // 6) 圓形艙位標記與發光管線
+      if (r >= 0.28 && r < 0.5) {
+        const cx = px + pw / 2;
+        const cy = py + ph / 2;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = Math.max(1.5, S(5));
+        ctx.beginPath(); ctx.arc(cx, cy, S(cell * 0.25), 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = Math.max(1, S(2));
+        ctx.beginPath(); ctx.arc(cx, cy, S(cell * 0.18), 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = Math.max(1, S(2.5));
+        for (let a = 0; a < 4; a++) {
+          const ang = (a / 4) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(ang) * S(cell * 0.14), cy + Math.sin(ang) * S(cell * 0.14));
+          ctx.lineTo(cx + Math.cos(ang) * S(cell * 0.28), cy + Math.sin(ang) * S(cell * 0.28));
+          ctx.stroke();
+        }
       }
     });
   } else if (kind === 'icefield') {
-    // 極寒暴風雪基地：大面積冰原與凍湖，長裂縫貫穿整個區塊。
+    // 極寒暴風雪基地 / 霜封虛空：晶瑩凍土與深邃冰河
     eachCell((gx, gy, i, j) => {
       const r = hash(i, j, seed + 13);
-      if (r <= 0.45) return;
-      // 凍湖：大塊偏藍的冰面
-      ctx.fillStyle = base;
-      ctx.beginPath();
+      if (r <= 0.40) return;
       const cx = X(gx + cell * (0.3 + hash(i, j, seed + 1) * 0.4));
       const cy = Y(gy + cell * (0.3 + hash(i, j, seed + 2) * 0.4));
-      const rad = S(cell * (0.3 + r * 0.25));
+      const rad = S(cell * (0.32 + r * 0.28));
+
+      // 1) 冰湖外圍白霜暈染
+      const fg = ctx.createRadialGradient(cx, cy, rad * 0.6, cx, cy, rad * 1.25);
+      fg.addColorStop(0, 'rgba(190, 235, 255, 0.28)');
+      fg.addColorStop(0.7, 'rgba(160, 220, 255, 0.12)');
+      fg.addColorStop(1, 'rgba(160, 220, 255, 0)');
+      ctx.fillStyle = fg;
+      ctx.beginPath(); ctx.arc(cx, cy, rad * 1.25, 0, Math.PI * 2); ctx.fill();
+
+      // 2) 晶瑩冰原基底 (深藍冷凝色)
+      ctx.fillStyle = base;
+      ctx.beginPath();
       ctx.ellipse(cx, cy, rad, rad * 0.74, r * Math.PI, 0, Math.PI * 2);
       ctx.fill();
-      // 冰面上的長裂縫 (從中心往外岔)
+
+      // 3) 冰裂紋 (放射狀深邃裂隙，帶有發光冰藍邊緣)
       ctx.strokeStyle = accent;
-      ctx.lineWidth = Math.max(1, S(4));
+      ctx.lineWidth = Math.max(1.5, S(4.5));
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = S(8);
       for (let k = 0; k < 5; k++) {
         const a = hash(i, j, seed + 20 + k) * Math.PI * 2;
         let px = cx;
@@ -218,51 +432,159 @@ function drawMacroKind(ctx, macro, level, seed, X, Y, S, w, h, n) {
         }
         ctx.stroke();
       }
+      ctx.shadowBlur = 0;
     });
   } else if (kind === 'channels') {
-    // 熔岩核心熔爐：貫穿的岩漿渠道切開玄武岩平台，渠道邊緣透出橙紅。
-    ctx.fillStyle = base;
-    for (const gy of lines) ctx.fillRect(0, Y(gy) - S(46), w, S(92));
-    for (const gx of lines) ctx.fillRect(X(gx) - S(38), 0, S(76), h);
-    // 渠道內的白熱核心 (細、亮)
-    ctx.fillStyle = accent;
-    for (const gy of lines) ctx.fillRect(0, Y(gy) - S(9), w, S(18));
-    for (const gx of lines) ctx.fillRect(X(gx) - S(7), 0, S(14), h);
+    // 熔岩核心熔爐 / 鏽蝕地下鐵：玄武岩裂口與洶湧熾熱岩漿河
+    const channelW = S(88);
+
+    // 1) 熔岩渠道周邊熱輻射外暈 (Thermal Radiance)
+    ctx.save();
+    for (const gy of lines) {
+      const y = Y(gy);
+      const rg = ctx.createLinearGradient(0, y - channelW * 1.4, 0, y + channelW * 1.4);
+      rg.addColorStop(0, 'rgba(255, 60, 0, 0)');
+      rg.addColorStop(0.35, 'rgba(255, 80, 10, 0.22)');
+      rg.addColorStop(0.5, 'rgba(255, 120, 20, 0.45)');
+      rg.addColorStop(0.65, 'rgba(255, 80, 10, 0.22)');
+      rg.addColorStop(1, 'rgba(255, 60, 0, 0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, y - channelW * 1.4, w, channelW * 2.8);
+    }
+    for (const gx of lines) {
+      const x = X(gx);
+      const rg = ctx.createLinearGradient(x - channelW * 1.4, 0, x + channelW * 1.4, 0);
+      rg.addColorStop(0, 'rgba(255, 60, 0, 0)');
+      rg.addColorStop(0.35, 'rgba(255, 80, 10, 0.22)');
+      rg.addColorStop(0.5, 'rgba(255, 120, 20, 0.45)');
+      rg.addColorStop(0.65, 'rgba(255, 80, 10, 0.22)');
+      rg.addColorStop(1, 'rgba(255, 60, 0, 0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(x - channelW * 1.4, 0, channelW * 2.8, h);
+    }
+
+    // 2) 渠道深層熾熱熔岩基底
+    ctx.fillStyle = 'rgba(235, 75, 10, 0.9)';
+    for (const gy of lines) ctx.fillRect(0, Y(gy) - channelW / 2, w, channelW);
+    for (const gx of lines) ctx.fillRect(X(gx) - channelW / 2, 0, channelW, h);
+
+    // 3) 渠道鋸齒岩岸 (玄武岩碎裂邊緣)
+    ctx.fillStyle = '#140806';
+    for (const gy of lines) {
+      const y = Y(gy);
+      for (let px = 0; px < w; px += S(40)) {
+        const h1 = (Math.sin(px * 0.1 + gy) + 1) * S(10);
+        ctx.fillRect(px, y - channelW / 2, S(40), h1);
+        const h2 = (Math.cos(px * 0.12 + gy) + 1) * S(10);
+        ctx.fillRect(px, y + channelW / 2 - h2, S(40), h2);
+      }
+    }
+    for (const gx of lines) {
+      const x = X(gx);
+      for (let py = 0; py < h; py += S(40)) {
+        const w1 = (Math.sin(py * 0.1 + gx) + 1) * S(10);
+        ctx.fillRect(x - channelW / 2, py, w1, S(40));
+        const w2 = (Math.cos(py * 0.12 + gx) + 1) * S(10);
+        ctx.fillRect(x + channelW / 2 - w2, py, w2, S(40));
+      }
+    }
+
+    // 4) 渠道中央流動亮橘岩漿流
+    ctx.fillStyle = 'rgba(255, 165, 25, 0.95)';
+    for (const gy of lines) ctx.fillRect(0, Y(gy) - S(16), w, S(32));
+    for (const gx of lines) ctx.fillRect(X(gx) - S(16), 0, S(32), h);
+
+    // 5) 白熱高溫裂隙核心 (帶有強烈灼熱發光)
+    ctx.fillStyle = 'rgba(255, 245, 190, 0.98)';
+    ctx.shadowColor = '#ffb703';
+    ctx.shadowBlur = S(12);
+    for (const gy of lines) ctx.fillRect(0, Y(gy) - S(6), w, S(12));
+    for (const gx of lines) ctx.fillRect(X(gx) - S(6), 0, S(12), h);
+    ctx.restore();
   } else if (kind === 'rifts') {
-    // 深淵無盡戰：虛空裂縫與符文圓陣，裂縫邊緣帶紫光。
-    eachCell((gx, gy, i, j) => {
-      const r = hash(i, j, seed + 31);
-      if (r < 0.55) {
+    // 毒霧沼澤 / 水墨仙山 / 深淵無盡戰
+    if (level && level.id === 'inkmount') {
+      // 水墨仙山：宣紙墨韻山水，起伏等高山勢、墨跡暈染與飄落楓葉
+      eachCell((gx, gy, i, j) => {
+        const r = hash(i, j, seed + 31);
         const cx = X(gx + cell * 0.5);
         const cy = Y(gy + cell * 0.5);
+
+        // 遠山水墨渲染層
+        const rad = S(cell * (0.35 + r * 0.25));
+        const ig = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+        ig.addColorStop(0, 'rgba(40, 52, 48, 0.12)');
+        ig.addColorStop(0.6, 'rgba(50, 65, 60, 0.06)');
+        ig.addColorStop(1, 'rgba(60, 75, 70, 0)');
+        ctx.fillStyle = ig;
+        ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
+
+        // 皴法墨線
+        ctx.strokeStyle = 'rgba(30, 42, 38, 0.22)';
+        ctx.lineWidth = Math.max(1, S(3));
         const a = r * Math.PI * 2;
-        const len = S(cell * (0.34 + r * 0.3));
-        ctx.strokeStyle = base;
-        ctx.lineWidth = Math.max(2, S(46));
         ctx.beginPath();
-        ctx.moveTo(cx - Math.cos(a) * len, cy - Math.sin(a) * len);
-        ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+        ctx.moveTo(cx - Math.cos(a) * rad * 0.8, cy - Math.sin(a) * rad * 0.8);
+        ctx.quadraticCurveTo(cx + Math.sin(a) * S(30), cy - Math.cos(a) * S(30),
+          cx + Math.cos(a) * rad * 0.8, cy + Math.sin(a) * rad * 0.8);
         ctx.stroke();
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = Math.max(1, S(6));
-        ctx.beginPath();
-        ctx.moveTo(cx - Math.cos(a) * len, cy - Math.sin(a) * len);
-        ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
-        ctx.stroke();
-      }
-      if (r > 0.86) {
-        const cx = X(gx + cell * 0.5);
-        const cy = Y(gy + cell * 0.5);
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = Math.max(1, S(5));
-        ctx.beginPath();
-        ctx.arc(cx, cy, S(cell * 0.3), 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(cx, cy, S(cell * 0.22), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    });
+
+        // 朱砂紅楓葉點綴
+        if (r > 0.4) {
+          ctx.fillStyle = 'rgba(215, 68, 42, 0.55)';
+          for (let m = 0; m < 4; m++) {
+            const mx = cx + (hash(i, j, seed + 10 + m) - 0.5) * rad * 1.1;
+            const my = cy + (hash(i, j, seed + 20 + m) - 0.5) * rad * 1.1;
+            ctx.beginPath(); ctx.arc(mx, my, S(3.5), 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      });
+    } else {
+      // 虛空深淵 / 毒沼巨穴：次元破裂與符文法陣
+      eachCell((gx, gy, i, j) => {
+        const r = hash(i, j, seed + 31);
+        if (r < 0.60) {
+          const cx = X(gx + cell * 0.5);
+          const cy = Y(gy + cell * 0.5);
+          const a = r * Math.PI * 2;
+          const len = S(cell * (0.36 + r * 0.3));
+
+          // 裂縫暗影底槽
+          ctx.strokeStyle = base;
+          ctx.lineWidth = Math.max(2, S(48));
+          ctx.beginPath();
+          ctx.moveTo(cx - Math.cos(a) * len, cy - Math.sin(a) * len);
+          ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+          ctx.stroke();
+
+          // 核心發光脈衝線
+          ctx.save();
+          ctx.strokeStyle = accent;
+          ctx.lineWidth = Math.max(1.5, S(6.5));
+          ctx.shadowColor = accent;
+          ctx.shadowBlur = S(10);
+          ctx.beginPath();
+          ctx.moveTo(cx - Math.cos(a) * len, cy - Math.sin(a) * len);
+          ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+          ctx.stroke();
+          ctx.restore();
+        }
+        if (r > 0.80) {
+          // 地表符文環
+          const cx = X(gx + cell * 0.5);
+          const cy = Y(gy + cell * 0.5);
+          ctx.save();
+          ctx.strokeStyle = accent;
+          ctx.shadowColor = accent;
+          ctx.shadowBlur = S(8);
+          ctx.lineWidth = Math.max(1, S(5));
+          ctx.beginPath(); ctx.arc(cx, cy, S(cell * 0.3), 0, Math.PI * 2); ctx.stroke();
+          ctx.lineWidth = Math.max(1, S(2.5));
+          ctx.beginPath(); ctx.arc(cx, cy, S(cell * 0.22), 0, Math.PI * 2); ctx.stroke();
+          ctx.restore();
+        }
+      });
+    }
   }
   // kind === 'none' → 不畫 (保持原樣)
 }

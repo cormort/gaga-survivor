@@ -1783,12 +1783,64 @@ export function drawHeldWeapon(ctx, id, opts) {
   // 掛在身上的武器不會整把跟著開火往後彈，只留一點震動
   const kick = mount.aim ? recoil : recoil * 0.25;
 
+  // ── 動態姿態與手持位移系統 (Motion Archetypes) ────────────────
+  // 依武器性質區分：突刺 (Thrust)、下劈揮砍 (Slash Swing)、旋轉浮空 (Spinning)、
+  // 重型火炮反衝 (Heavy Recoil)、法杖施法脈衝 (Magic Surge) 與標準槍械抖動
+  let motionOffsetX = 0;
+  let motionOffsetY = 0;
+  let motionAngle = 0;
+
+  const isSpinner = a.family === 'disc' || a.saw || a.boomerang || id === 'ghost_shuriken' || id === 'soccer' || id === 'quantum_sphere';
+  const spinSpeed = a.family === 'disc' ? 3.0 : 2.2;
+  const currentSpin = (time * spinSpeed) + (kick * 14.0); // 攻擊時加速狂轉
+
+  if (id === 'kunai' || id === 'drill') {
+    // ── 突刺類 (Thrust) ──
+    const thrustDist = id === 'drill' ? 7.0 : 9.5;
+    const thrustCycle = Math.sin(kick * Math.PI);
+    motionOffsetX = thrustCycle * thrustDist;
+    if (id === 'drill') {
+      const drillJitter = Math.sin(time * 75) * (kick > 0.05 ? 1.6 : 0.6);
+      motionOffsetY += drillJitter;
+    }
+  } else if (a.family === 'blade') {
+    // ── 揮砍斬擊類 (Slash Swing) ──
+    const swingProg = Math.sin(kick * Math.PI);
+    motionOffsetX = swingProg * 7.5;
+    motionOffsetY = (kick - 0.5) * 4.5;
+    motionAngle = (kick - 0.3) * 0.52; // 劈砍動作弧度
+    if (id === 'chainsword') {
+      const buzz = Math.sin(time * 85) * (kick > 0.05 ? 2.2 : 0.7);
+      motionOffsetY += buzz;
+      motionAngle += Math.sin(time * 60) * (kick > 0.05 ? 0.07 : 0.02);
+    }
+  } else if (isSpinner) {
+    // ── 旋轉浮空體類 (Spinning Orbs & Saws) ──
+    motionOffsetX = Math.sin(kick * Math.PI) * 4.2;
+  } else if (id === 'railgun' || id === 'annihilation_beam' || id === 'rocket' || id === 'shark_torpedo' || id === 'dragon_breath' || id === 'napalm_sea') {
+    // ── 重型發射器與粒子炮 (Heavy Recoil) ──
+    motionOffsetX = -kick * 7.5;
+    motionOffsetY = -kick * 2.2;
+    motionAngle = -kick * 0.22;
+  } else if (a.family === 'coil') {
+    // ── 法杖施法能量脈衝 (Magic Surge) ──
+    motionOffsetX = Math.sin(kick * Math.PI) * 4.5 - kick * 2.2;
+    motionOffsetY = Math.sin(time * 30) * kick * 1.5;
+    motionAngle = -kick * 0.08;
+  } else {
+    // ── 一般標準槍械 (Standard Gun Recoil) ──
+    motionOffsetX = -kick * 4.5;
+    motionOffsetY = -kick * 1.4;
+    motionAngle = -kick * 0.12;
+  }
+
   ctx.save();
   ctx.translate(handX, handY);
   ctx.rotate(baseAngle);
   if (mount.scale && mount.scale !== 1) ctx.scale(mount.scale, mount.scale);
-  ctx.translate(-kick * 3.2, -kick * 1.2);
-  ctx.rotate(-kick * 0.10);
+  ctx.translate(motionOffsetX, motionOffsetY);
+  ctx.rotate(motionAngle);
+
   // 等級越高手感越重：每級放大 3%（Lv5 = +12%），換武器或升級都看得出來
   const lv = Math.max(1, Math.min(5, opts.level || 1));
   if (lv > 1) ctx.scale(1 + (lv - 1) * 0.03, 1 + (lv - 1) * 0.03);
@@ -1804,7 +1856,7 @@ export function drawHeldWeapon(ctx, id, opts) {
     ctx.restore();
   }
 
-  const spin = time * (a.family === 'disc' ? 2.2 : 1.4);
+  const spin = currentSpin;
   let tip = a.len;
 
   const pngImg = weaponImages.get(id);
@@ -1817,7 +1869,14 @@ export function drawHeldWeapon(ctx, id, opts) {
       renderH: ((pngImg.height || 32) / (pngImg.width || 32)) * a.len * 1.25,
       tipX: a.len,
     };
-    ctx.drawImage(pngImg, -cfg.anchorX, -cfg.anchorY, cfg.renderW, cfg.renderH);
+    if (isSpinner) {
+      ctx.save();
+      ctx.rotate(currentSpin);
+      ctx.drawImage(pngImg, -cfg.anchorX, -cfg.anchorY, cfg.renderW, cfg.renderH);
+      ctx.restore();
+    } else {
+      ctx.drawImage(pngImg, -cfg.anchorX, -cfg.anchorY, cfg.renderW, cfg.renderH);
+    }
     tip = cfg.tipX || a.len;
   } else {
     // ── Canvas 程序化繪圖模式 (Fallback 安全後備) ──────────
@@ -1827,68 +1886,202 @@ export function drawHeldWeapon(ctx, id, opts) {
     }
   }
 
-  // 刀刃揮砍弧光 (Slash Arc)
-  if (a.family === 'blade' && (muzzle > 0.05 || recoil > 0.05)) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const arcPower = Math.max(muzzle, recoil);
-    ctx.globalAlpha = arcPower * 0.85;
-    ctx.strokeStyle = a.color;
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.arc(tip * 0.6, 0, tip * 0.75, -Math.PI * 0.38, Math.PI * 0.38);
-    ctx.stroke();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.arc(tip * 0.6, 0, tip * 0.75, -Math.PI * 0.25, Math.PI * 0.25);
-    ctx.stroke();
-    ctx.restore();
-  }
+  // ── 專屬武器打擊與開火特效系統 (Weapon Attack FX) ─────────────────
+  const flashPower = Math.max(muzzle, recoil);
 
-  // 電弧枝椏 (Electric Discharges)
-  if (a.family === 'coil' && muzzle > 0.05) {
+  if (flashPower > 0.04) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = muzzle * 0.9;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.4;
-    for (let i = 0; i < 3; i++) {
-      const off = (i - 1) * 3.5;
+
+    if (id === 'chainsword') {
+      // 1. 鏈鋸劍：雙層鋸齒切割弧光 + 橘紅摩擦火星噴濺
+      ctx.globalAlpha = flashPower * 0.95;
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 4.2;
       ctx.beginPath();
-      ctx.moveTo(tip, off);
-      ctx.lineTo(tip + 8 * muzzle, off + (i % 2 === 0 ? 4 : -4));
-      ctx.lineTo(tip + 16 * muzzle, off);
+      ctx.arc(tip * 0.5, 0, tip * 0.7, -Math.PI * 0.42, Math.PI * 0.42);
       ctx.stroke();
+      ctx.strokeStyle = '#ff3344';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.arc(tip * 0.5, 0, tip * 0.75, -Math.PI * 0.35, Math.PI * 0.35);
+      ctx.stroke();
+      // 火星粒子
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 4; i++) {
+        const sx = tip * 0.7 + Math.sin(time * 30 + i) * 6;
+        const sy = (i - 1.5) * 6 * flashPower;
+        ctx.fillRect(sx, sy, 2.2, 2.2);
+      }
+    } else if (id === 'power_sword') {
+      // 2. 動力劍：力場分解弧光 (Power Disruption Crescent)
+      ctx.globalAlpha = flashPower;
+      const R = 32;
+      ctx.drawImage(glowCanvas('#00f5ff'), tip - R * 0.4, -R / 2, R, R);
+      ctx.strokeStyle = '#00f5ff';
+      ctx.lineWidth = 4.5;
+      ctx.beginPath();
+      ctx.arc(tip * 0.55, 0, tip * 0.8, -Math.PI * 0.45, Math.PI * 0.45);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.arc(tip * 0.55, 0, tip * 0.8, -Math.PI * 0.3, Math.PI * 0.3);
+      ctx.stroke();
+    } else if (id === 'phase_blade' || id === 'phase_storm') {
+      // 3. 相位刀刃：全息相位割裂弧光 + 數位矩陣方塊
+      ctx.globalAlpha = flashPower * 0.9;
+      ctx.strokeStyle = '#7df8ff';
+      ctx.lineWidth = 3.6;
+      ctx.beginPath();
+      ctx.arc(tip * 0.6, 0, tip * 0.75, -Math.PI * 0.38, Math.PI * 0.38);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(tip * 0.9, -3, 2.5, 2.5);
+      ctx.fillRect(tip * 0.7, 4, 2, 2);
+    } else if (id === 'kunai') {
+      // 4. 苦無：破空穿透流線 (Sonic Slipstream)
+      ctx.globalAlpha = flashPower * 0.85;
+      ctx.strokeStyle = '#cfe8ff';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.moveTo(tip, 0);
+      ctx.lineTo(tip + 18 * flashPower, 0);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(tip + 4, -3.5);
+      ctx.lineTo(tip + 14 * flashPower, -1.5);
+      ctx.moveTo(tip + 4, 3.5);
+      ctx.lineTo(tip + 14 * flashPower, 1.5);
+      ctx.stroke();
+    } else if (id === 'orbit_saw') {
+      // 5. 軌道圓鋸：切割金屬火花流 (Cutting Sparks)
+      ctx.globalAlpha = flashPower;
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 2.0;
+      for (let i = 0; i < 4; i++) {
+        const offY = (i - 1.5) * 5;
+        ctx.beginPath();
+        ctx.moveTo(tip * 0.4, offY);
+        ctx.lineTo(tip * 0.4 + (10 + i * 4) * flashPower, offY * 1.6);
+        ctx.stroke();
+      }
+    } else if (id === 'railgun' || id === 'annihilation_beam') {
+      // 6. 軌道炮/湮滅射線：同心電磁震波環 + 超音速貫穿光軸
+      ctx.globalAlpha = flashPower;
+      const R = 30 + flashPower * 12;
+      ctx.drawImage(glowCanvas('#7df8ff'), tip - R * 0.35, -R / 2, R, R);
+      ctx.strokeStyle = '#7df8ff';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.ellipse(tip + 6 * flashPower, 0, 4 * flashPower, 10 * flashPower, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(tip + 16 * flashPower, 0, 6 * flashPower, 16 * flashPower, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3.0;
+      ctx.beginPath();
+      ctx.moveTo(tip, 0);
+      ctx.lineTo(tip + 32 * flashPower, 0);
+      ctx.stroke();
+    } else if (id === 'dragon_breath' || id === 'napalm_sea' || id === 'molotov') {
+      // 7. 龍息/烈焰火海：扇形擴散火焰錐 (Flame Cone Blast)
+      ctx.globalAlpha = flashPower * 0.95;
+      const R = 28 + flashPower * 10;
+      ctx.drawImage(glowCanvas('#ff5722'), tip - R * 0.2, -R / 2, R, R);
+      const fg = ctx.createRadialGradient(tip, 0, 2, tip + 14 * flashPower, 0, 22 * flashPower);
+      fg.addColorStop(0, '#ffffff');
+      fg.addColorStop(0.35, '#ffb703');
+      fg.addColorStop(0.75, '#ff3344');
+      fg.addColorStop(1, 'rgba(255,30,0,0)');
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(tip, 0);
+      ctx.lineTo(tip + 24 * flashPower, -12 * flashPower);
+      ctx.lineTo(tip + 28 * flashPower, 0);
+      ctx.lineTo(tip + 24 * flashPower, 12 * flashPower);
+      ctx.closePath();
+      ctx.fill();
+    } else if (id === 'frost_nova' || id === 'absolute_zero') {
+      // 8. 冰霜新星/絕對零度：六角冰霜雪晶綻放 (Hexagonal Ice Crystal Bloom)
+      ctx.globalAlpha = flashPower;
+      const R = 28 + flashPower * 8;
+      ctx.drawImage(glowCanvas('#7df8ff'), tip - R * 0.35, -R / 2, R, R);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.8;
+      for (let i = 0; i < 6; i++) {
+        const rad = (i * Math.PI) / 3;
+        const len = (12 + (i % 2) * 5) * flashPower;
+        ctx.beginPath();
+        ctx.moveTo(tip, 0);
+        ctx.lineTo(tip + Math.cos(rad) * len, Math.sin(rad) * len);
+        ctx.stroke();
+      }
+    } else if (id === 'lightning' || id === 'plasma_storm') {
+      // 9. 雷電法杖/等離子：分支電弧爆鳴 (Forked Lightning Burst)
+      ctx.globalAlpha = flashPower * 0.95;
+      const R = 26 + flashPower * 8;
+      ctx.drawImage(glowCanvas('#c77dff'), tip - R * 0.35, -R / 2, R, R);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i < 3; i++) {
+        const off = (i - 1) * 4.5;
+        ctx.beginPath();
+        ctx.moveTo(tip, off);
+        ctx.lineTo(tip + 7 * flashPower, off + (i % 2 === 0 ? 5 : -5));
+        ctx.lineTo(tip + 16 * flashPower, off + (i % 2 === 0 ? -3 : 3));
+        ctx.lineTo(tip + 24 * flashPower, off);
+        ctx.stroke();
+      }
+    } else if (id === 'bolter' || id === 'storm_bolter') {
+      // 10. 戰鎚爆彈槍：重裝爆彈火球 + 側向制退排焰 (Compensator Side Jets)
+      ctx.globalAlpha = flashPower;
+      const R = 24 + flashPower * 8;
+      ctx.drawImage(glowCanvas('#ffd166'), tip - R * 0.35, -R / 2, R, R);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(tip, 0);
+      ctx.lineTo(tip + 12 * flashPower, -4.5 * flashPower);
+      ctx.lineTo(tip + 18 * flashPower, 0);
+      ctx.lineTo(tip + 12 * flashPower, 4.5 * flashPower);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#ff9f1c';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.moveTo(tip - 2, -3);
+      ctx.lineTo(tip + 3, -11 * flashPower);
+      ctx.moveTo(tip - 2, 3);
+      ctx.lineTo(tip + 3, 11 * flashPower);
+      ctx.stroke();
+    } else {
+      // 11. 標準槍械火光 (Standard Muzzle Flash)
+      ctx.globalAlpha = flashPower;
+      const R = 15 + flashPower * 7;
+      ctx.drawImage(glowCanvas(a.color), tip - R * 0.35, -R / 2, R, R);
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.beginPath();
+      ctx.moveTo(tip, 0);
+      ctx.lineTo(tip + 9 * flashPower, -3.2 * flashPower);
+      ctx.lineTo(tip + 14 * flashPower, 0);
+      ctx.lineTo(tip + 9 * flashPower, 3.2 * flashPower);
+      ctx.closePath();
+      ctx.fill();
     }
-    ctx.restore();
-  }
 
-  // 槍口火光 (Muzzle Flash)
-  if (muzzle > 0.02) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = muzzle;
-    const R = 13 + muzzle * 7;
-    ctx.drawImage(glowCanvas(a.color), tip - R * 0.35, -R / 2, R, R);
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.beginPath();
-    ctx.moveTo(tip, 0);
-    ctx.lineTo(tip + 9 * muzzle, -3.2 * muzzle);
-    ctx.lineTo(tip + 14 * muzzle, 0);
-    ctx.lineTo(tip + 9 * muzzle, 3.2 * muzzle);
-    ctx.closePath();
-    ctx.fill();
     ctx.restore();
   }
 
   ctx.restore();
 
-  // 回傳世界座標的槍口位置（大致值，供粒子/測試參考）
-  const ang = baseAngle - kick * 0.10;
+  // 回傳世界座標的槍口位置（供粒子/測試參考）
+  const ang = baseAngle + motionAngle;
   const k = mount.scale || 1;
-  const ox = -kick * 3.2;
-  const oy = -kick * 1.2;
+  const ox = motionOffsetX;
+  const oy = motionOffsetY;
   return {
     x: handX + (Math.cos(ang) * (tip + ox) - Math.sin(ang) * oy) * k,
     y: handY + (Math.sin(ang) * (tip + ox) + Math.cos(ang) * oy) * k,

@@ -97,6 +97,31 @@ export class GroundRenderer {
     // 把 11 關都玩過會累積到 44 MB。
     this._groundTextures = new LevelCache();
     this.entityContrast = ENTITY_CONTRAST;
+
+    // 高解析度無接縫 PNG 地表貼圖預載
+    this._pngImages = new Map();
+    this._pngLoaded = new Map();
+    this._initGroundPngs();
+  }
+
+  _initGroundPngs() {
+    const ids = [
+      'street', 'lab', 'frost', 'core', 'subway', 'swamp',
+      'storm', 'foundry', 'frostvoid', 'voidroad', 'endless', 'inkmount'
+    ];
+    for (const id of ids) {
+      const img = new Image();
+      img.src = `assets/ground/ground_${id}.png`;
+      img.onload = () => {
+        this._pngLoaded.set(id, true);
+        // 若該關在載入完成前先用程序化生成了磚，載入成功後立即清除快取，下一幀切換為高解析度 PNG
+        this._groundTextures.delete(id);
+      };
+      img.onerror = () => {
+        this._pngLoaded.set(id, false);
+      };
+      this._pngImages.set(id, img);
+    }
   }
 
   // 清掉地表磚快取。主要給「量測冷啟動成本」與未來的換關釋放路徑用 ——
@@ -210,9 +235,7 @@ export class GroundRenderer {
     // 畫在地表材質之上、格線之下：讀起來像「地板上的結構」，格線保持為戰術疊層
     drawTerrain(ctx, camera, this.level || LEVELS.street, W, H, this.gameTime);
 
-    // 細格線 + 每 N 格一條主格線，強化移動感。
-    // 格距/主線週期/虛線由關卡 theme.gridStyle 決定 —— 原本五關都是 grid 64、
-    // 每 4 格一條主線的同一套格線，是「關卡只差色相」的最後一個來源。
+    // 細格線 + 每 N 格一條主格線與戰術十字瞄準標，強化空間感與移動感
     const gs = theme.gridStyle || {};
     const grid = gs.size || 64;
     const majorEvery = gs.major || 4;
@@ -226,7 +249,7 @@ export class GroundRenderer {
     for (let i = 0, x = ox; x < W + grid; i++, x += grid) {
       const major = (majorX + i) % majorEvery === 0;
       ctx.strokeStyle = major ? theme.major : theme.grid;
-      ctx.lineWidth = major ? 1.5 : 1;
+      ctx.lineWidth = major ? 1.2 : 1;
       ctx.beginPath();
       ctx.moveTo(Math.round(x) + 0.5, 0);
       ctx.lineTo(Math.round(x) + 0.5, H);
@@ -235,13 +258,32 @@ export class GroundRenderer {
     for (let i = 0, y = oy; y < H + grid; i++, y += grid) {
       const major = (majorY + i) % majorEvery === 0;
       ctx.strokeStyle = major ? theme.major : theme.grid;
-      ctx.lineWidth = major ? 1.5 : 1;
+      ctx.lineWidth = major ? 1.2 : 1;
       ctx.beginPath();
       ctx.moveTo(0, Math.round(y) + 0.5);
       ctx.lineTo(W, Math.round(y) + 0.5);
       ctx.stroke();
     }
     if (dash > 0) ctx.setLineDash([]);
+
+    // 戰術主坐標十字瞄點 (Tactical HUD Crosshairs)
+    ctx.strokeStyle = theme.major;
+    ctx.lineWidth = 1.6;
+    for (let i = 0, x = ox; x < W + grid; i++, x += grid) {
+      if ((majorX + i) % majorEvery !== 0) continue;
+      const cx = Math.round(x) + 0.5;
+      for (let j = 0, y = oy; y < H + grid; j++, y += grid) {
+        if ((majorY + j) % majorEvery !== 0) continue;
+        const cy = Math.round(y) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - 7, cy); ctx.lineTo(cx + 7, cy);
+        ctx.moveTo(cx, cy - 7); ctx.lineTo(cx, cy + 7);
+        ctx.stroke();
+      }
+    }
+
+    // 環境大氣微粒層 (風吹沙塵 / 飄雪 / 餘燼 / 孢子 / 水墨楓葉)
+    this.drawAmbientMotes(ctx, camera, this.level || LEVELS.street, W, H, this.gameTime);
 
     // 地圖邊界警示線 (發光紅牆)：只有有邊界的地圖（守塔）才畫
     if (!isWorldBounded()) { ctx.restore(); return; }
@@ -260,6 +302,78 @@ export class GroundRenderer {
     ctx.restore();
   }
 
+  // 大氣環境漂浮微粒 (依關卡主題微調粒子顏色、漂移風向與速度，帶來強烈的動態臨場感)
+  drawAmbientMotes(ctx, camera, level, vw, vh, gameTime = 0) {
+    const id = (level && level.id) || 'street';
+    if (!this._motes) {
+      this._motes = [];
+      for (let i = 0; i < 48; i++) {
+        const u = (Math.sin(i * 127.1) * 43758.5453) % 1;
+        const v = (Math.cos(i * 311.7) * 43758.5453) % 1;
+        this._motes.push({
+          x: Math.abs(u) * 2400,
+          y: Math.abs(v) * 2400,
+          r: 1.0 + Math.abs((Math.sin(i * 43.1) * 1000) % 1) * 2.0,
+          speedX: -15 + ((Math.sin(i * 91.3) * 1000) % 1) * 30,
+          speedY: -10 + ((Math.cos(i * 77.9) * 1000) % 1) * 20,
+          alpha: 0.25 + Math.abs((Math.sin(i * 19.7) * 1000) % 1) * 0.45,
+          phase: i * 0.5,
+        });
+      }
+    }
+
+    ctx.save();
+    let color = 'rgba(0, 229, 255, ';
+    let extraColor = 'rgba(255, 205, 100, ';
+    let windX = 12;
+    let windY = -8;
+
+    if (id === 'frost' || id === 'frostvoid') {
+      color = 'rgba(220, 240, 255, ';
+      extraColor = 'rgba(180, 225, 255, ';
+      windX = -35; windY = 25;
+    } else if (id === 'core' || id === 'foundry') {
+      color = 'rgba(255, 130, 30, ';
+      extraColor = 'rgba(255, 210, 60, ';
+      windX = 8; windY = -40;
+    } else if (id === 'swamp') {
+      color = 'rgba(100, 255, 200, ';
+      extraColor = 'rgba(160, 255, 120, ';
+      windX = 5; windY = -12;
+    } else if (id === 'inkmount') {
+      color = 'rgba(220, 75, 45, ';
+      extraColor = 'rgba(45, 55, 50, ';
+      windX = -18; windY = 15;
+    } else if (id === 'voidroad' || id === 'endless') {
+      color = 'rgba(190, 140, 255, ';
+      extraColor = 'rgba(120, 255, 235, ';
+      windX = 10; windY = -15;
+    } else if (id === 'lab') {
+      color = 'rgba(0, 245, 155, ';
+      extraColor = 'rgba(120, 255, 200, ';
+      windX = 0; windY = -10;
+    }
+
+    const px = camera.x * 0.22;
+    const py = camera.y * 0.22;
+
+    for (let i = 0; i < this._motes.length; i++) {
+      const m = this._motes[i];
+      const t = gameTime;
+      const wx = ((m.x + (m.speedX + windX) * t - px) % vw + vw) % vw;
+      const wy = ((m.y + (m.speedY + windY) * t - py) % vh + vh) % vh;
+
+      const a = m.alpha * (0.7 + Math.sin(t * 2 + m.phase) * 0.3);
+      const c = (i % 2 === 0) ? color : extraColor;
+
+      ctx.fillStyle = c + a.toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(wx, wy, m.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // 程序化地面材質烘焙 (Soulstone 風格參考)：世界座標雜湊決定汙漬與材質細節，
   // 結果烘進一片無接縫紋理磚，之後每幀只做 drawImage。紋理/材質種類由
   // levels.js theme.ground.motif / material 資料決定。
@@ -268,12 +382,38 @@ export class GroundRenderer {
     const hit = this._groundTextures.get(id);
     if (hit) return hit;
 
+    const T = 1024;           // 成品磚大小
+
+    // 若有高畫質 PNG 無接縫地表貼圖且已就緒，直接採用並疊合主題環境調色
+    const pngImg = this._pngImages && this._pngImages.get(id);
+    if (pngImg && this._pngLoaded.get(id) && pngImg.naturalWidth > 0) {
+      const tile = document.createElement('canvas');
+      tile.width = tile.height = T;
+      const tctx = tile.getContext('2d');
+      tctx.drawImage(pngImg, 0, 0, T, T);
+
+      // 主題柔光層疊加（保留高解析度細節，同時讓不同關卡的主題色彩更加和諧與突出）
+      const g = level.theme && level.theme.ground;
+      if (g && g.patches && g.patches.length > 0) {
+        tctx.save();
+        tctx.globalCompositeOperation = 'soft-light';
+        const rad = tctx.createRadialGradient(T / 2, T / 2, T * 0.1, T / 2, T / 2, T * 0.7);
+        rad.addColorStop(0, `rgba(${g.patches[0].c}, 0.35)`);
+        rad.addColorStop(1, 'rgba(0,0,0,0)');
+        tctx.fillStyle = rad;
+        tctx.fillRect(0, 0, T, T);
+        tctx.restore();
+      }
+
+      this._groundTextures.set(id, tile);
+      return tile;
+    }
+
     // 世界錨定的接縫消除：先把細節畫在一片比成品大 2×PAD 的畫布上，
     // 再裁出中央區塊當磚。跨磚界的柔光汙漬光暈照常接合，不會出現週期接縫。
     // 磚放大到 1024：768 在 1280 寬的視野裡只重複 1.7 次，週期很容易被眼睛抓到；
     // 放大後同樣一屏只看得到 1.25 次，加上逐磚翻轉（見 drawFloorGrid）就不明顯了。
     // P 必須是 LATTICE 的整數倍，雜訊的格點才對得上磚界。
-    const T = 1024;           // 成品磚大小
     const P = 256;            // 出血區 (涵蓋最大光暈半徑與裂縫漂移)
     const B = T + P * 2;
     const LATTICE = 128;      // 雜訊格點大小 (世界單位)
