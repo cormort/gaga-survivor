@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v47';
+const FALLBACK_VERSION = 'gaga-v48';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -140,6 +140,36 @@ const PRECACHE = [
   './assets/xian/xian_sword.png',
   './assets/xian/xian_talisman.png',
   './assets/xian/xian_zen.png',
+  // 武器手持精靈貼圖 (WeaponArt.js)
+  './assets/weapons/absolute_zero.png',
+  './assets/weapons/annihilation_beam.png',
+  './assets/weapons/bolter.png',
+  './assets/weapons/boomerang.png',
+  './assets/weapons/chainsword.png',
+  './assets/weapons/dragon_breath.png',
+  './assets/weapons/drill.png',
+  './assets/weapons/eternal_domain.png',
+  './assets/weapons/frost_nova.png',
+  './assets/weapons/ghost_shuriken.png',
+  './assets/weapons/guardian.png',
+  './assets/weapons/kunai.png',
+  './assets/weapons/lightning.png',
+  './assets/weapons/molotov.png',
+  './assets/weapons/napalm_sea.png',
+  './assets/weapons/orbit_saw.png',
+  './assets/weapons/phase_blade.png',
+  './assets/weapons/phase_storm.png',
+  './assets/weapons/plasma_storm.png',
+  './assets/weapons/power_sword.png',
+  './assets/weapons/quantum_sphere.png',
+  './assets/weapons/railgun.png',
+  './assets/weapons/rocket.png',
+  './assets/weapons/shark_torpedo.png',
+  './assets/weapons/shotgun.png',
+  './assets/weapons/singularity_ring.png',
+  './assets/weapons/soccer.png',
+  './assets/weapons/storm_bolter.png',
+  './assets/weapons/twin_storm.png',
   // 圖示 (manifest 與 apple-touch-icon 會用到；SVG 是維護用的原始檔)
   './icons/icon.svg',
   './icons/icon-maskable.svg',
