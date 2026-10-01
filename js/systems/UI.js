@@ -398,25 +398,6 @@ export class UIManager {
       const classColor = c.classColor || c.accent || '#00e5ff';
       const heroClass = c.heroClass || '特工';
 
-      const aspects = WEAPON_ASPECTS[c.startWeapon] || [];
-      const currentAspect = save.getWeaponAspect(c.startWeapon) || aspects[0]?.id;
-      let aspectHtml = '';
-      if (unlocked && aspects.length > 0) {
-        aspectHtml = `
-          <div class="char-aspect-section">
-            <div class="char-aspect-title">⚔️ 兵器型態:</div>
-            <div class="aspect-chips" data-weapon="${c.startWeapon}">
-              ${aspects.map(a => `
-                <span class="aspect-chip ${a.id === currentAspect ? 'active' : ''}" data-aspect="${a.id}" title="${a.name}: ${a.desc}">
-                  ${a.icon} ${a.name.split(' ')[0]}
-                </span>
-              `).join('')}
-            </div>
-            <div class="aspect-desc-tooltip">${aspects.find(a => a.id === currentAspect)?.desc || ''}</div>
-          </div>
-        `;
-      }
-
       card.innerHTML = `
         <canvas class="char-portrait" width="128" height="120"></canvas>
         <div class="char-class-badge" style="background:${classColor}; color:#0c1017;">${heroClass}</div>
@@ -424,10 +405,8 @@ export class UIManager {
         <div class="char-codename">${c.codename}${unlocked ? ` <span class="char-lv">Lv ${save.charLevel(id)}</span>` : ' <span class="lock-hint">未解鎖</span>'}</div>
         <div class="char-title">${c.title} <span class="char-class-tag" style="color:${classColor};">(${heroClass})</span></div>
         <div class="char-trait"><strong>${c.traitName}</strong>${c.traitDesc}</div>
-        ${aspectHtml}
       `;
       card.addEventListener('click', (e) => {
-        if (e.target.closest('.aspect-chip')) return;
         if (!unlocked) {
           // 鎖定卡：有給解鎖回呼就試買 (DNA 不足時由遊戲端顯示提示)
           if (typeof onUnlock === 'function') onUnlock(id, cost);
@@ -438,24 +417,6 @@ export class UIManager {
         card.classList.add('selected');
         onPick(id);
       });
-
-      if (unlocked && aspects.length > 0) {
-        card.querySelectorAll('.aspect-chip').forEach(chip => {
-          chip.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const aId = chip.dataset.aspect;
-            save.setWeaponAspect(c.startWeapon, aId);
-            sound.playGem();
-            card.querySelectorAll('.aspect-chip').forEach(el => el.classList.toggle('active', el.dataset.aspect === aId));
-            const descEl = card.querySelector('.aspect-desc-tooltip');
-            if (descEl) {
-              const found = aspects.find(a => a.id === aId);
-              if (found) descEl.textContent = found.desc;
-            }
-            if (typeof onAspectChange === 'function') onAspectChange(c.startWeapon, aId);
-          });
-        });
-      }
 
       this.charSelect.appendChild(card);
 
