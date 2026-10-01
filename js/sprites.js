@@ -6828,6 +6828,8 @@ const BOSS_PNG_SPRITES = {
   boss_frostvoid: 125,
   boss_voidroad: 125,
   boss_thunder: 130,
+  boss_inkape: 130,
+  boss_inkfox: 125,
 };
 
 function bossImageBuilder(img, height, final = false, charging = false) {

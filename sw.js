@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v61';
+const FALLBACK_VERSION = 'gaga-v62';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -152,6 +152,8 @@ const PRECACHE = [
   './assets/bosses/boss_frostvoid.png',
   './assets/bosses/boss_voidroad.png',
   './assets/bosses/boss_thunder.png',
+  './assets/bosses/boss_inkape.png',
+  './assets/bosses/boss_inkfox.png',
   // 武器手持精靈貼圖 (WeaponArt.js)
   './assets/weapons/absolute_zero.png',
   './assets/weapons/annihilation_beam.png',
