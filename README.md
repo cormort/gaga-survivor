@@ -37,7 +37,7 @@ python3 -m http.server 8791
 > 理由：maskable 圖示依規範**必須 opaque**（MDN：give your maskable icon an opaque background
 > color to fill the entire icon area），而透明的 `purpose: any` 圖示在 Android 會被塞進白色圓圈。
 > 用 AI 工具重繪圖示時很容易產出「透明圓角 + 羽化邊」，改完務必跑一次 `--check`。
-- 回歸測試：`node tools/verify-pwa.mjs`（61 項，含「Chrome 可安裝性」CDP 判定、各手機環境的安裝指引矩陣、關掉伺服器後的離線啟動）、`node tools/verify-pwa-update.mjs`（v1→v2 更新流程）、`node tools/bannerbox.mjs`（三種螢幕尺寸的橫幅版面）。
+- 回歸測試：`node tools/verify-pwa.mjs`（69 項，含「Chrome 可安裝性」CDP 判定、圖示必須完全不透明、各手機環境的安裝指引矩陣、安裝失敗後的「建立捷徑」備援、關掉伺服器後的離線啟動）、`node tools/verify-pwa-update.mjs`（v1→v2 更新流程）、`node tools/bannerbox.mjs`（三種螢幕尺寸的橫幅版面）。
 
 > **可安裝性要怎麼驗才準**：光看 manifest/圖示/SW 的靜態檢查驗不出「Chrome 願不願意給安裝」。
 > `Playwright` 的 `browser.newContext()` 是無痕情境，`Page.getInstallabilityErrors` 只會回

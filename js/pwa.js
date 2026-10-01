@@ -223,6 +223,12 @@ const INSTALL_COPY = {
   native: { icon: '📲', title: '安裝嘎嘎特攻隊', desc: '加入主畫面，離線也能出擊' },
   'native-manual': { icon: '📲', title: '安裝嘎嘎特攻隊', desc: '點瀏覽器右上角「⋮」→ 安裝應用程式' },
   ios: { icon: '🧭', title: '裝到 iPhone 主畫面', desc: '點下方「分享」鈕 → 加入主畫面' },
+  // Android 的安裝是兩段式：Chrome 先向 Google 要一個 WebAPK，再由系統裝起來。第二段
+  // 失敗時（授權、Play 服務、空間、Google 端的鑄造服務）Chrome 只會丟「無法建立捷徑／
+  // 無法開啟應用程式」，使用者就卡死了。這裡退一步給**不經過 WebAPK** 的備案：一般捷徑，
+  // 一定放得上主畫面，代價是不進 standalone 模式。
+  // 用疑問句而非「你失敗了」—— 等不到 appinstalled 不等於一定失敗（可能只是慢或事件沒回來）。
+  'native-failed': { icon: '📲', title: '沒看到 App 出現？', desc: '改用「⋮」→ 加到主畫面 → 建立捷徑' },
   unsupported: { icon: '🧭', title: '這個瀏覽器無法安裝' },
 };
 
@@ -236,10 +242,10 @@ function installCopy() {
 // 任何平台都能叫出安裝說明（不再對 iOS 直接回 false）。
 // 首頁的「📲 安裝成 App」按鈕與 console 的 gagaPWA.showInstallBanner() 都走這裡；
 // 只有在「真的有 beforeinstallprompt 可攔」時才給按鈕，其餘情況給步驟 —— 按了沒反應比不給按鈕更糟。
-function showInstallBanner() {
+function showInstallBanner(copyKey) {
   const mode = installMode();
   if (mode === 'installed') return false;
-  const copy = installCopy();
+  const copy = (copyKey && INSTALL_COPY[copyKey]) || installCopy();
   const canPrompt = mode === 'native' && !!deferredInstall;
   showBanner({
     icon: copy.icon,
@@ -250,6 +256,32 @@ function showInstallBanner() {
     onAction: () => { promptInstall(); },
   });
   return true;
+}
+
+// 安裝失敗的退路：Android 的安裝是兩段式 —— (1) Chrome 向 Google 要一個 WebAPK，
+// (2) 系統把它裝起來。第 (2) 段失敗時 Chrome 只會說「無法建立捷徑／無法開啟應用程式」，
+// 而我們原本在使用者按下「安裝」後就把橫幅收掉，使用者從此沒有任何下一步。
+// 成功的可靠訊號是 appinstalled；等不到就給不經過 WebAPK 的備案（建立捷徑）。
+//
+// 注意：不能用 isStandalone() 當成功訊號 —— Android 上安裝完成時，目前這個分頁仍然
+// 停在 Chrome（要從桌面開啟才是 standalone），所以那會誤判成功為失敗。
+const INSTALL_WATCHDOG_MS = 12000;
+let installWatchdog = null;
+
+function clearInstallWatchdog() {
+  if (installWatchdog !== null) {
+    window.clearTimeout(installWatchdog);
+    installWatchdog = null;
+  }
+}
+
+function armInstallWatchdog() {
+  clearInstallWatchdog();
+  installWatchdog = window.setTimeout(() => {
+    installWatchdog = null;
+    console.info('[pwa] 按下安裝後沒收到 appinstalled，顯示「建立捷徑」備援指示');
+    showInstallBanner('native-failed');
+  }, INSTALL_WATCHDOG_MS);
 }
 
 /**
@@ -271,7 +303,10 @@ export async function promptInstall() {
     const accepted = !!choice && choice.outcome === 'accepted';
     // 不論接受或取消，都把原生事件消耗掉；取消後改顯示手動步驟，避免按鈕從此失效。
     if (!accepted) showInstallBanner();
-    else hideBanner();
+    else {
+      hideBanner();
+      armInstallWatchdog();
+    }
     return accepted;
   } catch (err) {
     console.warn('[pwa] 安裝提示失敗：', err);
@@ -351,6 +386,7 @@ function initInstallPrompt() {
   });
 
   window.addEventListener('appinstalled', () => {
+    clearInstallWatchdog();
     deferredInstall = null;
     installDismissed = true;
     hideBanner();

@@ -390,6 +390,57 @@ ok('window.game 建立成功 (main.js 啟動)', gameBooted, gameBooted ? 'ok' : 
   await dc.close();
 }
 
+/* ── 安裝失敗的退路（Android WebAPK 第二段失敗）
+   Chrome 在 Android 上裝 PWA 是兩段式：先向 Google 要一個 WebAPK，再由系統裝起來。
+   第二段失敗時 Chrome 只丟「無法建立捷徑／無法開啟應用程式」，使用者手上就沒有下一步了。
+   所以按過「安裝」之後要有人看著：成功訊號是 appinstalled，等不到就給「建立捷徑」備案。
+   註：不能用 standalone 判定 —— Android 安裝完成時這個分頁仍停在 Chrome。 */
+{
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const fp = await c.newPage();
+  await fp.goto(`${BASE}/index.html`, { waitUntil: 'load' });
+  await fp.waitForFunction(() => window.gagaPWA, null, { timeout: 15000 });
+
+  // 偽造一個 beforeinstallprompt（真的那個只有 Chrome 自己會發，測試裡發不出來）
+  const armFake = (outcome) => fp.evaluate((o) => {
+    const evt = new Event('beforeinstallprompt', { cancelable: true });
+    evt.prompt = () => { window.__promptCalled = true; };
+    evt.userChoice = Promise.resolve({ outcome: o });
+    window.dispatchEvent(evt);
+  }, outcome);
+  const bannerState = () => fp.evaluate(() => {
+    const el = document.getElementById('pwa-banner');
+    return {
+      visible: !!el && !el.classList.contains('hidden'),
+      text: el ? el.textContent.replace(/\s+/g, '') : '',
+    };
+  });
+
+  // (1) 使用者按了「接受」，但系統端沒有真的裝起來（沒收到 appinstalled）
+  await armFake('accepted');
+  const accepted = await fp.evaluate(() => window.gagaPWA.promptInstall());
+  ok('按下安裝且使用者接受時，prompt() 真的被呼叫', accepted === true,
+    `promptInstall()=${accepted}, promptCalled=${await fp.evaluate(() => window.__promptCalled)}`);
+  ok('接受之後先把橫幅收起來（不要擋著安裝流程）', (await bannerState()).visible === false);
+
+  await new Promise((r) => setTimeout(r, 13000)); // 等過 INSTALL_WATCHDOG_MS
+  const failed = await bannerState();
+  ok('等不到 appinstalled 時，改給「建立捷徑」的備援指示（不讓使用者卡死）',
+    failed.visible === true && failed.text.includes('建立捷徑'),
+    JSON.stringify(failed));
+
+  // (2) 對照組：真的收到 appinstalled 就不該冒出失敗指示
+  await armFake('accepted');
+  await fp.evaluate(() => window.gagaPWA.promptInstall());
+  await fp.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+  await new Promise((r) => setTimeout(r, 13000));
+  const afterOk = await bannerState();
+  ok('收到 appinstalled（安裝成功）後不會再冒出失敗指示',
+    afterOk.visible === false, JSON.stringify(afterOk));
+
+  await c.close();
+}
+
 /* ── 真的離線：關掉伺服器 + context.setOffline(true)，再 reload ── */
 await ctx.setOffline(true);
 killServer();
