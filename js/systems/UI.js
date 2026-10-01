@@ -232,11 +232,6 @@ export class UIManager {
     this.recipeBtn = document.getElementById('btn-recipe');
     this.recipeModal = document.getElementById('recipe-modal');
     this.recipeList = document.getElementById('recipe-list');
-    // 兵器型態彈窗：型態選擇原本只掛在「角色卡的起始武器」上，導致 8 個家族裡有 3 個
-    // （足球／迴力鏢／軌道炮）在 UI 上完全選不到、永遠只能用預設型態。這個彈窗把全部家族列出來。
-    this.aspectBtn = document.getElementById('btn-aspects');
-    this.aspectModal = document.getElementById('aspect-modal');
-    this.aspectList = document.getElementById('aspect-list');
 
     // 守塔建築放置預覽 HUD 與設施檢查面板
     this.placementHud = document.getElementById('placement-hud');
@@ -300,9 +295,6 @@ export class UIManager {
     });
     document.getElementById('btn-close-recipe')?.addEventListener('click', () => {
       this.recipeModal?.classList.add('hidden');
-    });
-    document.getElementById('btn-close-aspects')?.addEventListener('click', () => {
-      this.aspectModal?.classList.add('hidden');
     });
 
     // 局內隨機事件橫幅
@@ -1291,48 +1283,6 @@ export class UIManager {
       row.appendChild(desc);
 
       this.recipeList.appendChild(row);
-    }
-  }
-
-  // 兵器型態：列出所有家族 × 3 型態，點了立刻寫進存檔（與角色卡上的 chips 共用同一個 API）
-  openAspectModal(save, onChange) {
-    if (!this.aspectModal) return;
-    this.buildAspectList(save, onChange);
-    this.aspectModal.classList.remove('hidden');
-  }
-
-  buildAspectList(save, onChange) {
-    if (!this.aspectList) return;
-    this.aspectList.innerHTML = '';
-    for (const [family, aspects] of Object.entries(WEAPON_ASPECTS)) {
-      const current = save.getWeaponAspect(family) || (aspects[0] && aspects[0].id);
-      const row = document.createElement('div');
-      row.className = 'aspect-family-row';
-      row.innerHTML = `
-        <div class="aspect-family-head">
-          <span class="aspect-family-icon">${WEAPONS[family] ? WEAPONS[family].icon : '⚔️'}</span>
-          <span class="aspect-family-name">${WEAPONS[family] ? WEAPONS[family].name : family}</span>
-        </div>
-        <div class="aspect-chips" data-weapon="${family}">
-          ${aspects.map((a) => `
-            <span class="aspect-chip ${a.id === current ? 'active' : ''}" data-aspect="${a.id}" title="${a.name}: ${a.desc}">
-              ${a.icon} ${a.name.split(' ')[0]}
-            </span>`).join('')}
-        </div>
-        <div class="aspect-desc-tooltip">${(aspects.find((a) => a.id === current) || {}).desc || ''}</div>
-      `;
-      row.querySelectorAll('.aspect-chip').forEach((chip) => {
-        chip.addEventListener('click', () => {
-          const aId = chip.dataset.aspect;
-          if (onChange) onChange(family, aId);
-          row.querySelectorAll('.aspect-chip').forEach((el) => el.classList.toggle('active', el.dataset.aspect === aId));
-          const desc = (aspects.find((a) => a.id === aId) || {}).desc || '';
-          const tip = row.querySelector('.aspect-desc-tooltip');
-          if (tip) tip.textContent = desc;
-          sound.playGem();
-        });
-      });
-      this.aspectList.appendChild(row);
     }
   }
 
