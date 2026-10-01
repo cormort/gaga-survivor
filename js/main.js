@@ -1245,7 +1245,20 @@ class Game {
       }
     } else if (act === 'summon') {
       // 召喚 3 隻當前波次的小怪 (數量逼近上限就不召)
-      if (this.enemies.length < 230) {
+      if (this.enemies.length < 230 && this.td) {
+        // 守塔關卡的波次是 groups 結構、沒有 pool：從當前波的怪種挑，並沿路線出發
+        const cur = this.td.waves[Math.max(0, this.td.waveIdx - 1)];
+        const types = cur ? cur.groups.map(g => g.type) : [];
+        const paths = this.level.paths;
+        if (types.length) {
+          for (let i = 0; i < 3; i++) {
+            this.td.spawn({
+              type: types[Math.floor(Math.random() * types.length)],
+              path: paths[Math.floor(Math.random() * paths.length)],
+            });
+          }
+        }
+      } else if (this.enemies.length < 230) {
         const pool = currentWave(this.level || LEVELS.street, this.gameTime).pool;
         const scale = enemyScale(this.gameTime, this.level, this.rules);
         scale.hp = (1 + this.gameTime / 90) * (this.level ? this.level.hpScale : 1) * 0.6; // 召喚怪刻意壓低
