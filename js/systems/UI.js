@@ -2109,7 +2109,11 @@ export class UIManager {
   }
 
   showGameOver(stats, weaponManager, gearSummary = null) {
-    sound.playGameOver();
+    if (stats && stats.isVictory) {
+      sound.playWin();
+    } else {
+      sound.playGameOver();
+    }
 
     const resultTitle = document.getElementById('result-title');
     const resultSub = document.getElementById('result-subtitle');

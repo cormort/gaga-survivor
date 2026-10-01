@@ -894,7 +894,7 @@ class Game {
     this.runCard = (!isDaily && RUN_CARDS[save.data.runCard]) || null;
 
     sound.ensureContext();
-    const activeLevelId = this.isDaily ? this.dailyConfig.levelKey : this.levelId;
+    const activeLevelId = this.modeId === 'towerDefense' ? 'td' : (this.isDaily ? this.dailyConfig.levelKey : this.levelId);
     sound.startBGM(activeLevelId);
 
     this.level = LEVELS[activeLevelId] || LEVELS.street;
@@ -1163,6 +1163,8 @@ class Game {
   onBossSpawned(boss) {
     this.boss = boss;
     this.camera.shake = 15;
+    sound.playAlarm();
+    sound.switchToBossTheme();
     this.ui.say(
       boss.isFinal ? '終極首領降臨！擊敗它即可完成任務！' : this.player.character.lines.boss,
       '#ff0055',
@@ -2512,6 +2514,7 @@ class Game {
         if (enemy.isBoss) {
           this.camera.shake = 18;
           sound.playEvoFanfare();
+          sound.restoreLevelTheme();
 
           // Boss 級焦痕
           const [rr, gg, bb] = this._hexRgb(enemy.color);
@@ -2768,19 +2771,19 @@ class Game {
 
   handleItemPickup(item) {
     if (item.type === 'exp') {
-      sound.playGem();
+      sound.playGem(item.x);
       // 裝備「領悟」詞條放大經驗水晶 (每顆至少 1)
       const val = Math.max(1, Math.round(item.value * (1 + (this.player.metaExp || 0)) * this.rules.expMul));
       // 只累積待處理的升級數，彈窗留到整批掉落物都吸完才觸發 (見 updateDropItems)
       this.pendingLevelUps += this.player.gainExp(val);
     } else if (item.type === 'magnet') {
-      sound.playGem();
+      sound.playPowerup();
       // 全場經驗水晶瞬間全部吸向玩家
       for (const d of this.dropItems) {
         d.isAttracted = true;
       }
     } else if (item.type === 'bomb') {
-      sound.playExplosion();
+      sound.playExplosion(item.x);
       this.camera.shake = 20;
       // 全場重創（不是一鍵抹除）：非 Boss 吃「當前生命 × 比例」，Boss 吃固定傷害。
       // 9999 會讓清場沒有代價，也讓後期難度設計失去意義（見 BOMB_TUNING 的說明）。
@@ -2793,11 +2796,11 @@ class Game {
         }
       }
     } else if (item.type === 'heal') {
-      sound.playGem();
+      sound.playHeal();
       this.player.heal(item.heal);
       this.particles.createDamageText(this.player.x, this.player.y, `+${item.heal} HP`, false);
     } else if (item.type === 'gold') {
-      sound.playGem();
+      sound.playCoin(item.x);
       this.gold += Math.round(item.value * facilityGoldMul(this));
     } else if (item.type === 'chest') {
       if (item.item === 'boss') this.openBossChest();
@@ -2808,7 +2811,7 @@ class Game {
       if (!j) return;
       save.addJewel(j.id);
       this.runJewels[j.id] = (this.runJewels[j.id] || 0) + 1;
-      sound.playGem();
+      sound.playPowerup();
       this.particles.createShockwave(this.player.x, this.player.y, 70, j.color);
       this.particles.createDamageText(this.player.x, this.player.y - 20, `${j.icon} ${j.name}`, false);
       this.ui.say(`${j.icon} 撿到${j.name}！已收進珠寶袋（陣亡也會保留）`, j.color, 1.8);
@@ -2838,13 +2841,13 @@ class Game {
       const gold = Math.round(30 * facilityGoldMul(this));
       this.gold += gold;
       this.player.heal(25);
-      sound.playEvoFanfare();
+      sound.playPowerup();
       this.particles.createShockwave(this.player.x, this.player.y, 150, '#ffb703');
       this.particles.createDamageText(this.player.x, this.player.y, `+${gold} 🪙 +25 HP`, false);
     } else if (item.type === 'consumable') {
       const cDef = CONSUMABLE_ITEMS[item.subType];
       if (!cDef) return;
-      sound.playGem();
+      sound.playPickup();
 
       // 先疊到同款的格子，再放進空格；兩格都被別款占滿才即拾即用
       const pockets = this.player.pockets;

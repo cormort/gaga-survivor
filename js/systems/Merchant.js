@@ -80,20 +80,22 @@ export function buyMerchantItem(game, item) {
   const cost = Math.round(item.cost * (game.mode.turretCostMul || 1));
   if (game.gold < cost) {
     game.ui.say('金幣不足！', '#ff0055', 1.5);
-    sound.playHurt();
+    sound.playError();
     return;
   }
   game.gold -= cost;
   game._merchantBuys++;
-  sound.playGem();
+  sound.playCoin();
   game.particles.createShockwave(game.player.x, game.player.y, 120, item.color);
 
   switch (item.id) {
     case 'mega_heal':
       game.player.heal(80);
+      sound.playHeal();
       break;
     case 'temp_overclock':
       game.player.cdrMultiplier = Math.max(0.3, game.player.cdrMultiplier * 0.6);
+      sound.playPowerup();
       game._tempBuffs.push({
         id: item.id, timer: item.duration,
         revert: (p) => { p.cdrMultiplier = Math.min(1, p.cdrMultiplier / 0.6); },
@@ -104,6 +106,7 @@ export function buyMerchantItem(game, item) {
     case 'energy_shield':
       game.player.shield = (game.player.shield || 0) + 100;
       game.player.maxShield = Math.max(game.player.maxShield || 0, game.player.shield);
+      sound.playShield();
       break;
     case 'hyper_magnet':
       game.player.magnetMultiplier *= 3;

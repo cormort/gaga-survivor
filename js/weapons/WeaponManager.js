@@ -581,7 +581,7 @@ export class WeaponManager {
             }, finalCrit)
           );
         }
-        sound.playShoot('kunai');
+        sound.playShoot(def.id === 'phase_blade' || def.id === 'phase_storm' ? 'phase_blade' : 'kunai', this.player.x);
       });
     }
   }
@@ -745,7 +745,7 @@ export class WeaponManager {
             lavaDamageMul: stats.lavaDamageMul,
           }, crit)
         );
-        sound.playShoot('rocket');
+        sound.playShoot('rocket', this.player.x);
       });
     }
   }
@@ -763,7 +763,7 @@ export class WeaponManager {
       const targetX = target ? target.x + (Math.random() * 40 - 20) : this.player.x + (Math.random() * 160 - 80);
       const targetY = target ? target.y + (Math.random() * 40 - 20) : this.player.y + (Math.random() * 160 - 80);
 
-      sound.playShoot('molotov');   // 燃燒瓶原本沒有任何投擲音效（六種武器唯一的靜音）
+      sound.playShoot('molotov', this.player.x);   // 燃燒瓶原本沒有任何投擲音效（六種武器唯一的靜音）
 
       // 真的「投擲」：瓶子沿拋物線飛到落點（純視覺、不碰撞），落地摔碎才點燃火海。
       // 先前火海是開火當下直接出現在目標腳下，看不出是丟出去的瓶子。
@@ -978,7 +978,7 @@ export class WeaponManager {
         }, crit)
       );
     }
-    sound.playShoot('boomerang');
+    sound.playShoot('boomerang', this.player.x);
   }
 
   // 軌道炮：開火當下就結算整條直線的傷害（不是飛行彈體），再補一個純視覺的光束實體
@@ -1037,7 +1037,7 @@ export class WeaponManager {
         }, crit)
       );
     }
-    sound.playShoot('railgun');
+    sound.playShoot('railgun', this.player.x);
   }
 
   fireSoccer(def, item, damage, enemies, crit = false) {
@@ -1083,7 +1083,7 @@ export class WeaponManager {
           afterimage: !!def.splitGen,
         }, crit)
       );
-      sound.playShoot('soccer');
+      sound.playShoot('soccer', this.player.x);
     }
   }
 
@@ -1101,7 +1101,7 @@ export class WeaponManager {
     if (particleSystem) {
       particleSystem.createShockwave(px, py, radius, def.isEvo ? '#e0fbff' : '#7fd8ff');
     }
-    sound.playShoot('frost_nova');
+    sound.playShoot('frost_nova', px);
 
     for (const enemy of enemies) {
       if (enemy.isDead) continue;
@@ -1157,7 +1157,7 @@ export class WeaponManager {
         }, crit)
       );
     }
-    sound.playShoot('shotgun');
+    sound.playShoot('shotgun', this.player.x);
     return true;
   }
 
@@ -1452,7 +1452,7 @@ export class WeaponManager {
         item.recoil = 1;
         item.muzzle = 1;
 
-        sound.playShoot(ox);
+        sound.playShoot(isStorm ? 'storm_bolter' : 'bolter', ox);
 
         this.projectiles.push(
           this.mkProjectile({
@@ -1487,7 +1487,7 @@ export class WeaponManager {
     const arc = isPower ? Math.PI * 2 : def.arc[item.level - 1];
     const hitDmg = Math.round(damage / (isPower ? 1 : Math.max(1, hits * 0.65)));
 
-    sound.playHit(this.player.x);
+    sound.playShoot(isPower ? 'power_sword' : 'chainsword', this.player.x);
 
     for (let h = 0; h < hits; h++) {
       this.schedule(h * 0.07, () => {

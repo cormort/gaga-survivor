@@ -37,15 +37,15 @@ export function bindEvents(game) {
 
   // 特工黑市 (Shop)
   document.getElementById('btn-shop')?.addEventListener('click', () => {
-    sound.playGem();
+    sound.playClick();
     const buy = (cur, costGold, costDna, onPaid) => {
       if (cur === 'gold' ? save.data.gold < costGold : save.data.dna < costDna) {
         game.ui.sayStatus(`${cur === 'gold' ? '金幣' : 'DNA'} 不足！`, true);
-        sound.playHurt();
+        sound.playError();
         return;
       }
       save.spend(cur === 'gold' ? costGold : 0, cur === 'dna' ? costDna : 0);
-      sound.playEvoFanfare();
+      sound.playCoin();
       game.ui.updateDnaChip(save.data.dna, save.data.gold);
       onPaid();
       game.ui.rebuildShopView(save);
@@ -57,7 +57,7 @@ export function bindEvents(game) {
         if (!crate) return;
         if (save.stashFull()) {
           game.ui.sayStatus('倉庫已滿，請先清理或擴充倉庫！', true);
-          sound.playHurt();
+          sound.playError();
           return;
         }
         buy(currency, crate.costGold, crate.costDna, () => {
@@ -95,10 +95,10 @@ export function bindEvents(game) {
         const res = save.sellJewels(id, count);
         if (!res.ok) {
           game.ui.sayStatus(res.reason, true);
-          sound.playHurt();
+          sound.playError();
           return;
         }
-        sound.playEvoFanfare();
+        sound.playCoin();
         game.ui.sayStatus(`賣出 ${res.count} 顆珠寶，獲得 ${res.gold} 🪙 + ${res.dna} 🧬`);
         game.ui.updateDnaChip(save.data.dna, save.data.gold);
         game.ui.rebuildShopView(save);
@@ -108,7 +108,7 @@ export function bindEvents(game) {
 
   // 特工等級
   document.getElementById('btn-char-levels').addEventListener('click', () => {
-    sound.playGem();
+    sound.playClick();
     game.ui.openCharLevelModal(save, (id, times) => levelUpCharacter(game, id, times));
   });
   document.getElementById('btn-close-char-levels').addEventListener('click', () => {
@@ -117,13 +117,13 @@ export function bindEvents(game) {
 
   // 基因強化 (天賦樹)
   document.getElementById('btn-talents').addEventListener('click', () => {
-    sound.playGem();
+    sound.playClick();
     game.ui.openTalentModal(save, (id) => investTalent(game, id));
   });
 
   // 裝備倉庫
   document.getElementById('btn-gear').addEventListener('click', () => {
-    sound.playGem();
+    sound.playClick();
     game.ui.openGearModal(save, {
       onEquip: (id) => {
         save.equipItem(id);
@@ -132,17 +132,17 @@ export function bindEvents(game) {
       },
       onUnequip: (slot) => {
         save.unequipSlot(slot);
-        sound.playGem();
+        sound.playClick();
         game.ui.rebuildGearView(save);
       },
       onSalvage: (id) => {
         const res = save.salvageItem(id);
         if (!res.ok) {
           game.ui.sayStatus(res.reason, true);
-          sound.playHurt();
+          sound.playError();
           return;
         }
-        sound.playGem();
+        sound.playCoin();
         game.ui.sayStatus(`分解完成，回收 ${res.gold} 🪙 + ${res.dna} 🧬`);
         game.ui.updateDnaChip(save.data.dna);
         game.ui.rebuildGearView(save);
@@ -151,7 +151,7 @@ export function bindEvents(game) {
         const res = save.reforgeItem(id);
         if (!res.ok) {
           game.ui.sayStatus(res.reason, true);
-          sound.playHurt();
+          sound.playError();
           return;
         }
         sound.playEvoFanfare();
@@ -162,7 +162,7 @@ export function bindEvents(game) {
       onSalvageAll: (rarity) => {
         const res = save.salvageAll(rarity);
         if (res.count === 0) return;
-        sound.playEvoFanfare();
+        sound.playCoin();
         game.ui.sayStatus(`分解 ${res.count} 件，回收 ${res.gold} 🪙 + ${res.dna} 🧬`);
         game.ui.updateDnaChip(save.data.dna);
         game.ui.rebuildGearView(save);
@@ -171,7 +171,7 @@ export function bindEvents(game) {
         const res = save.fuseItems(ids);
         if (!res.ok) {
           game.ui.sayStatus(res.reason, true);
-          sound.playHurt();
+          sound.playError();
           return;
         }
         sound.playEvoFanfare();
@@ -663,7 +663,7 @@ export function returnToMenu(game) {
   refreshCharSelect(game);
   refreshLevelSelect(game);
   game.ui.sayStatus('');
-  sound.stopBGM();
+  sound.startBGM('menu');
 }
 
 export function startDailyChallenge(game) {

@@ -1,31 +1,258 @@
 // Web Audio API 即時程序化音效與背景音樂合成引擎 (零外掛依賴)
 //
-// 這一版針對五件事做了強化：
-//   1. 節拍穩定度 —— 改用「前瞻排程器」(look-ahead scheduler)：以 ctx.currentTime
-//      為時基、提前 250ms 把音符排進音訊時鐘，每 50ms 醒來補排。原本是
-//      setInterval(stepTime) 直接觸發，主執行緒一忙（後期 250 隻怪）節拍就會飄，
-//      背景分頁還會被瀏覽器節流成 1Hz。
-//   2. 混音 —— 兩條匯流排先過一顆限幅器 (DynamicsCompressor) 才到 destination。
-//      後期同時命中＋爆炸的總和會超過 0 dBFS 破音，限幅器只在總和過門檻時動作，
-//      單一音效幾乎不受影響。
-//   3. 音效質感 —— 逐發微失諧與音量抖動（連續射擊不再像同一顆音重播）、
-//      立體聲定位（依世界座標相對畫面中心）、4ms 起音（消除爆音 click）。
-//   4. 音樂動態 —— setIntensity() 讓音樂跟著戰況走：張力高時補上 16 分音符琶音層、
-//      lead 密度上升、ghost hat 出現；8 小節一樂句、樂句尾有過門。
-//   5. 配置 —— 爆炸不再每次配置新 buffer（原本每次 ~11,000 次 Math.random），
-//      共用一份快取噪音；所有節點在 stop 後主動斷開。
+// 整合 https://cormort.github.io/chiptune-audio/ 的 chiptune 合成架構與預設參數：
+//   1. 參數化合成核心 (Parametric Chiptune Synthesis)：支援方波 (脈寬 0.05~0.95 與脈寬掃動)、
+//      鋸齒波、三角波、種子雜訊、滑音 (slide)、顫音 (vibrato 查表 LFO)、琶音 (arpeggio)、
+//      數位破音 (bit-crush 4-bit/3-bit 等)、泛音與齊奏微失諧。
+//   2. 豐富預設庫 (24 種 SFX_PRESETS)：包含 coin, jump, laser, hit, explosion, powerup,
+//      select, gameover, win, shoot, blip, click, hurt, pickup, heal, levelup, door, step,
+//      bounce, alarm, teleport, charge, error, splash 及所有武器專屬音色。
+//   3. 高效 AudioBuffer 快取 (LRU Cache)：以參數簽章快取已渲染 PCM，配合 AudioBufferSourceNode
+//      極致零負擔即時回放，支援任意世界座標立體聲定位與 playbackRate 音高縮放。
+//   4. 寶石連擊音高爬升 (Gem Combo Pitch Scaling)：連續吸寶時音調階梯上揚，製造極具爽快感的打擊回饋。
+//   5. 節拍穩定度 —— 前瞻排程器 (look-ahead scheduler)：以 ctx.currentTime 為時基、提前 250ms 排程。
+//   6. 混音限幅器 (DynamicsCompressor)：防止大量子彈、命中與爆炸疊加時過載破音。
+//   7. 豐富音樂主題 (BGM)：支援 street, lab, frost, core, endless，並新增 boss (首領戰高張力主題)、
+//      menu (營地/主選單舒緩 groove) 與 td (塔防戰術律動)。支援 首領戰動態切換 (switchToBossTheme)。
 
-// 各關卡的 BGM 主題 (速度 + 資料化分層：bass 音階 / 和弦進行 / 鼓組樣式 / lead / 琶音)
-// 關卡 id 沒對到就回 street 預設。chords 是「每小節根音」，8 個 = 8 小節一輪；
-// 這裡的 8 小節都是把原本的根音重新排序延伸，不引入新和聲（避免改到既有調性）。
-const BGM_THEMES = {
+// ── 基礎工具與 PRNG (Mulberry32) ─────────────────────────────
+export const SAMPLE_RATE = 44100;
+export const WAVE = { SQUARE: 0, SAW: 1, TRIANGLE: 2, NOISE: 3 };
+export const MAX_SFX_SECONDS = 30;
+
+export function mulberry32(seed) {
+  let a = (seed >>> 0) || 1;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 2048 點正弦波查表 (顫音 LFO 查表，避免每採樣呼叫 Math.sin)
+const SINE_BITS = 11;
+const SINE_SIZE = 1 << SINE_BITS;
+const SINE = new Float32Array(SINE_SIZE + 1);
+for (let i = 0; i <= SINE_SIZE; i++) SINE[i] = Math.sin((2 * Math.PI * i) / SINE_SIZE);
+
+// ── 音效預設值與限制 ─────────────────────────────────────────
+export const SFX_DEFAULTS = {
+  wave: WAVE.SQUARE,
+  freq: 440,
+  slide: 0,
+  duty: 0.5,
+  dutySweep: 0,
+  vibDepth: 0,
+  vibRate: 0,
+  arpMult: 1,
+  arpTime: 0,
+  bits: 0,
+  h2: 0,
+  h3: 0,
+  h4: 0,
+  h5: 0,
+  unison: 0,
+  detune: 10,
+  cutoff: 0,
+  chiff: 0,
+  attack: 0.005,
+  sustain: 0.1,
+  decay: 0.1,
+  vol: 0.5,
+  seed: 1,
+};
+
+const LIMITS = {
+  wave: [0, 3],
+  freq: [0, 20000],
+  slide: [-64, 64],
+  duty: [0.05, 0.95],
+  dutySweep: [-256, 256],
+  vibDepth: [0, 1],
+  vibRate: [0, 4000],
+  arpMult: [0.01, 64],
+  arpTime: [0, MAX_SFX_SECONDS],
+  bits: [0, 16],
+  h2: [0, 1],
+  h3: [0, 1],
+  h4: [0, 1],
+  h5: [0, 1],
+  unison: [0, 2],
+  detune: [0, 50],
+  cutoff: [0, 20000],
+  chiff: [0, 1],
+  attack: [0, MAX_SFX_SECONDS],
+  sustain: [0, MAX_SFX_SECONDS],
+  decay: [0, MAX_SFX_SECONDS],
+  vol: [0, 1],
+};
+
+const TIMBRE_KEYS = ['h2', 'h3', 'h4', 'h5', 'unison', 'detune', 'cutoff', 'chiff'];
+
+export function normalizeSfx(params = {}) {
+  const src = params && typeof params === 'object' ? params : {};
+  const p = {};
+  for (const k in SFX_DEFAULTS) {
+    if (TIMBRE_KEYS.includes(k)) continue;
+    const raw = src[k];
+    let v = typeof raw === 'number' && Number.isFinite(raw) ? raw : SFX_DEFAULTS[k];
+    const lim = LIMITS[k];
+    if (lim !== undefined) {
+      if (v < lim[0]) v = lim[0];
+      else if (v > lim[1]) v = lim[1];
+    }
+    p[k] = v;
+  }
+  p.wave = Math.round(p.wave);
+  p.bits = Math.round(p.bits);
+  p.seed = p.seed >>> 0;
+  for (const k of TIMBRE_KEYS) {
+    const raw = src[k];
+    let v = typeof raw === 'number' && Number.isFinite(raw) ? raw : SFX_DEFAULTS[k];
+    const lim = LIMITS[k];
+    if (v < lim[0]) v = lim[0];
+    else if (v > lim[1]) v = lim[1];
+    if (k === 'unison') v = Math.round(v);
+    if (v !== SFX_DEFAULTS[k] || (k === 'detune' && p.unison !== undefined)) p[k] = v;
+  }
+  return p;
+}
+
+// ── 經典 24 種 Chiptune 預設 (來自 chiptune-audio) ───────────
+export const SFX_PRESETS = {
+  coin:     { wave: WAVE.SQUARE, freq: 988, arpMult: 1.5, arpTime: 0.07, sustain: 0.1, decay: 0.15, duty: 0.25, vol: 0.45 },
+  jump:     { wave: WAVE.SQUARE, freq: 260, slide: 2.2, sustain: 0.08, decay: 0.15, duty: 0.4, vol: 0.4 },
+  laser:    { wave: WAVE.SQUARE, freq: 1400, slide: -4, sustain: 0.05, decay: 0.15, duty: 0.3, dutySweep: -1, vol: 0.4 },
+  hit:      { wave: WAVE.NOISE, freq: 6000, slide: -1.5, sustain: 0.03, decay: 0.12, bits: 4, vol: 0.4 },
+  explosion:{ wave: WAVE.NOISE, freq: 2500, slide: -2.5, attack: 0.01, sustain: 0.15, decay: 0.55, vol: 0.7 },
+  powerup:  { wave: WAVE.SQUARE, freq: 330, slide: 3, vibDepth: 0.03, vibRate: 30, sustain: 0.2, decay: 0.2, duty: 0.5, vol: 0.5 },
+  select:   { wave: WAVE.TRIANGLE, freq: 660, sustain: 0.04, decay: 0.06, duty: 0.5, vol: 0.4 },
+  gameover: { wave: WAVE.TRIANGLE, freq: 400, slide: -1, attack: 0.01, sustain: 0.4, decay: 0.6, vol: 0.6 },
+  win:      { wave: WAVE.SQUARE, freq: 523, arpMult: 1.5, arpTime: 0.12, sustain: 0.3, decay: 0.4, duty: 0.25, vibDepth: 0.01, vibRate: 8, vol: 0.5 },
+  shoot:    { wave: WAVE.SQUARE, freq: 900, slide: -6, sustain: 0.02, decay: 0.08, duty: 0.5, vol: 0.4 },
+  blip:     { wave: WAVE.SQUARE, freq: 1200, sustain: 0.01, decay: 0.03, duty: 0.25, vol: 0.3 },
+  click:    { wave: WAVE.TRIANGLE, freq: 2000, attack: 0, sustain: 0.003, decay: 0.012, vol: 0.35 },
+  hurt:     { wave: WAVE.SAW, freq: 320, slide: -3, sustain: 0.05, decay: 0.15, bits: 4, vol: 0.5 },
+  pickup:   { wave: WAVE.SQUARE, freq: 700, arpMult: 2, arpTime: 0.05, sustain: 0.06, decay: 0.1, duty: 0.125, vol: 0.45 },
+  heal:     { wave: WAVE.TRIANGLE, freq: 400, slide: 1.5, vibDepth: 0.02, vibRate: 12, sustain: 0.25, decay: 0.3, vol: 0.6 },
+  levelup:  { wave: WAVE.SQUARE, freq: 440, slide: 0.5, arpMult: 2, arpTime: 0.1, sustain: 0.25, decay: 0.3, duty: 0.125, vibDepth: 0.01, vibRate: 10, vol: 0.55 },
+  door:     { wave: WAVE.NOISE, freq: 300, slide: -1, attack: 0.01, sustain: 0.1, decay: 0.2, bits: 3, vol: 0.6 },
+  step:     { wave: WAVE.NOISE, freq: 1500, sustain: 0.01, decay: 0.04, vol: 0.3 },
+  bounce:   { wave: WAVE.TRIANGLE, freq: 180, slide: 4, sustain: 0.03, decay: 0.1, vol: 0.6 },
+  alarm:    { wave: WAVE.SQUARE, freq: 880, vibDepth: 0.2, vibRate: 6, sustain: 0.6, decay: 0.1, duty: 0.35, vol: 0.35 },
+  teleport: { wave: WAVE.SQUARE, freq: 200, slide: 6, vibDepth: 0.08, vibRate: 40, sustain: 0.25, decay: 0.15, duty: 0.3, dutySweep: 2, vol: 0.45 },
+  charge:   { wave: WAVE.SAW, freq: 110, slide: 3, attack: 0.05, sustain: 0.6, decay: 0.05, vol: 0.35 },
+  error:    { wave: WAVE.SQUARE, freq: 220, arpMult: 0.75, arpTime: 0.08, sustain: 0.12, decay: 0.08, duty: 0.5, vol: 0.4 },
+  splash:   { wave: WAVE.NOISE, freq: 4000, slide: -1, attack: 0.02, sustain: 0.1, decay: 0.35, vol: 0.5 },
+  // 遊戲擴充預設
+  shield:   { wave: WAVE.TRIANGLE, freq: 320, slide: 3.5, sustain: 0.05, decay: 0.18, vol: 0.4 },
+  chest:    { wave: WAVE.SQUARE, freq: 523, arpMult: 1.5, arpTime: 0.08, sustain: 0.2, decay: 0.35, duty: 0.25, vibDepth: 0.01, vibRate: 8, vol: 0.5 },
+};
+
+// ── 核心 PCM 合成器 (Float32Array 離線/快速渲染) ─────────────
+export function renderSfxInto(out, offset, params, sampleRate = SAMPLE_RATE) {
+  const p = normalizeSfx(params);
+  const invSR = 1 / sampleRate;
+  const seconds = p.attack + p.sustain + p.decay;
+  let n = Math.ceil(seconds * sampleRate);
+  const maxN = Math.ceil(MAX_SFX_SECONDS * sampleRate);
+  if (n > maxN) n = maxN;
+  const room = out.length - offset;
+  if (n > room) n = room;
+  if (n <= 0 || p.freq <= 0) return 0;
+
+  const wave = p.wave;
+  const vol = p.vol;
+  const levels = p.bits > 0 ? 2 ** p.bits : 0;
+  const invLevels = levels ? 1 / levels : 0;
+
+  const aEnd = p.attack * sampleRate;
+  const sEnd = aEnd + p.sustain * sampleRate;
+  const aStep = aEnd > 0 ? invSR / p.attack : 0;
+  const dStep = p.decay > 0 ? invSR / p.decay : Infinity;
+  let env = 0;
+
+  const slideRatio = p.slide === 0 ? 1 : Math.pow(2, p.slide * invSR);
+  let f = p.freq;
+  const arpAt = p.arpTime > 0 ? Math.ceil(p.arpTime * sampleRate) : -1;
+
+  const hasVib = p.vibDepth !== 0 && p.vibRate !== 0;
+  const vibStep = p.vibRate * SINE_SIZE * invSR;
+  let vibPos = 0;
+
+  const hasDutySweep = p.dutySweep !== 0;
+  const dutyStep = p.dutySweep * invSR;
+  let dutyCur = p.duty;
+
+  const noise = mulberry32(p.seed);
+  let nv = noise() * 2 - 1;
+  let phase = 0;
+  let wrapped = false;
+
+  for (let i = 0, idx = offset; i < n; i++, idx++) {
+    if (i < aEnd) env += aStep;
+    else if (i < sEnd) env = 1;
+    else { env -= dStep; if (env < 0) env = 0; }
+
+    if (i === arpAt) f *= p.arpMult;
+
+    let fi = f;
+    if (hasVib) {
+      vibPos += vibStep;
+      if (vibPos >= SINE_SIZE) vibPos -= SINE_SIZE * Math.floor(vibPos / SINE_SIZE);
+      const si = vibPos | 0;
+      const s0 = SINE[si];
+      fi *= 1 + p.vibDepth * (s0 + (SINE[si + 1] - s0) * (vibPos - si));
+    }
+    phase += fi * invSR;
+    f *= slideRatio;
+
+    if (phase >= 1) { phase -= Math.floor(phase); wrapped = true; } else wrapped = false;
+
+    let v;
+    switch (wave) {
+      case WAVE.SAW: v = 2 * phase - 1; break;
+      case WAVE.TRIANGLE: v = 4 * Math.abs(phase - 0.5) - 1; break;
+      case WAVE.NOISE:
+        if (wrapped) nv = noise() * 2 - 1;
+        v = nv;
+        break;
+      default:
+        if (hasDutySweep) {
+          dutyCur += dutyStep;
+          if (dutyCur < 0.05) dutyCur = 0.05;
+          else if (dutyCur > 0.95) dutyCur = 0.95;
+        }
+        v = phase < dutyCur ? 1 : -1;
+    }
+    if (levels) v = Math.round(v * levels) * invLevels;
+    out[idx] += v * env * vol;
+  }
+  return n;
+}
+
+export function renderSfx(params, { sampleRate = SAMPLE_RATE } = {}) {
+  const p = normalizeSfx(params);
+  const seconds = p.attack + p.sustain + p.decay;
+  let n = Math.ceil(seconds * sampleRate);
+  const maxN = Math.ceil(MAX_SFX_SECONDS * sampleRate);
+  if (n > maxN) n = maxN;
+  const out = new Float32Array(n);
+  renderSfxInto(out, 0, p, sampleRate);
+  return out;
+}
+
+// ── 各關卡與情境的 BGM 主題 ──────────────────────────────────
+export const BGM_THEMES = {
   street: {
     bpm: 128,
     bass: [110, 110, 130.81, 146.83, 110, 110, 164.81, 146.83],
-    mode: 'maj',                              // 和弦性質 (三度)
+    mode: 'maj',
     chords: [110, 87.31, 130.81, 87.31, 110, 87.31, 98, 130.81],   // A F C F | A F G C
-    kick: 'floor',                            // 4-on-floor
-    clap: [2, 6],                             // backbeat 拍手
+    kick: 'floor',
+    clap: [2, 6],
     hat: 'eighth',
     lead: { density: 0.3, octave: 2, wave: 'square', level: 0.045, dur: 0.16 },
     arp: { wave: 'triangle', level: 0.032 },
@@ -35,11 +262,11 @@ const BGM_THEMES = {
     bpm: 118,
     bass: [87.31, 87.31, 98, 110, 87.31, 87.31, 123.47, 110],
     mode: 'min',
-    chords: [87.31, 73.42, 65.41, 73.42, 87.31, 65.41, 73.42, 65.41],  // 陰沉下行 + 回繞
-    kick: 'half',                             // 半拍感 (只有 1 & 3)
+    chords: [87.31, 73.42, 65.41, 73.42, 87.31, 65.41, 73.42, 65.41],
+    kick: 'half',
     clap: [],
     hat: 'sparse',
-    drone: true,                              // 高八度微失諧長音 (實驗室不安感)
+    drone: true,
     lead: { density: 0.16, octave: 1, wave: 'sine', level: 0.04, dur: 0.3 },
     arp: { wave: 'sine', level: 0.026 },
     pad: { level: 0.05, detune: 10, spread: false },
@@ -48,24 +275,24 @@ const BGM_THEMES = {
     bpm: 124,
     bass: [98, 98, 123.47, 146.83, 98, 98, 130.81, 123.47],
     mode: 'min',
-    chords: [196, 174.61, 146.83, 196, 174.61, 196, 146.83, 174.61],  // 空靈高音區，重排
+    chords: [196, 174.61, 146.83, 196, 174.61, 196, 146.83, 174.61],
     kick: 'half',
     clap: [],
     hat: 'sparse',
-    lead: { density: 0.2, octave: 2, wave: 'sine', level: 0.05, dur: 0.45 }, // 長尾鈴聲
+    lead: { density: 0.2, octave: 2, wave: 'sine', level: 0.05, dur: 0.45 },
     arp: { wave: 'sine', level: 0.028 },
-    pad: { level: 0.045, detune: 6, spread: true },                         // 加 12 度的寬廣 pad
+    pad: { level: 0.045, detune: 6, spread: true },
   },
   core: {
     bpm: 142,
     bass: [65.41, 65.41, 73.42, 98, 65.41, 65.41, 82.41, 73.42],
     mode: 'min',
-    chords: [65.41, 65.41, 55, 49, 65.41, 55, 49, 55],           // C C A G | C A G A 低音重壓
+    chords: [65.41, 65.41, 55, 49, 65.41, 55, 49, 55],
     kick: 'floor',
     kickLevel: 0.62,
     clap: [2, 6],
     hat: 'eighth',
-    ghost: true,                              // 16 分 ghost hat 推進感
+    ghost: true,
     lead: { density: 0.34, octave: 2, wave: 'square', level: 0.05, dur: 0.13 },
     arp: { wave: 'square', level: 0.028 },
     pad: { level: 0.05, detune: 7, spread: false },
@@ -74,7 +301,7 @@ const BGM_THEMES = {
     bpm: 138,
     bass: [73.42, 73.42, 87.31, 110, 73.42, 73.42, 98, 87.31],
     mode: 'maj',
-    chords: [73.42, 73.42, 87.31, 98, 73.42, 98, 87.31, 110],     // D D F G | D G F A 揚升感
+    chords: [73.42, 73.42, 87.31, 98, 73.42, 98, 87.31, 110],
     kick: 'floor',
     clap: [2, 6],
     hat: 'eighth',
@@ -82,43 +309,84 @@ const BGM_THEMES = {
     arp: { wave: 'triangle', level: 0.032 },
     pad: { level: 0.05, detune: 5, spread: false },
   },
+  // ── 新增 BGM 主題 ───────────────────────────────────────────
+  boss: {
+    bpm: 168,
+    bass: [65.41, 65.41, 69.30, 77.78, 65.41, 65.41, 87.31, 82.41],
+    mode: 'min',
+    chords: [65.41, 69.30, 87.31, 82.41, 65.41, 69.30, 77.78, 61.74],
+    kick: 'floor',
+    kickLevel: 0.68,
+    clap: [2, 6],
+    hat: 'eighth',
+    ghost: true,
+    lead: { density: 0.42, octave: 2, wave: 'square', level: 0.055, dur: 0.12 },
+    arp: { wave: 'sawtooth', level: 0.035 },
+    pad: { level: 0.055, detune: 8, spread: true },
+  },
+  menu: {
+    bpm: 104,
+    bass: [110, 110, 130.81, 146.83, 110, 110, 146.83, 130.81],
+    mode: 'maj',
+    chords: [110, 130.81, 146.83, 130.81, 110, 130.81, 146.83, 164.81],
+    kick: 'half',
+    clap: [4],
+    hat: 'sparse',
+    lead: { density: 0.22, octave: 2, wave: 'triangle', level: 0.038, dur: 0.20 },
+    arp: { wave: 'sine', level: 0.024 },
+    pad: { level: 0.04, detune: 3, spread: true },
+  },
+  td: {
+    bpm: 132,
+    bass: [98, 98, 116.54, 130.81, 98, 98, 146.83, 130.81],
+    mode: 'min',
+    chords: [98, 116.54, 130.81, 116.54, 98, 116.54, 146.83, 130.81],
+    kick: 'floor',
+    kickLevel: 0.58,
+    clap: [2, 6],
+    hat: 'eighth',
+    ghost: true,
+    lead: { density: 0.32, octave: 2, wave: 'square', level: 0.048, dur: 0.14 },
+    arp: { wave: 'triangle', level: 0.030 },
+    pad: { level: 0.045, detune: 5, spread: false },
+  },
 };
 
-// 各武器家族的射擊音色。原本所有武器共用同一個 650→180Hz 的三角波，
-// 六種武器聽起來完全一樣；現在由呼叫端帶入家族名（不認得就回退成苦無）。
-const SHOOT_TIMBRES = {
-  kunai:     { type: 'triangle', f0: 650, f1: 180, dur: 0.08, level: 0.30 },
-  rocket:    { type: 'sawtooth', f0: 300, f1: 90,  dur: 0.15, level: 0.26 },
-  molotov:   { type: 'triangle', f0: 430, f1: 140, dur: 0.12, level: 0.22 },
-  lightning: { type: 'square',   f0: 900, f1: 260, dur: 0.09, level: 0.19 },
-  soccer:    { type: 'sine',     f0: 520, f1: 300, dur: 0.07, level: 0.22 },
-  guardian:  { type: 'sine',     f0: 780, f1: 640, dur: 0.06, level: 0.17 },
-  // 第二輪擴充的兩把武器：迴力鏢是「呼嘯」（先升後降的掃頻），軌道炮是尖銳的電磁爆音。
-  // 沒有這兩個條目時 playShoot 會靜默退回 kunai —— 八把武器裡唯一「聽起來一模一樣」的組合。
-  boomerang: { type: 'triangle', f0: 420, f1: 980, dur: 0.18, level: 0.24 },
-  railgun:   { type: 'square',   f0: 1400, f1: 180, dur: 0.22, level: 0.30 },
-  // 第三輪擴充：冰霜新星是清脆的高頻下滑，霰彈槍是短促低沉的鋸齒爆音
-  frost_nova: { type: 'sine',     f0: 1800, f1: 600, dur: 0.20, level: 0.20 },
-  shotgun:    { type: 'sawtooth', f0: 220,  f1: 60,  dur: 0.12, level: 0.32 },
+// ── 全武器射擊音色表 ─────────────────────────────────────────
+export const SHOOT_TIMBRES = {
+  kunai:       { type: 'triangle', f0: 650, f1: 180, dur: 0.08, level: 0.30 },
+  rocket:      { type: 'sawtooth', f0: 300, f1: 90,  dur: 0.15, level: 0.26 },
+  molotov:     { type: 'triangle', f0: 430, f1: 140, dur: 0.12, level: 0.22 },
+  lightning:   { type: 'square',   f0: 900, f1: 260, dur: 0.09, level: 0.19 },
+  soccer:      { type: 'sine',     f0: 520, f1: 300, dur: 0.07, level: 0.22 },
+  guardian:    { type: 'sine',     f0: 780, f1: 640, dur: 0.06, level: 0.17 },
+  boomerang:   { type: 'triangle', f0: 420, f1: 980, dur: 0.18, level: 0.24 },
+  railgun:     { type: 'square',   f0: 1400, f1: 180, dur: 0.22, level: 0.30 },
+  frost_nova:  { type: 'sine',     f0: 1800, f1: 600, dur: 0.20, level: 0.20 },
+  shotgun:     { type: 'sawtooth', f0: 220,  f1: 60,  dur: 0.12, level: 0.32 },
+  bolter:      { type: 'sawtooth', f0: 340,  f1: 70,  dur: 0.14, level: 0.32 },
+  storm_bolter:{ type: 'square',   f0: 440,  f1: 85,  dur: 0.11, level: 0.30 },
+  chainsword:  { type: 'sawtooth', f0: 200,  f1: 280, dur: 0.13, level: 0.26 },
+  power_sword: { type: 'sawtooth', f0: 520,  f1: 160, dur: 0.18, level: 0.32 },
+  phase_blade: { type: 'square',   f0: 820,  f1: 340, dur: 0.08, level: 0.22 },
+  orbit_saw:   { type: 'sawtooth', f0: 260,  f1: 320, dur: 0.10, level: 0.20 },
 };
 
-// 前瞻排程：提前 SCHEDULE_AHEAD 秒把音符排進音訊時鐘，每 SCHEDULER_MS 補排一次。
-// 這兩個數字是「穩定度 vs 排程餘裕」的取捨：AHEAD 太小會來不及、太大則反應遲鈍。
 const SCHEDULE_AHEAD = 0.25;
 const SCHEDULER_MS = 50;
 
-class SoundEngine {
+export class SoundEngine {
   constructor() {
     this.ctx = null;
-    this.master = null;      // 限幅器 (兩條匯流排的出口)
+    this.master = null;
     this.enabled = true;
     this.bgmGain = null;
     this.sfxGain = null;
     this.bgmStep = 0;
-    this.bgmMuted = false;   // 暫停時 BGM 靜音 (音效開關獨立)
-    this.sfxVol = 1;         // 使用者音量 (0~1，主選單滑桿)
+    this.bgmMuted = false;
+    this.sfxVol = 1;
     this.bgmVol = 0.8;
-    this._lastSfx = {};      // 各音效最近播放時間 (節流用)
+    this._lastSfx = {};
 
     // BGM 排程狀態
     this._schedTimer = null;
@@ -129,20 +397,29 @@ class SoundEngine {
     this._bgmLastLead = 0;
     this._bgmLastStep = -1;
     this._arpIdx = 0;
+    this._activeLevelId = 'street';
+    this._isBossBGM = false;
 
-    // 音樂張力 (0~1)：由主迴圈依戰況餵入，用來決定要不要疊琶音層、lead 多密
+    // 音樂張力 (0~1)
     this.intensity = 0;
     this._intensityTarget = 0;
 
     // 音效質感
-    this.sfxJitter = 0.06;   // 逐發微失諧 (±6%)，連續射擊不會像同一顆音重播
-    this._listenX = null;    // 聽者 (畫面中心) 的世界座標，供立體聲定位
+    this.sfxJitter = 0.06;
+    this._listenX = null;
     this._listenW = 1;
-    this._offline = false;   // 注入 OfflineAudioContext 時為 true (供無頭測試)
+    this._offline = false;
     this._visBound = false;
+
+    // Chiptune AudioBuffer LRU 快取
+    this.sfxCache = new Map();
+    this.maxCachedSfx = 128;
+
+    // 寶石連擊音調追蹤
+    this._gemCombo = 0;
+    this._lastGemTime = 0;
   }
 
-  // 同一音效在 gapMs 內只播第一次；尾聲大量同時命中時避免破音與 CPU 暴衝
   _throttle(name, gapMs) {
     const now = performance.now();
     if (now - (this._lastSfx[name] || -Infinity) < gapMs) return true;
@@ -150,7 +427,6 @@ class SoundEngine {
     return false;
   }
 
-  // 把「開關 × 音量 × 暫停靜音」一次算成實際 gain；任何一項改變都走這裡
   _applyGains() {
     if (!this.ctx) return;
     if (this.sfxGain) this.sfxGain.gain.value = this.enabled ? 0.25 * this.sfxVol : 0;
@@ -163,26 +439,21 @@ class SoundEngine {
     this._applyGains();
   }
 
-  // 音樂張力 (0~1)。主迴圈每幀餵入（Boss 在場 / 血量低 / 連擊狂潮），
-  // 排程器每步平滑逼近，所以不會有突兀的層數跳變。
   setIntensity(v) {
     this._intensityTarget = Math.max(0, Math.min(1, +v || 0));
   }
 
-  // 聽者位置：主迴圈每幀餵入畫面中心的世界的 x 與視窗寬，用於音效的左右定位
   setListener(centerX, viewWidth) {
     this._listenX = centerX;
     this._listenW = Math.max(1, viewWidth || 1);
   }
 
-  // 世界座標 → 立體聲位置 (-0.7 ~ 0.7；不做全開，避免單邊耳朵聽不到)
   _panFor(worldX) {
     if (worldX == null || this._listenX == null) return 0;
     const rel = (worldX - this._listenX) / (this._listenW * 0.5);
     return Math.max(-1, Math.min(1, rel)) * 0.7;
   }
 
-  // ctxOverride：注入 OfflineAudioContext 供無頭測試（會跳過 resume 與計時器）
   init(ctxOverride = null) {
     if (this.ctx) return;
     if (ctxOverride) {
@@ -197,8 +468,7 @@ class SoundEngine {
       this.ctx = new AudioContext();
     }
 
-    // 兩條匯流排 → 限幅器 → 輸出。後期同時命中與爆炸的總和很容易超過 0 dBFS，
-    // 沒有這一顆就是破音；單一音效幾乎不會碰到門檻，音色不受影響。
+    // 兩條匯流排 → 限幅器 → 輸出
     this.master = this.ctx.createDynamicsCompressor();
     this.master.threshold.value = -8;
     this.master.knee.value = 5;
@@ -215,8 +485,6 @@ class SoundEngine {
     this.bgmGain.gain.value = 0.12 * this.bgmVol;
     this.bgmGain.connect(this.master);
 
-    // 分頁切回前景時重新對時：手機背景會把 AudioContext 暫停，回來若讓排程器
-    // 追趕落後的音符，聽起來會像快轉一整段。
     if (!this._visBound && typeof document !== 'undefined' && document.addEventListener) {
       this._visBound = true;
       document.addEventListener('visibilitychange', () => {
@@ -242,7 +510,6 @@ class SoundEngine {
     return this.enabled;
   }
 
-  // 暫停/恢復 BGM (遊戲內暫停鍵用；與音效總開關互不干擾)
   pauseBGM() {
     this.bgmMuted = true;
     this._applyGains();
@@ -253,9 +520,7 @@ class SoundEngine {
     this._applyGains();
   }
 
-  // ── 音效發聲器 ────────────────────────────────────────────────
-  // 一次把「振盪器 → 包絡 → (立體聲定位) → 匯流排」接好，並且在 stop 後主動斷開。
-  // 逐發加入微失諧與音量抖動；起音固定留 4ms 斜坡，消除瞬間從 0 跳到峰值的爆音。
+  // ── 即時 Oscillator 音效發聲器 ──────────────────────────────
   _sfxVoice(o) {
     const ctx = this.ctx;
     const t = o.at != null ? o.at : ctx.currentTime;
@@ -298,8 +563,6 @@ class SoundEngine {
     return osc;
   }
 
-  // 快取噪音 buffer：爆炸原本每次自己建一份 0.25 秒的 buffer 並跑 ~11,000 次
-  // Math.random()，後期一秒好幾顆＝每秒數萬次配置。BGM 的鼓件早已共用一份，這裡統一。
   _noiseBuffer() {
     if (!this._noiseBuf) {
       const len = Math.max(1, Math.ceil(this.ctx.sampleRate * 0.6));
@@ -310,7 +573,6 @@ class SoundEngine {
     return this._noiseBuf;
   }
 
-  // 一段噪音 (爆炸層、鼓件共用)。offset 讓每次爆炸的噪音相位不同，聽起來不重複。
   _noiseVoice(t, dur, level, filterType = 'highpass', filterFreq = 6000, bus = null, pan = 0, offset = 0) {
     const src = this.ctx.createBufferSource();
     src.buffer = this._noiseBuffer();
@@ -345,8 +607,100 @@ class SoundEngine {
     return src;
   }
 
-  // 射擊音效。kind 是武器家族 (kunai/rocket/molotov/lightning/soccer/guardian)，
-  // worldX 選填：給了就依畫面中心做左右定位；不給就維持原本的中央單聲道。
+  // ── Chiptune AudioBuffer 快取回放引擎 ─────────────────────────
+  _getSfxBuffer(name, params) {
+    const rate = this.ctx ? this.ctx.sampleRate : SAMPLE_RATE;
+    const key = typeof name === 'string'
+      ? `${rate}|n:${name}`
+      : `${rate}|p:${JSON.stringify(normalizeSfx(params))}`;
+
+    const hit = this.sfxCache.get(key);
+    if (hit) {
+      this.sfxCache.delete(key);
+      this.sfxCache.set(key, hit);
+      return hit;
+    }
+
+    const samples = renderSfx(params, { sampleRate: rate });
+    if (!samples || samples.length === 0) return null;
+    const buf = this.ctx.createBuffer(1, samples.length, rate);
+    buf.getChannelData(0).set(samples);
+
+    this.sfxCache.set(key, buf);
+    while (this.sfxCache.size > this.maxCachedSfx) {
+      this.sfxCache.delete(this.sfxCache.keys().next().value);
+    }
+    return buf;
+  }
+
+  /**
+   * 播放 Chiptune 音效 (可傳入預設名如 'coin'，或自訂參數物件)
+   * opts.rate: 音高倍率 (預設 1.0)
+   * opts.pan: 立體聲定位 (-1 ~ 1)
+   * opts.worldX: 自動轉換為 pan 的世界座標
+   * opts.gain: 音量倍率 (預設 1.0)
+   */
+  playSfx(nameOrParams, opts = {}) {
+    if (!this.enabled) return null;
+    this.ensureContext();
+    if (!this.ctx) return null;
+
+    let params;
+    let name = null;
+    if (typeof nameOrParams === 'string') {
+      name = nameOrParams;
+      params = SFX_PRESETS[name];
+      if (!params) return null;
+    } else if (nameOrParams && typeof nameOrParams === 'object') {
+      params = nameOrParams;
+    } else {
+      return null;
+    }
+
+    const buf = this._getSfxBuffer(name, params);
+    if (!buf) return null;
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+
+    const rate = Number(opts.rate);
+    if (Number.isFinite(rate) && rate > 0) {
+      src.playbackRate.value = rate;
+    }
+
+    let node = src;
+    let pan = opts.pan != null ? Number(opts.pan) : (opts.worldX != null ? this._panFor(opts.worldX) : 0);
+    let panner = null;
+    if (Number.isFinite(pan) && pan !== 0 && this.ctx.createStereoPanner) {
+      panner = this.ctx.createStereoPanner();
+      panner.pan.value = Math.max(-1, Math.min(1, pan));
+      src.connect(panner);
+      node = panner;
+    }
+
+    const g0 = Number(opts.gain);
+    const gainVal = Number.isFinite(g0) ? g0 : 1;
+    let gainNode = null;
+    if (gainVal !== 1) {
+      gainNode = this.ctx.createGain();
+      gainNode.gain.value = Math.max(0, gainVal);
+      node.connect(gainNode);
+      node = gainNode;
+    }
+
+    node.connect(this.sfxGain);
+    src.start();
+    src.onended = () => {
+      try {
+        src.disconnect();
+        if (panner) panner.disconnect();
+        if (gainNode) gainNode.disconnect();
+      } catch (e) { /* ignore */ }
+    };
+    return src;
+  }
+
+  // ── 音效介面 ────────────────────────────────────────────────
   playShoot(kind = null, worldX = null) {
     if (!this.enabled || this._throttle('shoot', 35)) return;
     this.ensureContext();
@@ -357,51 +711,114 @@ class SoundEngine {
     });
   }
 
-  // 戰術閃避翻滾音效 (呼嘯氣流聲)
   playDash() {
     if (!this.enabled || this._throttle('dash', 150)) return;
     this.ensureContext();
     this._sfxVoice({ type: 'sine', f0: 340, f1: 80, dur: 0.18, level: 0.35, attack: 0.006 });
   }
 
-  // 擊中怪物。worldX 選填 (後期幾百發同時命中時，左右定位讓打擊感有空間感)
   playHit(worldX = null) {
     if (!this.enabled || this._throttle('hit', 50)) return;
     this.ensureContext();
     this._sfxVoice({ type: 'square', f0: 220, f1: 60, dur: 0.05, level: 0.18, pan: this._panFor(worldX) });
   }
 
-  // 拾取經驗寶石 (清脆晶瑩水晶音)
+  // 拾取經驗寶石：支援連續吸寶時階梯式音調上揚 (Combo Pitch Ramp)
   playGem(worldX = null) {
     if (!this.enabled || this._throttle('gem', 40)) return;
     this.ensureContext();
+    const now = performance.now();
+    if (now - this._lastGemTime < 1200) {
+      this._gemCombo = Math.min(12, this._gemCombo + 1);
+    } else {
+      this._gemCombo = 0;
+    }
+    this._lastGemTime = now;
+
+    // 基礎音符池
     const freqs = [523.25, 659.25, 783.99, 1046.50];
-    const f = freqs[Math.floor(Math.random() * freqs.length)];
+    const baseF = freqs[Math.floor(Math.random() * freqs.length)];
+    // 連擊音高乘數 (1.0 ~ 1.55)
+    const comboMult = 1 + this._gemCombo * 0.045;
+    const f = baseF * comboMult;
+
     this._sfxVoice({
       type: 'sine', f0: f, f1: f * 1.5, dur: 0.09, level: 0.2,
       pan: this._panFor(worldX), jitter: 0.02,
     });
   }
 
-  // 選取音效 (武器型態晶片等 UI 回饋)
+  // 金幣拾取音效 (清脆雙音琶音)
+  playCoin(worldX = null) {
+    if (!this.enabled || this._throttle('coin', 40)) return;
+    this.playSfx('coin', { worldX, gain: 0.85 });
+  }
+
+  // 回血拾取音效 (溫潤上揚琶音)
+  playHeal() {
+    if (!this.enabled || this._throttle('heal', 100)) return;
+    this.playSfx('heal', { gain: 0.8 });
+  }
+
+  // 道具/能力強化拾取 (Powerup)
+  playPowerup() {
+    if (!this.enabled || this._throttle('powerup', 100)) return;
+    this.playSfx('powerup', { gain: 0.8 });
+  }
+
+  // 拾取道具箱 / 背包耗材
+  playPickup() {
+    if (!this.enabled || this._throttle('pickup', 60)) return;
+    this.playSfx('pickup', { gain: 0.8 });
+  }
+
+  // UI 點擊音效
+  playClick() {
+    if (!this.enabled || this._throttle('click', 30)) return;
+    this.playSfx('click', { gain: 0.7 });
+  }
+
+  // 選取音效
   playSelect() {
     if (!this.enabled || this._throttle('select', 30)) return;
     this.ensureContext();
     this._sfxVoice({ type: 'triangle', f0: 660, f1: 990, dur: 0.1, level: 0.16, jitter: 0 });
   }
 
-  // 爆炸音效 (火箭、地雷、手榴彈)：低頻衝擊波 + 噪音層
+  // 錯誤 / 金幣不足警示音 (低音下沉拒絕聲)
+  playError() {
+    if (!this.enabled || this._throttle('error', 120)) return;
+    this.playSfx('error', { gain: 0.85 });
+  }
+
+  // 首領降臨 / 警報音效 (顫音警報)
+  playAlarm() {
+    if (!this.enabled || this._throttle('alarm', 300)) return;
+    this.playSfx('alarm', { gain: 0.9 });
+  }
+
+  // 關卡勝利號角 (大調輝煌終曲)
+  playWin() {
+    if (!this.enabled) return;
+    this.playSfx('win', { gain: 0.9 });
+  }
+
+  // 護盾吸收 / 充能
+  playShield() {
+    if (!this.enabled || this._throttle('shield', 80)) return;
+    this.playSfx('shield', { gain: 0.8 });
+  }
+
+  // 爆炸音效 (低頻衝擊波 + 噪音層)
   playExplosion(worldX = null) {
     if (!this.enabled || this._throttle('explosion', 90)) return;
     this.ensureContext();
     const t = this.ctx.currentTime;
     const pan = this._panFor(worldX);
-    // 低頻衝擊波
     this._sfxVoice({
       type: 'sawtooth', f0: 140, f1: 30, dur: 0.35, level: 0.4,
       attack: 0.003, pan, jitter: 0.10,
     });
-    // 噪音層（共用快取 buffer，隨機相位）
     this._noiseVoice(t, 0.25, 0.25, 'lowpass', 3200, null, pan, Math.random() * 0.3);
   }
 
@@ -417,7 +834,7 @@ class SoundEngine {
     if (!this.enabled) return;
     this.ensureContext();
     const t = this.ctx.currentTime;
-    const notes = [440, 554.37, 659.25, 880]; // A - C# - E - A
+    const notes = [440, 554.37, 659.25, 880];
     notes.forEach((freq, idx) => {
       this._sfxVoice({ type: 'triangle', f0: freq, dur: 0.25, level: 0.25, at: t + idx * 0.08, jitter: 0 });
     });
@@ -428,7 +845,7 @@ class SoundEngine {
     if (!this.enabled) return;
     this.ensureContext();
     const t = this.ctx.currentTime;
-    const chords = [523.25, 659.25, 783.99, 1046.50, 1318.51]; // C Major Spread
+    const chords = [523.25, 659.25, 783.99, 1046.50, 1318.51];
     chords.forEach((freq, idx) => {
       this._sfxVoice({ type: 'sine', f0: freq, dur: 0.6, level: 0.3, at: t + idx * 0.05, jitter: 0 });
     });
@@ -452,7 +869,7 @@ class SoundEngine {
     });
   }
 
-  // ── BGM 合成小工具 (全部餵 bgmGain，受主開關 × 音量 × 暫停靜音統一控管) ──
+  // ── BGM 合成工具 ─────────────────────────────────────────────
   _bgmTone(t, freq, type, dur, level, glideTo = null, attack = 0.004, release = null) {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -462,10 +879,8 @@ class SoundEngine {
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.linearRampToValueAtTime(level, t + attack);
     if (release === null) {
-      // 預設：attack 後自然指數衰減到尾 (短音/打擊)
       gain.gain.exponentialRampToValueAtTime(0.0008, t + dur);
     } else {
-      // 指定 release：attack 後保持音量，小節尾才淡出 (pad/長音用)
       gain.gain.setValueAtTime(level, t + Math.max(attack, dur - release));
       gain.gain.exponentialRampToValueAtTime(0.0008, t + dur);
     }
@@ -477,7 +892,7 @@ class SoundEngine {
       try {
         osc.disconnect();
         gain.disconnect();
-      } catch (e) { /* 已斷開 */ }
+      } catch (e) { /* ignore */ }
     };
     return osc;
   }
@@ -503,7 +918,6 @@ class SoundEngine {
     this._bgmNoise(t, 0.65, level, 'lowpass', 6500);
   }
 
-  // 小節起始的和弦 pad：mode maj/min 三度 + 可選 wide (多一顆高八度)
   _bgmPad(t, dur, root, mode, cfg) {
     const offsets = mode === 'maj' ? [0, 4, 7] : [0, 3, 7];
     for (const semi of offsets) {
@@ -512,25 +926,27 @@ class SoundEngine {
     if (cfg.spread) {
       this._bgmTone(t, root * 2, 'triangle', dur, cfg.level / 6, null, 0.5, 0.6);
     }
-    // 高張力時補一層高八度微亮 pad（只在高強度出現，讓「打到後期」聽得出來）
     if (this.intensity > 0.7) {
       this._bgmTone(t, root * 4, 'sine', dur, cfg.level / 5, null, 0.8, 0.7);
     }
-    // 高八度微失諧長音 (實驗室專用，拍頻製造不安感)
     if (this._bgmDrone) {
       this._bgmTone(t, root * 4 * 1.004, 'sine', dur * 2, 0.012, null, 1.2, 0.8);
       this._bgmTone(t, root * 4 * 0.996, 'sine', dur * 2, 0.012, null, 1.2, 0.8);
     }
   }
 
-  // 動態程序化 Synthwave 循環音樂 (BGM)：bass + 鼓組 + 和弦 pad + lead + 高張力琶音
-  // 音色與和聲全部來自 BGM_THEMES；節拍由前瞻排程器驅動 (見 _schedulerTick)
+  // ── 動態 BGM 播放與切換 ──────────────────────────────────────
   startBGM(levelId = 'street') {
-    if (this._schedTimer) return;
+    if (this._schedTimer) {
+      if (this._activeLevelId === levelId && !this._isBossBGM) return;
+      this.stopBGM();
+    }
     this.bgmMuted = false;
     this.ensureContext();
     if (!this.ctx) return;
 
+    this._activeLevelId = levelId;
+    this._isBossBGM = (levelId === 'boss');
     const theme = BGM_THEMES[levelId] || BGM_THEMES.street;
     this._bgmTheme = theme;
     this.bgmStep = 0;
@@ -538,7 +954,7 @@ class SoundEngine {
     this._bgmLastStep = -1;
     this._arpIdx = 0;
     this._bgmDrone = !!theme.drone;
-    this._bgmStepTime = (60 / theme.bpm) / 2; // 8分音符
+    this._bgmStepTime = (60 / theme.bpm) / 2;
     this.intensity = 0;
     this._applyGains();
 
@@ -547,8 +963,26 @@ class SoundEngine {
     this._schedulerTick();
   }
 
-  // 補排：把「下一個該響、且落在前瞻窗內」的 step 全部排進音訊時鐘。
-  // guard 是防止長時間凍結後一次補排幾百個音符（聽起來像快轉）。
+  // 首領降臨：動態切換到熱血首領 BGM
+  switchToBossTheme() {
+    if (this._isBossBGM) return;
+    const bossTheme = BGM_THEMES.boss || BGM_THEMES.core;
+    this._bgmTheme = bossTheme;
+    this._bgmStepTime = (60 / bossTheme.bpm) / 2;
+    this._isBossBGM = true;
+    this.setIntensity(1.0);
+  }
+
+  // 首領討伐成功：平滑切回關卡原 BGM
+  restoreLevelTheme() {
+    if (!this._isBossBGM) return;
+    const theme = BGM_THEMES[this._activeLevelId] || BGM_THEMES.street;
+    this._bgmTheme = theme;
+    this._bgmStepTime = (60 / theme.bpm) / 2;
+    this._isBossBGM = false;
+    this.setIntensity(0.2);
+  }
+
   _schedulerTick() {
     if (!this.ctx || !this.enabled || this._offline) return;
     const until = this.ctx.currentTime + SCHEDULE_AHEAD;
@@ -561,13 +995,11 @@ class SoundEngine {
     if (guard >= 64) this._nextStepTime = until;
   }
 
-  // 暫停/背景回來後重新對時，避免追趕落後的音符
   _resyncBGM() {
     if (!this.ctx || !this._schedTimer) return;
     this._nextStepTime = Math.max(this._nextStepTime, this.ctx.currentTime + 0.08);
   }
 
-  // 單個 8 分音符 step 的完整排程 (抽成方法以便無頭測試直接驅動)
   _bgmStep(t = null) {
     if (!this.enabled || !this.ctx) return;
     const now = t === null ? this.ctx.currentTime : t;
@@ -584,12 +1016,8 @@ class SoundEngine {
       ? [0, 0, 0, 2, 4, 4, 7, 7, 7, 7, 9, 12, 12, 12]
       : [0, 0, 0, 3, 5, 5, 7, 7, 7, 7, 10, 12, 12, 12];
 
-    // 音樂張力平滑逼近（每步 12%，約 8 步到位 → 約 1 秒，不會突兀）
     this.intensity += (this._intensityTarget - this.intensity) * 0.12;
     const it = this.intensity;
-
-    // 樂句結構：8 小節一樂句。第 8 小節第 5 個 8 分音符加過門，
-    // 樂句第一拍加大鼓刷，讓循環有「段落感」而不是無盡的 4 小節。
     const phraseBar = barIdx % 8;
 
     // 1. 鼓組
@@ -600,30 +1028,26 @@ class SoundEngine {
     } else if (theme.hat === 'sparse' && (stepInBar === 2 || stepInBar === 6)) {
       this._bgmHat(now, false, 0.035);
     }
-    // ghost hat 只在有張力時出現（原本一直開著，等於沒有動態）
     if (theme.ghost && it > 0.2 && stepInBar % 2 === 0) {
       this._bgmHat(now, false, 0.02 + it * 0.012, now + stepTime * 0.5);
     }
-    // 樂句過門：第 8 小節的後半拍連打三下小鼓/hat
     if (phraseBar === 7 && stepInBar >= 5 && stepInBar <= 7) {
       this._bgmHat(now, false, 0.03 + it * 0.02, now + stepTime * 0.5);
     }
     if (barIdx > 0 && phraseBar === 0 && stepInBar === 0) this._bgmCrash(now, 0.09 + it * 0.05);
     if (it > 0.6 && phraseBar === 4 && stepInBar === 0) this._bgmCrash(now, 0.05);
 
-    // 2. Bass 脈衝 (8 分音符)
+    // 2. Bass 脈衝
     this._bgmTone(now, bassNotes[this.bgmStep % bassNotes.length], 'triangle', stepTime * 0.85, 0.15);
 
-    // 3. 和弦 pad (每小節第一拍換和弦，跨整小節)
+    // 3. 和弦 pad
     if (stepInBar === 0) this._bgmPad(now, stepTime * 8, chordRoot, theme.mode, padCfg);
 
-    // 4. 高張力琶音層：16 分音符在和弦音之間跑，強度越高越大聲
+    // 4. 高張力琶音層
     if (theme.arp && it > 0.45 && stepInBar % 2 === 1) {
       const tones = theme.mode === 'maj' ? [0, 4, 7, 12] : [0, 3, 7, 12];
       const semi = tones[this._arpIdx % tones.length];
       this._arpIdx++;
-      // 提高兩個八度：琶音要當 pad 上方的亮層，跟低音同度會糊在一起（實測放 4 倍時
-      // 幾乎量不到高頻增量，落在 200~500Hz 的低中頻）。
       const freq = chordRoot * Math.pow(2, semi / 12) * 8;
       if (freq <= 5000) {
         this._bgmTone(now, freq, theme.arp.wave || 'triangle', stepTime * 0.9,
@@ -631,7 +1055,7 @@ class SoundEngine {
       }
     }
 
-    // 5. Lead 旋律 (機率式五聲音階短音；第一小節留白，避免單音重複)
+    // 5. Lead 旋律
     const leadChance = leadCfg.density * (0.75 + it * 0.6);
     if (barIdx >= 1 && Math.random() < leadChance && !(stepInBar === 0 && this._bgmLastStep >= 6)) {
       let semi = leadPool[Math.floor(Math.random() * leadPool.length)];
