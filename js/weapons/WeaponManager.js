@@ -1533,6 +1533,7 @@ export class WeaponManager {
 
     // 帝皇動力神劍額外激發 2 道月牙型解離空間衝擊波
     if (isPower) {
+      const waveDmg = Math.round(damage * ((def.shockwaveDmg || 85) / (def.baseDamage || 115)));
       [-0.18, 0.18].forEach((offset) => {
         const waveAngle = aim + offset;
         const sp = def.shockwaveSpeed || 520;
@@ -1544,7 +1545,7 @@ export class WeaponManager {
             y: this.player.y,
             vx: Math.cos(waveAngle) * sp,
             vy: Math.sin(waveAngle) * sp,
-            damage: def.shockwaveDmg || 85,
+            damage: waveDmg,
             radius: 20,
             pierce: def.shockwavePierce || 99,
             isCrit: crit,

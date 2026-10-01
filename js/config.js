@@ -1,4 +1,4 @@
-// 嘎嘎特攻 (Gaga Survivor) - 遊戲全局設定與數值配置
+// 呱呱特工 (Gaga Survivor) - 遊戲全局設定與數值配置
 
 export const GAME_CONFIG = {
   // 原本這裡還有 CANVAS_WIDTH/HEIGHT，但它們在 import 時算一次就固定，

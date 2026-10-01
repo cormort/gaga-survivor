@@ -1,4 +1,4 @@
-// 嘎嘎特攻 (Gaga Survivor) - 遊戲核心主循環與遊戲狀態機
+// 呱呱特工 (Gaga Survivor) - 遊戲核心主循環與遊戲狀態機
 
 import {
   GAME_CONFIG,

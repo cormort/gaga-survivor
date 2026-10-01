@@ -1,4 +1,4 @@
-// 嘎嘎特攻隊 / Gaga Survivor — Service Worker
+// 呱呱特工 / Gaga Survivor — Service Worker
 //
 // 目標：離線可玩 (整個 app shell + 全部 ES module 都預快取)，上線時自動換版。
 // 部署在 GitHub Pages 的子路徑 (/gaga-survivor/)，所以這裡全部用相對路徑 —— 一律相對於

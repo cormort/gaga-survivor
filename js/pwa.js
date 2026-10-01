@@ -1,4 +1,4 @@
-// 嘎嘎特攻隊 / Gaga Survivor — PWA 註冊層
+// 呱呱特工 / Gaga Survivor — PWA 註冊層
 //
 // 負責三件事，全部只碰 DOM 與瀏覽器 API，不 import 任何遊戲模組：
 //   1. 註冊 Service Worker (sw.js，相對於本頁 → GitHub Pages 子路徑也正確)
@@ -220,8 +220,8 @@ function watchRegistration(reg) {
 // 舊版對 iOS 直接 return false、而且那個提示用 localStorage 記住「提示過」就永久不再出現，
 // 於是使用者完全看不到任何安裝入口 —— 這就是「手機無法安裝 PWA」的來源。
 const INSTALL_COPY = {
-  native: { icon: '📲', title: '安裝嘎嘎特攻隊', desc: '加入主畫面，離線也能出擊' },
-  'native-manual': { icon: '📲', title: '安裝嘎嘎特攻隊', desc: '點瀏覽器右上角「⋮」→ 安裝應用程式' },
+  native: { icon: '📲', title: '安裝呱呱特工', desc: '加入主畫面，離線也能出擊' },
+  'native-manual': { icon: '📲', title: '安裝呱呱特工', desc: '點瀏覽器右上角「⋮」→ 安裝應用程式' },
   ios: { icon: '🧭', title: '裝到 iPhone 主畫面', desc: '點下方「分享」鈕 → 加入主畫面' },
   // Android 的安裝是兩段式：Chrome 先向 Google 要一個 WebAPK，再由系統裝起來。第二段
   // 失敗時（授權、Play 服務、空間、Google 端的鑄造服務）Chrome 只會丟「無法建立捷徑／

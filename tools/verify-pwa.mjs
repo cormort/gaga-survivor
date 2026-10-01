@@ -171,7 +171,7 @@ ok('index.html 有 <link rel="manifest">', !!manifestInfo.href, `${manifestInfo.
 const mf = manifestInfo.json || {};
 ok('manifest 抓得到並解析成 JSON', !!manifestInfo.json && manifestInfo.status === 200,
   `HTTP ${manifestInfo.status}, content-type=${manifestInfo.type}`);
-ok('manifest name / short_name', mf.name === '嘎嘎特攻隊 Gaga Survivor' && mf.short_name === '嘎嘎特攻隊',
+ok('manifest name / short_name', mf.name === '呱呱特工 Gaga Survivor' && mf.short_name === '呱呱特工',
   `${mf.name} / ${mf.short_name}`);
 ok('manifest start_url / scope / display / lang',
   mf.start_url === './index.html?source=pwa' && mf.scope === './'

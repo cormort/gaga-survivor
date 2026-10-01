@@ -8,7 +8,7 @@ export const CHARACTERS = {
     id: 'duck',
     sprite: 'duck',
     codename: '007 鴨鴨',
-    title: '嘎嘎特工',
+    title: '呱呱特工',
     role: '均衡新手推薦 / 單體點殺與極速風箏',
     heroClass: '遠程',
     classColor: '#ffcc00',
