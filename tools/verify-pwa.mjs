@@ -230,9 +230,41 @@ const cacheInfo = await page.evaluate(async () => {
 });
 const shellKeys = cacheInfo.entries[cacheVersion] || [];
 ok(`快取名稱與 sw.js 的 CACHE_VERSION 一致 (${cacheVersion})`, cacheInfo.names.includes(cacheVersion), cacheInfo.names.join(', '));
-const notCached = precache.filter((p) => !shellKeys.includes(new URL(p, `${BASE}/`).href));
-ok('預快取清單每一筆都真的進了快取', notCached.length === 0,
-  notCached.length ? `漏 ${notCached.length}: ${notCached.join(', ')}` : `${shellKeys.length} 筆`);
+// 程式本體（HTML/CSS/JS/圖示）安裝時就要進快取；遊戲素材改成「玩家同意才下載」
+// （行動網路是有限資源，見 sw.js 的 isShellEntry / CACHE_ASSETS）。
+const isAsset = (p) => p.replace(/^\.\//, '').startsWith('assets/');
+const shellNotCached = precache.filter((p) => !isAsset(p) && !shellKeys.includes(new URL(p, `${BASE}/`).href));
+ok('程式本體（非 assets）安裝時每一筆都真的進了快取', shellNotCached.length === 0,
+  shellNotCached.length ? `漏 ${shellNotCached.length}: ${shellNotCached.join(', ')}` : `${shellKeys.length} 筆`);
+
+const assetCached = precache.filter((p) => isAsset(p) && shellKeys.includes(new URL(p, `${BASE}/`).href));
+ok('遊戲素材在「玩家同意之前」沒有被默默下載', assetCached.length === 0,
+  assetCached.length ? `竟然先抓了 ${assetCached.length} 筆` : '同意前 0 筆素材');
+
+const assetResult = await page.evaluate(async () => {
+  const reg = await navigator.serviceWorker.ready;
+  const sw = navigator.serviceWorker.controller || reg.active;
+  if (!sw) return { ok: false, reason: 'no-sw' };
+  return await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ ok: false, reason: 'timeout' }), 120000);
+    const onMsg = (e) => {
+      if (e.data && e.data.type === 'ASSETS_DONE') {
+        clearTimeout(timer);
+        navigator.serviceWorker.removeEventListener('message', onMsg);
+        resolve({ ok: true, done: e.data.done, total: e.data.total });
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMsg);
+    sw.postMessage({ type: 'CACHE_ASSETS', bytes: 0 });
+  });
+});
+const cacheAfter = await page.evaluate(async (name) => {
+  const cache = await caches.open(name);
+  return (await cache.keys()).map((k) => k.url);
+}, cacheVersion);
+const assetNotCached = precache.filter((p) => isAsset(p) && !cacheAfter.includes(new URL(p, `${BASE}/`).href));
+ok('按下「立即下載」後，素材清單每一筆都進了快取', assetResult.ok && assetNotCached.length === 0,
+  assetResult.ok ? `${assetResult.done}/${assetResult.total} 檔（快取內 ${cacheAfter.length} 筆）` : `下載失敗: ${assetResult.reason}`);
 ok('完全沒有攔截/快取跨網域請求', cacheInfo.crossOrigin.length === 0,
   cacheInfo.crossOrigin.join(', ') || '0 筆跨網域');
 

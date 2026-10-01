@@ -7277,9 +7277,11 @@ const IMAGE_SPRITES = {
   hormagaunt: 50, termagant: 50, genestealer: 56, ork_boy: 66, squig_bomb: 52,
   // 各大首領 Boss
   boss: 110, boss_charging: 115, boss_nob: 105, boss_broodlord: 108, boss_carnifex: 120,
-  // 武俠敵人與門派頭目
-  wuxia_guard: 56, wuxia_rogue: 54, wuxia_archer: 54, wuxia_assassin: 52, wuxia_qingcheng: 52,
-  wuxia_zuo: 68, wuxia_yue: 66, wuxia_dongfang: 66, wuxia_lin: 52,
+  // 武俠敵人與門派頭目：已於 v65 移除 —— 這 9 張從來沒有任何關卡或敵人定義在用
+  // （levels.js 的 decor/enemies 都沒提到，config.js 的 ENEMY_TYPES 也沒有），
+  // 但一直在載入表與預快取清單裡，而且其中 3 張的切圖是壞的
+  // （wuxia_guard 帶一把游離鐮刀、wuxia_zuo 殘留來源圖字樣、wuxia_dongfang 只剩紅色剪影）。
+  // 檔案也一起刪了；要復活的話把檔案放回 assets/xian/ 再把 key 加回這裡即可。
   // 英雄特工 (13 位)
   duck: 60, rabbit: 62, penguin: 60, cat: 60, mechanic: 62,
   astartes_duck: 66, techpriest_goose: 66,
@@ -7660,6 +7662,32 @@ function markSpriteReady(key) {
   }
 }
 
+// 等「一組」貼圖的真圖就緒 —— 給「進場前先把這一場會用到的角色準備好」用。
+// 回傳 { ready, total, timedOut }；逾時就放行（寧可先玩舊圖，也不能把玩家卡在載入）。
+// onProgress(ready, total) 可選，用來在按鈕上顯示「載入角色中… 7/24」。
+export function whenSpritesReady(keys, timeoutMs = 8000, onProgress = null) {
+  const uniq = [...new Set(keys)].filter(Boolean);
+  if (!uniq.length) return Promise.resolve({ ready: 0, total: 0, timedOut: false });
+  return new Promise((resolve) => {
+    let done = 0;
+    let settled = false;
+    const finish = (timedOut) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ready: done, total: uniq.length, timedOut });
+    };
+    const timer = setTimeout(() => finish(true), timeoutMs);
+    for (const key of uniq) {
+      whenSpriteReady(key, () => {
+        done++;
+        if (onProgress) { try { onProgress(done, uniq.length); } catch (err) { /* 進度顯示不該影響載入 */ } }
+        if (done >= uniq.length) finish(false);
+      });
+    }
+  });
+}
+
 // 載入一張貼圖：onReady 負責把 builder 裝進 BUILDERS。
 // 回傳的 promise 保證 settle（逾時視為失敗），但圖晚到仍然有效。
 function loadSpriteImage(key, url, onReady) {
@@ -7692,8 +7720,25 @@ function loadSpriteImage(key, url, onReady) {
   });
 }
 
+// 下載順序：角色貼圖擺最前面。
+// 選角畫面與「進場前的等待」都只要這 25 張，但牠們原本散在 137 張裡照表排隊，
+// 前面卡著幾十張敵人與裝飾圖 —— 手機 4G 上那就是「等了 20 秒還沒看到自己的角色」。
+// sort 在現代 JS 是穩定的，所以同優先度仍維持原本的順序。
+function charactersFirst(entries, isCharacter) {
+  return [...entries].sort((a, b) => (isCharacter(b[0]) ? 1 : 0) - (isCharacter(a[0]) ? 1 : 0));
+}
+
 export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve() : Promise.all([
-  ...Object.entries(IMAGE_SPRITES).map(([key, height]) => loadSpriteImage(
+  ...charactersFirst(Object.entries(ZODIAC_SPRITES), (k) => k.endsWith('_hero')).map(([key, height]) => loadSpriteImage(
+    key, `./assets/zodiac/${key}.png?v=20261001`, (img) => {
+      if (key.endsWith('_hero')) {
+        BUILDERS[key] = zodiacHeroBuilder(key, img, height);
+      } else {
+        BUILDERS[key] = imageBuilder(img, height, false);
+      }
+      for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
+    })),
+  ...charactersFirst(Object.entries(IMAGE_SPRITES), (k) => PLAYER_SPRITE_KEYS.has(k)).map(([key, height]) => loadSpriteImage(
     key, `./assets/xian/${key}.png?v=20260929`, (img) => {
       if (PLAYER_SPRITE_KEYS.has(key)) {
         BUILDERS[key] = xianCharacterBuilder(key, img, height);
@@ -7707,15 +7752,6 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
   ...Object.entries(DECOR_PNG_SPRITES).map(([key, height]) => loadSpriteImage(
     key, `./assets/decor/${key}.png?v=20261001`, (img) => {
       BUILDERS[key] = imageBuilder(img, height, true);
-      for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
-    })),
-  ...Object.entries(ZODIAC_SPRITES).map(([key, height]) => loadSpriteImage(
-    key, `./assets/zodiac/${key}.png?v=20261001`, (img) => {
-      if (key.endsWith('_hero')) {
-        BUILDERS[key] = zodiacHeroBuilder(key, img, height);
-      } else {
-        BUILDERS[key] = imageBuilder(img, height, false);
-      }
       for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
     })),
   ...Object.entries(BOSS_PNG_SPRITES).map(([key, height]) => loadSpriteImage(

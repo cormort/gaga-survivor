@@ -13,6 +13,8 @@
 
 const BANNER_ID = 'pwa-banner';
 const UPDATE_BTN_ID = 'btn-app-update';
+// 「這一版的遊戲素材已經下載好了」記在這裡（值＝版本號）。沒記錄＝還沒下載。
+const ASSETS_OK_KEY = 'gaga.assetsOk';
 
 let banner = null;            // 橫幅 DOM 參照 (延後建立，避免影響首次繪製)
 let currentAction = null;     // 目前橫幅主按鈕的處理函式
@@ -21,6 +23,12 @@ let refreshing = false;       // 使用者按下「立即更新」後只重載�
 let installDismissed = false; // 這一輪工作階段不再提示安裝
 let waitingForReload = false;
 let updating = false;         // 「立即更新」進行中，避免連點重複觸發
+let registration = null;      // ServiceWorkerRegistration
+let currentVersion = '';      // version.json 的版本
+let assetsKB = 0;             // 同意才下載的素材大小（version.json 的 assetsKB）
+let pendingAssets = null;     // 正在下載的素材：{ version, then }
+let pendingThen = null;       // 「下載完之後要做什麼」（例如換版重載）
+let assetsPromptShown = false;// 這一輪工作階段已經問過要不要下載素材
 
 /* ── 環境判斷 ── */
 
@@ -156,28 +164,47 @@ function bannerVisible() {
 
 /* ── 更新提示 ── */
 
+// 換版前先確定「新版的遊戲素材」有沒有下載好。
+// 沒有的話先問玩家（要下載約 XX MB 嗎），下載完才換版 —— 這樣換版後不會出現
+// 「程式是新的、貼圖還是舊的」那段空窗（那正是玩家看到「角色變回舊的」的時候）。
+async function ensureAssetsThen(then) {
+  let info = { version: currentVersion, assetsKB };
+  try { info = await readVersionInfo(); } catch (err) { /* 離線就用已知的 */ }
+  if (info.version) currentVersion = info.version;
+  if (info.assetsKB) assetsKB = info.assetsKB;
+  if (currentVersion && assetsKB && !assetsOk(currentVersion)) {
+    offerAssetDownload(currentVersion, then, 'update');
+    return;
+  }
+  then();
+}
+
+// 讓 waiting 的新版接手，接手後整頁重載
+function activateWaiting(worker) {
+  waitingForReload = true;
+  try {
+    worker.postMessage({ type: 'SKIP_WAITING' });
+  } catch (err) {
+    console.warn('[pwa] 無法通知 Service Worker：', err);
+    reloadNow();
+    return;
+  }
+  // worker 沒回應時別讓玩家卡在舊版：兩秒後自己重載
+  window.setTimeout(() => {
+    if (waitingForReload) reloadNow();
+  }, 2000);
+}
+
 function offerUpdate(worker) {
   if (!worker) return;
+  const size = assetsKB ? `（遊戲素材約 ${humanMB(assetsKB)}）` : '';
   showBanner({
     icon: '🚀',
     title: '有新版本可用',
-    desc: '套用最新版本並重新載入遊戲',
+    desc: `套用最新版本並重新載入遊戲${size}`,
     actionLabel: '立即更新',
     tone: 'update',
-    onAction: () => {
-      waitingForReload = true;
-      try {
-        worker.postMessage({ type: 'SKIP_WAITING' });
-      } catch (err) {
-        console.warn('[pwa] 無法通知 Service Worker：', err);
-        window.location.reload();
-        return;
-      }
-      // worker 沒回應時別讓玩家卡在舊版：兩秒後自己重載
-      window.setTimeout(() => {
-        if (waitingForReload) window.location.reload();
-      }, 2000);
-    },
+    onAction: () => { ensureAssetsThen(() => activateWaiting(worker)); },
   });
 }
 
@@ -189,13 +216,10 @@ function offerReloadFromMessage(version) {
   showBanner({
     icon: '🚀',
     title: '有新版本可用',
-    desc: `已更新到 ${version || '最新版本'}，立即更新遊戲`,
+    desc: `已更新到 ${version || '最新版本'}，立即更新遊戲${assetsKB ? `（素材約 ${humanMB(assetsKB)}）` : ''}`,
     actionLabel: '立即更新',
     tone: 'update',
-    onAction: () => {
-      refreshing = true;
-      window.location.reload();
-    },
+    onAction: () => { ensureAssetsThen(reloadNow); },
   });
 }
 
@@ -331,21 +355,22 @@ function showMobileInstallHint() {
 
 /* ── Service Worker 註冊 ── */
 
-// 讀 version.json 決定 SW 的註冊網址。帶版本查詢字串有兩個作用：
+// 讀 version.json 決定 SW 的註冊網址，順便拿到「同意才下載的素材有多大」。
+// 帶版本查詢字串有兩個作用：
 //   1. 發版後 URL 改變 → 瀏覽器一定會做更新檢查（不必等別人改 sw.js 的位元組）
 //   2. 讓「網頁版已更新、安裝版還停在舊快取」這種事不再發生
-async function readVersionTag() {
+async function readVersionInfo() {
   try {
     // 帶時間戳查詢字串：連 SW 的快取 key 都不會命中，保證拿到伺服器上的版本
     const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
     if (res && res.ok) {
       const data = await res.json();
-      if (data && data.version) return String(data.version);
+      if (data) return { version: String(data.version || ''), assetsKB: Number(data.assetsKB) || 0 };
     }
   } catch (err) {
     /* 離線或檔案不存在：退回不帶查詢字串的註冊，SW 本身仍可用 */
   }
-  return '';
+  return { version: '', assetsKB: 0 };
 }
 
 async function registerServiceWorker() {
@@ -355,19 +380,23 @@ async function registerServiceWorker() {
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
 
   try {
-    const tag = await readVersionTag();
-    const url = tag ? `sw.js?v=${encodeURIComponent(tag)}` : 'sw.js';
+    const info = await readVersionInfo();
+    currentVersion = info.version;
+    assetsKB = info.assetsKB;
+    const url = currentVersion ? `sw.js?v=${encodeURIComponent(currentVersion)}` : 'sw.js';
     navigator.serviceWorker.register(url).then((reg) => {
+      registration = reg;
       watchRegistration(reg);
+      // 素材（貼圖…）比程式本體大得多，而且行動網路是有限資源 ——
+      // 第一版安裝時先問過玩家再抓，不要默默吃掉他的流量。
+      maybeOfferAssets();
     }).catch((err) => {
       console.info('[pwa] Service Worker 未註冊 (遊戲不受影響)：', err && err.message);
     });
 
     // 新版 SW 接管後會主動廣播；已安裝的 PWA 不一定會經歷 updatefound，
     // 收到這個訊息就提示玩家重新載入（否則他們會一直看到舊介面）。
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data && event.data.type === 'SW_UPDATED') offerReloadFromMessage(event.data.version);
-    });
+    navigator.serviceWorker.addEventListener('message', onServiceWorkerMessage);
 
     // 新 SW 接手後重載一次，讓整頁都吃到新版資源
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -378,6 +407,86 @@ async function registerServiceWorker() {
   } catch (err) {
     console.info('[pwa] Service Worker 註冊流程例外 (遊戲不受影響)：', err);
   }
+}
+
+/* ── 遊戲素材下載：先講清楚多大，玩家同意才抓 ── */
+
+// 素材下載完成與否記在 localStorage（每個版本一次）。沒同意就還沒下載 ——
+// 遊戲照樣能玩，只是貼圖每次都得從網路抓（換版後那段時間角色會是舊圖）。
+function assetsOk(version) {
+  if (!version) return true;   // 不知道版本就別吵
+  try { return localStorage.getItem(ASSETS_OK_KEY) === version; } catch (err) { return true; }
+}
+function markAssetsOk(version) {
+  try { localStorage.setItem(ASSETS_OK_KEY, version); } catch (err) { /* 私密模式等，忽略 */ }
+}
+
+function humanMB(kb) {
+  return kb >= 1024 ? `${(kb / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(kb))}KB`;
+}
+
+// 進度橫幅：SW 每抓幾張就回報一次
+function onServiceWorkerMessage(event) {
+  const data = event.data || {};
+  if (data.type === 'SW_UPDATED') { offerReloadFromMessage(data.version); return; }
+  if (data.type === 'ASSET_PROGRESS') {
+    if (!pendingAssets) return;
+    const pct = data.total ? Math.round((data.done / data.total) * 100) : 0;
+    showBanner({
+      icon: '📦',
+      title: `下載遊戲素材中… ${pct}%`,
+      desc: `${data.done} / ${data.total} 個檔案（約 ${humanMB(assetsKB)}）· 可以關掉這個視窗，下載會在背景繼續`,
+      actionLabel: '',
+      tone: 'install',
+    });
+    return;
+  }
+  if (data.type === 'ASSETS_DONE') {
+    const pending = pendingAssets;
+    pendingAssets = null;
+    markAssetsOk(pending?.version || currentVersion);
+    hideBanner();
+    console.info(`[pwa] 素材下載完成：${data.done}/${data.total}`);
+    if (pending && typeof pending.then === 'function') {
+      try { pending.then(); } catch (err) { console.warn('[pwa] 下載完成後的動作失敗：', err); }
+    }
+  }
+}
+
+function startAssetDownload(version, then) {
+  const sw = navigator.serviceWorker.controller || (registration && registration.active);
+  if (!sw) { if (then) then(); return; }
+  if (pendingAssets) return;                 // 已經在下載了
+  pendingAssets = { version: version || currentVersion, then };
+  showBanner({
+    icon: '📦',
+    title: `下載遊戲素材中… 0%`,
+    desc: `共約 ${humanMB(assetsKB)}· 可以關掉這個視窗，下載會在背景繼續`,
+    actionLabel: '',
+    tone: 'install',
+  });
+  sw.postMessage({ type: 'CACHE_ASSETS', bytes: assetsKB * 1024 });
+}
+
+// 「要不要下載素材？」——玩家按了才抓。不下載也能玩，只是沒有離線貼圖。
+function offerAssetDownload(version, then, reason) {
+  pendingThen = then || null;
+  showBanner({
+    icon: '📦',
+    title: reason === 'first' ? '首次載入需要下載遊戲素材' : '有新版本可用',
+    desc: `約 ${humanMB(assetsKB)}，下載後可離線遊玩（不下載也能玩，只是每次開都要重新抓貼圖）`,
+    actionLabel: '立即下載',
+    tone: 'install',
+    onAction: () => { startAssetDownload(version, pendingThen); },
+  });
+}
+
+function maybeOfferAssets() {
+  if (assetsPromptShown) return;
+  if (!currentVersion || assetsOk(currentVersion)) return;
+  if (!navigator.serviceWorker.controller) return;   // 還沒有 SW 在管這個分頁
+  assetsPromptShown = true;
+  offerAssetDownload(currentVersion, null, 'first');
 }
 
 function initInstallPrompt() {
@@ -447,14 +556,8 @@ async function updateApp() {
       }
       const waiting = await waitForWaiting(reg, 2500);
       if (waiting) {
-        waitingForReload = true;
-        try {
-          waiting.postMessage({ type: 'SKIP_WAITING' });
-        } catch (err) {
-          console.warn('[pwa] 無法通知 Service Worker，直接重載：', err);
-        }
-        // 正常由 controllerchange 重載；worker 沒回應時別讓玩家卡住。
-        window.setTimeout(() => { if (waitingForReload) reloadNow(); }, 1500);
+        // 先把新版的素材準備好（沒下載過就問玩家），再讓它接手
+        await ensureAssetsThen(() => activateWaiting(waiting));
         return; // 按鈕維持「更新中…」直到頁面換掉
       }
     }
@@ -481,6 +584,10 @@ function init() {
 
   registerServiceWorker();
 
+  // 已經被 SW 控制的分頁（回訪）：若這一版的素材還沒下載過，開場問一次。
+  // 延後幾秒，不要跟首次繪製與安裝提示搶注意力。
+  window.setTimeout(maybeOfferAssets, 3500);
+
   // 手機上的安裝說明：等畫面穩定後再出現，避免和首次繪製搶注意力。
   // 只有「攔不到安裝事件」的環境會自動跳（iOS、App 內建瀏覽器）。
   window.setTimeout(() => {
@@ -504,6 +611,10 @@ function init() {
 window.gagaPWA = {
   promptInstall, showInstallBanner, hideBanner, updateApp,
   isStandalone, isIOS, installMode, showMobileInstallHint,
+  // 素材下載（給 console 除錯與驗證腳本用）
+  startAssetDownload, offerAssetDownload, readVersionInfo,
+  assetsOk, markAssetsOk,
+  state: () => ({ version: currentVersion, assetsKB, downloading: !!pendingAssets }),
 };
 
 if (document.readyState === 'complete') init();

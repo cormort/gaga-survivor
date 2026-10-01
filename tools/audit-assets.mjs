@@ -20,7 +20,7 @@
 // 用法：node tools/audit-assets.mjs [--strict]
 //   --strict：有死檔或預快取缺口時離開碼 1（給 CI／發版前把關用）
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -78,6 +78,11 @@ for (const id of [...groundIds.matchAll(/'([^']+)'/g)].map((x) => x[1])) {
   add(`assets/ground/ground_${id}.png`, 'Ground.js 地表貼圖');
 }
 
+// 地表貼圖：檔名由關卡 id 組出來（Ground.js 的 _ensureGroundPng(`assets/ground/ground_${id}.png`)），
+// 而關卡 id 就是 levels.js 裡的 id。少這一段，12 張地表會被誤判成死檔。
+const levelSrc = read('js/levels.js');
+for (const m of levelSrc.matchAll(/^\s*id:\s*'([a-z_0-9]+)'/gm)) add(`assets/ground/ground_${m[1]}.png`, 'Ground.js 地表貼圖（進關才抓）');
+
 const bulletSrc = read('js/entities/EnemyProjectile.js');
 for (const k of arrStrings(bulletSrc, 'ENEMY_BULLET_KEYS')) add(`assets/bullets/${k}.png`, 'EnemyProjectile.js');
 
@@ -102,6 +107,13 @@ for (const f of codeFiles) {
 }
 
 /* ── 3) sw.js 的預快取清單 ── */
+// 刻意「不進預快取、改成用到才抓」的檔案。目前只有地表貼圖：一關一張各 1.4~2.3MB，
+// 開場全抓是 22.6MB 而一場只用到一張（見 Ground.js 的 _ensureGroundPng）。
+const ON_DEMAND = [/^assets\/ground\//];
+
+// 維護用原始檔：不會被程式載入，但要留在 repo 裡（要改圖示時從它產出 PNG）。
+const MAINTENANCE = ['icons/icon-maskable.svg'];
+
 const swSrc = read('sw.js');
 const precache = new Set(
   [...(swSrc.match(/const PRECACHE = \[([\s\S]*?)\];/)[1]).matchAll(/'([^']+)'/g)]
@@ -113,9 +125,11 @@ const precache = new Set(
 const size = (rel) => { try { return statSync(path.join(ROOT, rel)).size; } catch (err) { return 0; } };
 const mb = (n) => (n / 1048576).toFixed(1);
 
-const unused = onDisk.filter((f) => !used.has(f)).sort();
+const unused = onDisk.filter((f) => !used.has(f) && !MAINTENANCE.includes(f)).sort();
 const missing = [...used.keys()].filter((f) => !onDisk.includes(f)).sort();
-const notPrecached = onDisk.filter((f) => used.has(f) && !precache.has(f)).sort();
+const notPrecached = onDisk
+  .filter((f) => used.has(f) && !precache.has(f) && !ON_DEMAND.some((re) => re.test(f)))
+  .sort();
 const precachedMissing = [...precache].filter((p) => p.startsWith('assets/') && !onDisk.includes(p)).sort();
 
 const totalBytes = onDisk.reduce((s, f) => s + size(f), 0);
@@ -192,6 +206,27 @@ if (neverNamed.length) {
   console.log('');
 }
 
-const bad = unused.length + notPrecached.length + precachedMissing.length;
-console.log(bad === 0 ? '✅ 資產沒有死檔、預快取也沒有缺口' : `總結：${bad} 個問題（死檔 ${unused.length}、未預快取 ${notPrecached.length}、預快取缺檔 ${precachedMissing.length}）`);
+/* ── 6) 「同意才下載的素材」大小寫進 version.json ──
+   玩家按下下載前要先看到「約 XX MB」，那個數字就是這裡算出來的。
+   --write-version 會把它寫進 version.json；--strict 會比對有沒有過期。 */
+const assetsForDownload = [...precache].filter((p) => p.startsWith('assets/') && !ON_DEMAND.some((re) => re.test(p)));
+const assetBytes = assetsForDownload.reduce((sum, f) => sum + size(f), 0);
+const assetKB = Math.round(assetBytes / 1024);
+const versionPath = 'version.json';
+const versionJson = JSON.parse(read(versionPath));
+const stale = versionJson.assetsKB !== assetKB;
+console.log(`同意才下載的素材：${assetsForDownload.length} 檔 / ${mb(assetBytes)}MB（version.json 記的是 ${versionJson.assetsKB ?? '(未設定)'}KB）`);
+if (process.argv.includes('--write-version')) {
+  versionJson.assetsKB = assetKB;
+  writeFileSync(path.join(ROOT, versionPath), `${JSON.stringify(versionJson, null, 2)}\n`);
+  console.log(`✅ 已寫入 version.json 的 assetsKB = ${assetKB}`);
+} else if (stale) {
+  console.log('⚠️  version.json 的 assetsKB 過期了 —— 跑 `node tools/audit-assets.mjs --write-version` 更新');
+}
+console.log('');
+
+const bad = unused.length + notPrecached.length + precachedMissing.length + (stale && !process.argv.includes('--write-version') ? 1 : 0);
+console.log(bad === 0
+  ? '✅ 資產沒有死檔、預快取沒有缺口、下載大小也和 version.json 一致'
+  : `總結：${bad} 個問題（死檔 ${unused.length}、未預快取 ${notPrecached.length}、預快取缺檔 ${precachedMissing.length}、assetsKB 過期 ${stale ? 1 : 0}）`);
 if (STRICT && bad > 0) process.exit(1);

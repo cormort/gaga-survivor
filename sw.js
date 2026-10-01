@@ -125,15 +125,6 @@ const PRECACHE = [
   './assets/xian/termagant.png',
   './assets/xian/walker.png',
   './assets/xian/warden.png',
-  './assets/xian/wuxia_archer.png',
-  './assets/xian/wuxia_assassin.png',
-  './assets/xian/wuxia_dongfang.png',
-  './assets/xian/wuxia_guard.png',
-  './assets/xian/wuxia_lin.png',
-  './assets/xian/wuxia_qingcheng.png',
-  './assets/xian/wuxia_rogue.png',
-  './assets/xian/wuxia_yue.png',
-  './assets/xian/wuxia_zuo.png',
   './assets/xian/xian_alchemy.png',
   './assets/xian/xian_demon.png',
   './assets/xian/xian_mage.png',
@@ -192,20 +183,8 @@ const PRECACHE = [
   './assets/weapons/soccer.png',
   './assets/weapons/storm_bolter.png',
   './assets/weapons/twin_storm.png',
-  // 地圖無接縫高畫質地表貼圖 (Ground.js)
-  './assets/ground/ground_core.png',
-  './assets/ground/ground_endless.png',
-  './assets/ground/ground_foundry.png',
-  './assets/ground/ground_frost.png',
-  './assets/ground/ground_frostvoid.png',
-  './assets/ground/ground_inkmount.png',
-  './assets/ground/ground_lab.png',
-  './assets/ground/ground_storm.png',
-  './assets/ground/ground_street.png',
-  './assets/ground/ground_subway.png',
-  './assets/ground/ground_swamp.png',
-  './assets/ground/ground_voidroad.png',
-  './assets/ground/ground_makaimura.png',
+  // 地圖無接縫高畫質地表貼圖 (Ground.js)：一關一張，改為進關才抓（見 isOnDemandEntry），
+  // 因此不列在預快取清單裡。
   // 戰場防禦設施 (Turret.js)
   './assets/facilities/barracks.png',
   './assets/facilities/barricade.png',
@@ -221,7 +200,6 @@ const PRECACHE = [
   './assets/items/chest_boss.png',
   './assets/items/chest_gold.png',
   './assets/items/crate_supply.png',
-  './assets/items/crate_wood.png',
   './assets/items/fuel_can.png',
   './assets/items/pickup_bomb.png',
   './assets/items/pickup_chicken.png',
@@ -352,23 +330,84 @@ const PRECACHE = [
   './js/weapons/ProjectileFX.js',
 ];
 
-// ── install：預快取後立刻接手 ──
+// ── 預快取分成「程式本體」與「遊戲素材」──
+//
+// 為什麼要分：整套素材 40 幾 MB，而行動網路是有限資源。以前換版時 SW 會在背景
+// 直接把它們全部抓下來 —— 玩家不會知道自己的流量被用掉多少，而且抓的期間他是用
+// 舊快取在玩（畫面殘缺、角色是舊圖）。現在：
+//   程式本體 (HTML / CSS / JS / 圖示 / version.json) 仍然安裝時就抓 —— 沒有它遊戲跑不起來
+//   遊戲素材 (assets/) 改成**先告訴玩家要抓多少、他同意才抓**（CACHE_ASSETS 訊息）
+// 地表貼圖另外再降一級：它們是一關一張（各 1.4~2.3MB），只在真的進那一關時才抓
+// （見 js/systems/Ground.js 的 _ensureGroundPng），所以不列入這份清單。
+const isShellEntry = (url) => !url.startsWith('./assets/');
+const isOnDemandEntry = (url) => url.startsWith('./assets/ground/');
+const assetEntries = () => PRECACHE.filter((url) => !isShellEntry(url) && !isOnDemandEntry(url));
+
+// 抓完直接寫進快取。用 cache:'reload' 繞過 HTTP 快取 —— 換版時最怕的就是
+// 「新的版本號、舊的檔案」被 HTTP 的 max-age 留在快取裡。
+async function putFresh(cache, url) {
+  try {
+    const res = await fetch(new Request(url, { cache: 'reload' }));
+    if (res && res.ok && res.type === 'basic') {
+      await cache.put(url, res);
+      return true;
+    }
+  } catch (err) {
+    console.warn('[sw] 預快取略過', url, err);
+  }
+  return false;
+}
+
+// ── install：只預快取程式本體，然後接手 ──
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const { shell } = await currentCaches();
     const cache = await caches.open(shell);
-    try {
-      await cache.addAll(PRECACHE);
-    } catch (err) {
-      // 只要有一個檔案 404，addAll 會整批放棄 —— 那樣離線就全毀。
-      // 改成逐檔補，讓其餘資源仍然進得了快取，缺的那個在 console 留下痕跡。
-      console.warn('[sw] 預快取未竟全功，改為逐檔快取：', err);
-      await Promise.all(PRECACHE.map((url) =>
-        cache.add(url).catch((e) => console.warn('[sw] 預快取略過', url, e))));
-    }
+    const shellList = PRECACHE.filter(isShellEntry);
+    // 逐檔抓：addAll 只要有一個檔案 404 就整批放棄，那樣離線就全毀。
+    await Promise.all(shellList.map((url) => putFresh(cache, url)));
     await self.skipWaiting();
   })());
 });
+
+// ── 下載遊戲素材（頁面在玩家同意後送 CACHE_ASSETS 進來）──
+// ASSET_BYTES 只是拿來回報進度用的總量（真正的清單在上面），由頁面在同意時一起送來。
+let cachingAssets = null;
+let ASSET_BYTES = 0;
+async function cacheAssets() {
+  if (cachingAssets) return cachingAssets;
+  cachingAssets = (async () => {
+    const { shell } = await currentCaches();
+    const cache = await caches.open(shell);
+    const list = assetEntries();
+    const total = list.length;
+    let done = 0;
+    const tell = async (msg) => {
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach((client) => client.postMessage(msg));
+    };
+    await tell({ type: 'ASSET_PROGRESS', done, total, bytes: ASSET_BYTES });
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < list.length) {
+        const url = list[cursor++];
+        await putFresh(cache, url);
+        done++;
+        if (done % 5 === 0 || done === total) await tell({ type: 'ASSET_PROGRESS', done, total, bytes: ASSET_BYTES });
+      }
+    };
+    // 同時 6 條：跟瀏覽器對同一個來源的連線數差不多，再高只是排隊。
+    await Promise.all(Array.from({ length: 6 }, worker));
+    await tell({ type: 'ASSETS_DONE', done, total, bytes: ASSET_BYTES });
+    cachingAssets = null;
+    return { done, total };
+  })().catch((err) => {
+    cachingAssets = null;
+    console.warn('[sw] 素材下載失敗：', err);
+    return null;
+  });
+  return cachingAssets;
+}
 
 // ── activate：清舊版快取 + 立刻接管所有分頁 + 通知分頁換版 ──
 self.addEventListener('activate', (event) => {
@@ -387,9 +426,17 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-// ── 頁面要求跳版 (js/pwa.js 按下「重新載入」時送進來) ──
+// ── 頁面送進來的訊息 ──
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+  const data = event.data || {};
+  if (data.type === 'SKIP_WAITING') self.skipWaiting();
+  // 玩家同意下載素材（大小由頁面顯示，實際清單在這裡）
+  if (data.type === 'CACHE_ASSETS') {
+    if (typeof data.bytes === 'number') ASSET_BYTES = data.bytes;
+    event.waitUntil(cacheAssets());
+  }
+  // 這一版已經下載完成（另一個分頁下載的）：SW 自己記起來，換版時用得到
+  if (data.type === 'ASSETS_DONE_ACK') cachingAssets = null;
 });
 
 // 背景更新：抓到新版就換掉快取裡那份 (呼叫端可 await，導覽請求靠它做到網路優先)。
