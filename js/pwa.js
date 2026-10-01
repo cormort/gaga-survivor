@@ -2,7 +2,7 @@
 //
 // 負責三件事，全部只碰 DOM 與瀏覽器 API，不 import 任何遊戲模組：
 //   1. 註冊 Service Worker (sw.js，相對於本頁 → GitHub Pages 子路徑也正確)
-//   2. 偵測到 waiting worker 時提示「有新版本可用，點此重新載入」
+//   2. 偵測到 waiting worker 時提示「有新版本可用，立即更新」
 //   3. 安裝提示：beforeinstallprompt (Android/桌機 Chrome) 或 iOS Safari 的加入主畫面提示
 //
 // 任何一步失敗都不能影響遊戲啟動 —— 所以全程 try/catch；在區域網路的純 HTTP (非
@@ -12,14 +12,15 @@
 // 不用 alert()/confirm()；橫幅固定在頂部 HUD 下方、不覆蓋左下搖桿與右下動作列。
 
 const BANNER_ID = 'pwa-banner';
-const INSTALL_BTN_ID = 'btn-install-app';
+const UPDATE_BTN_ID = 'btn-app-update';
 
 let banner = null;            // 橫幅 DOM 參照 (延後建立，避免影響首次繪製)
 let currentAction = null;     // 目前橫幅主按鈕的處理函式
 let deferredInstall = null;   // beforeinstallprompt 事件
-let refreshing = false;       // 使用者按下「重新載入」後只重載一次
+let refreshing = false;       // 使用者按下「立即更新」後只重載一次
 let installDismissed = false; // 這一輪工作階段不再提示安裝
 let waitingForReload = false;
+let updating = false;         // 「立即更新」進行中，避免連點重複觸發
 
 /* ── 環境判斷 ── */
 
@@ -160,8 +161,8 @@ function offerUpdate(worker) {
   showBanner({
     icon: '🚀',
     title: '有新版本可用',
-    desc: '點此重新載入，套用最新版本',
-    actionLabel: '重新載入',
+    desc: '套用最新版本並重新載入遊戲',
+    actionLabel: '立即更新',
     tone: 'update',
     onAction: () => {
       waitingForReload = true;
@@ -188,8 +189,8 @@ function offerReloadFromMessage(version) {
   showBanner({
     icon: '🚀',
     title: '有新版本可用',
-    desc: `已更新到 ${version || '最新版本'}，點此重新載入`,
-    actionLabel: '重新載入',
+    desc: `已更新到 ${version || '最新版本'}，立即更新遊戲`,
+    actionLabel: '立即更新',
     tone: 'update',
     onAction: () => {
       refreshing = true;
@@ -240,8 +241,9 @@ function installCopy() {
 }
 
 // 任何平台都能叫出安裝說明（不再對 iOS 直接回 false）。
-// 首頁的「📲 安裝成 App」按鈕與 console 的 gagaPWA.showInstallBanner() 都走這裡；
-// 只有在「真的有 beforeinstallprompt 可攔」時才給按鈕，其餘情況給步驟 —— 按了沒反應比不給按鈕更糟。
+// 自動提示 (js/pwa.js 的 showMobileInstallHint) 與 console 的 gagaPWA.showInstallBanner()
+// 都走這裡；只有在「真的有 beforeinstallprompt 可攔」時才給按鈕，其餘情況給步驟
+// —— 按了沒反應比不給按鈕更糟。
 function showInstallBanner(copyKey) {
   const mode = installMode();
   if (mode === 'installed') return false;
@@ -317,7 +319,7 @@ export async function promptInstall() {
 
 // 自動提示：只有「這個環境沒有安裝事件可攔」時才主動講一次（native 由
 // beforeinstallprompt 驅動，不需要吵）。每個工作階段最多一次，關掉就算了；
-// 首頁常駐的安裝按鈕是保底入口，所以這裡不再用 localStorage 永久封鎖提示。
+// 安裝入口收在自動橫幅與 gagaPWA.showInstallBanner()，所以這裡不再用 localStorage 永久封鎖提示。
 let installHintShown = false;
 function showMobileInstallHint() {
   if (installHintShown || installDismissed || isStandalone()) return;
@@ -393,26 +395,89 @@ function initInstallPrompt() {
   });
 }
 
-/* ── 首頁常駐安裝入口 ── */
+/* ── 首頁常駐更新入口 ── */
 
-// 使用者「想安裝卻找不到入口」時的保底路徑：首頁固定一顆「📲 安裝成 App」。
-// 已經在主畫面執行（standalone）就隱藏 —— 那時安裝已經完成，按鈕只會誤導。
-function updateInstallButton() {
-  const btn = document.getElementById(INSTALL_BTN_ID);
+// 發版後最常見的災難是「網頁版已經更新、這個分頁（或已安裝的 App）還停在舊快取」——
+// 使用者看到的是舊介面或新舊混搭的畫面，卻沒有任何辦法自救。
+// 首頁固定一顆「🔄 立即更新」，按下去：
+//   1. 請瀏覽器真的去對一次 sw.js（註冊網址帶版本查詢字串，不會被快取擋住）
+//   2. 真的有新版 → 讓它接手 (SKIP_WAITING) → controllerchange 重載整頁
+//   3. 沒有新版 / 沒有 SW → 直接重載（導覽請求在 sw.js 是網路優先，重載即抓最新 HTML）
+function setUpdateButtonBusy(busy) {
+  const btn = document.getElementById(UPDATE_BTN_ID);
   if (!btn) return;
-  btn.classList.toggle('hidden', installMode() === 'installed');
+  btn.disabled = busy;
+  btn.textContent = busy ? '⏳ 更新中…' : '🔄 立即更新';
 }
 
-function initInstallButton() {
-  const btn = document.getElementById(INSTALL_BTN_ID);
+// reg.update() 之後新 SW 可能還在 installing，等到它進 waiting 為止。
+// 等不到就回 null，呼叫端直接重載 —— 不能讓玩家卡在「更新中」。
+function waitForWaiting(reg, ms) {
+  return new Promise((resolve) => {
+    const limit = Date.now() + ms;
+    const tick = () => {
+      if (reg.waiting) return resolve(reg.waiting);
+      if (Date.now() >= limit) return resolve(null);
+      window.setTimeout(tick, 100);
+    };
+    tick();
+  });
+}
+
+function reloadNow() {
+  refreshing = true;
+  window.location.reload();
+}
+
+async function updateApp() {
+  if (updating) return;
+  updating = true;
+  setUpdateButtonBusy(true);
+  try {
+    const reg = ('serviceWorker' in navigator)
+      ? await navigator.serviceWorker.getRegistration().catch(() => null)
+      : null;
+
+    if (reg) {
+      try {
+        await reg.update();
+      } catch (err) {
+        // 離線或伺服器掛掉：update() 失敗不代表不能重載，往下走
+        console.info('[pwa] Service Worker 更新檢查失敗，直接重載：', err);
+      }
+      const waiting = await waitForWaiting(reg, 2500);
+      if (waiting) {
+        waitingForReload = true;
+        try {
+          waiting.postMessage({ type: 'SKIP_WAITING' });
+        } catch (err) {
+          console.warn('[pwa] 無法通知 Service Worker，直接重載：', err);
+        }
+        // 正常由 controllerchange 重載；worker 沒回應時別讓玩家卡住。
+        window.setTimeout(() => { if (waitingForReload) reloadNow(); }, 1500);
+        return; // 按鈕維持「更新中…」直到頁面換掉
+      }
+    }
+
+    reloadNow();
+  } finally {
+    // 已經排定重載就不要還原按鈕（頁面馬上就換掉了）
+    if (!waitingForReload) {
+      updating = false;
+      setUpdateButtonBusy(false);
+    }
+  }
+}
+
+function initAppUpdateButton() {
+  const btn = document.getElementById(UPDATE_BTN_ID);
   if (!btn) return;
-  btn.addEventListener('click', () => { showInstallBanner(); });
-  updateInstallButton();
+  btn.addEventListener('click', () => { updateApp(); });
 }
 
 function init() {
   initInstallPrompt();
-  initInstallButton();
+  initAppUpdateButton();
 
   registerServiceWorker();
 
@@ -428,7 +493,6 @@ function init() {
     if (mq && mq.addEventListener) {
       mq.addEventListener('change', () => {
         if (isStandalone()) hideBanner();
-        updateInstallButton();
       });
     }
   } catch (err) {
@@ -438,7 +502,7 @@ function init() {
 
 // console 除錯入口 (與 window.game 同一個慣例)
 window.gagaPWA = {
-  promptInstall, showInstallBanner, hideBanner,
+  promptInstall, showInstallBanner, hideBanner, updateApp,
   isStandalone, isIOS, installMode, showMobileInstallHint,
 };
 

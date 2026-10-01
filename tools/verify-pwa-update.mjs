@@ -8,7 +8,7 @@
 // 依序驗證：
 //   1. 改版後「下一次開啟」就拿到新 HTML（導覽網路優先，不必等第二次）
 //   2. 註冊網址帶版本 → SW 換版、舊快取被清掉、新版接手
-//   3. 換版過程會提示「有新版本可用」，按下去會重載
+//   3. 換版過程會提示「有新版本可用」，按「立即更新」會重載
 //
 //   PW_MODULE=... node tools/verify-pwa-update.mjs
 import { spawn } from 'node:child_process';
@@ -125,7 +125,7 @@ const bannerText = await page.evaluate(async () => {
   return null;
 });
 ok('換版過程有提示「有新版本可用」（updatefound 或 SW_UPDATED 廣播）',
-  !!bannerText && /有新版本可用/.test(bannerText.text) && bannerText.action === '重新載入',
+  !!bannerText && /有新版本可用/.test(bannerText.text) && bannerText.action === '立即更新',
   bannerText ? `"${bannerText.text}" / 按鈕=${bannerText.action}` : '橫幅沒出現');
 
 if (bannerText) {
@@ -133,7 +133,7 @@ if (bannerText) {
   const nav = page.waitForNavigation({ timeout: 15000 }).then(() => { reloaded = true; }).catch(() => {});
   await page.evaluate(() => { document.querySelector('#pwa-banner .pwa-action')?.click(); });
   await nav;
-  ok('按下「重新載入」後頁面真的重載', reloaded);
+  ok('按下「立即更新」後頁面真的重載', reloaded);
 }
 
 await page.waitForFunction(() => window.game, null, { timeout: 15000 }).catch(() => {});

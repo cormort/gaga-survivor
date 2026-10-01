@@ -36,16 +36,63 @@ const walk = (dir, out = []) => {
 // 把註解與字串遮蔽成空白（長度不變，所以行號仍然對得上）。
 // 為什麼要：第 4 項檢查是「找自由識別字」，而註解裡很常提到型別名
 // （例如「手法與 js/systems/Hazards.js 相同」），不遮掉會整片誤判。
-// `//` 前面要求不是 `:`，以免把 `https://…` 這種字串裡的斜線當成註解。
-const mask = (m) => ' '.repeat(m.length);
-const stripNoise = (src) => src
-  .replace(/\/\*[\s\S]*?\*\//g, mask)
-  .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length))
-  .replace(/'(?:\\.|[^'\\\n])*'/g, mask)
-  .replace(/"(?:\\.|[^"\\\n])*"/g, mask)
+//
+// 為什麼不能只用一串 .replace()：先遮註解再遮字串，字串裡的 `//` 會被當成註解開頭
+// （`code: 'REALM TEARER // THREAT: SSS'` 就是這樣把收尾引號吃掉、留下 REALM 誤報）；
+// 反過來先遮字串，註解裡的單引號（`// don't`）又會吞掉整段程式。所以改成單趟掃描，
+// 依實際出現順序處理字串與註解；樣板字串的 `${…}` 內容保持可見（那裡是真的在使用名字）。
+const stripNoise = (src) => {
+  const out = src.split('');
+  const n = src.length;
+  let i = 0;
+  const blank = (k) => { if (src[k] !== '\n') out[k] = ' '; };
+  while (i < n) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') {                       // 行註解
+      while (i < n && src[i] !== '\n') { blank(i); i++; }
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {                       // 區塊註解
+      blank(i); blank(i + 1); i += 2;
+      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) { blank(i); i++; }
+      if (i < n) { blank(i); blank(i + 1); i += 2; }
+      continue;
+    }
+    if (c === '"' || c === "'") {                                // 一般字串
+      const quote = c;
+      blank(i); i++;
+      while (i < n) {
+        if (src[i] === '\\') { blank(i); blank(i + 1); i += 2; continue; }
+        if (src[i] === quote) { blank(i); i++; break; }
+        blank(i); i++;
+      }
+      continue;
+    }
+    if (c === '`') {                                             // 樣板字串：${} 保持原樣
+      blank(i); i++;
+      while (i < n) {
+        if (src[i] === '\\') { blank(i); blank(i + 1); i += 2; continue; }
+        if (src[i] === '`') { blank(i); i++; break; }
+        if (src[i] === '$' && src[i + 1] === '{') {
+          blank(i); blank(i + 1); i += 2;
+          let depth = 1;
+          while (i < n && depth > 0) {
+            if (src[i] === '{') depth++;
+            else if (src[i] === '}') depth--;
+            i++;                                                 // 內容不動
+          }
+          continue;
+        }
+        blank(i); i++;
+      }
+      continue;
+    }
+    i++;
+  }
   // 展開運算子 `...NAME` 的點會被「前面不是 . 」的判斷當成屬性存取而漏掉
   // （MERCHANT_ITEMS 就是這樣漏掉的：用法是 [...MERCHANT_ITEMS]）→ 先把 ... 遮掉
-  .replace(/\.\.\./g, '   ');
+  return out.join('').replace(/\.\.\./g, '   ');
+};
 
 const main = readFileSync(join(ROOT, MAIN), 'utf8');
 

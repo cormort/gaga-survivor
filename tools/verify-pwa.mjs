@@ -593,10 +593,11 @@ ok('pwa.js 對 iOS / App 內建瀏覽器一律給安裝步驟，且不再被 loc
 ok('pwa.js 區分 native / ios / unsupported 三種安裝能力',
   /function installMode\(\)/.test(pwaSrc)
   && /'installed'/.test(pwaSrc) && /'unsupported'/.test(pwaSrc) && /'native'/.test(pwaSrc), 'ok');
-ok('index.html 有常駐安裝入口，且 pwa.js 有接上它',
-  /id="btn-install-app"/.test(await readFile(path.join(ROOT, 'index.html'), 'utf8'))
-  && /btn-install-app/.test(pwaSrc) && /initInstallButton/.test(pwaSrc),
-  '「🏠 養成基地」裡的「📲 安裝成 App」— 攔不到 beforeinstallprompt 的環境的保底入口');
+ok('index.html 有常駐「立即更新」入口，且 pwa.js 有接上它並真的會強制更新',
+  /id="btn-app-update"/.test(await readFile(path.join(ROOT, 'index.html'), 'utf8'))
+  && /btn-app-update/.test(pwaSrc) && /initAppUpdateButton/.test(pwaSrc)
+  && /reg\.update\(\)/.test(pwaSrc) && /waitForWaiting/.test(pwaSrc),
+  '「🏠 養成基地」裡的「🔄 立即更新」— 一鍵請 SW 對版本、接手、重載整頁');
 ok('sw.js 有 skipWaiting / clients.claim / 版本化快取 / message / 同源過濾',
   /skipWaiting\(\)/.test(swSrc) && /clients\.claim\(\)/.test(swSrc)
   && swSrc.includes(cacheVersion) && /SKIP_WAITING/.test(swSrc)

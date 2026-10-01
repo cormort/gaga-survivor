@@ -562,10 +562,12 @@
         <details id="base-hub" class="base-hub">
           <summary class="game-btn talent-btn base-hub-toggle">🏠 養成基地</summary>
           <div class="menu-meta base-hub-grid">
-            <!-- 安裝入口 (js/pwa.js 會接上並在已安裝時隱藏)：iOS Safari、App 內建瀏覽器
-                 這類攔不到 beforeinstallprompt 的環境，自動橫幅關掉後仍能從這裡再叫出安裝步驟。
+            <!-- 更新入口 (js/pwa.js 接上)：按下去請 SW 重新對一次 sw.js，真的有新版就讓它
+                 接手並重載整頁；沒有新版也會直接重載（導覽請求是網路優先）。
+                 發版後最常見的就是「網頁版更新了、這個分頁還停在舊快取」——
+                 使用者看到新舊混搭的畫面卻無從自救，這顆是那個自救出口。
                  放這裡是為了不讓主畫面的黏底操作列（手機螢幕 15%）再長高。 -->
-            <button id="btn-install-app" class="game-btn talent-btn">📲 安裝成 App</button>
+            <button id="btn-app-update" class="game-btn talent-btn">🔄 立即更新</button>
             <button id="btn-char-levels" class="game-btn talent-btn">🆙 特工等級</button>
             <button id="btn-talents" class="game-btn talent-btn">🧬 基因強化</button>
             <button id="btn-gear" class="game-btn talent-btn">🎒 裝備倉庫</button>
