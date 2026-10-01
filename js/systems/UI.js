@@ -420,18 +420,26 @@ export class UIManager {
 
       this.charSelect.appendChild(card);
 
-      // 直接把遊戲內同一組 sprite 畫成頭像，選角看到的就是實際長相
-      import('../sprites.js').then(async ({ getSprite, imageSpritesReady }) => {
-        await imageSpritesReady;
-        const ctx = card.querySelector('.char-portrait').getContext('2d');
-        const sp = getSprite(c.sprite);
-        ctx.save();
-        ctx.clearRect(0, 0, 128, 120);
-        ctx.translate(64, 68);
-        const zoom = Math.min(1.5, 112 / sp.h);   // 修仙貼圖較高，縮到放得進頭像框
-        ctx.scale(zoom, zoom);
-        ctx.drawImage(sp.frames[0], -sp.w / 2, -sp.h / 2, sp.w, sp.h);
-        ctx.restore();
+      // 直接把遊戲內同一組 sprite 畫成頭像，選角看到的就是實際長相。
+      // 只等「自己這一張」：137 張貼圖 / 17.8MB 在手機 4G 上要十幾秒，
+      // 原本 await imageSpritesReady（＝等全部到齊）會讓 25 張卡整片空白，
+      // 只要有一張請求卡住更是永遠不畫 —— 詳見 sprites.js 的 whenSpriteReady。
+      import('../sprites.js').then(({ getSprite, hasSprite, whenSpriteReady }) => {
+        const canvas = card.querySelector('.char-portrait');
+        const paint = () => {
+          // 沒載到就維持空白，不要畫 getSprite 退回的 walker（一隻殭屍當頭像更糟）
+          if (!canvas || !hasSprite(c.sprite)) return;
+          const ctx = canvas.getContext('2d');
+          const sp = getSprite(c.sprite);
+          ctx.save();
+          ctx.clearRect(0, 0, 128, 120);
+          ctx.translate(64, 68);
+          const zoom = Math.min(1.5, 112 / sp.h);   // 修仙貼圖較高，縮到放得進頭像框
+          ctx.scale(zoom, zoom);
+          ctx.drawImage(sp.frames[0], -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+          ctx.restore();
+        };
+        whenSpriteReady(c.sprite, paint);
       });
     });
   }

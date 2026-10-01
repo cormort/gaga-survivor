@@ -6871,10 +6871,90 @@ function bossImageBuilder(img, height, final = false, charging = false) {
   };
 }
 
-export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve() : Promise.all([
-  ...Object.entries(IMAGE_SPRITES).map(([key, height]) => new Promise((resolve) => {
+// ── 貼圖載入 ──
+//
+// 為什麼不能只是「一個大 Promise.all(每一張圖)」：
+//   選角頭像原本 await 這個 Promise 才畫，而它蓋住的貼圖從 v34 的 30 張 / 1.0MB
+//   長到 v63 的 137 張 / 17.8MB。手機 4G 上（尤其剛換版、所有圖都要重抓時）
+//   那就代表十幾秒到一分鐘的**整片空白**；更糟的是只要有一個請求卡住
+//   （切到背景、訊號掉了，load 與 error 都不會 fire），Promise.all 永遠不 settle，
+//   25 張特工頭像一張都畫不出來 —— 這正是玩家回報「角色圖形全部跑掉了」的長相。
+// 所以：
+//   1. 每張圖有自己的 ready 訊號 (whenSpriteReady)：誰先到誰先畫，不再整批等齊
+//   2. 每張圖都有逾時 (IMAGE_TIMEOUT_MS)：逾時當失敗，保證一定會 settle
+//   3. 逾時之後圖才到的話仍然會建好 sprite 並通知訂閱者補畫（晚到總比沒有好）
+//
+// ⚠️ ready 的定義是「真圖建好了」，不是「BUILDERS 有東西」：
+//   BUILDERS 這個字面值裡本來就有全部生肖與基礎角色的**程式繪圖佔位**
+//   （例如 dragon_hero 是 drawBrute、rat_hero 是 drawWalker —— 也就是殭屍畫法）。
+//   用 BUILDERS[key] 當判定會讓訂閱立刻觸發，選角頭像就會先畫上佔位圖、
+//   而且真圖到了也不會補畫 —— 玩家看到的是舊的程式繪圖（生肖那 12 隻還是殭屍）。
+const IMAGE_TIMEOUT_MS = 8000;
+
+const spriteState = new Map();     // key -> 'pending' | 'ready'（沒有登記＝這張圖不存在）
+const spriteWaiters = new Map();   // key -> Set<fn>
+
+// 「這張貼圖的真圖可以畫了」的訂閱。真圖還沒到就排隊；圖不存在／不會有圖的 key
+// 直接觸發（呼叫端會拿到 BUILDERS 裡的程式繪圖）。逾時不算 ready —— 圖可能還在路上，
+// 寧可先空著也不要畫錯的角色上去。
+export function whenSpriteReady(key, fn) {
+  if (typeof fn !== 'function') return;
+  const st = spriteState.get(key);
+  if (st !== 'pending') { fn(); return; }
+  let set = spriteWaiters.get(key);
+  if (!set) { set = new Set(); spriteWaiters.set(key, set); }
+  set.add(fn);
+}
+
+function markSpriteReady(key) {
+  spriteState.set(key, 'ready');
+  const set = spriteWaiters.get(key);
+  if (!set) return;
+  spriteWaiters.delete(key);   // 真圖只會到一次
+  for (const fn of set) {
+    try {
+      fn();
+    } catch (err) {
+      console.warn('[sprites] 貼圖 ready 回呼失敗：', key, err);
+    }
+  }
+}
+
+// 載入一張貼圖：onReady 負責把 builder 裝進 BUILDERS。
+// 回傳的 promise 保證 settle（逾時視為失敗），但圖晚到仍然有效。
+function loadSpriteImage(key, url, onReady) {
+  spriteState.set(key, 'pending');
+  return new Promise((resolve) => {
     const img = new Image();
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      console.warn(`[sprites] 貼圖載入逾時 ${IMAGE_TIMEOUT_MS}ms，先用程式繪圖：${key}`);
+      resolve(false);
+    }, IMAGE_TIMEOUT_MS);
     img.onload = () => {
+      let built = false;
+      try {
+        onReady(img);
+        built = true;
+      } catch (err) {
+        console.warn(`[sprites] 貼圖建構失敗，沿用程式繪圖：${key}`, err);
+      }
+      if (built) markSpriteReady(key);
+      if (!settled) { settled = true; clearTimeout(timer); resolve(built); }
+    };
+    img.onerror = () => {
+      console.warn(`[sprites] 貼圖載入失敗，沿用程式繪圖：${key}`);
+      if (!settled) { settled = true; clearTimeout(timer); resolve(false); }
+    };
+    img.src = url;
+  });
+}
+
+export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve() : Promise.all([
+  ...Object.entries(IMAGE_SPRITES).map(([key, height]) => loadSpriteImage(
+    key, `./assets/xian/${key}.png?v=20260929`, (img) => {
       if (PLAYER_SPRITE_KEYS.has(key)) {
         BUILDERS[key] = xianCharacterBuilder(key, img, height);
       } else if (DECOR_SPRITE_KEYS.has(key)) {
@@ -6883,47 +6963,23 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
         BUILDERS[key] = imageBuilder(img, height, false);
       }
       for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
-      resolve();
-    };
-    img.onerror = () => {
-      console.warn(`[sprites] 貼圖載入失敗，沿用程式繪圖：${key}`);
-      resolve();
-    };
-    img.src = `./assets/xian/${key}.png?v=20260929`;
-  })),
-  ...Object.entries(DECOR_PNG_SPRITES).map(([key, height]) => new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
+    })),
+  ...Object.entries(DECOR_PNG_SPRITES).map(([key, height]) => loadSpriteImage(
+    key, `./assets/decor/${key}.png?v=20261001`, (img) => {
       BUILDERS[key] = imageBuilder(img, height, true);
       for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
-      resolve();
-    };
-    img.onerror = () => {
-      console.warn(`[sprites] 場景裝飾貼圖載入失敗，沿用程式繪圖：${key}`);
-      resolve();
-    };
-    img.src = `./assets/decor/${key}.png?v=20261001`;
-  })),
-  ...Object.entries(ZODIAC_SPRITES).map(([key, height]) => new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
+    })),
+  ...Object.entries(ZODIAC_SPRITES).map(([key, height]) => loadSpriteImage(
+    key, `./assets/zodiac/${key}.png?v=20261001`, (img) => {
       if (key.endsWith('_hero')) {
         BUILDERS[key] = zodiacHeroBuilder(key, img, height);
       } else {
         BUILDERS[key] = imageBuilder(img, height, false);
       }
       for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
-      resolve();
-    };
-    img.onerror = () => {
-      console.warn(`[sprites] 生肖貼圖載入失敗，沿用程式繪圖：${key}`);
-      resolve();
-    };
-    img.src = `./assets/zodiac/${key}.png?v=20261001`;
-  })),
-  ...Object.entries(BOSS_PNG_SPRITES).map(([key, height]) => new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
+    })),
+  ...Object.entries(BOSS_PNG_SPRITES).map(([key, height]) => loadSpriteImage(
+    key, `./assets/bosses/${key}.png?v=20261001`, (img) => {
       BUILDERS[key] = bossImageBuilder(img, height, false, false);
       BUILDERS[`${key}_charging`] = bossImageBuilder(img, height, false, true);
       BUILDERS[`${key}_final`] = bossImageBuilder(img, height, true, false);
@@ -6931,14 +6987,7 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
       for (const k of [...cache.keys()]) {
         if (k.startsWith(key)) cache.delete(k);
       }
-      resolve();
-    };
-    img.onerror = () => {
-      console.warn(`[sprites] 首領貼圖載入失敗，沿用程式繪圖：${key}`);
-      resolve();
-    };
-    img.src = `./assets/bosses/${key}.png?v=20261001`;
-  })),
+    })),
 ]);
 
 // 查詢 sprite key 是否真的存在。getSprite 對未知 key 會靜默退回 walker，
@@ -6948,6 +6997,14 @@ export function hasSprite(key) {
   if (BUILDERS[key]) return true;
   const m = String(key).match(/^(.+):v[0-2]$/);
   return !!(m && BUILDERS[m[1]]);
+}
+
+// 這張貼圖是不是「真的圖」——也就是已經由非同步載入的 PNG 換掉了。
+// BUILDERS 的字面值裡有生肖／基礎角色的程式繪圖佔位（rat_hero 是 drawWalker、
+// dragon_hero 是 drawBrute…），所以 hasSprite() 對它們永遠是 true，分不出真假；
+// 需要分辨「選角頭像畫的是真角色還是佔位圖」時要用這支。
+export function isImageSprite(key) {
+  return !!(BUILDERS[key] && BUILDERS[key].image === true);
 }
 
 // 取得某角色的 sprite 組 (首次呼叫才烘焙，之後直接命中快取)
