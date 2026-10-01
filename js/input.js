@@ -35,6 +35,13 @@ export class InputController {
       if (['s', 'arrowdown'].includes(key)) this.keys.down = true;
       if (['a', 'arrowleft'].includes(key)) this.keys.left = true;
       if (['d', 'arrowright'].includes(key)) this.keys.right = true;
+      if (window.game && window.game.bossCutscene && window.game.bossCutscene.active) {
+        if (e.code === 'Space' || key === ' ' || key === 'enter' || key === 'escape') {
+          e.preventDefault();
+          window.game.bossCutscene.skip();
+          return;
+        }
+      }
       if (e.code === 'Space' || key === ' ') {
         // 聚焦在按鈕/輸入框時保留原生鍵盤行為 (選單按鈕用 Space 啟動)，不攔截也不翻滾
         const tag = document.activeElement ? document.activeElement.tagName : '';

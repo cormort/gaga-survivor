@@ -1760,10 +1760,12 @@ export class UIManager {
       </label>
       <label class="ds-item"><input type="checkbox" data-ds="screenShake"${st.screenShake !== false ? ' checked' : ''}> 📳 畫面震動</label>
       <label class="ds-item"><input type="checkbox" data-ds="reduceFlash"${st.reduceFlash ? ' checked' : ''}> 🕶️ 減少閃光</label>
+      <label class="ds-item"><input type="checkbox" data-ds="bossCutscene"${st.bossCutscene !== false ? ' checked' : ''}> 🎬 首領特寫過場</label>
     `;
     container.querySelector('[data-ds="damageNumbers"]').addEventListener('change', (e) => onChange({ damageNumbers: e.target.value }));
     container.querySelector('[data-ds="screenShake"]').addEventListener('change', (e) => onChange({ screenShake: e.target.checked }));
     container.querySelector('[data-ds="reduceFlash"]').addEventListener('change', (e) => onChange({ reduceFlash: e.target.checked }));
+    container.querySelector('[data-ds="bossCutscene"]')?.addEventListener('change', (e) => onChange({ bossCutscene: e.target.checked }));
   }
 
   // 升級三選一對話框：渲染卡牌 + reroll 按鈕狀態

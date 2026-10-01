@@ -374,6 +374,10 @@ export function bindEvents(game) {
   });
 
   cv.addEventListener('pointerdown', (e) => {
+    if (game.bossCutscene && game.bossCutscene.active) {
+      game.bossCutscene.skip();
+      return;
+    }
     if (game.state !== 'PLAYING') return;
 
     // 右鍵取消建造

@@ -84,6 +84,7 @@ import {
   drawMerchant,
 } from './systems/Merchant.js';
 import { bindEvents, returnToMenu } from './systems/Menu.js';
+import { BossCutscene, getProfile } from './systems/BossCutscene.js';
 import { metaBonuses, upgradeKeyOf, isBanishable, charLevelBonuses } from './meta.js';
 import { SHOP_BOOSTERS } from './shop.js';
 import {
@@ -192,6 +193,7 @@ class Game {
     // 宙斯型態的連鎖電弧從來沒有生效過。
     this.weaponManager.game = this;
     this.spawner = new Spawner();
+    this.bossCutscene = new BossCutscene(this);
     this.particles = new ParticleSystem();
     this.applyDisplaySettings();
     this.ground = new GroundRenderer();
@@ -1165,11 +1167,27 @@ class Game {
     this.camera.shake = 15;
     sound.playAlarm();
     sound.switchToBossTheme();
+    if (this.bossCutscene && save.data.settings.bossCutscene !== false) {
+      this.bossCutscene.start(boss, this.level);
+    }
     this.ui.say(
       boss.isFinal ? '終極首領降臨！擊敗它即可完成任務！' : this.player.character.lines.boss,
       '#ff0055',
       boss.isFinal ? 5 : 3.2
     );
+  }
+
+  // 測試或預覽首領過場畫面 (傳入首領名稱或首領定義)
+  triggerBossCutscene(bossNameOrDef) {
+    let boss = bossNameOrDef;
+    if (typeof bossNameOrDef === 'string') {
+      const p = getProfile(bossNameOrDef);
+      boss = { name: bossNameOrDef, hp: 50000, skin: p?.skin || 'boss' };
+    }
+    if (!boss) boss = { name: '狂暴推土喪屍', hp: 4000, skin: 'boss_street' };
+    if (this.bossCutscene) {
+      this.bossCutscene.start(boss, this.level);
+    }
   }
 
   // 封印精英：靠近特工時鎖住一把武器，死亡（或被回收）就解封。至少留一把能用的武器。
@@ -1522,7 +1540,11 @@ class Game {
     // ponytail: 單幀例外不能弄死整條 rAF 鏈 —— 以前一次丟出就永久卡住畫面
     try {
       if (this.state === 'PLAYING') {
-        if (this.hitstopTimer > 0) {
+        if (this.bossCutscene && this.bossCutscene.active) {
+          this.bossCutscene.update(dt);
+          this.render();
+          this.bossCutscene.draw(this.ctx, this.vw, this.vh);
+        } else if (this.hitstopTimer > 0) {
           this.hitstopTimer = Math.max(0, this.hitstopTimer - dt);
           this.render();
           if (this.perf) this.perf.hitstopFrames++;
@@ -3766,6 +3788,7 @@ function initGame() {
   if (!window.game) {
     window.game = new Game();
   }
+  window.triggerBossCutscene = (name) => window.game?.triggerBossCutscene(name);
 }
 
 if (document.readyState === 'loading') {

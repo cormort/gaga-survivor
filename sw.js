@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v59';
+const FALLBACK_VERSION = 'gaga-v61';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -140,6 +140,18 @@ const PRECACHE = [
   './assets/xian/xian_sword.png',
   './assets/xian/xian_talisman.png',
   './assets/xian/xian_zen.png',
+  // 各關卡高畫質首領貼圖 (assets/bosses/)
+  './assets/bosses/boss_street.png',
+  './assets/bosses/boss_lab.png',
+  './assets/bosses/boss_frost.png',
+  './assets/bosses/boss_core.png',
+  './assets/bosses/boss_subway.png',
+  './assets/bosses/boss_swamp.png',
+  './assets/bosses/boss_storm.png',
+  './assets/bosses/boss_foundry.png',
+  './assets/bosses/boss_frostvoid.png',
+  './assets/bosses/boss_voidroad.png',
+  './assets/bosses/boss_thunder.png',
   // 武器手持精靈貼圖 (WeaponArt.js)
   './assets/weapons/absolute_zero.png',
   './assets/weapons/annihilation_beam.png',
@@ -303,6 +315,7 @@ const PRECACHE = [
   './js/entities/Player.js',
   './js/entities/Projectile.js',
   './js/entities/Turret.js',
+  './js/systems/BossCutscene.js',
   './js/systems/Decor.js',
   './js/systems/Facilities.js',
   './js/systems/Ground.js',

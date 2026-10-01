@@ -6816,6 +6816,59 @@ function zodiacHeroBuilder(key, img, height) {
   };
 }
 
+const BOSS_PNG_SPRITES = {
+  boss_street: 120,
+  boss_lab: 120,
+  boss_frost: 120,
+  boss_core: 125,
+  boss_subway: 125,
+  boss_swamp: 120,
+  boss_storm: 125,
+  boss_foundry: 125,
+  boss_frostvoid: 125,
+  boss_voidroad: 125,
+  boss_thunder: 130,
+};
+
+function bossImageBuilder(img, height, final = false, charging = false) {
+  const h = final ? Math.round(height * 1.25) : height;
+  const k = h / img.height;
+  const w = img.width * k;
+  return {
+    w: w + 16, h: h + 16, image: true,
+    fn: (x, t) => {
+      const p = t * Math.PI * 2;
+      const bob = Math.sin(p) * (charging ? 4.5 : 2.5);
+      const sq = 1 + Math.sin(p * 2) * (charging ? 0.05 : 0.025);
+      const foot = h / 2 + 3;
+
+      // 落地陰影
+      x.fillStyle = 'rgba(0,0,0,0.36)';
+      x.beginPath();
+      x.ellipse(0, foot, w * 0.42, w * 0.12, 0, 0, Math.PI * 2);
+      x.fill();
+
+      // 衝鋒/最終首領光環
+      if (charging || final) {
+        x.save();
+        x.globalAlpha = 0.35 + Math.sin(p * 3) * 0.15;
+        x.fillStyle = charging ? '#ff4d00' : '#ffd166';
+        x.beginPath();
+        x.arc(0, foot - h * 0.5, h * 0.55, 0, Math.PI * 2);
+        x.fill();
+        x.restore();
+      }
+
+      x.save();
+      x.translate(0, foot - bob);
+      if (charging) x.rotate(0.08);
+      x.scale(1 / sq, sq);
+      x.drawImage(img, -w / 2, -h, w, h);
+      x.restore();
+    }
+  };
+}
+
 export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve() : Promise.all([
   ...Object.entries(IMAGE_SPRITES).map(([key, height]) => new Promise((resolve) => {
     const img = new Image();
@@ -6865,6 +6918,24 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
       resolve();
     };
     img.src = `./assets/zodiac/${key}.png?v=20261001`;
+  })),
+  ...Object.entries(BOSS_PNG_SPRITES).map(([key, height]) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      BUILDERS[key] = bossImageBuilder(img, height, false, false);
+      BUILDERS[`${key}_charging`] = bossImageBuilder(img, height, false, true);
+      BUILDERS[`${key}_final`] = bossImageBuilder(img, height, true, false);
+      BUILDERS[`${key}_final_charging`] = bossImageBuilder(img, height, true, true);
+      for (const k of [...cache.keys()]) {
+        if (k.startsWith(key)) cache.delete(k);
+      }
+      resolve();
+    };
+    img.onerror = () => {
+      console.warn(`[sprites] 首領貼圖載入失敗，沿用程式繪圖：${key}`);
+      resolve();
+    };
+    img.src = `./assets/bosses/${key}.png?v=20261001`;
   })),
 ]);
 

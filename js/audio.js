@@ -797,6 +797,39 @@ export class SoundEngine {
     this.playSfx('alarm', { gain: 0.9 });
   }
 
+  // 忍者龍劍傳風格過場音效：首領登場強烈重音與緊張減和弦琶音
+  playBossCinematicSting() {
+    if (!this.enabled) return;
+    this.ensureContext();
+    const t = this.ctx.currentTime;
+    // 震撼低音打擊
+    this._sfxVoice({ type: 'sawtooth', f0: 95, f1: 28, dur: 0.65, level: 0.55, attack: 0.005 });
+    this._noiseVoice(t, 0.45, 0.38, 'lowpass', 1500, null, 0, 0.25);
+    // 8-bit NES 緊張感三連音琶音 (連續快速上升)
+    const notes = [164.81, 196.00, 246.94, 311.13, 392.00, 493.88];
+    notes.forEach((f, i) => {
+      setTimeout(() => {
+        if (!this.enabled || !this.ctx) return;
+        this._sfxVoice({ type: 'square', f0: f, f1: f * 0.99, dur: 0.12, level: 0.22, attack: 0.003, jitter: 0.04 });
+      }, i * 42);
+    });
+  }
+
+  // 刀劍橫切 / 眼神特寫掠過音效
+  playSwordSlash() {
+    if (!this.enabled || this._throttle('slash', 60)) return;
+    this.ensureContext();
+    this._sfxVoice({ type: 'sawtooth', f0: 1100, f1: 180, dur: 0.16, level: 0.35, attack: 0.002, jitter: 0.08 });
+    this._noiseVoice(this.ctx.currentTime, 0.12, 0.25, 'bandpass', 2800, null, 0, 0.12);
+  }
+
+  // 電影字卡打字音
+  playTextBleep() {
+    if (!this.enabled || this._throttle('bleep', 50)) return;
+    this.ensureContext();
+    this._sfxVoice({ type: 'square', f0: 880, f1: 820, dur: 0.025, level: 0.07, attack: 0.001 });
+  }
+
   // 關卡勝利號角 (大調輝煌終曲)
   playWin() {
     if (!this.enabled) return;
