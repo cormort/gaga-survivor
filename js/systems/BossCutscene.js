@@ -333,6 +333,35 @@ export const BOSS_CINEMA_PROFILES = {
     eyeColor: '#a0f0ff',
   },
 
+  // ── 關卡 12：魔界村 ──
+  '一角魔將‧獨角巨靈': {
+    title: '【撼地凶煞・破軍巨魔】',
+    code: 'CYCLOPS KNIGHT // THREAT: S',
+    quote: '吼喔喔喔！鎧甲小子……魔界之門前，將你的骨頭碾碎成泥！',
+    themeColor: '#e63946',
+    accentColor: '#ffb703',
+    bgType: 'makaimura_graveyard',
+    eyeColor: '#ff0033',
+  },
+  '猩紅魔王‧阿雷默': {
+    title: '【焚天劫火・猩紅魔尊】',
+    code: 'RED ARREMER KING // THREAT: SS',
+    quote: '桀桀桀……愚蠢的騎士，在我的無盡地獄烈焰中化為灰燼吧！',
+    themeColor: '#d90429',
+    accentColor: '#ff7b00',
+    bgType: 'makaimura_hellfire',
+    eyeColor: '#ffea00',
+  },
+  '雙面魔王‧阿斯塔羅特': {
+    title: '【至高魔皇・深淵雙面主】',
+    code: 'DEMON OVERLORD ASTAROTH // THREAT: SSS',
+    quote: '螻蟻般的凡夫肉身……本座的雙面雙瞳，已宣告你的死期！！',
+    themeColor: '#9d0208',
+    accentColor: '#9d4edd',
+    bgType: 'makaimura_throne',
+    eyeColor: '#ff0055',
+  },
+
   // ── 塔防與 40K 敵首 ──
   '歐克戰爭頭目': {
     title: '【綠皮大軍閥・鐵甲鐵爪】',
@@ -425,6 +454,9 @@ export const BOSS_NAME_TO_SKIN = {
   '山魈妖王': 'boss_inkape',
   '九尾墨狐': 'boss_inkfox',
   '天劫雷尊‧渡劫': 'boss_thunder_final',
+  '一角魔將‧獨角巨靈': 'boss_unicorn',
+  '猩紅魔王‧阿雷默': 'boss_arremer_king',
+  '雙面魔王‧阿斯塔羅特': 'boss_astaroth',
   '歐克戰爭頭目': 'boss_nob',
   '歐克蠻牛老大': 'boss_nob',
   '蟲群基因原體': 'boss_broodlord',

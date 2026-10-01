@@ -89,6 +89,7 @@ const GROUND_DETAIL = {
   voidroad:  { kind: 'network', size: 256, glow: '170,110,255', node: 0.35 },
   endless:   { kind: 'network', size: 512, glow: '140,90,255', node: 0.5 },
   inkmount:  { kind: 'paper',   size: 128, ink: '58,46,38' },
+  makaimura: { kind: 'slabs',   size: 128 },
 };
 
 export class GroundRenderer {
@@ -107,7 +108,7 @@ export class GroundRenderer {
   _initGroundPngs() {
     const ids = [
       'street', 'lab', 'frost', 'core', 'subway', 'swamp',
-      'storm', 'foundry', 'frostvoid', 'voidroad', 'endless', 'inkmount'
+      'storm', 'foundry', 'frostvoid', 'voidroad', 'endless', 'inkmount', 'makaimura'
     ];
     for (const id of ids) {
       const img = new Image();

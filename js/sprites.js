@@ -143,6 +143,7 @@ const BOSS_ACCENT = [
 const PLAYER_SPRITE_KEYS = new Set([
   'duck', 'rabbit', 'penguin', 'cat', 'mechanic',
   'astartes_duck', 'techpriest_goose',
+  'arthur',
   'xian_sword', 'xian_talisman', 'xian_mage', 'xian_alchemy', 'xian_zen', 'xian_demon',
   // 12 生肖正道特工 (Hero)
   'rat_hero', 'ox_hero', 'tiger_hero', 'rabbit_hero', 'dragon_hero', 'snake_hero',
@@ -155,7 +156,8 @@ const DECOR_SPRITE_KEYS = new Set([
   'cone', 'lamp', 'barrier', 'swamp_log', 'mushroom', 'console', 'rack',
   'snow_pine', 'lava_rock', 'vent', 'anvil', 'pillar', 'bench', 'cactus',
   'sandbags', 'neon', 'car', 'steel', 'ice_spike', 'void_crystal', 'void_obelisk',
-  'ink_maple', 'ink_lantern'
+  'ink_maple', 'ink_lantern',
+  'makai_tombstone', 'makai_dead_tree', 'makai_gargoyle', 'makai_skull_urn'
 ]);
 
 function accentFor(key, b) {
@@ -6394,6 +6396,720 @@ function drawBloater(x, t, r) {
   }
 }
 
+/* ==================== 魔界村：騎士亞瑟、魔物與首領繪製 ==================== */
+
+function drawArthur(x, t) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2.2;
+  const step = Math.sin(p);
+  shadow(x, 15, 18);
+
+  x.save();
+  // 鋼鐵戰靴
+  for (const s of [-1, 1]) {
+    const lift = s * step * 2.5;
+    x.fillStyle = '#64748b';
+    x.strokeStyle = '#0f172a';
+    x.lineWidth = 1.2;
+    x.beginPath();
+    x.roundRect(-5 + s * 5, 12 + bob - lift, 8, 8, 2);
+    x.fill();
+    x.stroke();
+    // 金色靴邊
+    x.fillStyle = '#f59e0b';
+    x.fillRect(-5 + s * 5, 18 + bob - lift, 8, 2);
+  }
+
+  // 草莓四角褲彩蛋 (金屬甲裙下隱約可見)
+  x.fillStyle = '#ffffff';
+  x.fillRect(-8, 6 + bob, 16, 8);
+  x.fillStyle = '#ef4444';
+  x.beginPath();
+  x.arc(-4, 9 + bob, 1.5, 0, Math.PI * 2);
+  x.arc(4, 11 + bob, 1.5, 0, Math.PI * 2);
+  x.fill();
+
+  // 鋼鐵板甲胸甲
+  x.fillStyle = sphere(x, '#cbd5e1', 14, 0, bob - 2);
+  x.beginPath();
+  x.roundRect(-10, -8 + bob, 20, 16, 3);
+  x.fill();
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 1.5;
+  x.stroke();
+
+  // 胸前金色聖十字徽章
+  x.fillStyle = '#f59e0b';
+  x.fillRect(-2, -6 + bob, 4, 12);
+  x.fillRect(-6, -3 + bob, 12, 3);
+
+  // 肩甲
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#94a3b8';
+    x.strokeStyle = '#0f172a';
+    x.lineWidth = 1.2;
+    x.beginPath();
+    x.ellipse(s * 12, -4 + bob, 4.5, 6, s * 0.2, 0, Math.PI * 2);
+    x.fill();
+    x.stroke();
+  }
+
+  // 左手盾牌
+  x.save();
+  x.translate(-14, 2 + bob);
+  x.fillStyle = '#475569';
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 1.5;
+  x.beginPath();
+  x.moveTo(-6, -10); x.lineTo(6, -10); x.lineTo(6, 2); x.lineTo(0, 10); x.lineTo(-6, 2);
+  x.closePath();
+  x.fill();
+  x.stroke();
+  x.fillStyle = '#f59e0b';
+  x.fillRect(-1.5, -8, 3, 14);
+  x.fillRect(-4.5, -4, 9, 3);
+  x.restore();
+
+  // 右手聖槍 / 鋼劍
+  x.save();
+  x.translate(13, bob);
+  x.fillStyle = '#78350f';
+  x.fillRect(0, -22, 2.5, 36);
+  x.fillStyle = '#e2e8f0';
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 1;
+  x.beginPath();
+  x.moveTo(1.25, -30); x.lineTo(5, -22); x.lineTo(-2.5, -22);
+  x.closePath();
+  x.fill();
+  x.stroke();
+  x.restore();
+
+  // 騎士頭盔 (Greathelm)
+  x.fillStyle = sphere(x, '#e2e8f0', 12, 0, bob - 16);
+  x.beginPath();
+  x.arc(0, -16 + bob, 10, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 1.5;
+  x.stroke();
+
+  // 護目鏡縫隙與英勇眼神
+  x.fillStyle = '#0f172a';
+  x.fillRect(-7, -17 + bob, 14, 3.5);
+  x.fillStyle = '#38bdf8';
+  x.fillRect(-5, -17 + bob, 3, 2);
+  x.fillRect(2, -17 + bob, 3, 2);
+
+  // 經典濃密鬍子
+  x.fillStyle = '#78350f';
+  x.beginPath();
+  x.arc(0, -11 + bob, 4.5, 0, Math.PI);
+  x.fill();
+
+  // 紅色騎士羽翎 (Plume)
+  x.fillStyle = '#dc2626';
+  x.strokeStyle = '#7f1d1d';
+  x.lineWidth = 1.2;
+  x.beginPath();
+  x.moveTo(-2, -26 + bob);
+  x.quadraticCurveTo(-6, -36 + bob, 6, -38 + bob);
+  x.quadraticCurveTo(8, -30 + bob, 2, -25 + bob);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  x.restore();
+}
+
+function drawMakaiZombie(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2;
+  const crawl = Math.sin(p * 1.5);
+  shadow(x, r * 0.9, r * 1.1);
+
+  // 殘破綠衣
+  x.fillStyle = '#166534';
+  x.strokeStyle = '#052e16';
+  x.lineWidth = 1.5;
+  x.beginPath();
+  x.roundRect(-r * 0.7, -r * 0.4 + bob, r * 1.4, r * 1.2, 4);
+  x.fill();
+  x.stroke();
+
+  // 肋骨外露
+  x.fillStyle = '#0f172a';
+  x.fillRect(-r * 0.35, -r * 0.1 + bob, r * 0.7, r * 0.5);
+  x.fillStyle = '#cbd5e1';
+  x.fillRect(-r * 0.3, 0 + bob, r * 0.6, 2);
+  x.fillRect(-r * 0.3, r * 0.2 + bob, r * 0.6, 2);
+
+  // 伸出的腐爛雙手
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#64748b';
+    x.strokeStyle = '#0f172a';
+    x.lineWidth = 1.2;
+    x.beginPath();
+    x.roundRect(s * r * 0.85 - 3, -r * 0.2 + bob + s * crawl * 2, 6, r * 0.9, 2);
+    x.fill();
+    x.stroke();
+    x.fillStyle = '#f1f5f9';
+    x.fillRect(s * r * 0.85 - 3, r * 0.65 + bob + s * crawl * 2, 6, 3);
+  }
+
+  // 殭屍頭顱
+  x.fillStyle = sphere(x, '#94a3b8', r * 0.75, 0, bob - r * 0.85);
+  x.beginPath();
+  x.arc(0, -r * 0.85 + bob, r * 0.65, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 1.5;
+  x.stroke();
+
+  // 空洞黃光眼睛
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#020617';
+    x.beginPath();
+    x.arc(s * r * 0.28, -r * 0.9 + bob, 3.5, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#facc15';
+    x.beginPath();
+    x.arc(s * r * 0.28, -r * 0.9 + bob, 1.8, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 裂嘴獠牙
+  x.fillStyle = '#0f172a';
+  x.fillRect(-r * 0.3, -r * 0.6 + bob, r * 0.6, 4);
+  x.fillStyle = '#ffffff';
+  x.fillRect(-r * 0.2, -r * 0.6 + bob, 2, 3);
+  x.fillRect(r * 0.1, -r * 0.6 + bob, 2, 3);
+}
+
+function drawMakaiRedArremer(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2.5;
+  const flap = Math.sin(p * 2) * 5;
+  shadow(x, r * 1.1, r * 1.2);
+
+  // 惡魔蝠翼
+  for (const s of [-1, 1]) {
+    x.save();
+    x.translate(s * r * 0.6, bob - r * 0.4);
+    x.scale(s, 1);
+    x.rotate(flap * 0.04);
+    x.fillStyle = '#991b1b';
+    x.strokeStyle = '#020617';
+    x.lineWidth = 1.6;
+    x.beginPath();
+    x.moveTo(0, 0);
+    x.lineTo(r * 0.8, -r * 0.9);
+    x.lineTo(r * 1.6, -r * 0.4);
+    x.quadraticCurveTo(r * 1.2, 0, r * 1.3, r * 0.5);
+    x.quadraticCurveTo(r * 0.7, r * 0.4, 0, r * 0.6);
+    x.closePath();
+    x.fill();
+    x.stroke();
+    x.restore();
+  }
+
+  // 倒鉤惡魔尾
+  x.strokeStyle = '#b91c1c';
+  x.lineWidth = 2.5;
+  x.beginPath();
+  x.moveTo(0, r * 0.6 + bob);
+  x.quadraticCurveTo(-r * 0.8, r * 0.9 + bob, -r * 0.5, r * 1.4 + bob);
+  x.stroke();
+  x.fillStyle = '#ef4444';
+  x.beginPath();
+  x.moveTo(-r * 0.5, r * 1.4 + bob);
+  x.lineTo(-r * 0.8, r * 1.2 + bob);
+  x.lineTo(-r * 0.3, r * 1.2 + bob);
+  x.closePath();
+  x.fill();
+
+  // 鮮紅肌肉身軀
+  x.fillStyle = sphere(x, '#dc2626', r * 0.8, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.65, r * 0.8, 0, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#450a0a';
+  x.lineWidth = 1.5;
+  x.stroke();
+
+  // 雙角
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#0f172a';
+    x.strokeStyle = '#dc2626';
+    x.lineWidth = 1;
+    x.beginPath();
+    x.moveTo(s * r * 0.25, -r * 0.8 + bob);
+    x.quadraticCurveTo(s * r * 0.8, -r * 1.5 + bob, s * r * 0.6, -r * 1.8 + bob);
+    x.quadraticCurveTo(s * r * 0.4, -r * 1.2 + bob, s * r * 0.1, -r * 0.9 + bob);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  }
+
+  // 頭部
+  x.fillStyle = sphere(x, '#ef4444', r * 0.6, 0, bob - r * 0.6);
+  x.beginPath();
+  x.arc(0, -r * 0.6 + bob, r * 0.55, 0, Math.PI * 2);
+  x.fill();
+
+  // 金黃蛇瞳
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#fde047';
+    x.beginPath();
+    x.ellipse(s * r * 0.25, -r * 0.65 + bob, 3.5, 2.5, s * 0.2, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#0f172a';
+    x.fillRect(s * r * 0.25 - 0.7, -r * 0.65 + bob - 2.5, 1.4, 5);
+  }
+
+  // 尖牙低吼
+  x.fillStyle = '#020617';
+  x.fillRect(-r * 0.2, -r * 0.4 + bob, r * 0.4, 3);
+  x.fillStyle = '#ffffff';
+  x.fillRect(-r * 0.15, -r * 0.45 + bob, 2, 2.5);
+  x.fillRect(r * 0.08, -r * 0.45 + bob, 2, 2.5);
+}
+
+function drawMakaiWoody(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 2;
+  const flap = Math.sin(p * 2.5) * 4;
+  shadow(x, r * 0.9, r * 1.0);
+
+  // 小惡魔翅膀
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#581c87';
+    x.beginPath();
+    x.moveTo(s * r * 0.4, bob);
+    x.quadraticCurveTo(s * r * 1.2, -r * 0.6 + flap, s * r * 1.1, r * 0.2);
+    x.quadraticCurveTo(s * r * 0.8, r * 0.4, s * r * 0.3, r * 0.3);
+    x.fill();
+  }
+
+  // 圓滾滾紫身軀
+  x.fillStyle = sphere(x, '#9333ea', r * 0.85, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.75, r * 0.85, 0, 0, Math.PI * 2);
+  x.fill();
+
+  // 肚皮亮色
+  x.fillStyle = 'rgba(233, 213, 255, 0.4)';
+  x.beginPath();
+  x.ellipse(0, bob + r * 0.15, r * 0.45, r * 0.45, 0, 0, Math.PI * 2);
+  x.fill();
+
+  // 三叉戟
+  x.fillStyle = '#f59e0b';
+  x.fillRect(r * 0.75, bob - r * 1.1, 3, r * 1.8);
+  x.fillStyle = '#e2e8f0';
+  x.fillRect(r * 0.6, bob - r * 1.3, r * 0.4, 3);
+  x.fillRect(r * 0.6, bob - r * 1.5, 2.5, 6);
+  x.fillRect(r * 0.75, bob - r * 1.6, 2.5, 7);
+  x.fillRect(r * 0.9, bob - r * 1.5, 2.5, 6);
+
+  // 尖尖哥布林耳
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#7e22ce';
+    x.beginPath();
+    x.moveTo(s * r * 0.4, -r * 0.4 + bob);
+    x.lineTo(s * r * 1.1, -r * 0.8 + bob);
+    x.lineTo(s * r * 0.5, 0 + bob);
+    x.closePath();
+    x.fill();
+  }
+
+  // 調皮黃眼
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#fef08a';
+    x.beginPath();
+    x.arc(s * r * 0.28, -r * 0.25 + bob, 4.5, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#0f172a';
+    x.beginPath();
+    x.arc(s * r * 0.28 + s * 1, -r * 0.25 + bob, 2.2, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  // 咧嘴大笑
+  x.fillStyle = '#020617';
+  x.beginPath();
+  x.arc(0, 0 + bob, r * 0.35, 0, Math.PI);
+  x.fill();
+  x.fillStyle = '#ffffff';
+  x.fillRect(-3, 0 + bob, 2.5, 2.5);
+  x.fillRect(1, 0 + bob, 2.5, 2.5);
+}
+
+function drawBossUnicorn(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 3;
+  shadow(x, r * 1.0, r * 1.1);
+
+  // 重型哥德鐵甲
+  x.fillStyle = sphere(x, '#64748b', r * 0.9, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.85, r * 0.9, 0, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 3;
+  x.stroke();
+
+  // 金色胸甲飾章
+  x.fillStyle = '#f59e0b';
+  x.beginPath();
+  x.arc(0, bob + 4, r * 0.35, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = '#dc2626';
+  x.beginPath();
+  x.arc(0, bob + 4, r * 0.18, 0, Math.PI * 2);
+  x.fill();
+
+  // 尖刺巨型鐵肩甲
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#475569';
+    x.strokeStyle = '#0f172a';
+    x.lineWidth = 2.5;
+    x.beginPath();
+    x.roundRect(s * r * 0.85 - 12, bob - r * 0.5, 24, 28, 6);
+    x.fill();
+    x.stroke();
+    x.fillStyle = '#f59e0b';
+    x.beginPath();
+    x.moveTo(s * r * 0.85, bob - r * 0.85);
+    x.lineTo(s * r * 0.85 + 7, bob - r * 0.5);
+    x.lineTo(s * r * 0.85 - 7, bob - r * 0.5);
+    x.closePath();
+    x.fill();
+  }
+
+  // 右手重型刺球鏈枷
+  x.save();
+  x.translate(r * 1.1, bob);
+  x.fillStyle = '#334155';
+  x.beginPath();
+  x.arc(14, 0, 16, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 2;
+  x.stroke();
+  x.fillStyle = '#f59e0b';
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+    x.fillRect(14 + Math.cos(a) * 16 - 2, Math.sin(a) * 16 - 2, 4, 4);
+  }
+  x.restore();
+
+  // 獨角頭盔與單眼
+  x.fillStyle = sphere(x, '#94a3b8', r * 0.65, 0, bob - r * 0.7);
+  x.beginPath();
+  x.arc(0, -r * 0.7 + bob, r * 0.55, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 2.5;
+  x.stroke();
+
+  // 傳奇黃金巨角 (The Unicorn Horn)
+  x.fillStyle = '#f59e0b';
+  x.strokeStyle = '#78350f';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.moveTo(-6, -r * 1.15 + bob);
+  x.lineTo(0, -r * 2.0 + bob);
+  x.lineTo(6, -r * 1.15 + bob);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 單眼紅光
+  x.fillStyle = '#0f172a';
+  x.fillRect(-14, -r * 0.75 + bob, 28, 8);
+  x.fillStyle = '#dc2626';
+  x.beginPath();
+  x.arc(0, -r * 0.71 + bob, 6, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = '#fef08a';
+  x.beginPath();
+  x.arc(0, -r * 0.71 + bob, 2.5, 0, Math.PI * 2);
+  x.fill();
+}
+
+function drawBossArremerKing(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 3;
+  const flap = Math.sin(p * 2) * 8;
+  shadow(x, r * 1.2, r * 1.2);
+
+  // 巨大雙翼
+  for (const s of [-1, 1]) {
+    x.save();
+    x.translate(s * r * 0.7, bob - r * 0.3);
+    x.scale(s, 1);
+    x.rotate(flap * 0.03);
+    x.fillStyle = '#7f1d1d';
+    x.strokeStyle = '#020617';
+    x.lineWidth = 2.5;
+    x.beginPath();
+    x.moveTo(0, 0);
+    x.lineTo(r * 1.2, -r * 1.4);
+    x.lineTo(r * 2.2, -r * 0.7);
+    x.quadraticCurveTo(r * 1.7, 0, r * 1.8, r * 0.7);
+    x.quadraticCurveTo(r * 1.0, r * 0.6, 0, r * 0.8);
+    x.closePath();
+    x.fill();
+    x.stroke();
+    x.restore();
+  }
+
+  // 猩紅王魔身軀
+  x.fillStyle = sphere(x, '#b91c1c', r * 0.9, 0, bob);
+  x.beginPath();
+  x.ellipse(0, bob, r * 0.75, r * 0.9, 0, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#020617';
+  x.lineWidth = 2.5;
+  x.stroke();
+
+  // 胸口熔岩紋路
+  x.strokeStyle = '#fef08a';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.moveTo(0, bob - r * 0.4); x.lineTo(-r * 0.3, bob + r * 0.2);
+  x.moveTo(0, bob - r * 0.4); x.lineTo(r * 0.3, bob + r * 0.2);
+  x.stroke();
+
+  // 皇冠惡魔雙角
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#0f172a';
+    x.strokeStyle = '#ef4444';
+    x.lineWidth = 1.5;
+    x.beginPath();
+    x.moveTo(s * r * 0.3, -r * 0.8 + bob);
+    x.quadraticCurveTo(s * r * 1.1, -r * 1.8 + bob, s * r * 0.8, -r * 2.2 + bob);
+    x.quadraticCurveTo(s * r * 0.5, -r * 1.4 + bob, s * r * 0.1, -r * 0.9 + bob);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  }
+
+  // 頭部
+  x.fillStyle = sphere(x, '#dc2626', r * 0.65, 0, bob - r * 0.7);
+  x.beginPath();
+  x.arc(0, -r * 0.7 + bob, r * 0.6, 0, Math.PI * 2);
+  x.fill();
+
+  // 金色怒目
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#fde047';
+    x.beginPath();
+    x.ellipse(s * r * 0.28, -r * 0.75 + bob, 5, 3.5, s * 0.2, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#0f172a';
+    x.fillRect(s * r * 0.28 - 1, -r * 0.75 + bob - 3.5, 2, 7);
+  }
+}
+
+function drawBossAstaroth(x, t, r) {
+  const p = t * Math.PI * 2;
+  const bob = Math.sin(p) * 3;
+  shadow(x, r * 1.2, r * 1.3);
+
+  // 雙面魔王主身軀 (紫羅蘭深邃身軀)
+  x.fillStyle = sphere(x, '#7e22ce', r * 0.95, 0, bob);
+  x.beginPath();
+  x.roundRect(-r * 0.8, -r * 0.6 + bob, r * 1.6, r * 1.7, 14);
+  x.fill();
+  x.strokeStyle = '#020617';
+  x.lineWidth = 3;
+  x.stroke();
+
+  // 黃金腰帶
+  x.fillStyle = '#f59e0b';
+  x.fillRect(-r * 0.75, bob + r * 0.75, r * 1.5, 8);
+
+  // 腹部第二張魔臉 (The Stomach Face)
+  x.fillStyle = '#020617';
+  x.beginPath();
+  x.roundRect(-r * 0.45, bob + r * 0.05, r * 0.9, r * 0.6, 8);
+  x.fill();
+  x.strokeStyle = '#f59e0b';
+  x.lineWidth = 1.8;
+  x.stroke();
+
+  // 腹面魔眼
+  x.fillStyle = '#ef4444';
+  x.beginPath();
+  x.arc(-r * 0.22, bob + r * 0.2, 4, 0, Math.PI * 2);
+  x.arc(r * 0.22, bob + r * 0.2, 4, 0, Math.PI * 2);
+  x.fill();
+
+  // 腹面烈焰大口與利齒
+  x.fillStyle = '#ff5400';
+  x.fillRect(-r * 0.35, bob + r * 0.35, r * 0.7, 8);
+  x.fillStyle = '#f8fafc';
+  for (let fx = -r * 0.3; fx <= r * 0.3; fx += 8) {
+    x.fillRect(fx, bob + r * 0.33, 3, 4);
+    x.fillRect(fx, bob + r * 0.41, 3, 4);
+  }
+
+  // 三叉戟
+  x.save();
+  x.translate(r * 1.15, bob - r * 0.3);
+  x.fillStyle = '#f59e0b';
+  x.fillRect(0, -r * 1.2, 4, r * 2.4);
+  x.fillStyle = '#38bdf8';
+  x.fillRect(-10, -r * 1.25, 24, 4);
+  x.fillRect(-10, -r * 1.55, 3, 10);
+  x.fillRect(2, -r * 1.7, 3, 15);
+  x.fillRect(11, -r * 1.55, 3, 10);
+  x.restore();
+
+  // 主魔角 (金角皇冠)
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#fbbf24';
+    x.strokeStyle = '#78350f';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(s * r * 0.3, -r * 0.9 + bob);
+    x.quadraticCurveTo(s * r * 1.2, -r * 1.8 + bob, s * r * 0.9, -r * 2.2 + bob);
+    x.quadraticCurveTo(s * r * 0.5, -r * 1.5 + bob, s * r * 0.1, -r * 1.0 + bob);
+    x.closePath();
+    x.fill();
+    x.stroke();
+  }
+
+  // 主魔頭
+  x.fillStyle = sphere(x, '#9333ea', r * 0.65, 0, bob - r * 0.85);
+  x.beginPath();
+  x.arc(0, -r * 0.85 + bob, r * 0.6, 0, Math.PI * 2);
+  x.fill();
+  x.strokeStyle = '#020617';
+  x.lineWidth = 2.5;
+  x.stroke();
+
+  // 金冠額帶
+  x.fillStyle = '#f59e0b';
+  x.fillRect(-r * 0.5, -r * 1.1 + bob, r * 1.0, 5);
+
+  // 金色魔王之眼
+  for (const s of [-1, 1]) {
+    x.fillStyle = '#fde047';
+    x.beginPath();
+    x.ellipse(s * r * 0.28, -r * 0.9 + bob, 5, 3.5, s * 0.2, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#020617';
+    x.fillRect(s * r * 0.28 - 1, -r * 0.9 + bob - 3.5, 2, 7);
+  }
+}
+
+function drawMakaiTombstone(x) {
+  x.fillStyle = '#475569';
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.roundRect(-16, 12, 32, 10, [3, 3, 1, 1]);
+  x.fill();
+  x.stroke();
+
+  x.beginPath();
+  x.moveTo(-14, 12);
+  x.lineTo(-14, -12);
+  x.arc(0, -12, 14, Math.PI, 0);
+  x.lineTo(14, 12);
+  x.closePath();
+  x.fill();
+  x.stroke();
+
+  // 十字雕刻與骷髏
+  x.fillStyle = '#0f172a';
+  x.fillRect(-2, -22, 4, 26);
+  x.fillRect(-8, -16, 16, 4);
+
+  // 青苔
+  x.fillStyle = '#0d9488';
+  x.beginPath();
+  x.ellipse(-8, 14, 6, 3, 0, 0, Math.PI * 2);
+  x.fill();
+}
+
+function drawMakaiDeadTree(x) {
+  x.strokeStyle = '#1e293b';
+  x.lineWidth = 6;
+  x.lineCap = 'round';
+  x.beginPath();
+  x.moveTo(0, 22);
+  x.quadraticCurveTo(-4, 0, 0, -12);
+  x.quadraticCurveTo(-18, -26, -22, -34);
+  x.moveTo(0, -12);
+  x.quadraticCurveTo(16, -24, 20, -32);
+  x.moveTo(0, 0);
+  x.lineTo(-12, -8);
+  x.stroke();
+
+  // 樹洞黃光
+  x.fillStyle = '#f59e0b';
+  x.beginPath();
+  x.arc(-1, 2, 2.5, 0, Math.PI * 2);
+  x.fill();
+}
+
+function drawMakaiGargoyle(x) {
+  x.fillStyle = '#334155';
+  x.strokeStyle = '#0f172a';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.roundRect(-14, 6, 28, 18, 3);
+  x.fill();
+  x.stroke();
+
+  x.fillStyle = '#64748b';
+  x.beginPath();
+  x.ellipse(0, -4, 10, 12, 0, 0, Math.PI * 2);
+  x.fill();
+  x.stroke();
+
+  // 石翼
+  x.beginPath();
+  x.moveTo(-6, -6); x.lineTo(-20, -20); x.lineTo(-14, 0);
+  x.moveTo(6, -6); x.lineTo(20, -20); x.lineTo(14, 0);
+  x.fill();
+  x.stroke();
+
+  // 紅光魔眼
+  x.fillStyle = '#ef4444';
+  x.beginPath();
+  x.arc(-3, -7, 1.8, 0, Math.PI * 2);
+  x.arc(3, -7, 1.8, 0, Math.PI * 2);
+  x.fill();
+}
+
+function drawMakaiSkullUrn(x) {
+  x.fillStyle = '#1e293b';
+  x.strokeStyle = '#020617';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.arc(0, 6, 14, 0, Math.PI);
+  x.fill();
+  x.stroke();
+
+  x.fillStyle = '#cbd5e1';
+  x.beginPath();
+  x.arc(0, 4, 5, 0, Math.PI * 2);
+  x.fill();
+
+  // 幽冥魂火
+  x.fillStyle = '#06b6d4';
+  x.beginPath();
+  x.moveTo(-8, 4);
+  x.quadraticCurveTo(-10, -12, 0, -20);
+  x.quadraticCurveTo(8, -12, 8, 4);
+  x.closePath();
+  x.fill();
+}
+
 const BUILDERS = {
   duck:    { w: 64, h: 60, fn: (x, t) => drawDuck(x, t) },
   rabbit:  { w: 72, h: 64, fn: (x, t) => drawRabbit(x, t) },
@@ -6445,6 +7161,15 @@ const BUILDERS = {
   ork_boy:     { w: 72, h: 64, fn: (x, t) => drawOrkBoy(x, t, 17) },
   squig_bomb:  { w: 56, h: 52, fn: (x, t) => drawSquigBomb(x, t, 12) },
   poxwalker:   { w: 58, h: 56, fn: (x, t) => drawPoxwalker(x, t, 15) },
+
+  // 魔界村經典魔物、亞瑟騎士與首領備援
+  makai_zombie:      { w: 60, h: 56, fn: (x, t) => drawMakaiZombie(x, t, 15) },
+  makai_red_arremer: { w: 68, h: 64, fn: (x, t) => drawMakaiRedArremer(x, t, 16) },
+  makai_woody:       { w: 72, h: 68, fn: (x, t) => drawMakaiWoody(x, t, 18) },
+  arthur:            { w: 64, h: 64, fn: (x, t) => drawArthur(x, t) },
+  boss_unicorn:      { w: 140, h: 140, fn: (x, t) => drawBossUnicorn(x, t, 40) },
+  boss_arremer_king: { w: 148, h: 148, fn: (x, t) => drawBossArremerKing(x, t, 42) },
+  boss_astaroth:     { w: 156, h: 156, fn: (x, t) => drawBossAstaroth(x, t, 45) },
 
   // 40K 三大 Boss
   boss_nob:       { w: 140, h: 140, fn: (x, t) => drawBossNob(x, t, 36) },
@@ -6516,6 +7241,10 @@ const BUILDERS = {
   ink_stele_c: { w: 40, h: 74, static: true, fn: inkStele('心魔燼滅') },
   ink_lantern: { w: 40, h: 62, static: true, fn: drawInkLantern },
   ink_sword:   { w: 30, h: 64, static: true, fn: drawInkSword },
+  makai_tombstone: { w: 46, h: 58, static: true, fn: (x) => drawMakaiTombstone(x) },
+  makai_dead_tree: { w: 54, h: 72, static: true, fn: (x) => drawMakaiDeadTree(x) },
+  makai_gargoyle:  { w: 48, h: 62, static: true, fn: (x) => drawMakaiGargoyle(x) },
+  makai_skull_urn: { w: 42, h: 54, static: true, fn: (x) => drawMakaiSkullUrn(x) },
 };
 
 // 關卡主題 Boss：10 主題 × (一般/最終) × (待機/衝鋒)，尺寸與半徑照最終形放大
@@ -6690,6 +7419,7 @@ const DECOR_PNG_SPRITES = {
   bench: 36, cactus: 58, sandbags: 36, neon: 46, car: 56, steel: 40,
   ice_spike: 48, void_crystal: 48, void_obelisk: 70, ink_rock: 84,
   ink_maple: 62, ink_lantern: 56, ink_stele_a: 78,
+  makai_tombstone: 68, makai_dead_tree: 84, makai_gargoyle: 72, makai_skull_urn: 56,
 };
 
 // 24 款 12 生肖角色與魔怪貼圖 (assets/zodiac/*.png，正邪各 12 款)
@@ -6830,6 +7560,16 @@ const BOSS_PNG_SPRITES = {
   boss_thunder: 130,
   boss_inkape: 130,
   boss_inkfox: 125,
+  boss_unicorn: 130,
+  boss_arremer_king: 135,
+  boss_astaroth: 145,
+};
+
+const MAKAIMURA_SPRITES = {
+  arthur: 66,
+  makai_zombie: 54,
+  makai_red_arremer: 58,
+  makai_woody: 66,
 };
 
 function bossImageBuilder(img, height, final = false, charging = false) {
@@ -6987,6 +7727,15 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
       for (const k of [...cache.keys()]) {
         if (k.startsWith(key)) cache.delete(k);
       }
+    })),
+  ...Object.entries(MAKAIMURA_SPRITES).map(([key, height]) => loadSpriteImage(
+    key, `./assets/makaimura/${key}.png?v=20261002`, (img) => {
+      if (key === 'arthur') {
+        BUILDERS[key] = xianCharacterBuilder(key, img, height);
+      } else {
+        BUILDERS[key] = imageBuilder(img, height, false);
+      }
+      for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
     })),
 ]);
 

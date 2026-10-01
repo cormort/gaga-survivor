@@ -1041,6 +1041,38 @@ export const ENEMY_TYPES = {
     deathZone: { radius: 75, dur: 4.0, dmg: 8, color: '#606c38' },
   },
 
+  // 魔界村經典魔物
+  makai_zombie: {
+    name: '食屍活死人',
+    ai: { kind: 'shamble', wander: 0.35, animSpeed: 7, sepMul: 0.9 },
+    hp: 34,
+    speed: 84,
+    damage: 10,
+    color: '#8a4fff',
+    radius: 14,
+    exp: 1,
+  },
+  makai_red_arremer: {
+    name: '紅魔鬼',
+    ai: { kind: 'weave', weaveAmp: 55, weaveFreq: 4.2, hoverAmp: 0.45, hoverFreq: 2.8, animSpeed: 14, sepMul: 0.6 },
+    hp: 24,
+    speed: 160,
+    damage: 14,
+    color: '#e63946',
+    radius: 13,
+    exp: 2,
+  },
+  makai_woody: {
+    name: '枯木妖靈',
+    ai: { kind: 'plod', kbResist: 0.6, animSpeed: 5, sepMul: 1.5 },
+    hp: 135,
+    speed: 62,
+    damage: 22,
+    color: '#5a3d68',
+    radius: 22,
+    exp: 4,
+  },
+
   // 40K 專屬 Boss
   boss_nob: {
     name: '綠皮突擊大隻佬',

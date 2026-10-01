@@ -643,7 +643,7 @@ export const LEVELS = {
     desc: '宣紙上暈開的仙山楓林，妖獸成群下山（開局即開放，難度為高階關卡）。斬妖煉器、渡過天劫，方能踏入無盡深淵。',
     difficulty: 11,
     dnaMult: 6.0,
-    next: 'endless',
+    next: 'makaimura',
     theme: {
       top: '#dfe4d8', mid: '#d6dccd', bottom: '#c3cbbd',
       grid: 'rgba(40,50,45,0.035)', major: 'rgba(40,50,45,0.07)',
@@ -690,6 +690,63 @@ export const LEVELS = {
       { at: 120, hp: 42000, name: '山魈妖王', speed: 100, damage: 40, behaviors: ['rockfall', 'barrage', 'summon'], skin: 'boss_inkape' },
       { at: 300, hp: 95000, name: '九尾墨狐', speed: 96, damage: 44, behaviors: ['foxfire', 'nova', 'vortex'], skin: 'boss_inkfox' },
       { at: LEVEL_DURATION, hp: 290000, name: '天劫雷尊‧渡劫', speed: 86, damage: 50, final: true, behaviors: ['tribulation', 'summon', 'nova', 'barrage', 'vortex'], skin: 'boss_thunder' },
+    ],
+  },
+
+  makaimura: {
+    id: 'makaimura',
+    name: '魔界村落',
+    sub: '群魔亂舞',
+    icon: '🏰',
+    desc: '陰風呼嘯的死靈古墓與魔界城堡廢墟，白骨妖物破土而出，紅魔鬼群伺機撲殺！穿上鎧甲，迎戰雙面魔王阿斯塔羅特！',
+    difficulty: 12,
+    dnaMult: 6.6,
+    next: 'endless',
+    theme: {
+      top: '#140824', mid: '#0d0517', bottom: '#07020e',
+      grid: 'rgba(180,120,255,0.035)', major: 'rgba(230,40,60,0.12)',
+      gridStyle: { size: 80, major: 4 },
+      bounds: 'rgba(255,30,60,0.65)',
+      grade: { c1: '140,40,190', a1: 0.06, c2: '15,2,30', a2: 0.12 },
+      vignette: 1.15,
+      ground: {
+        patches: [{ c: '180,80,255', a: 0.035 }, { c: '255,40,60', a: 0.045 }],
+        material: 'asphalt',
+        motif: 'crack',
+        motifColor: 'rgba(30,15,45,0.32)',
+        accent: 'rgba(255,80,60,0.18)',
+        density: { stain: 0.8, stainRadius: 1.2, motif: 1.8, grain: 1, accents: 1.2, base: 1.2 },
+        macro: {
+          kind: 'rifts', cell: 960,
+          base: 'rgba(200,50,80,0.08)', line: 'rgba(15,8,25,0.35)', accent: 'rgba(255,40,70,0.22)',
+          landmark: ['runecircle', 'tombstone'], landmarkCell: 1100, landmarkChance: 0.6,
+          escalate: { rgb: '255,40,60', count: 26 },
+        },
+      },
+    },
+    decor: ['makai_tombstone', 'makai_dead_tree', 'makai_gargoyle', 'makai_skull_urn'],
+    decorDensity: 0.65,
+    hpScale: 4.9,
+    rules: {
+      label: '魔界詛咒', desc: '魔界古墓惡靈躁動：敵人移速 +12%、暴擊率 +20%；金幣收益 +250%',
+      eliteChanceMul: 1.7, spawnMul: 1.35, expMul: 1.45, goldMul: 3.5,
+    },
+    mechs: [
+      { type: 'supply', interval: 35, jitter: 12 },
+      { type: 'spring', interval: 30, jitter: 10, radius: 95, dur: 6, heal: 4, color: '#ff0055' },
+    ],
+    waves: [
+      { until: 40, pool: [['makai_zombie', 0.65], ['bat', 0.35]], interval: 0.5, batch: 2 },
+      { until: 120, pool: [['makai_zombie', 0.45], ['makai_red_arremer', 0.35], ['spitter', 0.20]], interval: 0.4, batch: 2 },
+      { until: 240, pool: [['makai_zombie', 0.35], ['makai_red_arremer', 0.35], ['makai_woody', 0.18], ['runner', 0.12]], interval: 0.32, batch: 3 },
+      { until: 360, pool: [['makai_zombie', 0.25], ['makai_red_arremer', 0.35], ['makai_woody', 0.25], ['boomer', 0.15]], interval: 0.25, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['makai_zombie', 0.22], ['makai_red_arremer', 0.38], ['makai_woody', 0.25], ['blinker', 0.15]], interval: 0.2, batch: 4 },
+      { until: 9999, pool: [['makai_zombie', 0.20], ['makai_red_arremer', 0.40], ['makai_woody', 0.25], ['brute', 0.15]], interval: 0.16, batch: 5 },
+    ],
+    bosses: [
+      { at: 120, hp: 48000, name: '一角魔將‧獨角巨靈', speed: 85, damage: 38, behaviors: ['rockfall', 'barrage', 'charge'], skin: 'boss_unicorn' },
+      { at: 300, hp: 110000, name: '猩紅魔王‧阿雷默', speed: 105, damage: 45, behaviors: ['nova', 'summon', 'vortex'], skin: 'boss_arremer_king' },
+      { at: LEVEL_DURATION, hp: 280000, name: '雙面魔王‧阿斯塔羅特', speed: 88, damage: 52, final: true, behaviors: ['nova', 'barrage', 'summon', 'vortex'], skin: 'boss_astaroth' },
     ],
   },
 
@@ -746,13 +803,14 @@ export const LEVELS = {
 };
 
 export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'subway', 'swamp', 'storm',
-  'foundry', 'frostvoid', 'voidroad', 'inkmount', 'endless'];
+  'foundry', 'frostvoid', 'voidroad', 'inkmount', 'makaimura', 'endless'];
 
-// 無盡模式輪播的 Boss 池 (四關 Boss 全收錄)
+// 無盡模式輪播的 Boss 池 (全關卡 Boss 全收錄)
 export const ENDLESS_BOSS_CYCLE = []
   .concat(LEVELS.street.bosses, LEVELS.lab.bosses, LEVELS.frost.bosses, LEVELS.core.bosses,
     LEVELS.subway.bosses, LEVELS.swamp.bosses, LEVELS.storm.bosses,
-    LEVELS.foundry.bosses, LEVELS.frostvoid.bosses, LEVELS.voidroad.bosses, LEVELS.inkmount.bosses)
+    LEVELS.foundry.bosses, LEVELS.frostvoid.bosses, LEVELS.voidroad.bosses, LEVELS.inkmount.bosses,
+    LEVELS.makaimura.bosses)
   .map((b) => ({ ...b }));
 
 export const ENDLESS_BOSS_INTERVAL = 90;

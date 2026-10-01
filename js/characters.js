@@ -874,11 +874,71 @@ export const CHARACTERS = {
       p.traitDmgMul = 1.0 + Math.max(0, (p.maxHp - 100) * 0.003);
     },
   },
+
+  arthur: {
+    id: 'arthur',
+    sprite: 'arthur',
+    codename: '亞瑟',
+    title: '魔界騎士',
+    role: '重甲破邪 / 投擲長矛 / 絕境爆衣不屈',
+    heroClass: '前鋒',
+    classColor: '#4cc9f0',
+    classTitle: '重甲破邪 / 絕境不屈',
+    traitName: '黃金聖鎧與草莓四角褲',
+    traitDesc: '常駐減傷 25%；受致命傷時鎧甲碎裂爆發聖光擊退全場，獲得 2.5 秒無敵與 +50% 移速 (每局 2 次)',
+    startWeapon: 'kunai',
+    unlockCost: 0,
+    accent: '#4cc9f0',
+    lines: {
+      start: '為了王國與公主的誓言！魔界的妖孽們，休想越過亞瑟的長矛！',
+      levelup: '聖光庇佑！騎士的長矛更加鋒芒銳利！',
+      evolve: '這就是黃金聖鎧的終極力量！破邪穿刺——！',
+      lowhp: '鎧甲快碎了……可惡！難道又要只穿四角褲戰鬥了嗎？！',
+      boss: '魔界領主現身了！以王國騎士之名，受死吧！',
+      win: '魔界的妖霧散去了……公主，亞瑟凱旋而歸！',
+      death: '我的鎧甲……我的草莓四角褲……不甘心啊……',
+    },
+    init(player) {
+      player.armor = (player.armor || 0) + 4;
+      player.arthurRevives = 2;
+      player.arthurInvulnTimer = 0;
+    },
+    passive(player) {
+      player.damageReduction = (player.damageReduction || 0) + 0.25;
+    },
+    tick(dt, game) {
+      const p = game.player;
+      if (p.arthurInvulnTimer > 0) {
+        p.arthurInvulnTimer -= dt;
+        p.invulnerable = true;
+        if (p.arthurInvulnTimer <= 0) {
+          p.speedMultiplier /= 1.5;
+        }
+      }
+      // 爆衣不屈機制：當 HP 歸零且還有次數時爆發聖光脫困
+      if (p.hp <= 0 && p.arthurRevives > 0) {
+        p.arthurRevives--;
+        p.hp = Math.round(p.maxHp * 0.45);
+        p.arthurInvulnTimer = 2.5;
+        p.speedMultiplier *= 1.5;
+        game.floatingText?.(p.x, p.y - 40, '💥 鎧甲爆裂！草莓四角褲出擊！', '#ffd166');
+        game.sound?.playLevelUp?.();
+        for (const e of game.enemies) {
+          if (e.isDead) continue;
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (d < 350) {
+            game.damageEnemy(e, Math.round(180 * p.damageMultiplier), 18, p.x, p.y, 'holy');
+          }
+        }
+      }
+    },
+  },
 };
 
 export const CHARACTER_ORDER = [
   'duck', 'rabbit', 'penguin', 'cat', 'mechanic',
   'astartes_duck', 'techpriest_goose',
+  'arthur',
   'xian_sword', 'xian_talisman', 'xian_mage', 'xian_alchemy', 'xian_zen', 'xian_demon',
   // 12 生肖特工
   'rat_hero', 'ox_hero', 'tiger_hero', 'rabbit_hero', 'dragon_hero', 'snake_hero',

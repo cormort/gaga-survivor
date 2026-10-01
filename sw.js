@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v64';
+const FALLBACK_VERSION = 'gaga-v65';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -140,6 +140,11 @@ const PRECACHE = [
   './assets/xian/xian_sword.png',
   './assets/xian/xian_talisman.png',
   './assets/xian/xian_zen.png',
+  // 魔界村角色與魔物貼圖 (sprites.js MAKAIMURA_SPRITES)
+  './assets/makaimura/arthur.png',
+  './assets/makaimura/makai_zombie.png',
+  './assets/makaimura/makai_red_arremer.png',
+  './assets/makaimura/makai_woody.png',
   // 各關卡高畫質首領貼圖 (assets/bosses/)
   './assets/bosses/boss_street.png',
   './assets/bosses/boss_lab.png',
@@ -154,6 +159,9 @@ const PRECACHE = [
   './assets/bosses/boss_thunder.png',
   './assets/bosses/boss_inkape.png',
   './assets/bosses/boss_inkfox.png',
+  './assets/bosses/boss_unicorn.png',
+  './assets/bosses/boss_arremer_king.png',
+  './assets/bosses/boss_astaroth.png',
   // 武器手持精靈貼圖 (WeaponArt.js)
   './assets/weapons/absolute_zero.png',
   './assets/weapons/annihilation_beam.png',
@@ -197,6 +205,7 @@ const PRECACHE = [
   './assets/ground/ground_subway.png',
   './assets/ground/ground_swamp.png',
   './assets/ground/ground_voidroad.png',
+  './assets/ground/ground_makaimura.png',
   // 戰場防禦設施 (Turret.js)
   './assets/facilities/barracks.png',
   './assets/facilities/barricade.png',
@@ -247,6 +256,10 @@ const PRECACHE = [
   './assets/decor/vent.png',
   './assets/decor/void_crystal.png',
   './assets/decor/void_obelisk.png',
+  './assets/decor/makai_tombstone.png',
+  './assets/decor/makai_dead_tree.png',
+  './assets/decor/makai_gargoyle.png',
+  './assets/decor/makai_skull_urn.png',
   // 敵方投射物重繪貼圖 (EnemyProjectile.js)
   './assets/bullets/bullet_acid.png',
   './assets/bullets/bullet_blood_eye.png',
