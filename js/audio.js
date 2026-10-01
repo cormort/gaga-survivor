@@ -429,8 +429,8 @@ export class SoundEngine {
 
   _applyGains() {
     if (!this.ctx) return;
-    if (this.sfxGain) this.sfxGain.gain.value = this.enabled ? 0.25 * this.sfxVol : 0;
-    if (this.bgmGain) this.bgmGain.gain.value = this.enabled && !this.bgmMuted ? 0.12 * this.bgmVol : 0;
+    if (this.sfxGain) this.sfxGain.gain.value = this.enabled ? 0.12 * this.sfxVol : 0;
+    if (this.bgmGain) this.bgmGain.gain.value = this.enabled && !this.bgmMuted ? 0.3 * this.bgmVol : 0;
   }
 
   setVolumes(sfxVol, bgmVol) {
@@ -478,11 +478,11 @@ export class SoundEngine {
     this.master.connect(this.ctx.destination);
 
     this.sfxGain = this.ctx.createGain();
-    this.sfxGain.gain.value = 0.25 * this.sfxVol;
+    this.sfxGain.gain.value = 0.12 * this.sfxVol;
     this.sfxGain.connect(this.master);
 
     this.bgmGain = this.ctx.createGain();
-    this.bgmGain.gain.value = 0.12 * this.bgmVol;
+    this.bgmGain.gain.value = 0.3 * this.bgmVol;
     this.bgmGain.connect(this.master);
 
     if (!this._visBound && typeof document !== 'undefined' && document.addEventListener) {
