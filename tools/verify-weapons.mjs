@@ -170,7 +170,7 @@ const results = await page.evaluate(async () => {
   const imp = (p) => import(new URL(p, document.baseURI).href);
 
   try {
-    const { WEAPONS, PASSIVES, WEAPON_ASPECTS, GAME_CONFIG } = await imp('js/config.js');
+    const { WEAPONS, PASSIVES, WEAPON_ASPECTS, GAME_CONFIG, rangeDamageMul, rangeTradeoffMul, weaponRangeMul, PIERCE_ALL } = await imp('js/config.js');
     const { Enemy } = await imp('js/entities/Enemy.js');
     const { Projectile } = await imp('js/entities/Projectile.js');
     const g = window.game;
@@ -180,8 +180,25 @@ const results = await page.evaluate(async () => {
     const evos = ids.filter((id) => WEAPONS[id].isEvo);
     // 粗算 DPS：覺醒（evoGrowth）不計，只比「基礎值」——這一組要量的是進化本身的定位，
     // 不是滿級強度。baseCooldown 0 是「常駐」（永恆守護力場／奇點環），視為無限大 DPS。
+    //
+    // 射程定位（rangeDamageMul）必須算進來：baseDamage 是「校準後」的值，實際輸出
+    // 還要乘上它自己的射程倍率。少了這一步，短射程武器會被誤判成被支配
+    // （實測：烈焰新星 baseDamage 21 看起來只有 11.7 DPS，實際是 21 × 1.62 = 34）。
+    const tierOf = (def) => {
+      const r = Array.isArray(def.range) ? def.range[0] : def.range;
+      return rangeDamageMul(r);
+    };
+    //
+    // 彈匣武器（霰彈槍／龍息）還要攤進換彈時間：單發射擊後強制換彈的槍，
+    // 帳面 baseCooldown 是騙人的（0.42 秒一發？其實每發後面接 1.5 秒的幫浦行程）。
+    const shotInterval = (def) => {
+      if (!def.magazine) return def.baseCooldown;
+      const mag = Math.max(1, def.magazine);
+      const reload = Array.isArray(def.reload) ? def.reload[0] : (def.reload || 0);
+      return (def.baseCooldown * mag + reload) / mag;
+    };
     const dps = (def) => (def.baseCooldown > 0
-      ? def.baseDamage / def.baseCooldown
+      ? (def.baseDamage * tierOf(def)) / shotInterval(def)
       : (def.baseDamage > 0 ? Infinity : 0));
     const dpsTxt = (def) => (Number.isFinite(dps(def)) ? dps(def).toFixed(1) : '∞');
 

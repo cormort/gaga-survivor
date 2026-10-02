@@ -1,6 +1,6 @@
 // 武器管理器 (自動鎖定、冷卻計時、投射物生成、超武進化檢測與傷害統計)
 
-import { WEAPONS, PASSIVES, CHARGE, WEAPON_ASPECTS, rangeDamageMul } from '../config.js';
+import { WEAPONS, PASSIVES, CHARGE, WEAPON_ASPECTS, rangeTradeoffMul, weaponRangeMul, weaponRangeTier, PIERCE_ALL } from '../config.js';
 import { Projectile } from '../entities/Projectile.js';
 import { drawHeldWeapon, HELD_MOUNTS } from './WeaponArt.js';
 import { sound } from '../audio.js';
@@ -307,6 +307,21 @@ export class WeaponManager {
     return { fam, id: entry ? entry.id : null, stats: (entry && entry.stats) || {} };
   }
 
+  // 這把武器「宣告」的穿透值 —— 穿透只有一個來源（config.js 的 WEAPONS[*].pierce /
+  // pierceAll），所有 fire 方法都走這裡。先前是各方法自己讀 def.pierce、自己寫 9999、
+  // 自己接 Array.isArray，於是「穿透能力有沒有區隔」完全取決於誰記得寫。
+  //   pierceAll: true → 觸及即命中全部（範圍／光束／持續領域型：靠範圍而不是穿透吃群）
+  //   pierce: 數字或等級陣列 → 線型武器的穿透次數（短射程低、長射程高）
+  declaredPierce(def, level = 1) {
+    if (!def) return 1;
+    if (def.pierceAll) return PIERCE_ALL;
+    const lv = Number(level) > 0 ? Number(level) : 1;
+    const idx = Math.max(0, Math.min(lv, def.maxLevel || lv) - 1);
+    const raw = def.pierce;
+    if (Array.isArray(raw)) return raw[Math.min(idx, raw.length - 1)];
+    return raw === undefined ? 1 : raw;
+  }
+
   update(dt, enemies, particleSystem) {
     if (this._sawEjectCd > 0) this._sawEjectCd -= dt;
     if (this._stormCd > 0) this._stormCd -= dt;
@@ -390,7 +405,7 @@ export class WeaponManager {
   // 期間別把武器開火會把旗標蓋掉，暴擊跳字與「連環爆裂」特效就會掛在錯的彈上。
   mkProjectile(options, crit = false) {
     if (this.player.legendaryEffects?.includes('pierce_all') && options.pierce !== undefined) {
-      options.pierce = 999;
+      options.pierce = PIERCE_ALL;
     } else if (this.player.bonusPierce && options.pierce !== undefined && options.pierce < 900) {
       options.pierce += this.player.bonusPierce;
     }
@@ -421,7 +436,23 @@ export class WeaponManager {
       (this.player.luckPotionTimer > 0 ? 0.25 : 0);
     const critMul = 2 + (this.player.metaCritDmg || 0);
     const potionDmgMul = this.player.atkPotionTimer > 0 ? 1.4 : 1;
-    const finalDamage = Math.round(baseDmg * this.player.damageMultiplier * (this.player.traitDmgMul || 1) * potionDmgMul * (crit ? critMul : 1) * (this.player.blessingBerserkerMul || 1));
+
+    // 射程 ↔ 攻擊力 的反比規則（config.js 的 rangeTradeoffMul）—— **所有**武器都在這裡
+    // 統一結算，而不是各武器自己算一份（先前只有霰彈槍有，其餘武器把射程拉長是純賺）。
+    // 高能燃料（+15%/級）、烈焰之觸（範圍 +20%）、赫米斯型態（射程 +30%）都會依同一條
+    // 規則把單發威力壓下來，換到的是覆蓋範圍 —— 「範圍」與「爆發」從此是同一條軸。
+    // 用「比值」而非絕對值：等級造成的射程成長（守護輪盤 65→95、烈焰新星 110→165）
+    // 不列入取捨，否則升級反而會讓武器變弱。
+    const aspectStats = this.aspectOf(id).stats;
+    const rangeMul = weaponRangeMul(aspectStats, this.player.rangeMultiplier);
+    // 兩段相乘：① 這把武器「宣告的射程」決定的定位倍率（短射程 >1、長射程 <1）
+    // ② 玩家把射程拉長之後的取捨。少了 ①，config 裡的 range 就只是註解。
+    const rangeDamage = weaponRangeTier(def) * rangeTradeoffMul(rangeMul);
+
+    const finalDamage = Math.round(
+      baseDmg * this.player.damageMultiplier * (this.player.traitDmgMul || 1) * potionDmgMul
+      * (crit ? critMul : 1) * (this.player.blessingBerserkerMul || 1) * rangeDamage
+    );
 
     // 手持武器外觀：記下這一發瞄準的方向，並補上後座與槍口火光。
     // 方向以「最近的敵人」為準 —— 與各武器實際鎖定的目標一致，玩家看到的槍口
@@ -525,7 +556,7 @@ export class WeaponManager {
     }
 
     const baseCount = def.isEvo ? 1 : def.projectiles[item.level - 1];
-    const pierce = def.isEvo ? def.pierce : def.pierce[item.level - 1];
+    const pierce = this.declaredPierce(def, item.level);
     const speed = def.speed * (stats.speedMul || 1);
     const rangeMul = this.player.rangeMultiplier * (stats.rangeMul || 1);
 
@@ -591,7 +622,7 @@ export class WeaponManager {
     const fam = def.projType || 'guardian';
     const { stats } = this.aspectOf(def.id);
     if (def.forceField) {
-      this.fireForceField(def, damage, stats, crit);
+      this.fireForceField(def, item, damage, stats, crit);
       return;
     }
     let count = (def.isEvo ? def.count : def.count[item.level - 1]) + (stats.extraBlades || 0);
@@ -641,7 +672,7 @@ export class WeaponManager {
           orbitAngle: angle,
           orbitRadius: radius,
           spinSpeed: spinSpeed,
-          pierce: 9999,
+          pierce: this.declaredPierce(def, item.level),
           life: def.duration,
           isEvo: def.isEvo,
           knockback: 4.5,
@@ -655,7 +686,7 @@ export class WeaponManager {
   // 永恆守護力場：跟著玩家的圓形領域，範圍內每 rehit 秒結算一次傷害，
   // 每 stormEvery 秒放一次向外的擊退風暴。守護輪盤的型態照樣生效：
   // 聖盾（半徑 +30%、消彈）、札格（跳傷更快、+1 刃 → 傷害 +15%）、混沌（飛盤在上面已處理）。
-  fireForceField(def, damage, stats, crit) {
+  fireForceField(def, item, damage, stats, crit) {
     const radius = def.radius * this.player.rangeMultiplier * (stats.radiusMul || 1);
     const dmg = Math.round(damage * (1 + 0.15 * (stats.extraBlades || 0)));
     const rehit = ORBIT_REHIT / (stats.spinSpeedMul || 1);
@@ -663,7 +694,7 @@ export class WeaponManager {
     if (!field) {
       field = this.mkProjectile({
         type: 'force_field', weaponId: def.id, x: this.player.x, y: this.player.y,
-        damage: dmg, radius, pierce: 9999, life: def.duration, isEvo: true,
+        damage: dmg, radius, pierce: this.declaredPierce(def, item.level), life: def.duration, isEvo: true,
         knockback: 1.5, rehit, reflectBullets: !!stats.reflectBullets, followPlayer: true,
       }, crit);
       this.projectiles.push(field);
@@ -773,16 +804,16 @@ export class WeaponManager {
         this.mkProjectile({
           type: 'bottle', weaponId: def.id, x: this.player.x, y: this.player.y,
           toX: targetX, toY: targetY, flight, arcHeight: 40 + dist * 0.15,
-          damage, radius: 6, pierce: 9999, life: flight, isEvo: def.isEvo, noCollide: true,
+          damage, radius: 6, pierce: this.declaredPierce(def, item.level), life: flight, isEvo: def.isEvo, noCollide: true,
         }, crit)
       );
 
-      this.schedule(flight, () => this.landMolotov(def, stats, damage, r, targetX, targetY, enemies, crit));
+      this.schedule(flight, () => this.landMolotov(def, item, stats, damage, r, targetX, targetY, enemies, crit));
     });
   }
 
   // 燃燒瓶落地：玻璃碎裂 → 火海（燃油煉獄的火海會沿地面擴散）
-  landMolotov(def, stats, damage, r, targetX, targetY, enemies, crit) {
+  landMolotov(def, item, stats, damage, r, targetX, targetY, enemies, crit) {
     const ps = this.game?.particles;
     if (ps) {
       ps.createHitSpark(targetX, targetY, '#e9ecef');
@@ -808,7 +839,7 @@ export class WeaponManager {
         y: targetY,
         damage: damage,
         radius: r,
-        pierce: 9999,
+        pierce: this.declaredPierce(def, item.level),
         life: def.duration,
         isEvo: def.isEvo,
         knockback: 0.2,
@@ -949,7 +980,7 @@ export class WeaponManager {
     const lvl = Math.min(item.level, def.maxLevel) - 1;
     const outTime = (def.outTime && def.outTime[lvl]) || 0.38;
     const count = ((def.count && def.count[lvl]) || 1) + (stats.extraProjectiles || 0);
-    const pierce = ((def.pierce && def.pierce[lvl]) || 2) + (stats.pierce || 0);
+    const pierce = this.declaredPierce(def, item.level) + (stats.pierce || 0);
     const speed = def.speed * (stats.speedMul || 1);
     const dmg = Math.round(damage * (stats.damageMul || 1));
     const rehit = (def.rehit || 0.4) * (stats.rehitMul || 1);
@@ -1030,7 +1061,7 @@ export class WeaponManager {
           damage: 0,
           radius: width / 2,
           beamRange: range,
-          pierce: 9999,
+          pierce: this.declaredPierce(def, item.level),
           life: 0.18,
           isEvo: def.isEvo,
           knockback: 0,
@@ -1063,7 +1094,7 @@ export class WeaponManager {
           damage: damage,
           radius: rad,
           bounces: bounces,
-          pierce: 9999,
+          pierce: this.declaredPierce(def, item.level),
           life: 8.0,
           isEvo: def.isEvo,
           knockback: 3.5,
@@ -1130,14 +1161,9 @@ export class WeaponManager {
     const count = slug ? 1 : at(def.pellets);
     const spread = def.spread * (stats.spreadMul || 1);
     const range = def.range * (stats.rangeMul || 1) * this.player.rangeMultiplier;
-    // 射程 ↔ 攻擊力 的反比規則（config.js 的 rangeDamageMul）：
-    // 「射程越短，攻擊力越強」在引擎裡真的成立 —— 用**有效射程**算，所以
-    // 高能燃料與「赫米斯（速射）」把射程拉長的同時，單發威力會依比例下降；
-    // 換來的是覆蓋範圍。同一條規則也管到龍息霰彈（基礎射程 210 → ×1.43）。
-    const dmg = Math.round(
-      (slug ? damage * (stats.slugDamageMul || 2.5) : damage) * rangeDamageMul(range)
-    );
-    const pierce = slug ? (stats.pierce || 3) : at(def.pierce);
+    // 射程取捨已由 fireWeapon 統一套用（見該處的說明），這裡只負責彈道。
+    const dmg = slug ? Math.round(damage * (stats.slugDamageMul || 2.5)) : damage;
+    const pierce = slug ? (stats.pierce || 3) : this.declaredPierce(def, item.level);
     const baseAngle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
 
     for (let i = 0; i < count; i++) {
@@ -1233,7 +1259,7 @@ export class WeaponManager {
           y: rocketProj.y,
           damage: Math.round(rocketProj.damage * (rocketProj.lavaDamageMul || 0.4)),
           radius: rocketProj.lavaRadius || 55,
-          pierce: 9999,
+          pierce: PIERCE_ALL,   // 鯊魚核彈留下的火海：範圍型固定全中
           life: rocketProj.lavaDuration,
           knockback: 0.1,
         })
@@ -1433,7 +1459,7 @@ export class WeaponManager {
     if (!target) return;
 
     const baseCount = Array.isArray(def.projectiles) ? def.projectiles[item.level - 1] : (def.projectiles || 1);
-    const pierce = Array.isArray(def.pierce) ? def.pierce[item.level - 1] : (def.pierce || 1);
+    const pierce = this.declaredPierce(def, item.level);
     const speed = def.speed || 760;
     const expR = Array.isArray(def.explosionRadius) ? def.explosionRadius[item.level - 1] : (def.explosionRadius || 50);
 
@@ -1553,7 +1579,7 @@ export class WeaponManager {
             vy: Math.sin(waveAngle) * sp,
             damage: waveDmg,
             radius: 20,
-            pierce: def.shockwavePierce || 99,
+            pierce: def.shockwavePierce || PIERCE_ALL,
             isCrit: crit,
             isEvo: true,
             maxLife: 1.4,

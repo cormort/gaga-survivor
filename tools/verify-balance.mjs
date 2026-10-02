@@ -11,7 +11,7 @@
 // 用法：node tools/verify-balance.mjs
 import { readFileSync } from 'node:fs';
 import { DIFFICULTIES, RULE_DEFAULTS, enemyScale, LEVELS, ENEMY_SPEED_BASE, hazardDmgScale } from '../js/levels.js';
-import { BLESSINGS, blessingPool, BOMB_TUNING, ENEMY_TYPES, ELEMENTS } from '../js/config.js';
+import { BLESSINGS, blessingPool, BOMB_TUNING, ENEMY_TYPES, ELEMENTS, WEAPONS, rangeDamageMul, rangeTradeoffMul } from '../js/config.js';
 
 // 原始碼層級：確認實際抽祝福的路徑真的走 blessingPool（而不是各自再寫一次 filter）
 const progressionSrc = readFileSync(new URL('../js/systems/Progression.js', import.meta.url), 'utf8');
@@ -301,6 +301,119 @@ console.log('\n=== B. 引力異常的等級門檻 ===');
   const gated = BLESSINGS.filter((b) => b.minLevel);
   ok('所有有 minLevel 的祝福門檻都是正整數', gated.every((b) => Number.isInteger(b.minLevel) && b.minLevel > 0),
     gated.map((b) => `${b.name}=${b.minLevel}`).join('、') || '（目前只有引力異常）');
+}
+
+console.log('\n=== D. 射程 ↔ 攻擊力 ↔ 穿透（玩家要求：全武器適用 ＋ 穿透區隔） ===');
+{
+  // 「射程越短的攻擊力越強」原本只寫在霰彈槍裡，其餘武器把射程拉長是純賺；
+  // 穿透更是散在各 fire 方法裡自己讀 def.pierce、自己寫 9999。這一節把三軸定位
+  // 變成可回歸的契約：資料要宣告、規則要單調、引擎要在**同一個地方**套用。
+  const wmSrc = readFileSync(new URL('../js/weapons/WeaponManager.js', import.meta.url), 'utf8');
+  const ids = Object.keys(WEAPONS);
+
+  // D1 每一把武器都要宣告射程
+  const noRange = ids.filter((id) => WEAPONS[id].range === undefined);
+  ok(`D1 ${ids.length} 把武器都宣告了 range（射程規則才有作用對象）`,
+    noRange.length === 0, noRange.join('、') || '全部有 range');
+
+  // D2 每一把武器都要宣告穿透（或是明確的「觸及即全中」）
+  const noPierce = ids.filter((id) => WEAPONS[id].pierce === undefined && !WEAPONS[id].pierceAll);
+  ok('D2 每一把武器都宣告了 pierce 或 pierceAll（沒有靜默的 undefined）',
+    noPierce.length === 0, noPierce.join('、') || `線型 ${ids.filter((i) => WEAPONS[i].pierce !== undefined).length} 把、範圍型 ${ids.filter((i) => WEAPONS[i].pierceAll).length} 把`);
+
+  // D3 規則本體必須嚴格遞減（射程越長、倍率越低）
+  const ranges = [];
+  for (let r = 20; r <= 2000; r += 5) ranges.push(r);
+  const muls = ranges.map((r) => rangeDamageMul(r));
+  // 注意：兩端是刻意夾住的（MAX 2.2 / MIN 0.6），夾住區間內持平是預期行為，
+  // 所以「嚴格遞減」只要求在未夾住的區間成立。
+  const increasing = ranges.filter((r, i) => i > 0 && muls[i] > muls[i - 1] + 1e-9);
+  const unclamped = ranges.filter((r) => muls[ranges.indexOf(r)] < 2.199 && muls[ranges.indexOf(r)] > 0.601);
+  const notStrict = unclamped.filter((r) => {
+    const i = ranges.indexOf(r);
+    return i > 0 && !(muls[i] < muls[i - 1] - 1e-9) && ranges[i - 1] >= 20 && muls[i - 1] < 2.199;
+  });
+  ok('D3 rangeDamageMul 在未夾住的區間嚴格遞減、全區間不遞增', increasing.length === 0 && notStrict.length === 0,
+    increasing.length ? `在 ${increasing[0]}px 反而上升` : `${muls[0].toFixed(2)}（20px） → ${muls[muls.length - 1].toFixed(2)}（2000px），夾住區間 ±0`);
+
+  // D4 玩家端的動態取捨：k=1 不動、拉長要付代價、縮短要拿到好處
+  ok('D4 rangeTradeoffMul(1) = 1、拉長 1.75 倍 ≤ 0.87、縮短到 0.6 倍 ≥ 1.15',
+    Math.abs(rangeTradeoffMul(1) - 1) < 1e-9 && rangeTradeoffMul(1.75) <= 0.87 && rangeTradeoffMul(0.6) >= 1.15,
+    `k=1 → ${rangeTradeoffMul(1).toFixed(3)}、k=1.75 → ${rangeTradeoffMul(1.75).toFixed(3)}、k=0.6 → ${rangeTradeoffMul(0.6).toFixed(3)}`);
+
+  // D5 定位真的有落到資料上：短射程三分之一全部拿到加成、長射程三分之一全部付代價
+  const sorted = [...ids].sort((a, b) => {
+    const ra = Array.isArray(WEAPONS[a].range) ? WEAPONS[a].range[0] : WEAPONS[a].range;
+    const rb = Array.isArray(WEAPONS[b].range) ? WEAPONS[b].range[0] : WEAPONS[b].range;
+    return ra - rb;
+  });
+  const third = Math.max(1, Math.floor(sorted.length / 3));
+  const shortThird = sorted.slice(0, third);
+  const longThird = sorted.slice(-third);
+  const tierOf = (id) => {
+    const d = WEAPONS[id];
+    return rangeDamageMul(Array.isArray(d.range) ? d.range[0] : d.range);
+  };
+  const shortBad = shortThird.filter((id) => tierOf(id) < 1);
+  const longBad = longThird.filter((id) => tierOf(id) >= 1);
+  ok(`D5 最短射程的 ${third} 把全部拿到攻擊力加成（tier ≥ 1）`,
+    shortBad.length === 0, shortBad.map((i) => `${i}(${tierOf(i).toFixed(2)})`).join('、') || shortThird.map((i) => `${i}(${tierOf(i).toFixed(2)})`).join(' '));
+  ok(`D5b 最長射程的 ${third} 把全部付出攻擊力代價（tier < 1）`,
+    longBad.length === 0, longBad.map((i) => `${i}(${tierOf(i).toFixed(2)})`).join('、') || longThird.map((i) => `${i}(${tierOf(i).toFixed(2)})`).join(' '));
+
+  // D6 穿透區隔：線型武器的穿透值必須真的分佈開，不能全部一樣
+  const linePierce = ids.filter((id) => WEAPONS[id].pierce !== undefined)
+    .map((id) => {
+      const p = WEAPONS[id].pierce;
+      return Array.isArray(p) ? p[p.length - 1] : p;
+    });
+  const distinct = new Set(linePierce);
+  ok('D6 線型武器的穿透值至少有 4 種不同值（有區隔，不是全部一樣）',
+    distinct.size >= 4, `${distinct.size} 種：${[...distinct].sort((a, b) => a - b).join('/')}`);
+
+  // D7 穿透與射程的極值關係：最短射程的兩把線型武器必須比最長射程的兩把更不穿透
+  //
+  // 這裡刻意**不**要求「整份名單的穿透隨射程單調上升」——那不會成立，也不該成立：
+  // 爆彈槍／火箭／足球靠爆炸與彈射吃群（濺射型），穿透對它們本來就不是主要手段。
+  // 真正的契約是「兩端的差距」與「濺射型不得同時擁有高穿透」。
+  const lineSorted = sorted.filter((id) => WEAPONS[id].pierce !== undefined);
+  const pierceAt = (id) => { const p = WEAPONS[id].pierce; return Array.isArray(p) ? p[p.length - 1] : p; };
+  const shortest = lineSorted[0];
+  const longest = lineSorted[lineSorted.length - 1];
+  ok('D7 最長射程的線型武器，穿透至少是最短射程線型武器的 2 倍（兩端真的有區隔）',
+    pierceAt(longest) >= pierceAt(shortest) * 2,
+    `${shortest}(射程 ${WEAPONS[shortest].range})＝${pierceAt(shortest)} vs ${longest}(射程 ${WEAPONS[longest].range})＝${pierceAt(longest)}`);
+  // 濺射／彈射型：靠爆炸半徑或彈射次數吃群，穿透必須壓在低位（否則就是全能武器）。
+  // 風暴爆彈槍不在名單裡 —— 它是爆彈槍的**超武**，定位刻意換成「貫穿型的高穿透線武器」
+  // （射程 660、穿透 4），那正是它與基礎版爆彈槍的區隔。
+  const splash = ['bolter', 'rocket', 'shark_torpedo'].filter((id) => pierceAt(id) !== undefined);
+  const splashBad = splash.filter((id) => pierceAt(id) > 2);
+  ok('D7b 濺射型武器的穿透 ≤ 2（吃群的手段是爆炸，不是穿透）',
+    splashBad.length === 0, splashBad.map((i) => `${i}=${pierceAt(i)}`).join('、') || splash.map((i) => `${i}(${WEAPONS[i].range}px)=${pierceAt(i)}`).join(' '));
+  // 彈射型（足球／量子星雲球）：吃群靠 bounces，所以穿透必須是「撞到不消耗」，
+  // 否則第一隻敵人就把球吃掉、彈射次數形同虛設（實測：把 pierce 寫成 1 會讓 DPS 掉 46%）。
+  const bounce = ['soccer', 'quantum_sphere'];
+  const bounceBad = bounce.filter((id) => !WEAPONS[id].pierceAll || !WEAPONS[id].bounces);
+  ok('D7c 彈射型武器必須 pierceAll（撞到不消耗）且宣告 bounces',
+    bounceBad.length === 0, bounceBad.join('、') || bounce.map((id) => `${id}(bounces ${Array.isArray(WEAPONS[id].bounces) ? WEAPONS[id].bounces[0] : WEAPONS[id].bounces})`).join(' '));
+
+  // D8 引擎層級：射程取捨必須在 fireWeapon 統一結算（不是各武器自己算一份）
+  const fw = (wmSrc.match(/  fireWeapon\([\s\S]*?\n  \}/) || [''])[0];
+  ok('D8 fireWeapon 統一套用 rangeTradeoffMul（全武器適用，不是只有霰彈槍）',
+    /rangeTradeoffMul\(/.test(fw) && /weaponRangeMul\(/.test(fw),
+    `fireWeapon ${fw.split('\n').length} 行`);
+  const perWeapon = (wmSrc.match(/rangeTradeoffMul\(/g) || []).length;
+  ok('D8b 射程取捨只有一處套用（沒有武器自己再乘一次，避免重複計算）',
+    perWeapon === 1, `rangeTradeoffMul 在 WeaponManager 出現 ${perWeapon} 次`);
+
+  // D9 穿透只有一個來源：宣告值 → declaredPierce()；不得再有魔術數字 9999
+  ok('D9 穿透統一由 declaredPierce() 讀取（單一來源）',
+    /declaredPierce\(def/.test(wmSrc) && (wmSrc.match(/this\.declaredPierce\(/g) || []).length >= 8,
+    `${(wmSrc.match(/this\.declaredPierce\(/g) || []).length} 處呼叫`);
+  // 比對前先去掉註解 —— 註解裡提到「先前寫 9999」不該讓契約變紅
+  const wmCode = wmSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\/\/.*$/gm, '');
+  ok('D9b WeaponManager 的程式碼不再有魔術數字 9999（改用 PIERCE_ALL 常數）',
+    !/9999/.test(wmCode), (wmCode.match(/9999/g) || []).length ? `還有 ${(wmCode.match(/9999/g) || []).length} 處` : 'PIERCE_ALL');
 }
 
 console.log('\n=== C. 全面引爆類炸彈（回報：威力太大） ===');
