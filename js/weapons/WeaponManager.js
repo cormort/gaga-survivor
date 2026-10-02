@@ -1429,7 +1429,10 @@ export class WeaponManager {
     for (const item of this.weapons.values()) {
       if (!(item.reloading > 0) || !item.reloadTime) continue;
       const prog = 1 - item.reloading / item.reloadTime;
-      const cy = sy - 46;
+      // 高度 46 → 60：46 的時候這個環（半徑 9 → sy-55..sy-37）會壓在血條上方的
+      // 屬性狀態圓點（sy-41..sy-35）上，兩個一起出現時糊成一團（實測截圖確認）。
+      // 往上挪到 60 之後兩者完全分開：環 sy-69..sy-51、圓點 sy-41..sy-35。
+      const cy = sy - 60;
       ctx.save();
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(0,0,0,0.55)';
