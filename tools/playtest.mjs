@@ -634,27 +634,52 @@ const hpPctByMinute = dpsByMinute.map((d, m) => {
   return (d * 60 / hp) * 100;
 });
 
-// 平滑度：相鄰分鐘的相對跳動（跳動大 = 曲線有階梯）
+// 平滑度：用「2 分鐘 vs 2 分鐘」的滾動窗比較，而不是相鄰兩分鐘直接比。
+// 為什麼：相鄰兩分鐘的比值會被低基期放大 —— 0.2 → 1.5 DPS 是 ×7 但完全無感，
+// 而單一玩家的單一分鐘本來就有 ±30% 的雜訊（實測第一版的指標在 ×2.6 與 ×6.4
+// 之間跳來跳去，同一個版本跑兩次就不一樣）。滾動窗讓它變成可比較的量。
+// 只看「本來已經有壓力、然後突然跳上去」的區段（左窗 ≥ 2 DPS）。
+// 開局從 0.3 → 5 DPS 的爬升是設計（開場本來就該安靜），不該被當成階梯。
+const smoothFloorDps = 2;
 let worstJump = 0;
 let worstJumpAt = null;
 let worstJumpDetail = null;
-for (let m = 1; m < dpsByMinute.length; m++) {
-  const a = dpsByMinute[m - 1];
-  const b = dpsByMinute[m];
-  if (a == null || b == null) continue;
-  if ((trialsByMinute[m] || 0) < 2 || (trialsByMinute[m - 1] || 0) < 2) continue;   // 單場樣本＝雜訊
-  // 低基期的相對跳動不算階梯：0.2 → 1.5 DPS 是 ×7，但那個絕對值對玩家完全無感。
-  // 只在「壓力已經不可忽略」（兩邊較大者 ≥ 3 DPS）時才把它算成曲線形狀的問題。
-  if (Math.max(a, b) < 3) continue;
-  const rel = Math.abs(b - a) / Math.max(0.5, a);
-  if (rel > worstJump) {
-    worstJump = rel;
-    worstJumpAt = `第 ${m}→${m + 1} 分`;
+const winMean = (from, to) => {
+  const v = [];
+  for (let m = Math.max(0, from); m <= Math.min(to, dpsByMinute.length - 1); m++) if (dpsByMinute[m] != null) v.push(dpsByMinute[m]);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+};
+for (let k = 1; k < dpsByMinute.length - 1; k++) {
+  const left = winMean(k - 1, k);
+  const right = winMean(k + 1, k + 2);
+  if (left == null || right == null) continue;
+  if (left < smoothFloorDps) continue;
+  const ratio = left > 0 ? right / left : Infinity;
+  const magnitude = ratio >= 1 ? ratio : 1 / ratio;
+  if (magnitude > worstJump) {
+    worstJump = magnitude;
+    worstJumpAt = `第 ${k}~${k + 1} 分`;
     worstJumpDetail = {
-      from: { dps: a, pct: hpPctByMinute[m - 1], enemies: enemiesByMinute[m - 1] },
-      to: { dps: b, pct: hpPctByMinute[m], enemies: enemiesByMinute[m] },
+      left, right,
+      leftEnemies: enemiesByMinute[k - 1], rightEnemies: enemiesByMinute[k + 2],
     };
   }
+}
+
+// 敵人數的單分鐘跳動：這是「怪潮牆」的直接量度。
+// 為什麼拿它當主要契約而不是壓力比值：壓力＝人數 × 每隻怪的強度 × 玩家當下的走位，
+// 中間夾了一個玩家清場能力的門檻效應，比值天生吵（同一個版本跑兩次可以差一倍）。
+// 人數的爬升則直接由生成率決定 —— 是我們真的能修、也真的該修的那一段。
+let worstCountJump = 0;
+let worstCountAt = null;
+for (let m = 1; m < enemiesByMinute.length; m++) {
+  const a = enemiesByMinute[m - 1];
+  const b = enemiesByMinute[m];
+  if (a == null || b == null) continue;
+  if (a < 5) continue;                       // 開局從個位數起跳，比值沒有意義
+  const ratio = a > 0 ? b / a : Infinity;
+  const magnitude = ratio >= 1 ? ratio : 1 / ratio;
+  if (magnitude > worstCountJump) { worstCountJump = magnitude; worstCountAt = `第 ${m}→${m + 1} 分`; }
 }
 
 // 不死平台期：連續 3 分鐘「壓力 < 5% 最大生命／分鐘」而且場上還有 >20 隻怪。
@@ -722,15 +747,16 @@ for (let m = 0; m < dpsByMinute.length; m++) {
   line(`  ${String(m + 1).padStart(2)} 分  ${d.toFixed(1).padStart(6)} DPS ${pctTxt}/分  ${bar}  敵 ${String(enemiesByMinute[m] == null ? '?' : Math.round(enemiesByMinute[m])).padStart(3)}  樣本 ${n}/${trials.length}${tail && !CFG.immortal ? '   ← 陣亡區間' : ''}`);
 }
 line('');
-line(`  曲線平滑度：相鄰分鐘最大跳動 ×${worstJump.toFixed(2)}${worstJumpAt ? `（${worstJumpAt}）` : ''}${worstJump <= CFG.maxJump ? '　✅' : '　⚠️ 偏大'}`);
+line(`  敵人數爬升：單分鐘最大跳動 ×${worstCountJump.toFixed(2)}${worstCountAt ? `（${worstCountAt}）` : ''}${worstCountJump <= 3 ? '　✅' : '　⚠️ 像怪潮牆'}`);
+line(`  壓力曲線：前後 2 分鐘窗的最大跳動 ×${worstJump.toFixed(2)}${worstJumpAt ? `（${worstJumpAt}）` : ''}（僅供參考 —— 壓力含玩家清場能力的門檻效應，比值天生吵）`);
 if (worstJumpDetail) {
   const d = worstJumpDetail;
-  const jumpEnemies = d.to.enemies != null && d.from.enemies != null
-    ? `；同期敵人數 ${Math.round(d.from.enemies)} → ${Math.round(d.to.enemies)}` : '';
-  line(`    ${worstJumpAt}：${d.from.pct == null ? '?' : d.from.pct.toFixed(0)}% → ${d.to.pct == null ? '?' : d.to.pct.toFixed(0)}%/分${jumpEnemies}`);
-  if (d.to.enemies != null && d.to.enemies > 200 && d.from.enemies != null && d.from.enemies < d.to.enemies * 0.4) {
-    line('    ↑ 這個跳動來自「怪潮撞上同屏上限」而不是傷害公式：生成速率在這一分鐘追上清場速率，');
-    line('      敵人數一次衝到數百隻。要拉平曲線的話，該調的是波次表與生成間隔，不是傷害倍率。');
+  const jumpEnemies = d.leftEnemies != null && d.rightEnemies != null
+    ? `；同期敵人數 ${Math.round(d.leftEnemies)} → ${Math.round(d.rightEnemies)}` : '';
+  line(`    ${worstJumpAt}：窗平均 ${d.left.toFixed(1)} → ${d.right.toFixed(1)} DPS${jumpEnemies}`);
+  if (d.rightEnemies != null && d.leftEnemies != null && d.rightEnemies > 150 && d.leftEnemies < d.rightEnemies * 0.5) {
+    line('    ↑ 這個跳動來自「怪潮撞上同屏上限」而不是傷害公式：生成速率追上並超過清場速率，');
+    line('      敵人數衝到數百隻。要拉平曲線的話，該調的是波次表與生成間隔，不是傷害倍率。');
   }
 }
 line(`  壓力單位＝每分鐘吃掉最大生命的百分比（5%/分 ≈ 不吃補血也要 20 分鐘才會死）`);
@@ -764,8 +790,12 @@ if (CFG.assert) {
   const checks = [];
   const ok = (name, pass, detail) => checks.push({ name, pass: !!pass, detail: String(detail == null ? '' : detail) });
   ok('過程沒有未捕捉的例外', pageErrors.length === 0, pageErrors.slice(0, 2).join(' / ') || '0 筆');
-  ok(`難度曲線沒有階梯（相鄰分鐘相對跳動 ≤ ${CFG.maxJump}）`, worstJump <= CFG.maxJump,
-    `×${worstJump.toFixed(2)}${worstJumpAt ? ` @ ${worstJumpAt}` : ''}`);
+  ok('敵人數沒有怪潮牆（單分鐘爬升 ≤ ×3）', worstCountJump <= 3,
+    `×${worstCountJump.toFixed(2)}${worstCountAt ? ` @ ${worstCountAt}` : ''}`);
+  if (worstJump > CFG.maxJump) {
+    line(`  ⚠️ （提示，不判定）壓力曲線的前後窗跳動 ×${worstJump.toFixed(2)}${worstJumpAt ? ` @ ${worstJumpAt}` : ''} 高於 ${CFG.maxJump}：壓力＝人數 × 單怪強度 × 走位，`);
+    line('      含「敵人開始真的碰到你」的門檻效應，不是單一旋鈕能拉平的量。要調它請看人數那一行。');
+  }
   ok('（不死模式）壓力會隨時間上升，不是平的', CFG.immortal
     ? (() => { const v = hpPctByMinute.filter((x) => x != null); return v.length >= 4 && Math.max(...v) > Math.max(...v.slice(0, 2)) * 2; })()
     : true, CFG.immortal ? `前兩分鐘最高 ${Math.max(...hpPctByMinute.filter((x) => x != null).slice(0, 2)).toFixed(0)}%/分 → 最高 ${Math.max(...hpPctByMinute.filter((x) => x != null)).toFixed(0)}%/分` : '（非不死模式，跳過）');

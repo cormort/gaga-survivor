@@ -10,7 +10,7 @@
 //
 // 用法：node tools/verify-balance.mjs
 import { readFileSync } from 'node:fs';
-import { DIFFICULTIES, RULE_DEFAULTS, enemyScale, LEVELS, ENEMY_SPEED_BASE, hazardDmgScale } from '../js/levels.js';
+import { DIFFICULTIES, RULE_DEFAULTS, enemyScale, LEVELS, ENEMY_SPEED_BASE, hazardDmgScale, spawnRate, nominalSpawnRate, openingFactor, OPENING, LEVEL_ORDER } from '../js/levels.js';
 import { BLESSINGS, blessingPool, BOMB_TUNING, ENEMY_TYPES, ELEMENTS, WEAPONS, rangeDamageMul, rangeTradeoffMul } from '../js/config.js';
 
 // 原始碼層級：確認實際抽祝福的路徑真的走 blessingPool（而不是各自再寫一次 filter）
@@ -414,6 +414,65 @@ console.log('\n=== D. 射程 ↔ 攻擊力 ↔ 穿透（玩家要求：全武器
   const wmCode = wmSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\/\/.*$/gm, '');
   ok('D9b WeaponManager 的程式碼不再有魔術數字 9999（改用 PIERCE_ALL 常數）',
     !/9999/.test(wmCode), (wmCode.match(/9999/g) || []).length ? `還有 ${(wmCode.match(/9999/g) || []).length} 處` : 'PIERCE_ALL');
+}
+
+console.log('\n=== E. 生成率曲線：怪潮牆（第二個階梯） ===');
+{
+  // 第一輪把傷害公式的折點與硬封頂拿掉之後，tools/playtest.mjs 仍然在**每一張關卡**
+  // 都量到同一個結構性階梯：第 6~7 分鐘，敵人數從幾十隻衝到幾百隻。原因不在傷害，
+  // 在生成率 —— 波次表的 interval / batch 是分段常數，邊界直接跳（street 第 6 分鐘
+  // 2.22 → 6.67 隻/秒，+200%）。這一組把「生成率曲線必須平滑」寫成契約。
+  const levels = LEVEL_ORDER.map((id) => LEVELS[id]).filter((lv) => lv && !lv.td && lv.waves);
+  const effRate = (lv, t) => spawnRate(lv, t) / (1 + (OPENING.sparse - 1) * openingFactor(t));
+
+  // E1 名目率的相鄰波次不得跳超過 1.5 倍（資料層的階梯）
+  const bigSteps = [];
+  for (const lv of levels) {
+    const rates = lv.waves.map((w) => (w.batch || 1) / w.interval);
+    for (let i = 1; i < rates.length; i++) {
+      // 1.52 而不是 1.50：interval 是四捨五入到小數三位的，倍率會有一點捨入誤差
+      if (rates[i] > rates[i - 1] * 1.52) {
+        bigSteps.push(`${lv.id}#${i + 1} ${rates[i - 1].toFixed(2)}→${rates[i].toFixed(2)}（${(rates[i] / rates[i - 1]).toFixed(2)}×）`);
+      }
+    }
+  }
+  ok('E1 每個波次的生成率不超過前一波的 1.5 倍（資料層沒有階梯；容許 1.5% 捨入誤差）',
+    bigSteps.length === 0, bigSteps.slice(0, 4).join('、') || `${levels.length} 關共 ${levels.reduce((a, l) => a + l.waves.length, 0)} 個波次全部合格`);
+
+  // E2 平滑後的曲線必須單調不減
+  const notMono = [];
+  for (const lv of levels) {
+    for (let t = 0; t <= 600; t += 5) {
+      if (effRate(lv, t + 5) < effRate(lv, t) - 1e-9) { notMono.push(`${lv.id}@${t}s`); break; }
+    }
+  }
+  ok('E2 生成率隨時間單調不減（不會突然變少又變多）',
+    notMono.length === 0, notMono.join('、') || '13 關全部單調');
+
+  // E3 30 秒內不得跳超過 60%（移動平均的代價：爬升前移，不能變成另一種懸崖）
+  let worstRise = 0; let worstRiseAt = '';
+  for (const lv of levels) {
+    for (let t = 0; t <= 570; t += 5) {
+      const a = effRate(lv, t); const b = effRate(lv, t + 30);
+      if (a > 0 && b / a - 1 > worstRise) { worstRise = b / a - 1; worstRiseAt = `${lv.id}@${t}s`; }
+    }
+  }
+  ok('E3 生成率在任 30 秒內增幅 ≤ 60%（沒有懸崖）',
+    worstRise <= 0.6, `最大 ${(worstRise * 100).toFixed(1)}%（${worstRiseAt}）`);
+
+  // E4 但也不能太平：後段仍然要明顯比前段兇，否則就是從「階梯」變成「沒有難度曲線」
+  const growth = levels.map((lv) => ({ id: lv.id, g: effRate(lv, 480) / effRate(lv, 120) }));
+  const flat = growth.filter((x) => !(x.g >= 3));
+  ok('E4 8 分鐘的生成率仍 ≥ 2 分鐘的 3 倍（拉平的是階梯，不是把後期沒收）',
+    flat.length === 0, flat.length ? flat.map((x) => `${x.id} ${x.g.toFixed(2)}×`).join('、')
+      : `最低 ${Math.min(...growth.map((x) => x.g)).toFixed(2)}×（${growth.sort((a, b) => a.g - b.g)[0].id}）`);
+
+  // E5 引擎層級：Spawner 必須走 spawnRate()，不能自己回頭用 wave.interval
+  const spSrc = readFileSync(new URL('../js/systems/Spawner.js', import.meta.url), 'utf8');
+  const uses = /spawnRate\(level, gameTime\)/.test(spSrc);
+  const rawUse = /let interval = wave\.interval;/.test(spSrc) && !uses;
+  ok('E5 Spawner 用 spawnRate() 取得生成率（沒有自己回頭用分段常數的 wave.interval）',
+    uses && !rawUse, uses ? '走 spawnRate()' : '找不到 spawnRate() 呼叫');
 }
 
 console.log('\n=== C. 全面引爆類炸彈（回報：威力太大） ===');

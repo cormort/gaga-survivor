@@ -2,7 +2,7 @@
 // 無盡模式 (endless) 是唯一例外：波次間隔/數量隨時間成長，Boss 固定 90 秒輪播。
 
 import { Enemy } from '../entities/Enemy.js';
-import { LEVELS, OPENING, openingFactor, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL, endlessBossInterval } from '../levels.js';
+import { LEVELS, OPENING, openingFactor, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL, endlessBossInterval, spawnRate } from '../levels.js';
 import { worldBounds } from '../config.js';
 import { ELITE_AFFIXES, elementOf } from '../config.js';
 import { hasSprite } from '../sprites.js';
@@ -120,14 +120,21 @@ export class Spawner {
     this.spawnTimer += dt;
     const wave = currentWave(level, gameTime);
 
-    // 無盡模式：間隔隨時間縮短、單次數量增加 (有上限避免一口氣灌爆)
+    // 生成率（隻／秒）是這一輪的主要旋鈕，不再是 interval / batch 各自跳。
+    // 為什麼：波次表的 interval / batch 是分段常數，邊界直接跳 —— street 第 6 分鐘
+    // 2.22 → 6.67 隻/秒（+200%）、第 8 分鐘再跳 +131%，敵人數就在那一分鐘從幾十隻
+    // 衝到幾百隻。這是「怪潮毫無預警湧上來」的真正來源（見 levels.js 的 spawnRate / nominalSpawnRate）。
+    //
+    // batch 維持整數（一次生幾隻是離散的），由 interval 吸收內插：率連續，數量就不會一跳。
     const rules = this.rules || RULE_DEFAULTS;
-    let interval = wave.interval;
     let batch = wave.batch;
     if (level.id === 'endless') {
-      interval = Math.max(0.15, 0.55 - gameTime * 0.00055);
       batch = 1 + Math.min(5, Math.floor(gameTime / 150));
     }
+    // 由平滑後的「率」回推間隔。rate <= 0 只可能在關卡資料壞掉時發生，
+    // 那時退回這一波原本的 interval（不要讓整個生成器停擺）。
+    const rate = spawnRate(level, gameTime);
+    let interval = rate > 0 ? Math.max(0.05, batch / rate) : wave.interval;
 
     // 生成密度：直接縮短間隔 (關卡規則 / 每日詞綴共用)
     interval /= rules.spawnMul;
