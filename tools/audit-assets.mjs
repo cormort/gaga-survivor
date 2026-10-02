@@ -10,6 +10,7 @@
 //
 // 引用來源全部是表驅動（檔名由 key 組出來），所以不能只 grep 檔名字串：
 //   js/sprites.js            IMAGE_SPRITES / DECOR_PNG_SPRITES / ZODIAC_SPRITES / BOSS_PNG_SPRITES
+//                            / MAKAIMURA_SPRITES（魔界村角色與魔物，路徑為 assets/makaimura/）
 //   js/weapons/WeaponArt.js  WEAPON_ART 的 key
 //   js/systems/Ground.js     地表貼圖 id 陣列
 //   js/entities/EnemyProjectile.js  ENEMY_BULLET_KEYS
@@ -68,6 +69,7 @@ for (const k of objKeys(spritesSrc, 'IMAGE_SPRITES')) add(`assets/xian/${k}.png`
 for (const k of objKeys(spritesSrc, 'DECOR_PNG_SPRITES')) add(`assets/decor/${k}.png`, 'sprites.js DECOR_PNG_SPRITES');
 for (const k of objKeys(spritesSrc, 'ZODIAC_SPRITES')) add(`assets/zodiac/${k}.png`, 'sprites.js ZODIAC_SPRITES');
 for (const k of objKeys(spritesSrc, 'BOSS_PNG_SPRITES')) add(`assets/bosses/${k}.png`, 'sprites.js BOSS_PNG_SPRITES');
+for (const k of objKeys(spritesSrc, 'MAKAIMURA_SPRITES')) add(`assets/makaimura/${k}.png`, 'sprites.js MAKAIMURA_SPRITES');
 
 const weaponSrc = read('js/weapons/WeaponArt.js');
 for (const id of objKeysBraced(weaponSrc, 'WEAPON_ART')) add(`assets/weapons/${id}.png`, 'WeaponArt.js WEAPON_ART');
@@ -193,6 +195,7 @@ const loadedKeys = [
   ...objKeys(spritesSrc, 'DECOR_PNG_SPRITES').map((k) => [`assets/decor/${k}.png`, k]),
   ...objKeys(spritesSrc, 'ZODIAC_SPRITES').map((k) => [`assets/zodiac/${k}.png`, k]),
   ...objKeys(spritesSrc, 'BOSS_PNG_SPRITES').map((k) => [`assets/bosses/${k}.png`, k]),
+  ...objKeys(spritesSrc, 'MAKAIMURA_SPRITES').map((k) => [`assets/makaimura/${k}.png`, k]),
 ];
 const neverNamed = loadedKeys.filter(([, k]) => {
   if (/_charging$|_final$/.test(k)) return false;          // 這些是動態組出來的

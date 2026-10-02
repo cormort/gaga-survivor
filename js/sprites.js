@@ -7750,12 +7750,12 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
       for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
     })),
   ...Object.entries(DECOR_PNG_SPRITES).map(([key, height]) => loadSpriteImage(
-    key, `./assets/decor/${key}.png?v=20261001`, (img) => {
+    key, `./assets/decor/${key}.png?v=20261002b`, (img) => {
       BUILDERS[key] = imageBuilder(img, height, true);
       for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
     })),
   ...Object.entries(BOSS_PNG_SPRITES).map(([key, height]) => loadSpriteImage(
-    key, `./assets/bosses/${key}.png?v=20261001`, (img) => {
+    key, `./assets/bosses/${key}.png?v=20261002b`, (img) => {
       BUILDERS[key] = bossImageBuilder(img, height, false, false);
       BUILDERS[`${key}_charging`] = bossImageBuilder(img, height, false, true);
       BUILDERS[`${key}_final`] = bossImageBuilder(img, height, true, false);
@@ -7765,7 +7765,7 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
       }
     })),
   ...Object.entries(MAKAIMURA_SPRITES).map(([key, height]) => loadSpriteImage(
-    key, `./assets/makaimura/${key}.png?v=20261002`, (img) => {
+    key, `./assets/makaimura/${key}.png?v=20261002b`, (img) => {
       if (key === 'arthur') {
         BUILDERS[key] = xianCharacterBuilder(key, img, height);
       } else {
