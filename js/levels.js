@@ -900,12 +900,62 @@ export const OPENING = {
   sparse: 2.2,   // 開場生成間隔 ×2.2（約 45% 的數量）→ 3 分鐘時 ×1
 };
 
+// 開場係數的淡出曲線：smoothstep 而不是線性。
+// 線性在 t=0 與 t=dur 兩端各有一次斜率斷點 —— 那正是「難度曲線不滑順」的其中一個來源：
+// 開場一開始掉得最快、結束時又突然停住。smoothstep 兩端導數都是 0，
+// 端點值不變（1 → 0），所以中段的平衡幾乎不動，只有「接縫」被抹平。
 export function openingFactor(gameTime) {
-  return Math.max(0, 1 - gameTime / OPENING.dur);   // 1 → 0
+  const x = Math.min(1, Math.max(0, 1 - gameTime / OPENING.dur));   // 1 → 0
+  return x * x * (3 - 2 * x);                                       // smoothstep
+}
+
+// 敵人傷害隨時間的成長曲線（單一真相，Spawner／孵化／裂解共用）。
+//
+// 這一版是「把階梯換成曲線」的第三輪修正。前兩輪的寫法都帶著**不連續**：
+//   ① 第一輪：`min(3.5, 1 + 分鐘×0.10)` —— 20 分鐘就封頂，後期完全不痛。
+//   ② 第二輪：`min(12, min(5.5, 1+分鐘×0.14) × (1 + max(0, 分鐘-10)² × 0.010))`
+//      —— 10 分鐘處斜率突然從 0.14 跳到 0.14+0.2×(分鐘-10)，是一條**折線**；
+//      而且 24 分鐘撞到硬封頂 12 之後完全水平。
+// 兩者合起來就是玩家回報的體感：「過了一個強度就基本不死了」——
+// 折線之前太癢、折線之後一次跳太多，最後又完全平掉。
+//
+// 現在改成單一條處處可微的增長式：`1 + 0.105×分鐘 + 0.052×分鐘^1.4`
+//   1 分 ×1.16、3 分 ×1.56、8 分 ×2.82、20 分 ×6.55、30 分 ×10.3、40 分 ×14.3
+// 沒有折點、沒有硬封頂（多項式成長，後期仍持續變痛，但不會指數爆炸成必死）。
+// 對照舊版：3 分鐘 1.42（幾乎相同，前期手感不變）、20 分鐘 7.6 → 6.6、
+// 30 分鐘 12（封頂）→ 10.3、40 分鐘 12（封頂）→ 14.3 —— 前期不動、後期不再平掉。
+export function enemyDmgScale(minutes) {
+  const m = Math.max(0, minutes);
+  return 1 + 0.105 * m + 0.052 * Math.pow(m, 1.4);
+}
+
+// 屬性壓力倍率：敵人屬性攻擊留下的持續傷害（DoT）的絕對值。
+// 為什麼要獨立一條：屬性 DoT 是唯一不吃 0.5 秒無敵影格的傷害通道（見 config.js
+// 的 ELEMENTS），它必須跟玩家的生命成長一起走，否則後期又會被回復量吃掉。
+// 比物理曲線平緩（前期不該被毒死），但同樣處處可微：`1 + 0.09×分鐘 + 0.02×分鐘^1.3`。
+export function enemyElemScale(minutes) {
+  const m = Math.max(0, minutes);
+  return 1 + 0.09 * m + 0.02 * Math.pow(m, 1.3);
+}
+
+// 地形傷害的時間成長（單一真相，Hazards.js 的每一種地面區域共用）。
+//
+// 為什麼地形也要跟著時間長：關卡的 mech 傷害是寫死在 levels.js 的常數（毒池 6~15、
+// 岩漿 6~7、地雷 10~18），一局打到 8 分鐘之後，這些數字對玩家等於零 ——
+// 「地形扣血」在中期就自動失效了。地形是唯一**玩家無法用火力清掉**的壓力來源，
+// 讓它與時間同步成長，難度曲線才不會只靠「怪物數量」這一根柱子撐。
+//
+// 曲線同樣刻意處處可微（沒有折點）：`1 + 0.16×分鐘 + 0.03×分鐘^1.35`
+//   1 分 ×1.19、5 分 ×2.06、8 分 ×2.80、20 分 ×5.9、40 分 ×12
+// 一個 8 分鐘的關卡裡，毒池從 6 點長到約 17 點一下 —— 有成長，但穿過去仍然可行。
+export function hazardDmgScale(gameTime) {
+  const m = Math.max(0, gameTime / 60);
+  return 1 + 0.16 * m + 0.03 * Math.pow(m, 1.35);
 }
 
 export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
   const endless = level && level.id === 'endless';
+  const minutes = gameTime / 60;
   return {    // 血量曲線（第三輪：玩家回報「敵人太脆，近不了身」）
     //
     // 實測（tools/probe-enemy-pressure.mjs）在標準難度、真實主迴圈下：
@@ -922,24 +972,19 @@ export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
     // 3 倍是實測調出來的（tools/probe-enemy-pressure.mjs 的接觸率）：
     // ×2 時 walker 在 5 分鐘只有 75 HP，玩家實測 44 DPS 下 1.7 秒就死，
     // 而牠要走 3.5 秒 —— 接觸率只有 10%，玩家仍然覺得「近不了身」。
-    hp: (1 + (gameTime / 60) * 0.55) * 3 * ((level && level.hpScale) || 1)
+    hp: (1 + minutes * 0.55) * 3 * ((level && level.hpScale) || 1)
         * (endless ? 1 + gameTime / 300 : 1) * rules.enemyHpMul
         // 後期二次項：10 分鐘前不動（維持「多而脆」的節奏），之後才加速追上輸出曲線。
-        * (1 + Math.pow(Math.max(0, gameTime / 60 - 10), 2) * 0.012)
+        * (1 + Math.pow(Math.max(0, minutes - 10), 2) * 0.012)
         // 開局皮厚（所有關卡含無盡模式）
         * (1 + (OPENING.hpMul - 1) * openingFactor(gameTime)),
-    // 敵人傷害隨時間的成長（dmg 上限 12 倍，見下方註解）
-    dmg: Math.min(
-      12,
-      Math.min(5.5, 1 + (gameTime / 60) * 0.14)
-        // 後期二次項（與血量同一手法）：10 分鐘前完全不動，維持前中期的標準手感，
-        // 之後才加速追上玩家的血量與減傷成長。
-        * (1 + Math.pow(Math.max(0, gameTime / 60 - 10), 2) * 0.010),
-    ),
-    // 為什麼要有最外層的 12 倍封頂：沒有它的話 40 分鐘會到 ×80 以上
-    //（基礎接觸傷害 8 就等於 640 點一下）—— 那已經不是「難」而是必死，
-    // 會把走位與裝備的價值一起抹掉。12 倍 ≈ 96 點基礎傷害：有減傷與裝備的
-    // 老手撐得住，站著不動的一定死。
+    // 敵人傷害隨時間的成長 —— 見上方 enemyDmgScale 的完整說明（平滑、無折點、無硬封頂）
+    dmg: enemyDmgScale(minutes),
+    // 屬性壓力（DoT 的絕對值）：這是「不會被無敵影格吃掉」的第二條傷害通道。
+    elem: enemyElemScale(minutes),
+    // 這隻怪屬於哪一關：Enemy 用它查 LEVEL_ENEMY_ELEMENTS（同一隻雜兵在冰封荒原
+    // 與商業街的屬性不同）。所有生成路徑都經過這裡，所以不必再各自傳關卡。
+    levelId: level ? level.id : null,
     // 移動速度：原本完全不隨時間成長，而玩家有移速升級 —— 實測「中位敵人距離」
     // 全程卡在 400px，雜兵根本走不到玩家面前。
     //
@@ -949,7 +994,7 @@ export function enemyScale(gameTime, level, rules = RULE_DEFAULTS) {
     // 血量決定「能不能撐到面前」，移速決定「能不能在撐住之前走到」，兩個都要動。
     // 1.6 倍讓 walker 的 500px 行軍從 5.6 秒降到 3.5 秒，配上血量成長才進得了身。
     // 上限 1.5× 與關卡/難度的 enemySpeedMul 照舊，所以地獄的 ×1.14 仍然有效。
-    speed: ENEMY_SPEED_BASE * rules.enemySpeedMul * Math.min(1.5, 1 + (gameTime / 60) * 0.03),
+    speed: ENEMY_SPEED_BASE * rules.enemySpeedMul * Math.min(1.5, 1 + minutes * 0.03),
   };
 }
 

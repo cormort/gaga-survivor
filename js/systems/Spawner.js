@@ -4,7 +4,7 @@
 import { Enemy } from '../entities/Enemy.js';
 import { LEVELS, OPENING, openingFactor, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL, endlessBossInterval } from '../levels.js';
 import { worldBounds } from '../config.js';
-import { ELITE_AFFIXES } from '../config.js';
+import { ELITE_AFFIXES, elementOf } from '../config.js';
 import { hasSprite } from '../sprites.js';
 
 // 場上敵人硬上限（main.js 的孵化／裂解上限由 spawner.maxEnemies 推導）。
@@ -92,6 +92,10 @@ export class Spawner {
     this.updateAdaptive(dt);
     if (level.td) return;   // 守塔關：波次與首領由 TowerDefense 控制
 
+    // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)。
+    // 提到最前面算：首領生成也要吃到同一份係數（屬性壓力 elem 與關卡 levelId）。
+    const scale = enemyScale(gameTime, level, this.rules);
+
     // Boss 排程：無盡模式 = 固定週期輪播深淵 Boss；一般關卡 = 時間表
     if (level.id === 'endless') {
       if (gameTime >= this.nextEndlessBossAt) {
@@ -101,14 +105,14 @@ export class Spawner {
         // 血量與時俱進，名稱加「深淵·」前綴區隔；剝掉 final 旗標避免被誤判為通關
         this.spawnBoss(
           { ...def, final: false, hp: Math.round(def.hp * (1 + gameTime / 350)), name: '深淵·' + def.name },
-          player, enemies, onBossSpawnCallback
+          player, enemies, onBossSpawnCallback, scale
         );
       }
     } else {
       const nextBoss = level.bosses[this.bossIndex];
       if (nextBoss && gameTime >= nextBoss.at) {
         this.bossIndex++;
-        this.spawnBoss(nextBoss, player, enemies, onBossSpawnCallback);
+        this.spawnBoss(nextBoss, player, enemies, onBossSpawnCallback, scale);
       }
     }
 
@@ -135,8 +139,6 @@ export class Spawner {
 
     if (enemies.length >= this.maxEnemies) return;
 
-    // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)
-    const scale = enemyScale(gameTime, level, rules);
     scale.hp *= this.adaptiveHpMul;
     for (let i = 0; i < batch; i++) {
       // 生成距離隨時間縮短 (520 → 440)：後期玩家的清場半徑遠大於此，
@@ -166,11 +168,16 @@ export class Spawner {
     enemy.makeElite(keys[Math.floor(Math.random() * keys.length)]);
   }
 
-  spawnBoss(def, player, enemies, onBossSpawnCallback) {
+  spawnBoss(def, player, enemies, onBossSpawnCallback, scale = null) {
     const pos = this.getSpawnPosition(player, 550);
     const boss = new Enemy('boss', pos.x, pos.y);
     boss.maxHp = boss.hp = def.hp;
     boss.name = def.name;
+    // 首領的屬性：關卡資料可以指定 def.element（沒有就用 ENEMY_ELEMENTS 的預設）。
+    // 首領生成不走 new Enemy(typeKey, ..., scale)，所以這兩行要在這裡補 ——
+    // 少了 elementPotency，首領的屬性傷害會永遠停在 ×1，後期等於沒有屬性。
+    if (def.element) boss.element = elementOf(def.element).id;
+    boss.elementPotency = (scale && scale.elem) || 1;
     // 關卡主題外觀：一般 Boss 用該關皮膚，最終 Boss 換更大號的「最終」變體
     boss.skin = def.skin ? (def.final ? def.skin + '_final' : def.skin) : undefined;
     // 關卡專屬技能：charge 內建衝鋒，額外技能由 def.behaviors 帶入

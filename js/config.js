@@ -434,20 +434,24 @@ export const WEAPONS = {
     id: 'shotgun',
     name: '特工霰彈槍',
     icon: '💥',
-    description: '朝最近敵人轟出扇形霰彈，射程短但彈丸多、擊退強。每打完一匣 3 發要停下來換彈；升級縮短換彈時間。',
+    description: '朝最近敵人轟出扇形霰彈，射程短但彈丸多、擊退強。單發射擊後強制換彈（幫浦行程）；升級縮短換彈時間。射程越短，每顆彈丸越痛。',
     isEvo: false,
     evoTarget: 'dragon_breath',
     pairPassive: 'max_hp_vest',    // 近戰距離武器 ↔ 生存配件
     maxLevel: 5,
-    baseDamage: 17,                // 單顆彈丸（升級不加傷害，超武才提高攻擊力）
-    baseCooldown: 0.42,            // 同一匣內的連發間隔
-    magazine: 3,                   // 一匣發數，打完進入換彈卡頓
-    reload: [2.2, 1.85, 1.5, 1.2, 0.9],   // 換彈秒數：升級的主要收益
+    baseDamage: 17,                // 單顆彈丸（升級不加傷害，超武才提高攻擊力）；
+                                   // 實際傷害 = 這個值 × rangeDamageMul（見下方反比規則）。
+                                   // 13 → 17：單發換彈讓每分鐘擊發次數掉到約 1/3，
+                                   // 拉高單顆威力才不會讓「改成單發」變成純粹的削弱
+                                   // （預設型態赫米斯 +30% 射程，反比規則會再打 0.77 折）
+    baseCooldown: 0.42,
+    magazine: 1,                   // 單發：擊發一次就進入換彈（幫浦／上彈）
+    reload: [1.5, 1.32, 1.14, 0.94, 0.75],  // 換彈秒數：升級的主要收益
     speed: 720,
     projType: 'pellet',
-    pellets: [6, 6, 6, 6, 6],
+    pellets: [8, 8, 8, 8, 8],
     spread: 0.8,                   // 扇形總角度（弧度）
-    range: 165,                    // 240 → 165：真正的貼臉武器
+    range: 165,                    // 240 → 165：真正的貼臉武器（也是傷害加成的來源）
     pierce: [1, 1, 1, 2, 2],
   },
 
@@ -470,15 +474,16 @@ export const WEAPONS = {
     id: 'dragon_breath',
     name: '龍息霰彈 (超武)',
     icon: '🐲',
-    description: '霰彈化為龍息烈焰，一次噴出 12 顆燃燒彈丸，貫穿並點燃整片怪群。攻擊力大幅提升，仍需換彈。',
+    description: '霰彈化為龍息烈焰，一次噴出 12 顆燃燒彈丸，貫穿並點燃整片怪群。攻擊力大幅提升，仍需換彈（單發）。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.25,               // 超武覺醒每級 +25% 基礎傷害（主打攻擊力）
     baseWeapon: 'shotgun',
-    baseDamage: 48,                // 32 → 48
+    baseDamage: 88,                // 32 → 48 → 66 → 88：與霰彈槍同一條 rangeDamageMul 反比規則
+                                   // （單發換彈後每輪少打兩發，威力要補回來）
     baseCooldown: 0.36,
-    magazine: 3,
-    reload: 0.9,                   // 繼承霰彈槍滿級的換彈時間
+    magazine: 1,                   // 繼承霰彈槍的單發換彈手感
+    reload: 0.9,
     speed: 780,
     projType: 'pellet',
     pellets: 12,
@@ -573,6 +578,118 @@ export const CHARGE = {
   freeze: { duration: 1.1, bossSlow: 2.2, color: '#7fd8ff' },
   // 中毒：單層比燃燒弱，但持續久且可疊層 — 定位是打高血量目標
   poison: { dps: 7, duration: 5, maxStacks: 5, color: '#7dff8f' },
+};
+
+// ── 敵人攻擊屬性（元素）────────────────────────────────────────────────
+//
+// 為什麼要有這一層：玩家的防禦是「多層相乘 + 上限」的堆疊（護甲 ≤50%、鐵壁藥水
+// 再 ×0.5、聖域再 ×(1-resist)、護盾吸收、以及最關鍵的 **0.5 秒無敵影格**）。
+// 相乘之後，雜兵的接觸傷害只有「每 0.5 秒一下」這個上限 —— 一旦玩家的
+// 生命＋回復超過 2×單下傷害÷減傷，**任何人數的雜兵都殺不死他**。
+// 這正是「過了一個強度就基本不死」的結構原因：不是敵人太弱，是傷害只有一個
+// 通道，而那個通道被無敵影格與減傷封死了。
+//
+// 所以這裡加的是**第二條通道**：屬性傷害。
+//   ① armorPierce —— 護甲（metaArmor）對屬性傷害只有部分效果，堆滿 50% 也擋不住。
+//   ② dotPct / dotFlat —— 命中後在玩家身上留下持續傷害。持續傷害是**逐幀結算**，
+//      完全不受 0.5 秒無敵影格限制，所以「站著不動」永遠是危險的。
+//   ③ dotPct 是「玩家最大生命的比例」—— 這是讓曲線平滑的核心：傷害自動跟著
+//      玩家的成長曲線走，不會在後期變成 0，也不會在前期一擊秒殺。
+//
+// 數值刻意保守：單層最多 1.0~1.6%/秒，疊滿 3~5 層約 4~6%/秒（約 17~25 秒致命），
+// 而且離開攻擊源後數秒內自動消退 —— 是「逼你走位」的壓力，不是無法應對的死刑。
+export const ELEMENTS = {
+  physical: {
+    id: 'physical', name: '物理', icon: '🩸', color: '#ffffff',
+    armorPierce: 0, dotFlat: 0, dotPct: 0, dotDur: 0, maxStacks: 0, speedMul: 1,
+  },
+  toxic: {
+    id: 'toxic', name: '劇毒', icon: '☠️', color: '#7dff8f',
+    armorPierce: 0.5,        // 護甲只擋一半
+    dotFlat: 1.4,            // × enemyScale().elem（時間曲線）
+    dotPct: 0.012,           // 每層每秒 1.2% 最大生命
+    dotDur: 4.5,
+    maxStacks: 5,
+    speedMul: 1,
+  },
+  fire: {
+    id: 'fire', name: '燃燒', icon: '🔥', color: '#ff7b00',
+    armorPierce: 0.35,
+    dotFlat: 2.2,
+    dotPct: 0.018,
+    dotDur: 3.0,
+    maxStacks: 3,
+    speedMul: 1,
+  },
+  shock: {
+    id: 'shock', name: '電擊', icon: '⚡', color: '#00e5ff',
+    armorPierce: 0.6,        // 金屬護甲反而導電
+    dotFlat: 1.1,
+    dotPct: 0.009,
+    dotDur: 2.5,
+    maxStacks: 4,
+    speedMul: 0.88,
+  },
+  frost: {
+    id: 'frost', name: '冰凍', icon: '❄️', color: '#7fd8ff',
+    armorPierce: 0.25,
+    dotFlat: 0.8,
+    dotPct: 0.006,
+    dotDur: 3.0,
+    maxStacks: 3,
+    speedMul: 0.78,          // 減速才是冰凍的主效果，傷害只是附帶
+  },
+};
+
+export const ELEMENT_IDS = Object.keys(ELEMENTS).filter((k) => k !== 'physical');
+
+// ── 射程 ↔ 攻擊力 的反比規則（設計原則，玩家指定）─────────────────────
+//
+// 「射程越短的攻擊力越強」：貼臉武器用更高的風險換更高的單發傷害，
+// 長射程武器則用安全距離換取較低的爆發。這條規則寫成函式而不是每個武器各寫一份，
+// 是為了讓它**真的在引擎裡成立**（而不是只寫在說明文字裡）：任何人把 range 調短，
+// 傷害就自動上來；把射程拉長（含高能燃料、赫米斯型態），傷害就自動下降 ——
+// 「覆蓋範圍」與「爆發」從此是同一條軸上的取捨。
+//
+// 基準射程 300：rangeDamageMul(165) ≈ 1.82（霰彈槍）、(210) ≈ 1.43（龍息）。
+// 夾在 1.0~2.0 之間，所以長射程武器不會被懲罰到負值，貼臉武器也不會無限膨脹。
+export const RANGE_DAMAGE_REF = 300;
+export function rangeDamageMul(range) {
+  return Math.min(2, Math.max(1, RANGE_DAMAGE_REF / Math.max(60, range)));
+}
+
+export function elementOf(id) {
+  return ELEMENTS[id] || ELEMENTS.physical;
+}
+
+// 哪一種敵人的攻擊帶哪一種屬性。沒有列到的就是純物理 —— 名單刻意只覆蓋
+// 「主題上說得通」的那一批（酸液、火焰、電擊、冰霜），大約四成，
+// 這樣「堆護甲」仍然是有意義的選擇，而不是被屬性傷害全面作廢。
+export const ENEMY_ELEMENTS = {
+  // 毒／酸：噴吐、孢子、自爆、焦油、毒氣
+  boomer: 'toxic', spitter: 'toxic', spore_host: 'toxic', sporeling: 'toxic',
+  hatcher: 'toxic', sniper: 'toxic', tar_slug: 'toxic', bloater: 'toxic',
+  medic: 'toxic', termagant: 'toxic', poxwalker: 'toxic', spore_mine: 'toxic',
+  boss_broodlord: 'toxic', rat_evil: 'toxic', snake_evil: 'toxic',
+  ink_gas_boar: 'toxic', ink_ape_mother: 'toxic', pig_evil: 'toxic',
+  // 火：砲擊、巨像重擊、龍息、狐火、爆破
+  mortar: 'fire', chimera: 'fire', dragon_evil: 'fire', squig_bomb: 'fire',
+  makai_red_arremer: 'fire', tiger_evil: 'fire', dog_evil: 'fire',
+  ink_fox: 'fire', ink_fox_guard: 'fire', ink_boar_king: 'fire',
+  // 電：相位閃現、風刃、電場型
+  blinker: 'shock', warden: 'shock', rooster_evil: 'shock',
+  horse_evil: 'shock', goat_evil: 'shock', ink_gale_wolf: 'shock',
+  // 冰：寒霜主題
+  ink_shadow_crow: 'frost', ink_fox_spirit: 'frost', rabbit_evil: 'frost',
+};
+
+// 依關卡主題追加的屬性覆寫：同一隻雜兵在「冰封荒原」與「淪陷商業街」不該一樣冷。
+// key 是關卡 id，值是 { 敵人 key: 元素 }。只覆寫有列到的。
+export const LEVEL_ENEMY_ELEMENTS = {
+  frost: { walker: 'frost', bat: 'frost', brute: 'frost', hound: 'frost', warden: 'frost' },
+  frostvoid: { walker: 'frost', bat: 'frost', brute: 'frost', hound: 'frost', warden: 'frost', bloater: 'frost' },
+  foundry: { walker: 'fire', brute: 'fire', hound: 'fire', warden: 'fire' },
+  storm: { walker: 'shock', bat: 'shock', runner: 'shock', hound: 'shock' },
 };
 
 // 被動配件定義
@@ -1346,7 +1463,7 @@ export const WEAPON_ASPECTS = {
   ],
   shotgun: [
     { id: 'hermes',     name: '赫米斯 (速射)', icon: '💨', tag: '快速連轟',
-      desc: '開火冷卻 -25%，射程 +30%。',
+      desc: '開火冷卻 -25%，射程 +30%（依反比規則，單發威力會隨之下降）。',
       stats: { cdMul: 0.75, rangeMul: 1.3 } },
     { id: 'hephaestus', name: '赫菲斯托斯 (燃燒彈)', icon: '🔥', tag: '點燃彈丸',
       desc: '彈丸命中點燃（每秒 5 點），扇形收窄 25% 讓彈丸更集中。',

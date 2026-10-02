@@ -37,6 +37,7 @@ import {
   currentWave,
   pickEnemy,
   enemyScale,
+  hazardDmgScale,
   mergeRules,
   getDailyChallenge,
   DIFFICULTIES,
@@ -1258,7 +1259,7 @@ class Game {
       this.camera.shake = Math.max(this.camera.shake, 10);
       const d = Math.hypot(this.player.x - boss.x, this.player.y - boss.y);
       if (d < R + this.player.radius) {
-        this.player.takeDamage(14, `${boss.name}・震波`);
+        this.player.takeDamage(14, `${boss.name}・震波`, boss.element, boss.elementPotency);
         this.particles.createHurtText(this.player.x, this.player.y, 14);
       }
     } else if (act === 'summon') {
@@ -1339,6 +1340,11 @@ class Game {
         dur: 0,
         dmg: 18,
         dmgEnemy: 450,
+        // 直接 push 的地面區域也要帶屬性與時間倍率，否則首領的雷區
+        // 會是全場唯一「不會隨時間變痛、也不會附著屬性」的地形（見 Hazards.js 的 hurtByHazard）。
+        element: boss.element || 'fire',
+        scale: hazardDmgScale(this.gameTime),
+        source: `${boss.name}・地面爆破`,
       });
       this.particles.createShockwave(boss.x, boss.y, 90, '#ff0055');
     } else if (act === 'rockfall') {
@@ -1346,7 +1352,8 @@ class Game {
       const b = worldBounds();
       const drop = (x, y, fuse) => this.hazards.push({
         kind: 'mine', x: Math.max(b.minX + 60, Math.min(b.maxX - 60, x)), y: Math.max(b.minY + 60, Math.min(b.maxY - 60, y)),
-        r: 72, color: '#8a7a66', t: 0, tick: 0.5, fuse, dur: 0, dmg: 20, dmgEnemy: 0, source: `${boss.name}・投石`,
+        r: 72, color: '#8a7a66', t: 0, tick: 0.5, fuse, dur: 0, dmg: 20, dmgEnemy: 0,
+        element: 'physical', scale: hazardDmgScale(this.gameTime), source: `${boss.name}・投石`,
       });
       const n = boss.skin && boss.skin.endsWith('_final') ? 8 : 6;
       const rot = Math.random() * Math.PI * 2;
@@ -1411,6 +1418,12 @@ class Game {
 
   spawnEnemyProjectile(shooter, projData) {
     if (this.enemyProjectiles.length < 150) {
+      // 沒指定屬性時繼承射手（Boss 彈幕、召喚物都走這條），所以 12 隻 Boss 與
+      // 所有遠程怪不必逐一補 element 欄位。
+      if (projData.element === undefined && shooter && shooter.element) {
+        projData.element = shooter.element;
+        projData.potency = shooter.elementPotency || 1;
+      }
       const ep = new EnemyProjectile(projData);
       ep.sourceName = shooter?.name;
       this.enemyProjectiles.push(ep);
@@ -1464,7 +1477,7 @@ class Game {
       // 優先判定玩家 (含無敵幀擋彈)
       if (dist < p.radius + ep.radius) {
         consumed = true;
-        if (p.takeDamage(ep.damage, ep.sourceName ? `${ep.sourceName}・子彈` : '敵方子彈')) {
+        if (p.takeDamage(ep.damage, ep.sourceName ? `${ep.sourceName}・子彈` : '敵方子彈', ep.element, ep.potency)) {
           this.camera.shake = Math.max(this.camera.shake, 6);
           this.particles.createHurtText(p.x, p.y, ep.damage);
           this.particles.createDeathParticles(ep.x, ep.y, ep.color || '#06d6a0', 6);
@@ -1652,7 +1665,7 @@ class Game {
           sound.playExplosion();
           const dist = Math.hypot(this.player.x - boomer.x, this.player.y - boomer.y);
           if (dist <= 75 + this.player.radius) {
-            this.player.takeDamage(20, `${boomer.name}・自爆`);
+            this.player.takeDamage(20, `${boomer.name}・自爆`, boomer.element, boomer.elementPotency);
             this.camera.shake = 8;
           }
         },
@@ -1691,7 +1704,7 @@ class Game {
           const sdx = this.player.x - e.x;
           const sdy = this.player.y - e.y;
           if (Math.sqrt(sdx * sdx + sdy * sdy) <= slam.radius + this.player.radius) {
-            if (this.player.takeDamage(slam.dmg, `${e.name}・重擊`)) {
+            if (this.player.takeDamage(slam.dmg, `${e.name}・重擊`, e.element, e.elementPotency)) {
               this.particles.createHurtText(this.player.x, this.player.y, slam.dmg);
             }
           }
@@ -1731,7 +1744,9 @@ class Game {
       // 怪物撞擊特工傷害檢測
       const dist = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
       if (dist < this.player.radius + enemy.radius) {
-        if (this.player.takeDamage(enemy.damage, enemy.name)) {
+        // 屬性帶進 takeDamage：這一發照常吃無敵影格與減傷，但會留下持續傷害
+        // （元素衝擊 → Player.applyElement），那是唯一不受 0.5 秒無敵影格限制的壓力。
+        if (this.player.takeDamage(enemy.damage, enemy.name, enemy.element, enemy.elementPotency)) {
           this.camera.shake = 6;
           this.particles.createDeathParticles(this.player.x, this.player.y, '#ff0055', 6);
           this.player.character.onHit?.(this);

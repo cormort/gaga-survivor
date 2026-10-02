@@ -116,8 +116,10 @@ export class ParticleSystem {
     this._dtHead = (this._dtHead + 1) % MAX_DAMAGE_TEXTS;
   }
 
-  // 玩家受傷的跳字：負號 + 紅字，跟自己打出的暴擊 (大紅字加驚嘆號) 區分開
-  createHurtText(x, y, amount) {
+  // 玩家受傷的跳字：負號 + 紅字，跟自己打出的暴擊 (大紅字加驚嘆號) 區分開。
+  // color 可覆寫：屬性持續傷害用自己的元素色（毒綠／火橙／電青／冰藍），
+  // 玩家才分得出「這一下是撞到的」還是「這是還在燒」。
+  createHurtText(x, y, amount, color = '#ff5c7a') {
     this._pushDamageText({
       x: x + (Math.random() * 10 - 5),
       y: y - 24,
@@ -127,7 +129,7 @@ export class ParticleSystem {
       maxLife: 0.7,
       scale: 1.3,
       bucket: 1,
-      color: '#ff5c7a',
+      color,
       suffix: '',
     });
   }

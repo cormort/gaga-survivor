@@ -1,6 +1,6 @@
 // 武器管理器 (自動鎖定、冷卻計時、投射物生成、超武進化檢測與傷害統計)
 
-import { WEAPONS, PASSIVES, CHARGE, WEAPON_ASPECTS } from '../config.js';
+import { WEAPONS, PASSIVES, CHARGE, WEAPON_ASPECTS, rangeDamageMul } from '../config.js';
 import { Projectile } from '../entities/Projectile.js';
 import { drawHeldWeapon, HELD_MOUNTS } from './WeaponArt.js';
 import { sound } from '../audio.js';
@@ -1130,7 +1130,13 @@ export class WeaponManager {
     const count = slug ? 1 : at(def.pellets);
     const spread = def.spread * (stats.spreadMul || 1);
     const range = def.range * (stats.rangeMul || 1) * this.player.rangeMultiplier;
-    const dmg = slug ? Math.round(damage * (stats.slugDamageMul || 2.5)) : damage;
+    // 射程 ↔ 攻擊力 的反比規則（config.js 的 rangeDamageMul）：
+    // 「射程越短，攻擊力越強」在引擎裡真的成立 —— 用**有效射程**算，所以
+    // 高能燃料與「赫米斯（速射）」把射程拉長的同時，單發威力會依比例下降；
+    // 換來的是覆蓋範圍。同一條規則也管到龍息霰彈（基礎射程 210 → ×1.43）。
+    const dmg = Math.round(
+      (slug ? damage * (stats.slugDamageMul || 2.5) : damage) * rangeDamageMul(range)
+    );
     const pierce = slug ? (stats.pierce || 3) : at(def.pierce);
     const baseAngle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
 

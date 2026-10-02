@@ -1,6 +1,6 @@
 // 特工鴨 (Player) 實體類別 - 包含精緻特工裝扮繪製、屬性與成長邏輯
 
-import { GAME_CONFIG, worldBounds } from '../config.js';
+import { GAME_CONFIG, worldBounds, elementOf } from '../config.js';
 import { sound } from '../audio.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
 import { CHARACTERS } from '../characters.js';
@@ -84,6 +84,20 @@ export class Player {
     this.isDead = false;
     this.regenTimer = 0;
 
+    // 屬性傷害狀態 (元素)。
+    //
+    // 為什麼玩家需要這一層：0.5 秒無敵影格把所有「一次性」傷害都封頂在
+    // 每秒 2 下，於是只要生命＋回復超過那個上限，敵人再多也殺不死玩家。
+    // 屬性持續傷害（DoT）逐幀結算、完全不吃無敵影格，是唯一能讓
+    // 「站著不動」永遠有代價的通道。詳細設計見 config.js 的 ELEMENTS。
+    //
+    // 結構：{ [elementId]: { stacks, timer, flat, pct, src } }，timer 歸零即清除。
+    this.elementStatus = {};
+    this.elementSpeedMul = 1;       // 冰凍／電擊的減速，逐幀由 elementStatus 推導
+    this._dotTextTimer = 0;         // 持續傷害跳字的節流（不要每幀噴字）
+    this._elementTickAccum = 0;     // 節流期間累積的傷害（跳字用）
+    this._elementAccum = 0;         // 逐幀結算的浮點餘數（取整只在寫入時做）
+
     // 冰面滑行慣性 (地形機制 'ice')：iceFriction > 0 時操控改為加速度模型
     this.velocity = { x: 0, y: 0 };
     this.iceFriction = 0;
@@ -144,7 +158,9 @@ export class Player {
   get speed() {
     const achillesBonus = 1 + (this.achillesSpeedStacks || 0) * 0.06;
     // terrainSpeedMul：焦油泥沼減速／疾風帶加速，由 Hazards.js 每幀寫入
-    return this.baseSpeed * this.speedMultiplier * achillesBonus * (this.terrainSpeedMul || 1);
+    // elementSpeedMul：冰凍／電擊的減速，由屬性狀態推導（見 update）
+    return this.baseSpeed * this.speedMultiplier * achillesBonus * (this.terrainSpeedMul || 1)
+      * (this.elementSpeedMul || 1);
   }
 
   // 觸發戰術閃避翻滾
@@ -280,12 +296,47 @@ export class Player {
         this.regenTimer = 0;
       }
     }
+
+    tickPlayerElements(this, dt);
   }
 
-  takeDamage(amount, source = '未知來源') {
+  // 承受「屬性衝擊」：命中當下照常結算一次傷害（走 takeDamage 的減傷與無敵影格），
+  // 另外留下持續傷害。持續傷害才是這一層的重點 —— 它不吃無敵影格。
+  //
+  // potency 由呼叫端提供（enemyScale().elem 推導），讓屬性壓力與時間曲線同步成長。
+  applyElement(elementId, potency = 1, source = '屬性傷害') {
+    const def = elementOf(elementId);
+    if (def.id === 'physical' || def.maxStacks <= 0) return;
+    const cur = this.elementStatus[def.id];
+    // 疊層節流：剩餘時間還很長時不再加層，否則一群怪可以在半秒內疊滿，
+    // 變成「碰一下就直接進入最高毒傷」的必死設計。
+    if (cur && cur.timer > def.dotDur * 0.6 && cur.stacks >= def.maxStacks) {
+      cur.timer = Math.max(cur.timer, def.dotDur);
+      return;
+    }
+    const next = cur || { stacks: 0, timer: 0, flat: 0, pct: 0, src: source };
+    if (!cur || cur.timer <= def.dotDur * 0.6) {
+      next.stacks = Math.min(def.maxStacks, next.stacks + 1);
+    }
+    next.timer = def.dotDur;
+    next.flat = Math.max(next.flat, def.dotFlat * potency);
+    next.pct = Math.max(next.pct, def.dotPct);
+    next.src = source;
+    this.elementStatus[def.id] = next;
+  }
+
+  clearElements() {
+    this.elementStatus = {};
+    this.elementSpeedMul = 1;
+  }
+
+  takeDamage(amount, source = '未知來源', element = 'physical', potency = 1) {
     if (this.invulnerableTimer > 0 || this.isDead) return false;
 
-    let dmg = Math.round(amount * this.damageTakenMul * (1 - (this.metaArmor || 0)));
+    // 屬性衝擊：護甲只擋 (1 - armorPierce) 的部分。堆滿 50% 護甲對電擊（穿透 0.6）
+    // 只剩 20% 減傷 —— 這是「堆防禦就不會死」被打破的地方。
+    const el = elementOf(element);
+    let dmg = Math.round(amount * this.damageTakenMul * (1 - (this.metaArmor || 0) * (1 - el.armorPierce)));
     // 惡魔城防禦藥劑：受傷減半
     if (this.shieldPotionTimer > 0) {
       dmg = Math.round(dmg * 0.5);
@@ -316,27 +367,37 @@ export class Player {
     this.invulnerableTimer = 0.5; // 0.5 秒無敵時間
     sound.playHurt();
 
-    if (this.hp <= 0) {
-      if (this.blessingDeathSave) {
-        this.blessingDeathSave = false;
-        this.hp = 1;
-        this.invulnerableTimer = 3.0; // 3 秒無敵時間
-        sound.playEvoFanfare();
-        if (this.game?.ui) this.game.ui.say('🌈 虹光護佑觸發！以 1 HP 存活！', '#00f59b', 3);
-        return true;
-      }
-      // 緊急復甦天賦（每局一次）：Lv1 回 50%、Lv2 回滿並由遊戲層震退周圍
-      if (this.revivesLeft > 0) {
-        this.revivesLeft--;
-        this.hp = Math.round(this.maxHp * (this.reviveFull ? 1 : 0.5));
-        this.invulnerableTimer = 3.0;
-        sound.playEvoFanfare();
-        this.game?.onPlayerRevive?.(this.reviveFull);
-        return true;
-      }
-      this.hp = 0;
-      this.isDead = true;
+    // 命中就把屬性帶上：這一發已經被減傷了，但接下來幾秒的持續傷害才是代價。
+    if (el.id !== 'physical') this.applyElement(el.id, potency, source);
+
+    if (this.hp <= 0) return this.onLethal(source);
+    return true;
+  }
+
+  // 致命傷的共同出口：虹光護佑 → 緊急復甦 → 真正的死亡。
+  // takeDamage 與屬性持續傷害共用同一條（否則 DoT 會直接無視復活機制）。
+  onLethal(source) {
+    if (this.blessingDeathSave) {
+      this.blessingDeathSave = false;
+      this.hp = 1;
+      this.invulnerableTimer = 3.0; // 3 秒無敵時間
+      this.clearElements();
+      sound.playEvoFanfare();
+      if (this.game?.ui) this.game.ui.say('🌈 虹光護佑觸發！以 1 HP 存活！', '#00f59b', 3);
+      return true;
     }
+    // 緊急復甦天賦（每局一次）：Lv1 回 50%、Lv2 回滿並由遊戲層震退周圍
+    if (this.revivesLeft > 0) {
+      this.revivesLeft--;
+      this.hp = Math.round(this.maxHp * (this.reviveFull ? 1 : 0.5));
+      this.invulnerableTimer = 3.0;
+      this.clearElements();
+      sound.playEvoFanfare();
+      this.game?.onPlayerRevive?.(this.reviveFull);
+      return true;
+    }
+    this.hp = 0;
+    this.isDead = true;
     return true;
   }
 
@@ -484,6 +545,36 @@ export class Player {
     ctx.roundRect(barX, barY, Math.max(0, barW * pct), barH, 3);
     ctx.fill();
 
+    // 屬性狀態指示：血條上方一排小圓點，顏色 = 元素，點數 = 疊層。
+    // 為什麼一定要畫出來：屬性持續傷害是不吃無敵影格的，玩家如果看不到
+    // 「我身上還有 4 層毒」，那些扣血就會變成「莫名其妙一直掉血」。
+    const elIds = Object.keys(this.elementStatus || {});
+    if (elIds.length > 0) {
+      ctx.shadowBlur = 0;
+      const dotR = 3;
+      let ex = barX;
+      const ey = barY - (this.shield > 0 ? 11 : 6);
+      for (const id of elIds) {
+        const s = this.elementStatus[id];
+        if (!s || s.timer <= 0) continue;
+        const def = elementOf(id);
+        const n = Math.max(1, s.stacks);
+        const w = dotR * 2 + 1;
+        ctx.fillStyle = 'rgba(6, 10, 18, 0.75)';
+        ctx.fillRect(ex - 1, ey - dotR - 1, w * n + 1, dotR * 2 + 2);
+        ctx.shadowColor = def.color;
+        ctx.shadowBlur = 5;
+        ctx.fillStyle = def.color;
+        for (let i = 0; i < n; i++) {
+          ctx.beginPath();
+          ctx.arc(ex + dotR + i * w, ey, dotR - 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+        ex += w * n + 4;
+      }
+    }
+
     // 若有高能納米護盾，在血條上方繪製藍光護盾條
     if (this.shield > 0) {
       const shieldPct = Math.min(1, this.shield / (this.maxShield || 100));
@@ -506,4 +597,76 @@ export class Player {
     }
     ctx.restore();
   }
+}
+
+// ── 屬性狀態的逐幀結算 ────────────────────────────────────────────────
+//
+// 這裡刻意**不走 takeDamage**：takeDamage 會被 invulnerableTimer 擋下，而
+// 0.5 秒無敵影格正是「堆防禦就不會死」的來源。持續傷害逐幀扣血，不受無敵影響，
+// 也不被護盾吸收（護盾是外面的屏障，毒在體內）—— 只有 damageTakenMul 與
+// 「護甲 × (1 - 穿透)」會影響它，與衝擊傷害同一套減傷語意。
+//
+// 每次結算前先檢查是否致命，走的是 Player.onLethal（虹光護佑／緊急復甦同一條出口）。
+function tickPlayerElements(p, dt) {
+  if (p.isDead) return;
+  const ids = Object.keys(p.elementStatus);
+  if (ids.length === 0) {
+    if (p.elementSpeedMul !== 1) p.elementSpeedMul = 1;
+    return;
+  }
+
+  let total = 0;
+  let src = null;
+  let slow = 1;
+
+  for (const id of ids) {
+    const s = p.elementStatus[id];
+    if (!s) continue;
+    s.timer -= dt;
+    if (s.timer <= 0) {
+      delete p.elementStatus[id];
+      continue;
+    }
+    const def = elementOf(id);
+    slow = Math.min(slow, def.speedMul || 1);
+    const perSec = (s.flat + s.pct * p.maxHp) * s.stacks;
+    // 減傷只吃 damageTakenMul（角色特質／難度／祝福風險）與「護甲 × (1-穿透)」——
+    // 護盾不吸收（毒在體內），雅典娜聖域與鐵壁藥水的減傷在衝擊當下已經算過了。
+    const dmg = perSec * dt * p.damageTakenMul
+      * (1 - (p.metaArmor || 0) * (1 - def.armorPierce));
+    total += dmg;
+    src = s.src || src;
+  }
+  p.elementSpeedMul = slow;
+
+  if (total <= 0) return;
+
+  // 取整只在寫入時做，逐幀用浮點累加，才不會因為 dt 太小而被四捨五入成 0。
+  p._elementAccum = (p._elementAccum || 0) + total;
+  const whole = Math.floor(p._elementAccum);
+  if (whole > 0) {
+    p._elementAccum -= whole;
+    p.hp -= whole;
+    if (p.game) {
+      p.game._damageTaken = (p.game._damageTaken || 0) + whole;
+      p.game._lastHit = { source: src || '屬性傷害', dmg: whole };
+      const by = (p.game._dmgBySource ||= {});
+      const key = src || '屬性傷害';
+      by[key] = (by[key] || 0) + whole;
+    }
+  }
+
+  // 跳字節流：每 0.5 秒把累積的屬性傷害吐一次，否則逐幀噴字會蓋住整個畫面。
+  p._dotTextTimer = (p._dotTextTimer || 0) - dt;
+  p._elementTickAccum = (p._elementTickAccum || 0) + total;
+  if (p._dotTextTimer <= 0 && p._elementTickAccum >= 1 && p.game?.particles) {
+    const shown = Math.round(p._elementTickAccum);
+    p._elementTickAccum = 0;
+    p._dotTextTimer = 0.5;
+    // 用第一個（最舊）元素的顏色當代表色
+    const firstId = Object.keys(p.elementStatus).find((k) => k !== 'physical') || 'toxic';
+    p.game.particles.createHurtText(p.x, p.y - 6, shown, elementOf(firstId).color);
+  }
+
+  if (p.hp <= 0) p.onLethal(src || '屬性傷害');
 }
