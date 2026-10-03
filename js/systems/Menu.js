@@ -358,6 +358,7 @@ export function bindEvents(game) {
     if (e.key === 't' || e.key === 'T') tryUpgradeNearestTurret(game);
     if (e.key === 'g' || e.key === 'G') hireMercenary(game);
     if ((e.key === 'n' || e.key === 'N') && game.state === 'PLAYING') game.td?.startWave(true);   // 守塔：提前開戰
+    if ((e.key === 'x' || e.key === 'X') && game.td) toggleTDSpeed(game);
     if (e.key === 'e' || e.key === 'E') game.usePocketItem(0);
     if (e.key === 'f' || e.key === 'F') game.usePocketItem(1);
     if (e.key === 'q' || e.key === 'Q') castSkill(game, 0);
@@ -497,6 +498,7 @@ export function bindEvents(game) {
   // 僱傭傭兵 (G / 行動端按鈕)
   game.ui.hireBtn?.addEventListener('click', () => hireMercenary(game));
   document.getElementById('btn-next-wave')?.addEventListener('click', () => { if (game.state === 'PLAYING') game.td?.startWave(true); });
+  document.getElementById('btn-td-speed')?.addEventListener('click', () => { if (game.td) toggleTDSpeed(game); });
 
   // 砲塔進化專精按鈕 (UI 建構子已掛 click，走 _turretUpCb；這裡不要再掛，避免一次點擊雙重觸發)
 
@@ -706,4 +708,12 @@ export function startDailyChallenge(game) {
   game.mode = getMode('survivor');
   game.ui.startScreen.classList.add('hidden');
   game.start(true);
+}
+
+// 守塔遊戲速度 1× ↔ 2×（主迴圈依 game.tdSpeed 每幀多跑一步）
+function toggleTDSpeed(game) {
+  game.tdSpeed = game.tdSpeed === 2 ? 1 : 2;
+  const label = document.getElementById('td-speed-label');
+  if (label) label.textContent = `${game.tdSpeed}×`;
+  document.getElementById('btn-td-speed')?.classList.toggle('active', game.tdSpeed === 2);
 }

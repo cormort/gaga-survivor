@@ -6,62 +6,24 @@
 //   pathWidth        —— 路寬 (px)；怪物被夾在路內
 //   bounds           —— 地圖矩形（約 1600×900，鏡頭拉遠到整張放得進畫面）
 //   sockets          —— 建塔點：守塔關只能蓋在這裡（點擊開建造選單）
-//   waves            —— 由 genWaves 產生：[{ groups: [{ type, count, gap, path }], boss? }]
+//   waves            —— 手寫波次（見 wave()）：[{ hp, groups: [{ type, count, gap, path? }], boss? }]
 //   lives / startGold —— 選填，覆寫命數與開局金幣（預設見 TowerDefense.js 的 TD_LIVES / TD_START_GOLD）
 // 座標系：核心在原點；地圖範圍由各關 bounds 決定（不是生存者的 4000×4000）。
 // 路線與建塔點由舊版 4000×4000 版圖等比壓縮後，沿路肩每 ~170px 自動排出建塔點再烘進來。
 
 import { LEVELS } from './levels.js';
 
-// 依波數產生波次：主力群數量逐波增加，逢 3 的倍數加一群飛行／快速怪，
-// 後半段加入重裝與特殊怪；最後一波附帶終極首領（擊敗即過關）。
-function genWaves(n, { main, fast, heavy, special, boss }) {
-  const waves = [];
-  for (let w = 1; w <= n; w++) {
-    const groups = [];
-    groups.push({ type: main[(w - 1) % main.length], count: 6 + w * 2, gap: Math.max(0.35, 0.9 - w * 0.04) });
-    if (w % 3 === 0) groups.push({ type: fast, count: 4 + w, gap: 0.3 });
-    if (w >= n * 0.4) groups.push({ type: heavy, count: Math.floor(w / 2), gap: 1.2 });
-    if (w >= n * 0.6) groups.push({ type: special[w % special.length], count: 2 + Math.floor(w / 3), gap: 0.9 });
-    waves.push({ groups, boss: w === n ? boss : null });
-  }
-  return waves;
-}
-
-// 鑄造世界 40K 專屬波次生成器：融合泰倫蟲群、歐克蠻兵與納垢瘟疫行者
-function gen40kWaves() {
-  const waves = [];
-  const bossNob = { hp: 18000, name: '歐克戰爭頭目', speed: 64, damage: 38, behaviors: ['summon', 'barrage', 'ground'], skin: 'boss_nob' };
-  const bossBroodlord = { hp: 36000, name: '蟲群基因原體', speed: 78, damage: 45, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' };
-  const bossCarnifex = { hp: 72000, name: '泰倫劊子手暴君', speed: 52, damage: 60, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_carnifex' };
-
-  const mains = ['hormagaunt', 'ork_boy', 'termagant', 'genestealer'];
-  for (let w = 1; w <= 12; w++) {
-    const groups = [];
-    // 基礎主力潮
-    groups.push({ type: mains[(w - 1) % mains.length], count: 8 + w * 3, gap: Math.max(0.28, 0.78 - w * 0.03) });
-    // 自爆/快速突擊單位 (孢子地雷、跳跳炸彈)
-    if (w % 2 === 0) {
-      groups.push({ type: (w % 4 === 0) ? 'squig_bomb' : 'spore_mine', count: 4 + Math.floor(w * 0.8), gap: 0.35 });
-    }
-    // 重裝單位 (瘟疫行者、基因竊取者)
-    if (w >= 3) {
-      groups.push({ type: (w % 3 === 0) ? 'poxwalker' : 'genestealer', count: 3 + Math.floor(w / 3), gap: 0.9 });
-    }
-    // 遠程火力壓制單位 (槍蟲)
-    if (w >= 5) {
-      groups.push({ type: 'termagant', count: 4 + Math.floor(w / 2), gap: 0.65 });
-    }
-
-    let waveBoss = null;
-    if (w === 4) waveBoss = bossNob;
-    else if (w === 8) waveBoss = bossBroodlord;
-    else if (w === 12) waveBoss = bossCarnifex;
-
-    waves.push({ groups, boss: waveBoss });
-  }
-  return waves;
-}
+// 手寫波次：wave(血量倍率, [群組…], 首領?)；群組 = [怪種, 數量, 出怪間隔秒, 入口?]
+// 入口省略＝輪流走所有路線；寫數字＝固定走 paths[入口]。
+// 血量倍率乘在 TowerDefense 的基礎血量上（基礎 × 關卡 hpScale × 難度 × 這個倍率）。
+// 設計原則：每關先教一種護甲，再逼你混搭 ——
+//   輕甲（喪屍／獵犬）→ 守衛塔；重甲（巨漢／盾衛／巨像）→ 加農砲、秘法塔；空中（蝙蝠／孢子）→ 守衛塔、飛彈塔、秘法塔
+//   （護甲倍率見 js/tdtowers.js 的 ARMOR_MUL，怪種護甲見 TowerDefense.js 的 ARMOR_CLASS）
+const wave = (hp, groups, boss = null) => ({
+  hp,
+  groups: groups.map(([type, count, gap, path]) => ({ type, count, gap, path })),
+  boss,
+});
 
 const base = (id) => LEVELS[id];
 
@@ -83,13 +45,17 @@ export const TD_LEVELS = {
     paths: [
       [[0, -830], [0, -555], [-780, -555], [-780, -290], [615, -290], [615, -105], [0, -105], [0, 0]],
     ],
-    waves: genWaves(8, {
-      main: ['walker', 'walker', 'runner'],
-      fast: 'bat',
-      heavy: 'brute',
-      special: ['spitter', 'boomer'],
-      boss: { hp: 9000, name: '峽谷掠奪者', speed: 60, damage: 30, behaviors: ['summon', 'barrage'], skin: 'boss_storm' },
-    }),
+    waves: [
+      wave(1.0, [['walker', 10, 0.9]]),
+      wave(1.1, [['walker', 12, 0.8], ['runner', 5, 0.7]]),
+      wave(1.2, [['runner', 10, 0.6], ['hound', 6, 0.5]]),                       // 快速輕甲：守衛塔
+      wave(1.3, [['walker', 12, 0.6], ['brute', 4, 1.4]]),                        // 第一次重甲：加農砲／秘法塔
+      wave(1.4, [['bat', 12, 0.35], ['walker', 10, 0.6]]),                        // 第一次空中：加農砲、兵營沒用
+      wave(1.6, [['brute', 6, 1.1], ['spitter', 4, 1.0], ['runner', 10, 0.5]]),
+      wave(1.8, [['hound', 12, 0.4], ['bat', 10, 0.4], ['brute', 5, 1.2]]),
+      wave(2.0, [['walker', 16, 0.5], ['warden', 4, 1.5], ['bat', 8, 0.4]],
+        { hp: 7000, name: '峽谷掠奪者', speed: 60, damage: 30, behaviors: ['summon', 'barrage'], skin: 'boss_storm' }),
+    ],
     rules: { label: '守塔規則', desc: '怪物沿路線進攻核心；波間休息可蓋塔，提前開戰拿金幣' },
     sockets: [
       { id: 'c1', x: -100, y: -745 },
@@ -113,6 +79,7 @@ export const TD_LEVELS = {
   td_fork: {
     ...base('swamp'),
     id: 'td_fork',
+    startGold: 320,   // 兩個入口：開局要能兩邊各蓋一座
     name: '雙叉河道',
     sub: '守塔 ‧ 雙線',
     icon: '🌿',
@@ -128,13 +95,19 @@ export const TD_LEVELS = {
       [[-800, -180], [-495, -180], [-495, 335], [-215, 335], [-215, 0], [0, 0]],
       [[800, -425], [455, -425], [455, 215], [180, 215], [180, 0], [0, 0]],
     ],
-    waves: genWaves(10, {
-      main: ['walker', 'hound', 'runner'],
-      fast: 'bat',
-      heavy: 'warden',
-      special: ['spitter', 'bloater', 'medic'],
-      boss: { hp: 22000, name: '沼澤雙頭蛇', speed: 64, damage: 34, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_swamp' },
-    }),
+    waves: [
+      wave(1.0, [['walker', 8, 0.9, 0], ['walker', 8, 0.9, 1]]),
+      wave(1.1, [['runner', 8, 0.7, 0], ['hound', 6, 0.6, 1]]),
+      wave(1.2, [['bat', 10, 0.4], ['walker', 12, 0.6]]),
+      wave(1.3, [['brute', 4, 1.3, 0], ['runner', 12, 0.5, 1]]),                  // 西邊重甲、東邊輕甲：兩邊要蓋不同的塔
+      wave(1.4, [['walker', 14, 0.5, 0], ['medic', 3, 1.4, 0], ['warden', 3, 1.6, 1]]),
+      wave(1.55, [['bat', 14, 0.35], ['bloater', 6, 0.9]]),
+      wave(1.7, [['brute', 6, 1.1, 0], ['brute', 6, 1.1, 1]]),
+      wave(1.85, [['hound', 14, 0.4, 0], ['spitter', 6, 0.9, 1], ['blinker', 10, 0.5, 1]]),
+      wave(2.0, [['warden', 5, 1.3], ['bat', 14, 0.35], ['runner', 14, 0.45]]),
+      wave(2.2, [['walker', 20, 0.4], ['brute', 6, 1.0], ['bat', 10, 0.4]],
+        { hp: 16000, name: '沼澤雙頭蛇', speed: 64, damage: 34, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_swamp' }),
+    ],
     rules: { label: '守塔規則', desc: '兩條路線同時進攻；波間休息可蓋塔，提前開戰拿金幣' },
     sockets: [
       { id: 'f1', x: -715, y: -80 },
@@ -162,6 +135,7 @@ export const TD_LEVELS = {
   td_fortress: {
     ...base('frostvoid'),
     id: 'td_fortress',
+    startGold: 420,   // 三個入口
     name: '三門要塞',
     sub: '守塔 ‧ 三線',
     icon: '🏰',
@@ -178,13 +152,21 @@ export const TD_LEVELS = {
       [[-800, 475], [-475, 475], [-475, 220], [-195, 220], [-195, 80], [0, 0]],
       [[800, 475], [475, 475], [475, 285], [195, 285], [195, 80], [0, 0]],
     ],
-    waves: genWaves(12, {
-      main: ['walker', 'hound', 'runner', 'brute'],
-      fast: 'blinker',
-      heavy: 'chimera',
-      special: ['spitter', 'mortar', 'medic', 'boomer'],
-      boss: { hp: 48000, name: '要塞攻城巨像', speed: 56, damage: 40, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_frostvoid' },
-    }),
+    waves: [
+      wave(1.0, [['walker', 6, 0.9, 0], ['walker', 6, 0.9, 1], ['walker', 6, 0.9, 2]]),
+      wave(1.1, [['runner', 8, 0.6, 0], ['hound', 6, 0.6, 1], ['hound', 6, 0.6, 2]]),
+      wave(1.2, [['brute', 3, 1.4, 1], ['brute', 3, 1.4, 2], ['walker', 10, 0.6, 0]]),
+      wave(1.3, [['bat', 16, 0.3], ['blinker', 8, 0.6, 0]]),
+      wave(1.45, [['warden', 3, 1.6, 0], ['medic', 4, 1.2, 1], ['runner', 12, 0.5, 2]]),
+      wave(1.6, [['mortar', 4, 1.6], ['brute', 6, 1.0], ['walker', 12, 0.5]]),
+      wave(1.75, [['hound', 18, 0.35], ['bat', 12, 0.35]]),
+      wave(1.9, [['chimera', 2, 3.0, 0], ['spitter', 6, 0.9, 1], ['spitter', 6, 0.9, 2]]),   // 攻城巨像：最重的重甲
+      wave(2.05, [['bloater', 8, 0.8], ['blinker', 12, 0.45], ['brute', 6, 1.0]]),
+      wave(2.2, [['warden', 6, 1.2], ['bat', 18, 0.3], ['runner', 16, 0.4]]),
+      wave(2.4, [['chimera', 3, 2.5], ['mortar', 5, 1.4], ['hound', 16, 0.35]]),
+      wave(2.4, [['brute', 9, 0.9], ['bat', 16, 0.3], ['walker', 24, 0.35], ['chimera', 2, 3.0]],
+        { hp: 24000, name: '要塞攻城巨像', speed: 56, damage: 40, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_frostvoid' }),
+    ],
     rules: { label: '守塔規則', desc: '三條路線輪番進攻；波間休息可蓋塔，提前開戰拿金幣' },
     sockets: [
       { id: 'ft1', x: -95, y: -570 },
@@ -210,6 +192,7 @@ export const TD_LEVELS = {
   td_forgeworld: {
     ...base('lab'),
     id: 'td_forgeworld',
+    startGold: 450,   // 終極關：開場就是快速蟲群
     name: '鑄造世界 ‧ 卡迪亞防線',
     sub: '守塔 ‧ 終極決戰',
     icon: '⚙️',
@@ -249,7 +232,23 @@ export const TD_LEVELS = {
       [[-800, -760], [-425, -760], [-425, -340], [-175, -340], [-175, -85], [0, 0]],
       [[800, -760], [425, -760], [425, -340], [175, -340], [175, -85], [0, 0]],
     ],
-    waves: gen40kWaves(),
+    waves: [
+      wave(0.6, [['hormagaunt', 8, 0.9]]),
+      wave(0.7, [['ork_boy', 4, 1.4, 0], ['hormagaunt', 10, 0.6, 1]]),            // 歐克小子是重甲
+      wave(0.85, [['spore_mine', 8, 0.7], ['termagant', 6, 0.9]]),                // 孢子囊會飛
+      wave(1.0, [['hormagaunt', 12, 0.5], ['ork_boy', 4, 1.3]],
+        { hp: 4500, name: '歐克戰爭頭目', speed: 64, damage: 38, behaviors: ['summon', 'barrage', 'ground'], skin: 'boss_nob' }),
+      wave(1.25, [['genestealer', 8, 0.7], ['squig_bomb', 8, 0.5]]),
+      wave(1.4, [['poxwalker', 10, 0.8, 0], ['ork_boy', 6, 1.1, 1]]),
+      wave(1.55, [['spore_mine', 12, 0.5], ['hormagaunt', 18, 0.35]]),
+      wave(1.7, [['termagant', 10, 0.7], ['genestealer', 10, 0.55], ['ork_boy', 5, 1.2]],
+        { hp: 11000, name: '蟲群基因原體', speed: 78, damage: 45, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' }),
+      wave(1.85, [['squig_bomb', 14, 0.35], ['poxwalker', 12, 0.6]]),
+      wave(2.0, [['ork_boy', 10, 0.9], ['spore_mine', 14, 0.45]]),
+      wave(2.2, [['genestealer', 16, 0.4], ['termagant', 12, 0.6], ['hormagaunt', 20, 0.3]]),
+      wave(2.4, [['ork_boy', 12, 0.8], ['poxwalker', 14, 0.5], ['spore_mine', 12, 0.4]],
+        { hp: 24000, name: '泰倫劊子手暴君', speed: 52, damage: 60, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_carnifex' }),
+    ],
     rules: { label: '卡迪亞死守令', desc: '兩條主要戰線遭受蟲群與綠皮猛烈衝擊；佈署星界軍兵營與機械製造廠構築阻絕陣線' },
     sockets: [
       { id: 'fw1', x: -715, y: -655 },

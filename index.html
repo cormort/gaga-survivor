@@ -71,6 +71,8 @@
 
       <!-- 任務提示列：下一波 Boss / 終極首領通關條件 -->
       <div id="objective" class="objective"></div>
+      <!-- 守塔：休息時預告下一波（怪種、數量、護甲） -->
+      <div id="td-wave-preview" class="td-wave-preview hidden"></div>
 
       <!-- 局內隨機事件橫幅 -->
       <div id="event-banner" class="event-banner hidden"></div>
@@ -211,6 +213,10 @@
         <span class="action-badge hidden">0</span>
       </button>
       </div>
+      <button id="btn-td-speed" class="action-btn hidden" title="遊戲速度 1× / 2× (X)">
+        <span class="action-icon" id="td-speed-label">1×</span>
+        <span class="action-key">X</span>
+      </button>
       <button id="btn-next-wave" class="action-btn hidden" title="提前開戰 (N)：剩餘休息秒數換成金幣">
         <span class="action-icon">⏩</span>
         <span class="action-key">N</span>

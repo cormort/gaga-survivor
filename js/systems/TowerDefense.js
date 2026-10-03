@@ -19,9 +19,10 @@ const WAVE_BONUS = (w) => 60 + w * 15;   // 清完第 w 波的獎金
 const EARLY_GOLD_PER_SEC = 4;            // 提前開戰：每剩 1 秒休息 +4 金幣
 const GROUP_STAGGER = 2.5;               // 同一波裡各群的起跑間隔 (秒)
 const WAYPOINT_REACH = 36;               // 走到這麼近就換下一個路徑點
-const TD_HP = 2;                         // 雜兵血量 = 基礎血量 × TD_HP × 關卡 hpScale × 難度 × 波數成長
+const TD_HP = 4;                         // 雜兵血量 = 基礎血量 × TD_HP × 關卡 hpScale × 難度 × 波數成長
+const TD_BOSS_HP = 0.6;                   // 關卡資料裡的首領血量 × 這個倍率（調難度用的總旋鈕）
 const TD_SPEED = 0.6;                     // 地圖壓到約 1600×900 後路線短了一半，怪走慢一點才有時間被火網消耗
-const TD_HP_GROWTH = 0.15;               // 每多一波 +15%（不套生存者的時間曲線、開局厚血與動態難度）
+const TD_HP_GROWTH = 0.15;               // 波次沒寫 hp 時：每多一波 +15%（不套生存者的時間曲線、開局厚血與動態難度）
 // 怪種護甲（魔獸三式）：light / medium / heavy / air（首領一律 boss）。
 // 塔的攻擊類型 × 護甲倍率見 js/tdtowers.js 的 ARMOR_MUL。沒列到的怪種算 medium。
 // air：不走路線、從入口直線飛向核心；加農砲與兵營打不到、也擋不住。
@@ -79,7 +80,8 @@ export class TowerDefense {
     this.queue = [];
     wave.groups.forEach((grp, gi) => {
       for (let k = 0; k < grp.count; k++) {
-        this.queue.push({ t: gi * GROUP_STAGGER + k * grp.gap, type: grp.type, path: paths[(k + gi) % paths.length] });
+        const path = grp.path != null ? paths[grp.path % paths.length] : paths[(k + gi) % paths.length];
+        this.queue.push({ t: gi * GROUP_STAGGER + k * grp.gap, type: grp.type, path });
       }
     });
     this.queue.sort((a, b) => a.t - b.t);
@@ -90,13 +92,14 @@ export class TowerDefense {
     g.ui.say(`⚔️ 第 ${this.waveIdx}/${this.total} 波來襲！`, '#ff5e5e', 2);
     if (wave.boss) {
       const isFinal = this.waveIdx === this.total;
-      g.spawner.spawnBoss({ ...wave.boss, final: isFinal }, g.player, g.enemies, (boss) => g.onBossSpawned(boss));
+      g.spawner.spawnBoss({ ...wave.boss, hp: Math.round(wave.boss.hp * TD_BOSS_HP * g.rules.enemyHpMul), final: isFinal }, g.player, g.enemies, (boss) => g.onBossSpawned(boss));
       // 首領也從入口出發、沿路線走向核心（輪流挑一條路線）
       const path = paths[(this.waveIdx - 1) % paths.length];
       g.boss.x = path[0][0];
       g.boss.y = path[0][1];
       g.boss.path = path;
       g.boss.armorClass = 'boss';
+      g.boss.speed *= TD_SPEED;   // 首領也照路線縮短的比例放慢，否則 20 秒就走完全程、必定漏掉
       g.boss.pathIdx = 1;
       g.boss._wp = { x: path[1][0], y: path[1][1], radius: 0 };
     }
@@ -106,7 +109,9 @@ export class TowerDefense {
     const g = this.game;
     const scale = enemyScale(0, this.level, g.rules);   // 只取移速與傷害；血量下面重算
     scale.speed *= TD_SPEED;
-    scale.hp = TD_HP * (this.level.hpScale || 1) * g.rules.enemyHpMul * (1 + TD_HP_GROWTH * (this.waveIdx - 1));
+    const wave = this.waves[this.waveIdx - 1];
+    const waveHp = wave && wave.hp != null ? wave.hp : 1 + TD_HP_GROWTH * (this.waveIdx - 1);
+    scale.hp = TD_HP * (this.level.hpScale || 1) * g.rules.enemyHpMul * waveHp;
     const [x, y] = path[0];
     const e = new Enemy(type, x + (Math.random() - 0.5) * this.half, y + (Math.random() - 0.5) * this.half, scale);
     e.armorClass = ARMOR_CLASS[type] || 'medium';
@@ -171,6 +176,23 @@ export class TowerDefense {
       e.x = r.px + ((e.x - r.px) / r.d) * lim;
       e.y = r.py + ((e.y - r.py) / r.d) * lim;
     }
+  }
+
+  // 下一波預告（休息時顯示）：每群的怪種、數量、護甲與入口；首領另列
+  nextWaveInfo() {
+    if (this.phase !== 'break' || this.waveIdx >= this.total) return null;
+    const w = this.waves[this.waveIdx];
+    const n = this.level.paths.length;
+    const entrances = new Array(n).fill(0);
+    const byType = new Map();   // 同一怪種分走不同入口時合併成一筆
+    for (const grp of w.groups) {
+      if (grp.path != null) entrances[grp.path % n] += grp.count;
+      else for (let k = 0; k < grp.count; k++) entrances[k % n]++;
+      const g = byType.get(grp.type) || { type: grp.type, count: 0, armor: ARMOR_CLASS[grp.type] || 'medium' };
+      g.count += grp.count;
+      byType.set(grp.type, g);
+    }
+    return { index: this.waveIdx + 1, groups: [...byType.values()], entrances, boss: w.boss ? w.boss.name : null };
   }
 
   objective() {
@@ -243,6 +265,34 @@ export class TowerDefense {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('🚪', gx - cam.x, gy - cam.y);
+    }
+    // 休息時：下一波會從哪些入口來、各來幾隻（脈動紅圈＋數字）
+    const info = this.nextWaveInfo();
+    if (info) {
+      const beat = 0.5 + 0.5 * Math.sin(this.game.gameTime * 5);
+      this.level.paths.forEach((path, i) => {
+        if (!info.entrances[i]) return;
+        const x = path[0][0] - cam.x;
+        const y = path[0][1] - cam.y;
+        ctx.strokeStyle = `rgba(255,70,90,${0.5 + 0.4 * beat})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(x, y, w * 0.6 + 8 + beat * 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.font = 'bold 26px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+        const label = `×${info.entrances[i]}`;
+        // 數字往地圖內側放，不要被畫面邊緣切掉
+        const b = this.level.bounds;
+        const lx = x + (path[0][0] <= b.minX + 1 ? 70 : path[0][0] >= b.maxX - 1 ? -70 : 0);
+        const ly = y + (path[0][1] <= b.minY + 1 ? 70 : path[0][1] >= b.maxY - 1 ? -70 : 0);
+        ctx.strokeText(label, lx, ly);
+        ctx.fillStyle = '#ff6b7a';
+        ctx.fillText(label, lx, ly);
+      });
     }
     ctx.restore();
   }

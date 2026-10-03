@@ -1068,6 +1068,21 @@ export class UIManager {
   }
 
   // 守塔設施詳細資訊、專精升級與拆除回收彈窗
+  // 守塔下一波預告：info 來自 TowerDefense.nextWaveInfo()（null＝隱藏）。只在內容變了才重寫 DOM
+  updateWavePreview(info, names) {
+    const el = this.wavePreview || (this.wavePreview = document.getElementById('td-wave-preview'));
+    if (!el) return;
+    const key = info ? JSON.stringify(info) : '';
+    if (key === this._wavePreviewKey) return;
+    this._wavePreviewKey = key;
+    el.classList.toggle('hidden', !info);
+    if (!info) return;
+    const ARMOR = { light: '輕甲', medium: '中甲', heavy: '重甲', air: '空中' };
+    el.innerHTML = `<b>下一波 ${info.index}</b>` + info.groups.map((g) =>
+      `<span class="wp-group">${names[g.type] || g.type} ×${g.count}<i class="wp-armor wp-${g.armor}">${ARMOR[g.armor] || ''}</i></span>`).join('')
+      + (info.boss ? `<span class="wp-group wp-boss">👑 ${info.boss}</span>` : '');
+  }
+
   // 守塔建造選單：pos 是建塔點的螢幕座標，選單浮在它上方（太靠上就改放下方）
   showBuildMenu(show, pos = null, items = [], onPick = null) {
     const el = this.buildMenu;

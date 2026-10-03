@@ -3739,3 +3739,18 @@ body, html {
 .td-branch-opt .ico { font-size: 24px; }
 .td-branch-opt small { font-size: 11px; line-height: 1.35; color: var(--text-muted); font-weight: 500; }
 .td-branch-opt.poor { opacity: 0.5; }
+/* 守塔下一波預告：怪種 ×數量＋護甲標籤（顏色對應：輕甲綠、中甲黃、重甲灰、空中藍） */
+.td-wave-preview {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px;
+  max-width: min(720px, calc(100vw - 32px)); margin: 4px auto 0; padding: 5px 10px;
+  background: rgba(10, 14, 23, 0.72); border: 1px solid var(--border-color); border-radius: 10px;
+  font-size: 12px; color: var(--text-main); pointer-events: none;
+}
+.td-wave-preview b { color: #ff6b7a; margin-right: 2px; }
+.wp-group { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.wp-armor { font-style: normal; font-size: 10px; font-weight: 800; padding: 0 5px; border-radius: 4px; color: #0a0e17; }
+.wp-light { background: #9be37a; }
+.wp-medium { background: #ffd166; }
+.wp-heavy { background: #c9d3df; }
+.wp-air { background: #7fd1ff; }
+.wp-boss { color: #ffb703; font-weight: 800; }

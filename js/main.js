@@ -28,6 +28,7 @@ import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/T
 // 守塔關的鏡頭縮放範圍：拉遠到整張圖放得進畫面；太小的螢幕最多拉到 TD_MIN_ZOOM，剩下的用拖曳平移
 const TD_MIN_ZOOM = 0.5;
 const TD_MAX_ZOOM = 1.4;
+const ENEMY_NAMES = Object.fromEntries(Object.entries(ENEMY_TYPES).map(([k, v]) => [k, v.name]));   // 守塔下一波預告用
 const TD_HUD_PAD = 110;   // 頂部 HUD（計時／金幣／生命條）佔的螢幕高度：地圖排在它下面，入口才不會被蓋住
 
 
@@ -1055,6 +1056,10 @@ class Game {
     this.ui.showBuildMenu(false);
     // 守塔關的手指要拿來點建塔點、拖曳地圖：關掉「按哪裡搖桿就跳到哪裡」，只留角落搖桿
     this.input.floatingJoystick = !this.td;
+    this.tdSpeed = 1;
+    document.getElementById('btn-td-speed')?.classList.toggle('hidden', !this.td);
+    const spLabel = document.getElementById('td-speed-label');
+    if (spLabel) spLabel.textContent = '1×';
     if (this.level && this.level.sockets) {
       for (const s of this.level.sockets) {
         s.occupied = false;
@@ -1603,6 +1608,8 @@ class Game {
           // 自適應解析度也要用它判斷餘裕 —— 幀距有 vsync 夾住，量不出真正剩多少。
           const t0 = performance.now();
           this.update(dt);
+          // 守塔 2× 速度：同一幀多跑一步模擬（比把 dt 加倍穩定，快速怪不會穿過路寬夾制或砲塔射程）
+          if (this.td && this.tdSpeed === 2 && this.state === 'PLAYING') this.update(dt);
           const t1 = performance.now();
           this.render();
           const t2 = performance.now();
@@ -1686,6 +1693,7 @@ class Game {
     // 3. 怪物波次生成
     this.spawner.update(dt, this.gameTime, this.player, this.enemies, (boss) => this.onBossSpawned(boss));
     if (this.td) this.td.update(dt);
+    if (this.td) this.ui.updateWavePreview(this.td.nextWaveInfo(), ENEMY_NAMES);
     const showNext = !!(this.td && this.td.phase === 'break');
     if (showNext !== this._nextWaveShown) {
       this._nextWaveShown = showNext;
