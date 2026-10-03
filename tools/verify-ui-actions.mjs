@@ -73,7 +73,10 @@ const results = await page.evaluate(async () => {
   // 金幣給足，並把玩家移開以免撞到 minSpacing
   const armPlayer = (x, y, gold = 99999) => { g.gold = gold; g.player.x = x; g.player.y = y; };
 
-  // 1) 四顆設施按鈕：每一顆都必須真的蓋出東西並扣錢
+  // 1) 四顆設施按鈕：按下去進入放置預覽（32540cc 起的兩段式建造），再點地圖確認，
+  //    必須真的蓋出東西並扣錢。舊版這裡斷言「按一下就蓋好」，放置預覽上線後就一直是紅燈。
+  // 在地圖上點一下：跟玩家一樣，對畫布送 pointerdown（Menu.js 的放置確認走這條）
+  const tapCanvas = (sx, sy) => g.canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: sx, clientY: sy, bubbles: true }));
   const facilities = [
     ['btn-build', 'turret', '機槍砲台'],
     ['btn-build-grid', 'electric_grid', '高壓電網'],
@@ -86,20 +89,24 @@ const results = await page.evaluate(async () => {
     const before = g.turrets.length;
     const goldBefore = g.gold;
     const clicked = click(domId);
+    const previewing = g.placement && g.placement.type === type;
+    if (previewing) tapCanvas(g.placement.screenX, g.placement.screenY);
     const added = g.turrets.length - before;
-    ok(`設施按鈕【${label}】會蓋出設施並扣金幣`,
-      clicked && added === 1 && g.gold < goldBefore,
-      `clicked=${clicked} 新增=${added} 金幣 ${goldBefore}→${g.gold}${said.length ? ' 遊戲說：' + said.join(' / ') : ''}`);
+    ok(`設施按鈕【${label}】進入放置預覽，點地圖確認後蓋出設施並扣金幣`,
+      clicked && previewing && added === 1 && g.gold < goldBefore && !g.placement,
+      `clicked=${clicked} 預覽=${previewing} 新增=${added} 金幣 ${goldBefore}→${g.gold}${said.length ? ' 遊戲說：' + said.join(' / ') : ''}`);
   }
 
-  // 2) 鍵盤 1/2/3/4 也必須有效（同一條路徑）
+  // 2) 鍵盤 1/2/3/4 進入放置預覽，B 確認（另一條確認路徑）
   for (const [k, type, label] of [['1', 'turret', '機槍砲台'], ['2', 'electric_grid', '高壓電網'], ['3', 'purifier', '淨化裝置'], ['4', 'barricade', '反傷拒馬']]) {
     reset();
     said = [];
     const before = g.turrets.length;
     key(k);
-    ok(`快捷鍵【${k}】${label} 有效`, g.turrets.length > before,
-      `新增 ${g.turrets.length - before} 座${said.length ? ' 遊戲說：' + said.join(' / ') : ''}`);
+    const previewing = g.placement && g.placement.type === type;
+    key('b');
+    ok(`快捷鍵【${k}】${label} 進入預覽，B 確認後蓋出`, previewing && g.turrets.length > before,
+      `預覽=${previewing} 新增 ${g.turrets.length - before} 座${said.length ? ' 遊戲說：' + said.join(' / ') : ''}`);
   }
 
   // 3) 僱傭按鈕

@@ -620,6 +620,17 @@ const results = await page.evaluate(async () => {
       return diff / (SIG * SIG);
     };
 
+    // 地表貼圖改成進關才抓（Ground._ensureGroundPng；c20b1d5 素材下載改版）之後，
+    // 不先等它載完，取樣量到的是貼圖還沒到時的程序化底圖 —— 沙暴要塞與鑄造廠的底圖只差 3.3%，
+    // 但玩家實際看到的是載完的貼圖。所以先把每關的貼圖抓好、等它載完再取樣。
+    await Promise.all(ORDER.map((id) => new Promise((res) => {
+      g.ground._ensureGroundPng(id);
+      const img = g.ground._pngImages.get(id);
+      if (!img || (img.complete && img.naturalWidth)) return res();
+      img.addEventListener('load', res, { once: true });
+      img.addEventListener('error', res, { once: true });
+    })));
+
     {
       const sigs = {};
       const fail = [];

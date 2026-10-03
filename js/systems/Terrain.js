@@ -865,6 +865,51 @@ function drawLandmarkArt(x, kind) {
       x.shadowBlur = 0;
       break;
     }
+    case 'tombstone': {
+      // 魔界村的墓碑群：一座圓頂大墓碑（刻十字）＋一座歪斜的小碑＋新翻的墳土，碑縫透出紅紫幽光
+      x.fillStyle = 'rgba(40,24,30,0.55)';   // 墳土
+      x.beginPath();
+      x.ellipse(-6, 58, 70, 18, 0, 0, Math.PI * 2);
+      x.fill();
+      x.save();   // 歪斜的小碑
+      x.translate(46, 30);
+      x.rotate(0.22);
+      x.fillStyle = '#4a4552';
+      x.beginPath();
+      x.roundRect(-14, -34, 28, 52, [12, 12, 2, 2]);
+      x.fill();
+      x.strokeStyle = '#2a2530';
+      x.lineWidth = 2;
+      x.stroke();
+      x.restore();
+      x.fillStyle = '#5c5766';   // 圓頂大墓碑
+      x.beginPath();
+      x.roundRect(-30, -72, 60, 128, [30, 30, 4, 4]);
+      x.fill();
+      x.strokeStyle = '#2a2530';
+      x.lineWidth = 3;
+      x.stroke();
+      x.fillStyle = '#6e6978';   // 受光面
+      x.fillRect(-24, -40, 10, 88);
+      x.strokeStyle = 'rgba(255,70,110,0.75)';   // 十字刻痕透出幽光
+      glow('#ff3366');
+      x.lineWidth = 5;
+      x.beginPath();
+      x.moveTo(0, -52);
+      x.lineTo(0, 6);
+      x.moveTo(-17, -32);
+      x.lineTo(17, -32);
+      x.stroke();
+      x.shadowBlur = 0;
+      x.strokeStyle = 'rgba(30,15,45,0.6)';   // 裂紋
+      x.lineWidth = 2;
+      x.beginPath();
+      x.moveTo(14, -60);
+      x.lineTo(6, -38);
+      x.lineTo(16, -20);
+      x.stroke();
+      break;
+    }
     default:
       break;
   }
