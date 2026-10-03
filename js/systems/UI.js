@@ -1409,6 +1409,19 @@ export class UIManager {
       this.coreHpText = document.getElementById('core-hp-text');
     }
     if (!this.coreHud) return;
+    const livesPill = this.livesPill || (this.livesPill = document.getElementById('td-lives-pill'));
+    // 守塔（core.isLives）：核心血量就是命數，顯示成資訊列裡的 ❤️ 小膠囊，不用置中的大血條
+    livesPill?.classList.toggle('hidden', !(core && core.isLives));
+    if (core && core.isLives) {
+      this.coreHud.classList.add('hidden');
+      const n = Math.ceil(core.hp);
+      if (this._livesShown !== n) {
+        this._livesShown = n;
+        document.getElementById('td-lives').textContent = n;
+        livesPill.classList.toggle('danger', n <= core.maxHp * 0.35);
+      }
+      return;
+    }
     if (!core) {
       this.coreHud.classList.add('hidden');
       return;

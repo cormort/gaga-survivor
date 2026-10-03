@@ -234,6 +234,18 @@ export class TowerDefense {
     ctx.restore();
   }
 
+  // 入口標記（門、來怪紅圈）的位置：入口本身貼在地圖邊上，標記畫在邊上的話有一半會
+  // 跑出地圖、壓進頂部 HUD（三門要塞北門被下一波預告蓋住）。所以沿路線往地圖內側挪
+  // 一個標記半徑，整個標記都落在地圖裡。ix/iy 是指向地圖內側的單位向量
+  entranceMark(path) {
+    const b = this.level.bounds;
+    const [x, y] = path[0];
+    const ix = x <= b.minX + 1 ? 1 : x >= b.maxX - 1 ? -1 : 0;
+    const iy = y <= b.minY + 1 ? 1 : y >= b.maxY - 1 ? -1 : 0;
+    const inset = this.level.pathWidth * 0.6 + 20;
+    return { x: x + ix * inset, y: y + iy * inset, ix, iy };
+  }
+
   // 路線：地面上的淺色帶狀路面 + 深色路肩，入口畫一個紅色門標
   draw(ctx, cam) {
     const w = this.level.pathWidth;
@@ -264,7 +276,7 @@ export class TowerDefense {
       ctx.lineWidth = 5;
       ctx.stroke();
       ctx.setLineDash([]);
-      const [gx, gy] = path[0];
+      const { x: gx, y: gy } = this.entranceMark(path);
       ctx.fillStyle = 'rgba(255,60,80,0.35)';
       ctx.beginPath();
       ctx.arc(gx - cam.x, gy - cam.y, w * 0.6, 0, Math.PI * 2);
@@ -281,8 +293,9 @@ export class TowerDefense {
       const beat = 0.5 + 0.5 * Math.sin(this.game.gameTime * 5);
       this.level.paths.forEach((path, i) => {
         if (!info.entrances[i]) return;
-        const x = path[0][0] - cam.x;
-        const y = path[0][1] - cam.y;
+        const m = this.entranceMark(path);
+        const x = m.x - cam.x;
+        const y = m.y - cam.y;
         ctx.strokeStyle = `rgba(255,70,90,${0.5 + 0.4 * beat})`;
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -294,10 +307,9 @@ export class TowerDefense {
         ctx.lineWidth = 5;
         ctx.strokeStyle = 'rgba(0,0,0,0.8)';
         const label = `×${info.entrances[i]}`;
-        // 數字往地圖內側放，不要被畫面邊緣切掉
-        const b = this.level.bounds;
-        const lx = x + (path[0][0] <= b.minX + 1 ? 70 : path[0][0] >= b.maxX - 1 ? -70 : 0);
-        const ly = y + (path[0][1] <= b.minY + 1 ? 70 : path[0][1] >= b.maxY - 1 ? -70 : 0);
+        // 數字再往地圖內側放一格，不要壓在紅圈上
+        const lx = x + m.ix * (w * 0.6 + 40);
+        const ly = y + m.iy * (w * 0.6 + 40);
         ctx.strokeText(label, lx, ly);
         ctx.fillStyle = '#ff6b7a';
         ctx.fillText(label, lx, ly);

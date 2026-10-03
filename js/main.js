@@ -27,10 +27,12 @@ import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/T
 import { heroMoveVector, updateHeroRespawn } from './systems/TDHero.js';
 
 // 守塔關的鏡頭縮放範圍：拉遠到整張圖放得進畫面；太小的螢幕最多拉到 TD_MIN_ZOOM，剩下的用拖曳平移
-const TD_MIN_ZOOM = 0.5;
+const TD_MIN_ZOOM = 0.45;
 const TD_MAX_ZOOM = 1.4;
 const ENEMY_NAMES = Object.fromEntries(Object.entries(ENEMY_TYPES).map(([k, v]) => [k, v.name]));   // 守塔下一波預告用
-const TD_HUD_PAD = 110;   // 頂部 HUD（計時／金幣／生命條）佔的螢幕高度：地圖排在它下面，入口才不會被蓋住
+// 頂部 HUD 佔的螢幕高度：資訊列＋任務提示＋下一波預告（實測底部約 118px）。地圖排在它下面，
+// 貼著上緣的入口（三門要塞北門）才不會被蓋住。生命改放進資訊列，就是為了不讓這塊再往下長。
+const TD_HUD_PAD = 128;
 
 
 import { InputController } from './input.js';
@@ -962,6 +964,7 @@ class Game {
     setGearTheme(this.characterId);
     this.player.game = this;
     this.td = this.level.td && this.core ? new TowerDefense(this) : null;   // 守塔：路線＋分波
+    if (this.td) this.core.isLives = true;   // HUD 改顯示成命數膠囊（UI.updateCoreHUD）
     this.fitView();   // 守塔拉遠看整張圖；其他模式還原 1:1
     this.weaponManager = new WeaponManager(this.player);
     // 武器系統也要能呼叫回遊戲層 (宙斯連鎖閃電 game.chainShock、商人臨時增益
@@ -1188,7 +1191,6 @@ class Game {
 
     // 守塔關只能點建塔點蓋塔：收起「走到空地蓋」的建造鈕與設施列
     this.ui.setModeButtons(this.td ? { ...this.mode, turrets: false } : this.mode);
-    document.querySelector('#core-hud .core-title').textContent = this.td ? '剩餘生命' : '基地核心';
     document.getElementById('exp-bar-container')?.classList.toggle('hidden', !!this.td);   // 守塔沒有經驗值
     this.ui.updateCoreHUD(this.core);
     updateFacilityHUD(this);
