@@ -53,7 +53,7 @@ export class GuardsmanUnit {
     let target = null;
     let minDist = this.range;
     for (const e of enemies) {
-      if (e.isDead) continue;
+      if (e.isDead || e.flying) continue;   // 飛行怪（守塔）步兵與戰車打不到
       const d = Math.hypot(e.x - this.x, e.y - this.y);
       if (d < minDist) {
         minDist = d;
@@ -89,7 +89,7 @@ export class GuardsmanUnit {
       // 白刃刺刀交火
       if (minDist <= this.radius + target.radius + 14 && this.bayonetTimer <= 0) {
         this.bayonetTimer = this.bayonetCd;
-        const bayonetDmg = Math.round(this.damage * 1.6);
+        const bayonetDmg = Math.round(this.damage * 1.6 * (this.damageMul || 1));
         game.damageEnemy(target, bayonetDmg, 2, this.x, this.y, 'bayonet');
         sound.playHit();
         const dist = Math.hypot(target.x - this.x, target.y - this.y) || 1;
@@ -101,7 +101,7 @@ export class GuardsmanUnit {
         this.laserTimer = 0.08;
         this.laserFx = { tx: target.x, ty: target.y };
         sound.playShoot();
-        game.damageEnemy(target, this.damage, 1, this.x, this.y, 'lasgun');
+        game.damageEnemy(target, Math.round(this.damage * (this.damageMul || 1)), 1, this.x, this.y, 'lasgun');
       }
     }
   }
@@ -210,7 +210,7 @@ export class LemanRussUnit {
     let bestTarget = null;
     let bestScore = -1;
     for (const e of enemies) {
-      if (e.isDead) continue;
+      if (e.isDead || e.flying) continue;   // 飛行怪（守塔）步兵與戰車打不到
       const dist = Math.hypot(e.x - this.x, e.y - this.y);
       if (dist > this.cannonRange) continue;
       const score = (e.isBoss ? 5000 : 0) + e.hp - dist * 0.5;
@@ -238,7 +238,7 @@ export class LemanRussUnit {
           y: by,
           vx: vx,
           vy: vy,
-          damage: 240,
+          damage: Math.round(240 * (this.damageMul || 1)),
           radius: 12,
           pierce: 1,
           life: 1.8,
@@ -255,7 +255,7 @@ export class LemanRussUnit {
     let sponsonTarget = null;
     let minSpDist = this.sponsonRange;
     for (const e of enemies) {
-      if (e.isDead) continue;
+      if (e.isDead || e.flying) continue;   // 飛行怪（守塔）步兵與戰車打不到
       const d = Math.hypot(e.x - this.x, e.y - this.y);
       if (d < minSpDist) {
         minSpDist = d;
@@ -266,7 +266,7 @@ export class LemanRussUnit {
     if (sponsonTarget && this.sponsonTimer <= 0) {
       this.sponsonTimer = this.sponsonCd;
       this.sponsonMuzzleTimer = 0.08;
-      game.damageEnemy(sponsonTarget, 36, 1, this.x, this.y, 'heavy_bolter');
+      game.damageEnemy(sponsonTarget, Math.round(36 * (this.damageMul || 1)), 1, this.x, this.y, 'heavy_bolter');
       if (game.particles) game.particles.createExplosion(sponsonTarget.x, sponsonTarget.y, 22);
       sound.playShoot();
     }

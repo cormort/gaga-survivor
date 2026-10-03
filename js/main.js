@@ -3475,6 +3475,7 @@ class Game {
       enemy.draw(this.ctx, renderCam);
     }
     Enemy.drawStatusGlows(this.ctx, renderCam, this.enemies);
+    if (this.td) this.td.drawBadges(this.ctx, renderCam);   // 守塔：重甲標記
     this.drawSealChains(renderCam);
 
     // 繪製敵方投射物

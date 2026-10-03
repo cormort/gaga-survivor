@@ -261,6 +261,7 @@ export class UIManager {
     this.inspectPriorityVal = document.getElementById('inspect-priority-val');
     this.btnInspectPriority?.addEventListener('click', () => this._onInspectPriority?.());
     this.buildMenu = document.getElementById('td-build-menu');
+    this.inspectBranches = document.getElementById('inspect-branches');
 
     this.btnCancelPlacement?.addEventListener('click', () => {
       if (typeof this._onCancelPlacement === 'function') this._onCancelPlacement();
@@ -1159,6 +1160,33 @@ export class UIManager {
       if (this.inspectUpgradeCost) this.inspectUpgradeCost.textContent = `${upCost} 🪙`;
       const sellVal = turret.getSellValue ? turret.getSellValue() : Math.round((conf.baseCost || 60) * 0.7);
       if (this.inspectRecycleVal) this.inspectRecycleVal.textContent = `+${sellVal} 🪙`;
+
+      // 守塔：名稱／等級／數值改用塔自己的摘要（等級倍率已算進去），升級價、專精二選一、塔不會壞所以不顯示耐久
+      const td = callbacks.td;
+      this.inspectHp?.closest('.inspect-stat-row')?.classList.toggle('hidden', !!td);
+      this.inspectHpBar?.parentElement?.classList.toggle('hidden', !!td);
+      this.btnInspectUpgrade?.classList.toggle('hidden', !!td && td.upgradeCost == null);
+      if (td) {
+        this.inspectIcon.textContent = td.icon;
+        this.inspectTitle.textContent = td.title;
+        this.inspectLevel.textContent = turret.branch ? 'MAX' : `LV.${turret.level}`;
+        this.inspectType.textContent = { pierce: '穿刺攻擊', siege: '攻城攻擊', magic: '魔法攻擊', normal: '普通攻擊' }[turret.dmgType] || '防禦工事';
+        const st = turret.statSummary();
+        this.inspectDmg.textContent = st?.dmg ?? '—';
+        this.inspectRange.textContent = st?.range ? `${st.range} px` : '—';
+        this.inspectRate.textContent = st?.cd ? `${st.cd}s` : '—';
+        this.inspectVariant.textContent = turret.branch ? td.title : turret.level === 3 ? '可選專精 ↓' : '升到第 3 級可專精';
+        if (td.upgradeCost != null) this.inspectUpgradeCost.textContent = `${td.upgradeCost} 🪙`;
+        this.inspectRecycleVal.textContent = `+${td.sellValue} 🪙`;
+      }
+      this.inspectBranches?.classList.toggle('hidden', !td?.branches);
+      this.inspectBranches?.replaceChildren(...(td?.branches || []).map((b) => {
+        const el = document.createElement('button');
+        el.className = `game-btn td-branch-opt${b.affordable ? '' : ' poor'}`;
+        el.innerHTML = `<span class="ico">${b.icon}</span><b>${b.name}</b><small>${b.desc}</small><span class="btn-cost-tag">${b.cost} 🪙</span>`;
+        el.addEventListener('click', b.onPick);
+        return el;
+      }));
 
       this._onInspectUpgrade = callbacks.onUpgrade;
       this._onInspectRecycle = callbacks.onRecycle;

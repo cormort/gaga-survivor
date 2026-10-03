@@ -3733,3 +3733,9 @@ body, html {
 .td-build-opt.poor { opacity: 0.45; }
 .td-build-opt:hover, .td-build-opt:focus-visible { border-color: var(--border-glow); background: var(--bg-card-hover); outline: none; }
 .inspect-priority { width: 100%; margin-bottom: 10px; background: rgba(0, 229, 255, 0.12); color: var(--text-main); border: 1px solid var(--border-color); }
+/* 守塔檢查面板：第 3 級後的專精二選一 */
+.inspect-branches { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.td-branch-opt { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px !important; background: rgba(255, 209, 102, 0.1); color: var(--text-main); border: 1px solid rgba(255, 209, 102, 0.5); text-align: center; }
+.td-branch-opt .ico { font-size: 24px; }
+.td-branch-opt small { font-size: 11px; line-height: 1.35; color: var(--text-muted); font-weight: 500; }
+.td-branch-opt.poor { opacity: 0.5; }

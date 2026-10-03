@@ -12,7 +12,21 @@ const FACILITY_IMAGE_KEYS = [
   'electric_grid', 'purifier', 'barricade',
   'heavy_bolter', 'barracks', 'manufactorum'
 ];
+// 守塔塔種貼圖：4 條塔線 × (1/2/3 級 + 2 專精)，鍵名 = `${tdKey}_${branch || level}`
+export const TD_IMAGES = {};
+const TD_SPRITE_SCALE = 0.85;   // 設定圖每格約 100px；一、二級塔原圖只有 40~55px 寬，太小在拉遠的地圖上看不清楚
+const TD_IMAGE_KEYS = {
+  guard: ['missile', 'multishot'], arcane: ['storm', 'frost'],
+  cannon: ['siege', 'flamestrike'], barracks: ['knight', 'bunker'],
+};
 if (typeof Image !== 'undefined') {
+  for (const [line, branches] of Object.entries(TD_IMAGE_KEYS)) {
+    for (const stage of [1, 2, 3, ...branches]) {
+      const img = new Image();
+      img.src = `assets/td/${line}_${stage}.png`;
+      TD_IMAGES[`${line}_${stage}`] = img;
+    }
+  }
   for (const k of FACILITY_IMAGE_KEYS) {
     const img = new Image();
     img.src = `assets/facilities/${k}.png`;
@@ -118,6 +132,41 @@ export const FACILITY_TYPES = {
     maxUnits: 2,
     color: '#e67e22',
   },
+  // 守塔專用（js/tdtowers.js 的 mortar）：拋射砲彈落地爆炸，打不到飛行怪
+  mortar: {
+    id: 'mortar',
+    name: '迫擊砲',
+    icon: '💣',
+    desc: '拋射高爆砲彈，落地範圍爆炸；打不到飛行怪',
+    baseCost: 125,
+    costGrowth: 60,
+    maxHp: 1200,
+    radius: 22,
+    range: 340,
+    cooldown: 3.0,
+    damage: 60,
+    splash: 75,
+    flight: 0.9,     // 砲彈飛行秒數
+    minSpacing: 65,
+    color: '#d08a3c',
+  },
+  // 守塔兵營的「地堡」專精（星海式）：陸戰隊在建築內同時射擊 shots 個目標，可對空
+  bunker: {
+    id: 'bunker',
+    name: '地堡',
+    icon: '🏯',
+    desc: '陸戰隊在地堡內同時射擊多個目標，可對空',
+    baseCost: 260,
+    costGrowth: 0,
+    maxHp: 1600,
+    radius: 26,
+    range: 280,
+    cooldown: 0.55,
+    damage: 22,
+    shots: 4,
+    minSpacing: 85,
+    color: '#7fa3c9',
+  },
 };
 
 // 砲塔升級模組 (僅限機槍砲台)
@@ -148,6 +197,49 @@ export const TURRET_VARIANTS = {
     damage: 40,
     pulseRadius: 210,
     slowDur: 2.5,
+  },
+  // 守塔「極寒塔」的專精：更大更久的脈衝，雜兵有機率直接凍住
+  frost: {
+    id: 'frost',
+    name: '🧊 永凍塔',
+    color: '#a0e9ff',
+    range: 300,
+    cooldown: 1.6,
+    damage: 40,
+    pulseRadius: 290,
+    slowDur: 4,
+    freezeChance: 0.25,
+  },
+  // 守塔「守衛塔」專精：飛彈塔只打空中、雙發；多重弩炮一次 3 目標
+  missile: {
+    id: 'missile',
+    name: '🚀 飛彈塔',
+    color: '#ff6b3d',
+    range: 340,
+    cooldown: 0.8,
+    damage: 45,
+    salvo: 2,
+    target: 'air',
+  },
+  multishot: {
+    id: 'multishot',
+    name: '🎯 多重弩炮',
+    color: '#ffd166',
+    range: 300,
+    cooldown: 0.5,
+    damage: 30,
+    shots: 3,
+  },
+  // 守塔「秘法塔」專精：在目標處降下風暴，範圍內每秒 damage 點魔法傷害、持續 stormDur 秒
+  storm: {
+    id: 'storm',
+    name: '🌀 靈能風暴',
+    color: '#8e7dff',
+    range: 320,
+    cooldown: 4.5,
+    damage: 60,
+    stormR: 95,
+    stormDur: 3,
   },
   tesla: {
     id: 'tesla',
@@ -248,17 +340,22 @@ export class Turret {
   // 挑射程內的目標。priority 未設（生存者）＝最近、首領優先；
   // 守塔可切換 first（沿路線走最遠）／last／strong（血最多）／close。
   // e.progress 由 TowerDefense.targetFor 每幀寫入。
-  pickTarget(enemies, range) {
-    const range2 = range * range;
+  // opts.air：'never'（加農砲、兵營打不到空中）／'only'（飛彈塔只打空中）；e.flying 由 TowerDefense 標上
+  // opts.minRange：攻城坦克打不到身邊的怪；opts.skip：已選過的目標（多目標射擊用）
+  pickTarget(enemies, range, opts = {}) {
+    const r = range * (this.rangeMul || 1);
+    const range2 = r * r;
+    const min2 = (opts.minRange || 0) ** 2;
     const p = this.priority;
     let target = null;
     let best = Infinity;
     for (const e of enemies) {
-      if (e.isDead) continue;
+      if (e.isDead || (opts.air === 'never' && e.flying) || (opts.air === 'only' && !e.flying)) continue;
+      if (opts.skip && opts.skip.includes(e)) continue;
       const dx = e.x - this.x;
       const dy = e.y - this.y;
       const d2 = dx * dx + dy * dy;
-      if (d2 > range2) continue;
+      if (d2 > range2 || d2 < min2) continue;
       const score = p === 'first' ? -(e.progress || 0)
         : p === 'last' ? (e.progress || 0)
         : p === 'strong' ? -e.hp
@@ -272,8 +369,44 @@ export class Turret {
     return target;
   }
 
+  // 依優先序挑最多 n 個不同目標
+  pickTargets(enemies, range, n, opts = {}) {
+    const out = [];
+    while (out.length < n) {
+      const e = this.pickTarget(enemies, range, { ...opts, skip: out });
+      if (!e) break;
+      out.push(e);
+    }
+    return out;
+  }
+
+  // 持續傷害區（靈能風暴、烈焰風暴）：每 0.25 秒結算一次，避免每幀跳傷害字
+  updateZones(dt, enemies, onHit) {
+    if (!this.zones) return;
+    for (let i = this.zones.length - 1; i >= 0; i--) {
+      const z = this.zones[i];
+      z.t += dt;
+      z.tick += dt;
+      if (z.tick >= 0.25) {
+        z.tick -= 0.25;
+        const r2 = z.r * z.r;
+        for (const e of enemies) {
+          if (e.isDead || (z.ground && e.flying)) continue;
+          if ((e.x - z.x) ** 2 + (e.y - z.y) ** 2 <= r2) onHit(e, z.dps * 0.25);
+        }
+      }
+      if (z.t >= z.dur) this.zones.splice(i, 1);
+    }
+  }
+
+  addZone(x, y, r, dur, dps, kind, ground = false) {
+    if (!this.zones) this.zones = [];
+    this.zones.push({ x, y, r, dur, dps, kind, ground, t: 0, tick: 0 });
+  }
+
   update(dt, enemies, onHit, player = null, game = null) {
     this.animTimer += dt;
+    this.updateZones(dt, enemies, onHit);
     if (this.muzzleTimer > 0) this.muzzleTimer -= dt;
     if (this.pulseTimer > 0) this.pulseTimer -= dt;
 
@@ -356,21 +489,66 @@ export class Turret {
       return;
     }
 
+    // 4.5 迫擊砲（守塔）：拋射砲彈，落地範圍爆炸；集束彈再散出子彈、燃燒彈附帶灼燒
+    if (this.facilityType === 'mortar') {
+      this.updateShells(dt, enemies, onHit, game);
+      this.cooldownTimer -= dt;
+      if (this.cooldownTimer > 0) return;
+      // 攻城坦克：射程 ×1.6，但打不到 130px 內的怪
+      const target = this.pickTarget(enemies, this.fConf.range * (this.siege ? 1.6 : 1), { air: 'never', minRange: this.siege ? 130 : 0 });
+      if (!target) return;
+      this.cooldownTimer = this.fConf.cooldown * this.cdMul(game);
+      this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+      this.muzzleTimer = 0.15;
+      // 瞄準落點：沿路線的怪朝下一個路徑點走，預估砲彈飛行時間內的位移（不算轉彎，夠用）
+      let tx = target.x;
+      let ty = target.y;
+      if (target._wp) {
+        const dx = target._wp.x - target.x;
+        const dy = target._wp.y - target.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const lead = Math.min(d, this.fConf.flight * target.speed * target.speedFactor());
+        tx += (dx / d) * lead;
+        ty += (dy / d) * lead;
+      }
+      this.shells.push({ x0: this.x, y0: this.y - 10, tx, ty, t: 0, dur: this.fConf.flight, r: this.fConf.splash * (this.siege ? 1.35 : 1), dmg: this.fConf.damage });
+      sound.playShoot();
+      return;
+    }
+
+    // 4.6 地堡（守塔）：陸戰隊同時射擊多個目標，可對空
+    if (this.facilityType === 'bunker') {
+      this.cooldownTimer -= dt;
+      if (this.cooldownTimer > 0) return;
+      const ts = this.pickTargets(enemies, this.fConf.range, this.fConf.shots);
+      if (!ts.length) return;
+      this.cooldownTimer = this.fConf.cooldown * this.cdMul(game);
+      this.muzzleTimer = 0.08;
+      this.extraBeams = ts.map((e) => ({ x: e.x, y: e.y }));
+      for (const e of ts) onHit(e, this.fConf.damage);
+      sound.playShoot();
+      return;
+    }
+
     // 5. 星界軍兵營與機械製造廠行為：定時召喚部隊馳援前線
     if (this.facilityType === 'barracks' || this.facilityType === 'manufactorum') {
       if (game && game.alliedUnits) {
         const myUnits = game.alliedUnits.filter((u) => u.facility === this && !u.isDead);
-        const maxU = this.fConf.maxUnits || 4;
+        const maxU = this.maxUnits || this.fConf.maxUnits || 4;   // 守塔兵營固定 3 名（tdKey 設定）
         if (myUnits.length < maxU) {
           this.spawnTimer = (this.spawnTimer || 0) + dt;
           if (this.spawnTimer >= (this.fConf.spawnCd || 5)) {
             this.spawnTimer = 0;
-            if (this.facilityType === 'barracks') {
-              game.alliedUnits.push(new GuardsmanUnit(this.x, this.y, this, game));
-              game.ui.say('💂 星界軍步兵受命奔赴前線！', '#27ae60', 1.8);
-            } else {
-              game.alliedUnits.push(new LemanRussUnit(this.x, this.y, this, game));
-              game.ui.say('🚜 黎曼魯斯主戰戰車出廠推進！', '#e67e22', 2.2);
+            const u = this.facilityType === 'barracks'
+              ? new GuardsmanUnit(this.x, this.y, this, game)
+              : new LemanRussUnit(this.x, this.y, this, game);
+            // 守塔的等級／專精倍率（生存者兩者都是 1）
+            u.maxHp = u.hp = Math.round(u.maxHp * (this.unitHpMul || 1));
+            u.damageMul = this.dmgMul || 1;
+            game.alliedUnits.push(u);
+            if (!this.tdKey) {   // 守塔關兵營會一直補兵，不要每次都跳字
+              game.ui.say(this.facilityType === 'barracks' ? '💂 星界軍步兵受命奔赴前線！' : '🚜 黎曼魯斯主戰戰車出廠推進！',
+                this.facilityType === 'barracks' ? '#27ae60' : '#e67e22', 2);
             }
             sound.playEvoFanfare();
             if (game.particles) {
@@ -385,25 +563,29 @@ export class Turret {
     // 6. 基礎與進化砲台行為
     this.cooldownTimer -= dt;
 
-    if (this.variant === 'cryo') {
+    if (this.variant === 'cryo' || this.variant === 'frost') {
       if (this.cooldownTimer <= 0) {
+        // 範圍內沒怪就不放（不然守塔的波間休息也在空打）
+        const pr = this.conf.pulseRadius * (this.rangeMul || 1);
+        if (!enemies.some((e) => !e.isDead && Math.hypot(e.x - this.x, e.y - this.y) <= pr)) return;
         this.cooldownTimer = this.conf.cooldown * this.cdMul(game);
         this.pulseTimer = 0.35;
         sound.playExplosion();
         for (const e of enemies) {
           if (e.isDead) continue;
           const d = Math.hypot(e.x - this.x, e.y - this.y);
-          if (d <= this.conf.pulseRadius) {
+          if (d <= pr) {
             onHit(e, this.conf.damage);
             e.slowTimer = Math.max(e.slowTimer || 0, this.conf.slowDur);
+            if (this.conf.freezeChance && !e.isBoss && Math.random() < this.conf.freezeChance) e.applyFreeze(1.2);
           }
         }
       }
       return;
     }
 
-    // 鎖定範圍內的目標（依瞄準優先序）
-    const target = this.pickTarget(enemies, this.conf.range);
+    // 鎖定範圍內的目標（依瞄準優先序；飛彈塔只打空中）
+    const target = this.pickTarget(enemies, this.conf.range, { air: this.conf.target === 'air' ? 'only' : null });
     if (!target) {
       this.beam = null;
       this.chainTargets = [];
@@ -416,14 +598,29 @@ export class Turret {
     this.cooldownTimer = this.conf.cooldown * this.cdMul(game);
     this.muzzleTimer = 0.08;
 
-    if (this.variant === 'flame') {
+    if (this.variant === 'storm') {
+      // 靈能風暴：在目標腳下降下風暴（魔法，空中地面都打）
+      this.addZone(target.x, target.y, this.conf.stormR, this.conf.stormDur, this.conf.damage, 'storm');
+      this.beam = { x: target.x, y: target.y, life: 0.15 };
+      sound.playHit();
+    } else if (this.variant === 'multishot') {
+      const ts = [target, ...this.pickTargets(enemies, this.conf.range, this.conf.shots - 1, { skip: [target] })];
+      this.beam = null;
+      this.extraBeams = ts.map((e) => ({ x: e.x, y: e.y }));
+      for (const e of ts) onHit(e, this.conf.damage);
+    } else if (this.variant === 'missile') {
+      this.beam = { x: target.x, y: target.y, life: 0.1 };
+      for (let k = 0; k < this.conf.salvo; k++) onHit(target, this.conf.damage);
+      game?.particles?.createExplosion(target.x, target.y, 22);
+      sound.playShoot();
+    } else if (this.variant === 'flame') {
       this.beam = { x: target.x, y: target.y, life: 0.1 };
       for (const e of enemies) {
         if (e.isDead) continue;
         const dx = e.x - this.x;
         const dy = e.y - this.y;
         const d = Math.hypot(dx, dy);
-        if (d <= this.conf.range) {
+        if (d <= this.conf.range * (this.rangeMul || 1)) {
           const ang = Math.atan2(dy, dx);
           let diff = Math.abs(ang - this.angle);
           if (diff > Math.PI) diff = Math.PI * 2 - diff;
@@ -463,6 +660,141 @@ export class Turret {
     }
   }
 
+  // 砲彈：飛行中的砲彈落地就炸；烈焰風暴在落點留下火海
+  updateShells(dt, enemies, onHit, game) {
+    if (!this.shells) this.shells = [];
+    for (let i = this.shells.length - 1; i >= 0; i--) {
+      const s = this.shells[i];
+      s.t += dt;
+      if (s.t < s.dur) continue;
+      this.shells.splice(i, 1);
+      const r2 = s.r * s.r;
+      for (const e of enemies) {
+        if (e.isDead || e.flying) continue;
+        if ((e.x - s.tx) ** 2 + (e.y - s.ty) ** 2 > r2) continue;
+        onHit(e, s.dmg);
+      }
+      if (game && game.particles) {
+        game.particles.createExplosion(s.tx, s.ty, s.r);
+        game.particles.createShockwave(s.tx, s.ty, s.r, this.flamestrike ? '#ff5400' : this.fConf.color);
+      }
+      sound.playExplosion(s.tx);
+      if (this.flamestrike) this.addZone(s.tx, s.ty, s.r, 4, s.dmg * 0.35, 'fire', true);
+    }
+  }
+
+  // 守塔塔：用設定圖裁出的貼圖（assets/td/<塔線>_<等級或專精>.png，tools/cut_td_towers.py 產生），
+  // 射擊特效沿用原本的畫法。圖還沒載入時回傳 false，呼叫端退回程式繪製。
+  drawTD(ctx, camera, sx, sy) {
+    const img = TD_IMAGES[`${this.tdKey}_${this.branch || this.level}`];
+    if (!img || !img.naturalWidth) return false;
+    this.drawShots(ctx, camera, sx, sy);
+    const w = img.naturalWidth * TD_SPRITE_SCALE;
+    const h = img.naturalHeight * TD_SPRITE_SCALE;
+    ctx.drawImage(img, sx - w / 2, sy + 18 - h, w, h);   // 底部對齊建塔點中心稍下方（等角地基的前緣）
+    this.drawShells(ctx, camera);
+    return true;
+  }
+
+  // 脈衝光環（極寒／冰霜）與射擊光束、連鎖電弧
+  drawShots(ctx, camera, sx, sy) {
+    // 脈衝光環 (極寒塔專用)
+    if (this.pulseTimer > 0) {
+      ctx.strokeStyle = 'rgba(0, 245, 255, 0.8)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(sx, sy, this.conf.pulseRadius * (this.rangeMul || 1) * (1 - this.pulseTimer / 0.35), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // 開火射線與電弧
+    if (this.beam && this.muzzleTimer > 0) {
+      ctx.strokeStyle = this.conf.color;
+      ctx.lineWidth = this.variant === 'flame' ? 6 : 2.5;
+      ctx.beginPath();
+      ctx.moveTo(sx + Math.cos(this.angle) * 18, sy + Math.sin(this.angle) * 18);
+      ctx.lineTo(this.beam.x - camera.x, this.beam.y - camera.y);
+      ctx.stroke();
+
+      if (this.chainTargets.length > 0) {
+        ctx.strokeStyle = '#e0aaff';
+        ctx.lineWidth = 2;
+        let curX = this.beam.x - camera.x;
+        let curY = this.beam.y - camera.y;
+        for (const ct of this.chainTargets) {
+          ctx.beginPath();
+          ctx.moveTo(curX, curY);
+          curX = ct.x - camera.x;
+          curY = ct.y - camera.y;
+          ctx.lineTo(curX, curY);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  // 拋射中的砲彈與地面影子
+  drawShells(ctx, camera) {
+    for (const sh of this.shells || []) {
+      const k = Math.min(1, sh.t / sh.dur);
+      const gx = sh.x0 + (sh.tx - sh.x0) * k - camera.x;
+      const gy = sh.y0 + (sh.ty - sh.y0) * k - camera.y;
+      const h = Math.sin(k * Math.PI) * (sh.sub ? 30 : 130);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';   // 地面影子：看得出落點
+      ctx.beginPath();
+      ctx.ellipse(gx, gy, 6, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1b1d22';
+      ctx.beginPath();
+      ctx.arc(gx, gy - h, sh.sub ? 3 : 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 持續傷害區：靈能風暴是藍紫色電弧圈，烈焰風暴是橘紅火海；剩餘時間越少越淡
+  drawZones(ctx, camera) {
+    if (!this.zones || !this.zones.length) return;
+    ctx.save();
+    for (const z of this.zones) {
+      const x = z.x - camera.x;
+      const y = z.y - camera.y;
+      const a = Math.min(1, (z.dur - z.t) / 0.6);
+      const storm = z.kind === 'storm';
+      const g = ctx.createRadialGradient(x, y, z.r * 0.2, x, y, z.r);
+      g.addColorStop(0, storm ? `rgba(142,125,255,${0.35 * a})` : `rgba(255,120,30,${0.45 * a})`);
+      g.addColorStop(1, storm ? `rgba(80,60,220,${0.08 * a})` : `rgba(200,40,0,${0.1 * a})`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, z.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = storm ? `rgba(200,190,255,${0.8 * a})` : `rgba(255,200,80,${0.6 * a})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();   // 隨機折線：風暴的電弧／火焰的跳動
+      for (let k = 0; k < 6; k++) {
+        const ang = Math.random() * Math.PI * 2;
+        const rr = Math.random() * z.r;
+        ctx.moveTo(x + Math.cos(ang) * rr, y + Math.sin(ang) * rr);
+        ctx.lineTo(x + Math.cos(ang + 0.5) * rr * 0.6, y + Math.sin(ang + 0.5) * rr * 0.6);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 檢查面板用的數值摘要（已含等級／地基倍率）
+  statSummary() {
+    const m = this.dmgMul || 1;
+    const rm = this.rangeMul || 1;
+    const f = this.fConf;
+    if (this.facilityType === 'turret') {
+      const c = this.conf;
+      return { dmg: Math.round(c.damage * m * (c.salvo || 1)), range: Math.round((c.pulseRadius || c.range) * rm), cd: c.cooldown };
+    }
+    if (f.damage) return { dmg: Math.round(f.damage * m), range: Math.round(f.range * rm * (this.siege ? 1.6 : 1)), cd: f.cooldown };
+    if (f.spawnCd) return { dmg: null, range: null, cd: f.spawnCd };
+    return null;
+  }
+
   takeDamage(amount, sourceEnemy = null) {
     this.hp -= amount;
     // 鋼鐵拒馬反傷
@@ -480,6 +812,94 @@ export class Turret {
     const sx = this.x - camera.x;
     const sy = this.y - camera.y;
     if (sx < -100 || sx > VIEW.w + 100 || sy < -100 || sy > VIEW.h + 100) return;
+
+    this.drawZones(ctx, camera);
+    // 多目標射擊（多重弩炮、地堡）的曳光
+    if (this.extraBeams && this.muzzleTimer > 0) {
+      ctx.save();
+      ctx.strokeStyle = this.facilityType === 'bunker' ? '#ffe08a' : this.conf.color;
+      ctx.lineWidth = 2;
+      for (const b of this.extraBeams) {
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - 8);
+        ctx.lineTo(b.x - camera.x, b.y - camera.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (this.tdKey && this.drawTD(ctx, camera, sx, sy)) return;
+
+    // ── 繪製地堡（守塔）：低矮混凝土碉堡＋四道射擊口，開火時射擊口閃光 ──
+    if (this.facilityType === 'bunker') {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + 14, 30, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#5f6b78';
+      ctx.strokeStyle = '#141b26';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(sx - 28, sy - 16, 56, 30, 9);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#7d8a98';   // 頂蓋
+      ctx.beginPath();
+      ctx.roundRect(sx - 22, sy - 24, 44, 14, 6);
+      ctx.fill();
+      ctx.stroke();
+      for (let k = 0; k < 4; k++) {   // 射擊口
+        ctx.fillStyle = this.muzzleTimer > 0 ? '#ffe08a' : '#11161d';
+        ctx.fillRect(sx - 21 + k * 11, sy - 3, 8, 4);
+      }
+      ctx.fillStyle = this.fConf.color;
+      ctx.fillRect(sx - 6, sy - 22, 12, 3);
+      ctx.restore();
+      return;
+    }
+
+    // ── 繪製迫擊砲（守塔）：沙包圍起的八角底座＋指向目標的粗短砲管；飛行中的砲彈畫在拋物線上 ──
+    if (this.facilityType === 'mortar') {
+      ctx.save();
+      ctx.strokeStyle = '#141b26';
+      ctx.lineWidth = 2;
+      ctx.fillStyle = '#8a7451';   // 沙包環
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.ellipse(sx + Math.cos(a) * 21, sy + Math.sin(a) * 16, 8, 5.5, a, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#3b3f46';   // 八角底座
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4 + Math.PI / 8;
+        ctx.lineTo(sx + Math.cos(a) * 15, sy + Math.sin(a) * 12);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      const recoil = this.muzzleTimer > 0 ? 4 : 0;
+      ctx.translate(sx, sy - 5);
+      ctx.rotate(this.angle);
+      // 攻城坦克：橄欖綠長砲管；烈焰風暴：焦紅砲管
+      const len = this.siege ? 36 : 24;
+      ctx.fillStyle = this.flamestrike ? '#a4442a' : this.siege ? '#55693f' : '#5d6470';
+      ctx.beginPath();
+      ctx.roundRect(-6 - recoil, this.siege ? -5 : -7, len, this.siege ? 10 : 14, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#12151b';
+      ctx.beginPath();
+      ctx.ellipse(len - 6 - recoil, 0, 3, this.siege ? 4.5 : 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      this.drawShells(ctx, camera);
+      this.drawHpBar(ctx, sx, sy);
+      return;
+    }
 
     // ── 繪製高壓電網 ──
     if (this.facilityType === 'electric_grid') {
@@ -868,42 +1288,10 @@ export class Turret {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 脈衝光環 (極寒塔專用)
-    if (this.pulseTimer > 0) {
-      ctx.strokeStyle = 'rgba(0, 245, 255, 0.8)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(sx, sy, this.conf.pulseRadius * (1 - this.pulseTimer / 0.35), 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // 開火射線與電弧
-    if (this.beam && this.muzzleTimer > 0) {
-      ctx.strokeStyle = this.conf.color;
-      ctx.lineWidth = this.variant === 'flame' ? 6 : 2.5;
-      ctx.beginPath();
-      ctx.moveTo(sx + Math.cos(this.angle) * 18, sy + Math.sin(this.angle) * 18);
-      ctx.lineTo(this.beam.x - camera.x, this.beam.y - camera.y);
-      ctx.stroke();
-
-      if (this.chainTargets.length > 0) {
-        ctx.strokeStyle = '#e0aaff';
-        ctx.lineWidth = 2;
-        let curX = this.beam.x - camera.x;
-        let curY = this.beam.y - camera.y;
-        for (const ct of this.chainTargets) {
-          ctx.beginPath();
-          ctx.moveTo(curX, curY);
-          curX = ct.x - camera.x;
-          curY = ct.y - camera.y;
-          ctx.lineTo(curX, curY);
-          ctx.stroke();
-        }
-      }
-    }
+    this.drawShots(ctx, camera, sx, sy);
 
     // 高解析度砲台貼圖
-    const imgKey = this.variant === 'flame' ? 'turret_flame' : this.variant === 'cryo' ? 'turret_cryo' : 'turret';
+    const imgKey = this.variant === 'flame' ? 'turret_flame' : (this.variant === 'cryo' || this.variant === 'frost') ? 'turret_cryo' : 'turret';
     const tImg = FACILITY_IMAGES[imgKey];
     if (tImg && tImg.naturalWidth > 0) {
       const iw = 54, ih = 54;

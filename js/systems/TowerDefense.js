@@ -22,6 +22,15 @@ const WAYPOINT_REACH = 36;               // 走到這麼近就換下一個路徑
 const TD_HP = 2;                         // 雜兵血量 = 基礎血量 × TD_HP × 關卡 hpScale × 難度 × 波數成長
 const TD_SPEED = 0.6;                     // 地圖壓到約 1600×900 後路線短了一半，怪走慢一點才有時間被火網消耗
 const TD_HP_GROWTH = 0.15;               // 每多一波 +15%（不套生存者的時間曲線、開局厚血與動態難度）
+// 怪種護甲（魔獸三式）：light / medium / heavy / air（首領一律 boss）。
+// 塔的攻擊類型 × 護甲倍率見 js/tdtowers.js 的 ARMOR_MUL。沒列到的怪種算 medium。
+// air：不走路線、從入口直線飛向核心；加農砲與兵營打不到、也擋不住。
+export const ARMOR_CLASS = {
+  walker: 'light', runner: 'light', hound: 'light', boomer: 'light', blinker: 'light',
+  hormagaunt: 'light', squig_bomb: 'light',
+  brute: 'heavy', warden: 'heavy', chimera: 'heavy', ork_boy: 'heavy',
+  bat: 'air', spore_mine: 'air',
+};
 export const TD_LIVES = 20;              // 關卡沒寫 lives 時的預設命數
 export const TD_START_GOLD = 250;        // 關卡沒寫 startGold 時的開局金幣（約 4 座基礎砲台）
 export const LEAK = (e) => (e.isBoss ? 10 : 1);           // 漏一隻扣幾條命
@@ -87,6 +96,7 @@ export class TowerDefense {
       g.boss.x = path[0][0];
       g.boss.y = path[0][1];
       g.boss.path = path;
+      g.boss.armorClass = 'boss';
       g.boss.pathIdx = 1;
       g.boss._wp = { x: path[1][0], y: path[1][1], radius: 0 };
     }
@@ -99,6 +109,9 @@ export class TowerDefense {
     scale.hp = TD_HP * (this.level.hpScale || 1) * g.rules.enemyHpMul * (1 + TD_HP_GROWTH * (this.waveIdx - 1));
     const [x, y] = path[0];
     const e = new Enemy(type, x + (Math.random() - 0.5) * this.half, y + (Math.random() - 0.5) * this.half, scale);
+    e.armorClass = ARMOR_CLASS[type] || 'medium';
+    e.flying = e.armorClass === 'air';
+    if (e.flying) path = [path[0], path[path.length - 1]];   // 飛行怪不走路線，從入口直線飛向核心
     e.path = path;
     e.pathIdx = 1;
     e.spawnTime = g.gameTime;
@@ -166,6 +179,29 @@ export class TowerDefense {
     }
     if (this.phase === 'wave') return `第 ${this.waveIdx}/${this.total} 波進攻中 ‧ 守住核心！`;
     return '最後一波！守住終極首領即可通關';
+  }
+
+  // 重甲怪頭上畫一面小盾牌（穿刺塔打牠只剩一半傷害，要看得出來）。在怪物之後畫
+  drawBadges(ctx, cam) {
+    ctx.save();
+    ctx.fillStyle = '#c9d3df';
+    ctx.strokeStyle = '#1b222c';
+    ctx.lineWidth = 1.5;
+    for (const e of this.game.enemies) {
+      if (e.isDead || e.armorClass !== 'heavy') continue;
+      const x = e.x - cam.x;
+      const y = e.y - cam.y - e.radius - 16;
+      ctx.beginPath();
+      ctx.moveTo(x - 6, y - 6);
+      ctx.lineTo(x + 6, y - 6);
+      ctx.lineTo(x + 6, y);
+      ctx.quadraticCurveTo(x + 6, y + 5, x, y + 8);
+      ctx.quadraticCurveTo(x - 6, y + 5, x - 6, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // 路線：地面上的淺色帶狀路面 + 深色路肩，入口畫一個紅色門標

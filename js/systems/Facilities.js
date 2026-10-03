@@ -14,6 +14,7 @@ import { Projectile } from '../entities/Projectile.js';
 import { sound } from '../audio.js';
 import { save } from '../save.js';
 import { enemyScale } from '../levels.js';
+import { TD_TOWERS, TD_BRANCHES, ARMOR_MUL, applyTDStats } from '../tdtowers.js';
 
 // 金幣乘數的天花板。天賦財運 × 模式 × 祝福 × 每日規則 × 淘金潮是純乘法疊加、
 // 原本沒有上限 —— 實測空存檔 23 分鐘 5.8 萬金，帶滿 meta 加成的存檔同時間 142 萬，
@@ -229,8 +230,10 @@ export function recycleFacility(game, turret) {
   const idx = game.turrets.indexOf(turret);
   if (idx === -1) return;
 
-  const refund = turret.getSellValue ? turret.getSellValue() : Math.round((turret.fConf?.baseCost || 60) * 0.7);
+  const refund = turret.tdKey ? Math.round(turret.invested * 0.7)   // 守塔：總投入的 70%
+    : turret.getSellValue ? turret.getSellValue() : Math.round((turret.fConf?.baseCost || 60) * 0.7);
   game.gold += refund;
+  if (turret.tdKey) removeUnitsOf(game, turret);   // 守塔：賣掉兵營，路上的兵一起撤
 
   // 釋放地基槽
   if (turret.socket) {
@@ -254,6 +257,10 @@ export function recycleFacility(game, turret) {
 // 升級設施 (Upgrade Facility)
 export function upgradeFacility(game, turret) {
   if (!turret || turret.isDead) return;
+  if (turret.tdKey) {
+    upgradeTDTower(game, turret);
+    return;
+  }
 
   // 標準機槍砲台可先進化型態
   if (turret.facilityType === 'turret' && turret.variant === 'standard') {
@@ -300,6 +307,7 @@ export function inspectFacility(game, turret) {
     onUpgrade: () => upgradeFacility(game, turret),
     onRecycle: () => recycleFacility(game, turret),
     onClose: () => closeFacilityInspector(game),
+    td: turret.tdKey ? tdInspectInfo(game, turret) : null,
     // 只有會自己挑目標開火的塔才有瞄準優先序（兵營、電網等沒有）
     priority: turret.priority ? {
       label: TARGET_PRIORITIES[turret.priority],
@@ -308,29 +316,135 @@ export function inspectFacility(game, turret) {
   });
 }
 
+// 守塔塔的升級資訊：下一級價格，或第 3 級時的兩個專精選項
+function tdInspectInfo(game, t) {
+  const d = TD_TOWERS[t.tdKey];
+  return {
+    upgradeCost: !t.branch && t.level < 3 ? d.up[t.level - 1] : null,
+    sellValue: Math.round(t.invested * 0.7),
+    branches: !t.branch && t.level === 3 ? d.branches.map((key) => {
+      const b = TD_BRANCHES[key];
+      return { name: b.name, icon: b.icon, desc: b.desc, cost: b.cost, affordable: game.gold >= b.cost, onPick: () => chooseTDBranch(game, t, key) };
+    }) : null,
+    title: t.branch ? TD_BRANCHES[t.branch].name : d.name,
+    icon: t.branch ? TD_BRANCHES[t.branch].icon : d.icon,
+  };
+}
+
 // 關閉設施檢查面板
 export function closeFacilityInspector(game) {
   game.inspectedTurret = null;
   game.ui.showFacilityInspector(false);
 }
 
-// ── 守塔關：點建塔點 → 建造選單 ──
-// 守塔能蓋的塔種（生存者的電網／淨化／拒馬是就地築防用的，蓋在路邊的建塔點上沒有作用）
-export const TD_TOWERS = ['turret', 'heavy_bolter', 'barracks', 'manufactorum'];
-
+// ── 守塔關：點建塔點 → 建造選單（塔種與升級路線見 js/tdtowers.js） ──
 export function openBuildMenu(game, socket) {
   closeFacilityInspector(game);
   const s = { x: (socket.x - game.camera.x) * game.zoom, y: (socket.y - game.camera.y) * game.zoom };
-  const items = TD_TOWERS.map((type) => {
-    const conf = FACILITY_TYPES[type];
-    const cost = getFacilityCost(game, type);
-    return { type, icon: conf.icon, name: conf.name, desc: conf.desc, cost, affordable: game.gold >= cost };
-  });
+  const items = Object.entries(TD_TOWERS).map(([key, d]) => (
+    { type: key, icon: d.icon, name: d.name, desc: d.desc, cost: d.cost, affordable: game.gold >= d.cost }
+  ));
   game.buildMenuSocket = socket;
-  game.ui.showBuildMenu(true, s, items, (type) => {
+  game.ui.showBuildMenu(true, s, items, (key) => {
     closeBuildMenu(game);
-    buildFacility(game, type, socket.x, socket.y, socket);
+    buildTDTower(game, socket, key);
   });
+}
+
+export function buildTDTower(game, socket, key) {
+  const d = TD_TOWERS[key];
+  if (!d || socket.occupied) return null;
+  if (game.gold < d.cost) {
+    game.ui.say(`金幣不足，${d.name}需要 ${d.cost} 🪙`, '#ffb703', 1.6);
+    sound.playHurt();
+    return null;
+  }
+  game.gold -= d.cost;
+  const t = new Turret(socket.x, socket.y, d.type, d.variant || 'standard', socket);
+  t.tdKey = key;
+  t.dmgType = d.dmgType;
+  t.invested = d.cost;
+  if (d.type !== 'barracks') t.priority = 'first';   // 會自己挑目標的塔：預設先打走最前面的怪
+  if (d.type === 'barracks') t.maxUnits = 3;
+  applyTDStats(t);
+  socket.occupied = true;
+  socket.turret = t;
+  game.turrets.push(t);
+  game.particles.createShockwave(t.x, t.y, 80, t.fConf.color || '#00e5ff');
+  sound.playEvoFanfare();
+  updateFacilityHUD(game);
+  return t;
+}
+
+// 升到下一級（1→2→3）；第 3 級之後要選專精（檢查面板的兩顆按鈕 → chooseTDBranch）
+export function upgradeTDTower(game, t) {
+  const d = TD_TOWERS[t.tdKey];
+  if (t.branch || t.level >= 3) return;
+  const cost = d.up[t.level - 1];
+  if (game.gold < cost) {
+    game.ui.say(`金幣不足，升級需要 ${cost} 🪙`, '#ff0055', 1.6);
+    sound.playHurt();
+    return;
+  }
+  game.gold -= cost;
+  t.invested += cost;
+  t.level++;
+  const oldHp = t.unitHpMul;
+  applyTDStats(t);
+  rescaleUnits(game, t, oldHp);
+  game.particles.createShockwave(t.x, t.y, 100, '#00f5ff');
+  sound.playEvoFanfare();
+  updateFacilityHUD(game);
+  if (game.inspectedTurret === t) inspectFacility(game, t);
+}
+
+export function chooseTDBranch(game, t, key) {
+  const b = TD_BRANCHES[key];
+  if (!b || t.branch || t.level < 3 || !TD_TOWERS[t.tdKey].branches.includes(key)) return;
+  if (game.gold < b.cost) {
+    game.ui.say(`金幣不足，${b.name}需要 ${b.cost} 🪙`, '#ff0055', 1.6);
+    sound.playHurt();
+    return;
+  }
+  game.gold -= b.cost;
+  t.invested += b.cost;
+  t.branch = key;
+  t.level = 4;
+  const oldType = t.facilityType;
+  const oldHp = t.unitHpMul;
+  b.apply(t);
+  applyTDStats(t);
+  if (t.facilityType !== oldType) {
+    removeUnitsOf(game, t);   // 兵營改建成地堡：路上的步兵撤回地堡裡
+  } else {
+    rescaleUnits(game, t, oldHp);
+  }
+  game.particles.createShockwave(t.x, t.y, 140, t.fConf.color || '#ffd166');
+  sound.playEvoFanfare();
+  game.ui.say(`${b.icon} 專精完成：【${b.name}】`, '#ffd166', 2.2);
+  updateFacilityHUD(game);
+  if (game.inspectedTurret === t) inspectFacility(game, t);
+}
+
+// 兵營升級時，已經在路上的兵也跟著變強（血量依新舊倍率等比換算）
+function rescaleUnits(game, t, oldHpMul) {
+  for (const u of game.alliedUnits || []) {
+    if (u.facility !== t || u.isDead) continue;
+    const k = (t.unitHpMul || 1) / (oldHpMul || 1);
+    u.maxHp = Math.round(u.maxHp * k);
+    u.hp = Math.round(u.hp * k);
+    u.damageMul = t.dmgMul;
+  }
+}
+
+function removeUnitsOf(game, t) {
+  if (game.alliedUnits) game.alliedUnits = game.alliedUnits.filter((u) => u.facility !== t);
+}
+
+// 攻擊類型 × 護甲（魔獸三式矩陣，見 tdtowers.js；TowerDefense 標上 e.armorClass）
+function resistMul(t, e) {
+  const row = t.dmgType && ARMOR_MUL[t.dmgType];
+  return row ? row[e.armorClass || 'medium'] ?? 1 : 1;
 }
 
 export function closeBuildMenu(game) {
@@ -388,8 +502,6 @@ export function buildFacility(game, type = 'turret', targetX = null, targetY = n
     facility.maxHp = Math.round(facility.maxHp * game.player.facilityHpMul);
     facility.hp = facility.maxHp;
   }
-  // 守塔：會自己挑目標的塔預設先打走最前面的怪（可在檢查面板切換）
-  if (game.td && (type === 'turret' || type === 'heavy_bolter')) facility.priority = 'first';
   game.turrets.push(facility);
 
   const fxColor = type === 'electric_grid' ? '#b5179e' : type === 'purifier' ? '#00f59b' : type === 'barricade' ? '#ffb703' : type === 'heavy_bolter' ? '#f39c12' : type === 'barracks' ? '#27ae60' : type === 'manufactorum' ? '#e67e22' : '#00e5ff';
@@ -417,7 +529,8 @@ export function updateTurrets(game, dt) {
     const t = game.turrets[i];
 
     t.update(dt, game.enemies, (target, dmg) => {
-      game.damageEnemy(target, dmg, 1, t.x, t.y, t.facilityType || 'turret');
+      // 等級／地基倍率與守塔的護甲／魔抗都在這裡統一乘上
+      game.damageEnemy(target, Math.round(dmg * (t.dmgMul || 1) * resistMul(t, target)), 1, t.x, t.y, t.facilityType || 'turret');
       sound.playShoot();
     }, game.player, game);
 
@@ -600,9 +713,9 @@ export function updateAlliedUnits(game, dt) {
     const u = game.alliedUnits[i];
     u.update(dt, game.enemies, game);
 
-    // 敵人貼近碰撞與推擠阻截
+    // 敵人貼近碰撞與推擠阻截（飛行怪從頭上飛過去）
     for (const e of game.enemies) {
-      if (e.isDead) continue;
+      if (e.isDead || e.flying) continue;
       const dx = e.x - u.x;
       const dy = e.y - u.y;
       const minD = u.radius + e.radius;
