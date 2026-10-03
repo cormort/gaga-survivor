@@ -427,7 +427,13 @@ export function bindEvents(game) {
       // 守塔：點塔 → 檢查面板（升級／賣出／瞄準）；點空建塔點 → 建造選單；點空地 → 收起並開始拖曳平移
       if (game.td) {
         const t = game.turrets.find((tt) => Math.hypot(tt.x - wx, tt.y - wy) <= (tt.radius || 24) + 18);
-        const sock = !t && game.level.sockets.find((so) => !so.occupied && Math.hypot(so.x - wx, so.y - wy) <= 45);
+        // 建塔點判定：取最近的空建塔點；半徑至少 60 世界單位、且縮小時至少 44 螢幕像素（手指點得到）
+        const reach = Math.max(60, 44 / (game.zoom || 1));
+        let sock = null, best = reach;
+        if (!t) for (const so of game.level.sockets) {
+          const d = Math.hypot(so.x - wx, so.y - wy);
+          if (!so.occupied && d <= best) { sock = so; best = d; }
+        }
         if (t) {
           closeBuildMenu(game);
           inspectFacility(game, t);
