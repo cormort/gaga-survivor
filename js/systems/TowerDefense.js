@@ -20,8 +20,8 @@ const WAVE_BONUS = (w) => 60 + w * 15;   // 清完第 w 波的獎金
 const EARLY_GOLD_PER_SEC = 4;            // 提前開戰：每剩 1 秒休息 +4 金幣
 const GROUP_STAGGER = 2.5;               // 同一波裡各群的起跑間隔 (秒)
 const WAYPOINT_REACH = 36;               // 走到這麼近就換下一個路徑點
-const TD_HP = 4;                         // 雜兵血量 = 基礎血量 × TD_HP × 關卡 hpScale × 難度 × 波數成長
-const TD_BOSS_HP = 0.5;                   // 關卡資料裡的首領血量 × 這個倍率（調難度用的總旋鈕）
+const TD_HP = 3.6;                         // 雜兵血量 = 基礎血量 × TD_HP × 關卡 hpScale × 難度 × 波數成長
+const TD_BOSS_HP = 0.45;                   // 關卡資料裡的首領血量 × 這個倍率（調難度用的總旋鈕）
 const TD_SPEED = 0.6;                     // 地圖壓到約 1600×900 後路線短了一半，怪走慢一點才有時間被火網消耗
 const TD_HP_GROWTH = 0.15;               // 波次沒寫 hp 時：每多一波 +15%（不套生存者的時間曲線、開局厚血與動態難度）
 // 怪種護甲（魔獸三式）：light / medium / heavy / air（首領一律 boss）。
@@ -32,6 +32,8 @@ export const ARMOR_CLASS = {
   hormagaunt: 'light', squig_bomb: 'light',
   brute: 'heavy', warden: 'heavy', chimera: 'heavy', ork_boy: 'heavy',
   bat: 'air', spore_mine: 'air',
+  // 魔獸主題（td_warcraft）：食屍鬼輕甲、石像鬼（紅魔鬼）會飛、枯木妖靈重甲
+  makai_zombie: 'light', makai_red_arremer: 'air', makai_woody: 'heavy',
 };
 // 入口巢穴與主堡的逐格貼圖（tools/cut_td_structures.py 產生；關卡用 lair / base 欄位指定）
 //   巢穴：2 列（待機、出怪中）× 2 格，每格 256×224、地面中心 (128, 214)
@@ -62,6 +64,14 @@ export class TowerDefense {
     this.queue = [];
     this.clock = 0;
     this.half = this.level.pathWidth / 2;
+    // 實際使用的路線：有巢穴的關卡，路從巢穴洞口開始（第一點換成入口標記），
+    // 怪從洞口出來、路面也從洞口畫起，不會再有一截路伸到巢穴後面的地圖邊。
+    // 不改 level.paths 本身：關卡物件跨局重用，就地改會每開一局往內縮一次
+    this.paths = this.level.paths.map((p) => {
+      if (!this.level.lair) return p;
+      const m = this.entranceMark(p);
+      return [[m.x, m.y], ...p.slice(1)];
+    });
   }
 
   get total() {
@@ -90,7 +100,7 @@ export class TowerDefense {
       g.ui.say(`⏩ 提前開戰！+${bonus} 🪙`, '#ffd166', 1.8);
     }
     const wave = this.waves[this.waveIdx];
-    const paths = this.level.paths;
+    const paths = this.paths;
     this.queue = [];
     wave.groups.forEach((grp, gi) => {
       for (let k = 0; k < grp.count; k++) {
@@ -117,6 +127,44 @@ export class TowerDefense {
       g.boss.pathIdx = 1;
       g.boss._wp = { x: path[1][0], y: path[1][1], radius: 0 };
     }
+  }
+
+  // 路網上離 (x, y) 最近的位置：路線 pi、線段 i（paths[pi][i-1] → paths[pi][i]）、投影點與距離
+  locate(x, y) {
+    let best = null;
+    this.paths.forEach((p, pi) => {
+      for (let i = 1; i < p.length; i++) {
+        const r = projectToSegment(p[i - 1], p[i], x, y);
+        if (!best || r.d < best.d) best = { ...r, pi, i };
+      }
+    });
+    return best;
+  }
+
+  // 英雄只能走在路上：把 (x, y) 夾回最近的路面（離中線不超過路寬一半 − margin）
+  clampToRoad(x, y, margin = 0) {
+    const r = this.locate(x, y);
+    const lim = Math.max(4, this.half - margin);
+    if (r.d <= lim) return { x, y };
+    return { x: r.px + ((x - r.px) / r.d) * lim, y: r.py + ((y - r.py) / r.d) * lim };
+  }
+
+  // 英雄沿路走的路徑點：同一條路就沿折線走；不同路就先走到核心（每條路的終點都在核心）再沿另一條往回走。
+  // 直接朝目的地走的話會穿過路外、卡在路肩的夾制上
+  roadRoute(from, to) {
+    const a = this.locate(from.x, from.y);
+    const b = this.locate(to.x, to.y);
+    const vert = (pi, k) => ({ x: this.paths[pi][k][0], y: this.paths[pi][k][1] });
+    const pts = [];
+    if (a.pi === b.pi) {
+      if (b.i > a.i) for (let k = a.i; k < b.i; k++) pts.push(vert(a.pi, k));
+      else if (b.i < a.i) for (let k = a.i - 1; k >= b.i; k--) pts.push(vert(a.pi, k));
+    } else {
+      for (let k = a.i; k < this.paths[a.pi].length; k++) pts.push(vert(a.pi, k));
+      for (let k = this.paths[b.pi].length - 2; k >= b.i; k--) pts.push(vert(b.pi, k));
+    }
+    pts.push({ x: to.x, y: to.y });
+    return pts;
   }
 
   // 目前這一波雜兵的血量倍率（基礎 × 關卡 × 難度 × 波次）；英雄的隕石也拿它算傷害
@@ -282,7 +330,7 @@ export class TowerDefense {
     ctx.save();
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    for (const path of this.level.paths) {
+    for (const path of this.paths) {
       const trace = () => {
         ctx.beginPath();
         path.forEach(([x, y], i) => (i ? ctx.lineTo(x - cam.x, y - cam.y) : ctx.moveTo(x - cam.x, y - cam.y)));
@@ -306,6 +354,9 @@ export class TowerDefense {
       ctx.lineWidth = 5;
       ctx.stroke();
       ctx.setLineDash([]);
+    }
+    // 巢穴（或門牌）在所有路面之後畫，別條路不會蓋到它
+    for (const path of this.level.paths) {
       const { x: gx, y: gy } = this.entranceMark(path);
       if (this.drawLair(ctx, gx - cam.x, gy - cam.y)) continue;   // 有巢穴貼圖就不畫門牌
       ctx.fillStyle = 'rgba(255,60,80,0.35)';

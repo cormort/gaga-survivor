@@ -24,7 +24,7 @@ import { MERC } from './entities/Mercenary.js';
 import { drawSocket, drawPlacementGhost } from './entities/Turret.js';
 import './tdlevels.js';   // 守塔專屬關卡併入 LEVELS（side effect）
 import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/TowerDefense.js';
-import { heroMoveVector, updateHeroRespawn } from './systems/TDHero.js';
+import { heroMoveVector, updateHeroRespawn, keepHeroOnRoad } from './systems/TDHero.js';
 import { COLLAPSE_FRAME } from './entities/Core.js';
 
 // 守塔關的鏡頭縮放範圍：拉遠到整張圖放得進畫面；太小的螢幕最多拉到 TD_MIN_ZOOM，剩下的用拖曳平移
@@ -1090,6 +1090,7 @@ class Game {
     this.input.floatingJoystick = !this.td;
     document.body.classList.toggle('td-mode', !!this.td);   // CSS：守塔遊玩中把更新橫幅移到左上角（不蓋上緣入口）
     this.heroTarget = null;
+    this.heroRoute = null;
     this._heroRespawn = null;
     this._coreCollapse = null;
     this.player.heroLevel = 1;
@@ -1357,7 +1358,7 @@ class Game {
         // 守塔關卡的波次是 groups 結構、沒有 pool：從當前波的怪種挑，並沿路線出發
         const cur = this.td.waves[Math.max(0, this.td.waveIdx - 1)];
         const types = cur ? cur.groups.map(g => g.type) : [];
-        const paths = this.level.paths;
+        const paths = this.td.paths;   // 從巢穴洞口出發（不是地圖邊）
         if (types.length) {
           for (let i = 0; i < 3; i++) {
             this.td.spawn({
@@ -1719,6 +1720,7 @@ class Game {
 
     // 1. 更新特工玩家
     this.player.update(dt, this.td ? heroMoveVector(this) : this.input.vector);   // 守塔：點地移動的英雄
+    if (this.td && !this.player.isDead) keepHeroOnRoad(this);   // 守塔：英雄只能走在路上
     updateSkills(this, dt);
     tickBlessingEffects(this, dt);
     updateMerchant(this, dt);

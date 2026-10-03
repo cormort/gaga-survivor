@@ -5,7 +5,6 @@
 //   Q / R 是兩招守塔技能（所有角色共用、只看冷卻不吃靈力；技能欄沿用 Skills.js）
 
 import { GuardsmanUnit } from '../entities/AlliedUnit.js';
-import { worldBounds } from '../config.js';
 import { sound } from '../audio.js';
 
 const RESPAWN = 8;          // 復活秒數
@@ -53,28 +52,45 @@ export const TD_SKILLS = [
   },
 ];
 
-// 主迴圈用的移動向量：有按方向鍵就聽鍵盤（並取消點地目標），否則朝點地目標走
+// 主迴圈用的移動向量：有按方向鍵就聽鍵盤（並取消點地目標），否則沿著路網的路徑點走向點地目標
 export function heroMoveVector(game) {
   const v = game.input.vector;
   if (v.x || v.y) {
     game.heroTarget = null;
+    game.heroRoute = null;
     return v;
   }
-  const t = game.heroTarget;
-  if (!t) return v;
-  const dx = t.x - game.player.x;
-  const dy = t.y - game.player.y;
-  const d = Math.hypot(dx, dy);
-  if (d < ARRIVE) {
-    game.heroTarget = null;
-    return v;
+  const route = game.heroRoute;
+  if (!route || !route.length) return v;
+  let next = route[0];
+  let d = Math.hypot(next.x - game.player.x, next.y - game.player.y);
+  while (d < ARRIVE) {   // 到了這個路徑點就換下一個
+    route.shift();
+    if (!route.length) {
+      game.heroTarget = null;
+      game.heroRoute = null;
+      return v;
+    }
+    next = route[0];
+    d = Math.hypot(next.x - game.player.x, next.y - game.player.y);
   }
-  return { x: dx / d, y: dy / d };
+  return { x: (next.x - game.player.x) / d, y: (next.y - game.player.y) / d };
 }
 
+// 點地：目的地夾回最近的路面（英雄只能走在路上），再沿路網排出路徑點
 export function setHeroTarget(game, x, y) {
-  const b = worldBounds();
-  game.heroTarget = { x: Math.max(b.minX + 20, Math.min(b.maxX - 20, x)), y: Math.max(b.minY + 20, Math.min(b.maxY - 20, y)) };
+  const p = game.player;
+  const t = game.td.clampToRoad(x, y, p.radius * 0.5);
+  game.heroTarget = t;
+  game.heroRoute = game.td.roadRoute(p, t);
+}
+
+// 每幀把英雄夾回路面（方向鍵、翻滾、復活點都可能把人帶出路外）
+export function keepHeroOnRoad(game) {
+  const p = game.player;
+  const c = game.td.clampToRoad(p.x, p.y, p.radius * 0.5);
+  p.x = c.x;
+  p.y = c.y;
 }
 
 // 陣亡倒數與復活（主迴圈在英雄死亡時每幀呼叫）
@@ -83,6 +99,7 @@ export function updateHeroRespawn(game, dt) {
   if (game._heroRespawn == null) {
     game._heroRespawn = RESPAWN;
     game.heroTarget = null;
+    game.heroRoute = null;
     game.ui.say(`💀 英雄倒下了！${RESPAWN} 秒後在核心旁復活`, '#ff5e5e', 2.5);
     return;
   }
@@ -91,8 +108,9 @@ export function updateHeroRespawn(game, dt) {
   game._heroRespawn = null;
   p.isDead = false;
   p.hp = p.maxHp;
-  p.x = game.core.x;
-  p.y = Math.min(worldBounds().maxY - 30, game.core.y + game.core.radius + 40);
+  const spot = game.td.clampToRoad(game.core.x, game.core.y + game.core.radius + 40, p.radius * 0.5);   // 核心旁最近的路面
+  p.x = spot.x;
+  p.y = spot.y;
   p.invulnerableTimer = 2;
   game.particles.createShockwave(p.x, p.y, 90, '#ffd166');
   sound.playEvoFanfare();

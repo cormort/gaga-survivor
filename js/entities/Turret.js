@@ -221,13 +221,15 @@ export const TURRET_VARIANTS = {
     salvo: 2,
     target: 'air',
   },
+  // 每發 3 個目標＋專精 ×3＋穿刺打輕甲 ×1.5，原本 30／0.5 秒（約 540 DPS）是全塔最強，
+  // 守塔關建塔點拿掉 11 個後，只蓋守衛塔衝多重弩炮反而比混搭強；調到約 330 DPS
   multishot: {
     id: 'multishot',
     name: '🎯 多重弩炮',
     color: '#ffd166',
     range: 300,
-    cooldown: 0.5,
-    damage: 30,
+    cooldown: 0.6,
+    damage: 22,
     shots: 3,
   },
   // 守塔「秘法塔」專精：在目標處降下風暴，範圍內每秒 damage 點魔法傷害、持續 stormDur 秒
