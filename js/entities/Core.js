@@ -11,6 +11,7 @@
 
 import { TD_STRUCTURE_IMAGES } from '../systems/TowerDefense.js';
 
+export const COLLAPSE_FRAME = 0.45;   // 守塔主堡倒塌動畫每格秒數（4 格；main.js 的倒塌流程用同一個值）
 const CRIT_PCT = 0.35;    // 進入「危急」的血量門檻
 const WARN_PCT = 0.65;    // 進入「警戒」的血量門檻
 
@@ -56,13 +57,13 @@ export class Core {
 
   // 守塔主堡貼圖（spriteKey 由 main.js 依關卡 base 欄位設定）：4 列 完好／受損／危急／倒塌。
   // 前三列只循環前 3 格 —— 第 4 格在設定圖裡是「更嚴重一級」（危急列的第 4 格火已燒完），
-  // 混進循環會一閃一閃。倒塌列直接畫最後一格的廢墟（核心倒下時遊戲就結算了，動畫看不到）
+  // 混進循環會一閃一閃。倒塌列依 deathT（main.js 的倒塌流程累加）逐格播到廢墟
   drawSprite(ctx, sx, sy) {
     const img = TD_STRUCTURE_IMAGES[this.spriteKey];
     if (!img || !img.naturalWidth) return false;
     const C = 224, FOOT = 214, SCALE = 0.85;   // 畫出來約 150 寬（碰撞半徑 46，漏怪判定不變）
     const row = this.isDead ? 3 : { ok: 0, warn: 1, critical: 2 }[this.status];
-    const frame = this.isDead ? 3 : Math.floor(this.animTimer * 4) % 3;
+    const frame = this.isDead ? Math.min(3, Math.floor((this.deathT || 0) / COLLAPSE_FRAME)) : Math.floor(this.animTimer * 4) % 3;
     const w = C * SCALE;
     const footY = sy + this.radius * 0.7;
     ctx.drawImage(img, frame * C, row * C, C, C, sx - w / 2, footY - FOOT * SCALE, w, w);

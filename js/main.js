@@ -25,6 +25,7 @@ import { drawSocket, drawPlacementGhost } from './entities/Turret.js';
 import './tdlevels.js';   // 守塔專屬關卡併入 LEVELS（side effect）
 import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/TowerDefense.js';
 import { heroMoveVector, updateHeroRespawn } from './systems/TDHero.js';
+import { COLLAPSE_FRAME } from './entities/Core.js';
 
 // 守塔關的鏡頭縮放範圍：拉遠到整張圖放得進畫面；太小的螢幕最多拉到 TD_MIN_ZOOM，剩下的用拖曳平移
 const TD_MIN_ZOOM = 0.45;
@@ -440,6 +441,29 @@ class Game {
     }
     this._dprIdx = this._dprSteps.length - 1;   // 起始取最高階
     resize();
+  }
+
+  // 主堡倒塌：4 格動畫（每格 COLLAPSE_FRAME 秒），每倒一格再炸一次，最後停在廢墟一下才結算
+  updateCoreCollapse(dt) {
+    const c = this.core;
+    this._coreCollapse += dt;
+    c.deathT = this._coreCollapse;
+    c.update(dt);
+    this.particles.update(dt);
+    if (this.camera.shake > 0) this.camera.shake *= 0.9;
+    const step = Math.floor(this._coreCollapse / COLLAPSE_FRAME);
+    if (step > this._collapseStep && step < 4) {
+      this._collapseStep = step;
+      const ox = (Math.random() - 0.5) * 90;
+      const oy = (Math.random() - 0.5) * 40 - 30;
+      this.particles.createExplosion(c.x + ox, c.y + oy, 120);
+      sound.playExplosion();
+      this.camera.shake = Math.max(this.camera.shake, 14);
+    }
+    if (this._coreCollapse >= COLLAPSE_FRAME * 4 + 0.8) {
+      this._coreCollapse = null;
+      this.handleGameOver(false);
+    }
   }
 
   // 鏡頭縮放：守塔關拉遠看整張圖，其他模式 1:1。
@@ -1067,6 +1091,7 @@ class Game {
     document.body.classList.toggle('td-mode', !!this.td);   // CSS：守塔遊玩中把更新橫幅移到左上角（不蓋上緣入口）
     this.heroTarget = null;
     this._heroRespawn = null;
+    this._coreCollapse = null;
     this.player.heroLevel = 1;
     this.player.heroHpMul = 1;
     document.getElementById('joystick-zone')?.classList.toggle('hidden', !!this.td);   // 守塔：點地移動取代搖桿
@@ -1677,6 +1702,11 @@ class Game {
   }
 
   update(dt) {
+    // 守塔主堡倒塌中：戰場凍結，只播倒塌動畫與爆炸，播完才結算（放在計時之前，倒塌不算存活時間）
+    if (this._coreCollapse != null) {
+      this.updateCoreCollapse(dt);
+      return;
+    }
     this.gameTime += dt;
     if (this._timeStopTimer > 0) this._timeStopTimer -= dt;
 
@@ -1885,6 +1915,11 @@ class Game {
         sound.playExplosion();
         this.camera.shake = 24;
         this.ui.say(this.td ? '💥 防線失守！生命耗盡' : '💥 基地核心被摧毀！任務失敗', '#ff0055', 3);
+        if (this.core.spriteKey) {   // 守塔主堡：先播倒塌（updateCoreCollapse），播完才結算
+          this._coreCollapse = 0;
+          this._collapseStep = 0;
+          return;
+        }
         this.handleGameOver(false);
         return;
       }
