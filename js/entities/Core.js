@@ -9,6 +9,8 @@
 //   3. 危急時不夠吵：血量低於 35% 進入危急狀態 —— 外環轉紅加速、角標持續呼吸
 //      、頭頂跳出「核心危急」字樣，讓玩家知道該回頭救家了。
 
+import { TD_STRUCTURE_IMAGES } from '../systems/TowerDefense.js';
+
 const CRIT_PCT = 0.35;    // 進入「危急」的血量門檻
 const WARN_PCT = 0.65;    // 進入「警戒」的血量門檻
 
@@ -52,9 +54,35 @@ export class Core {
     if (this.hitTimer > 0) this.hitTimer -= dt;
   }
 
+  // 守塔主堡貼圖（spriteKey 由 main.js 依關卡 base 欄位設定）：4 列 完好／受損／危急／倒塌。
+  // 前三列只循環前 3 格 —— 第 4 格在設定圖裡是「更嚴重一級」（危急列的第 4 格火已燒完），
+  // 混進循環會一閃一閃。倒塌列直接畫最後一格的廢墟（核心倒下時遊戲就結算了，動畫看不到）
+  drawSprite(ctx, sx, sy) {
+    const img = TD_STRUCTURE_IMAGES[this.spriteKey];
+    if (!img || !img.naturalWidth) return false;
+    const C = 224, FOOT = 214, SCALE = 0.85;   // 畫出來約 150 寬（碰撞半徑 46，漏怪判定不變）
+    const row = this.isDead ? 3 : { ok: 0, warn: 1, critical: 2 }[this.status];
+    const frame = this.isDead ? 3 : Math.floor(this.animTimer * 4) % 3;
+    const w = C * SCALE;
+    const footY = sy + this.radius * 0.7;
+    ctx.drawImage(img, frame * C, row * C, C, C, sx - w / 2, footY - FOOT * SCALE, w, w);
+    if (this.hitTimer > 0) {   // 漏怪時底座閃一圈紅光
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, this.hitTimer * 2);
+      ctx.strokeStyle = '#ff3355';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.ellipse(sx, footY - 6, w * 0.42, w * 0.16, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    return true;
+  }
+
   draw(ctx, camera) {
     const sx = this.x - camera.x;
     const sy = this.y - camera.y;
+    if (this.spriteKey && this.drawSprite(ctx, sx, sy)) return;
     const r = this.radius;
     const pct = Math.max(0, this.hp / this.maxHp);
     const status = this.status;

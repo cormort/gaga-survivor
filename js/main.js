@@ -964,7 +964,10 @@ class Game {
     setGearTheme(this.characterId);
     this.player.game = this;
     this.td = this.level.td && this.core ? new TowerDefense(this) : null;   // 守塔：路線＋分波
-    if (this.td) this.core.isLives = true;   // HUD 改顯示成命數膠囊（UI.updateCoreHUD）
+    if (this.td) {
+      this.core.isLives = true;   // HUD 改顯示成命數膠囊（UI.updateCoreHUD）
+      this.core.spriteKey = this.level.base || 'base_keep';   // 主堡貼圖（Core.drawSprite）
+    }
     this.fitView();   // 守塔拉遠看整張圖；其他模式還原 1:1
     this.weaponManager = new WeaponManager(this.player);
     // 武器系統也要能呼叫回遊戲層 (宙斯連鎖閃電 game.chainShock、商人臨時增益
@@ -1061,6 +1064,7 @@ class Game {
     this.ui.showBuildMenu(false);
     // 守塔關的手指要拿來點建塔點、拖曳地圖：關掉「按哪裡搖桿就跳到哪裡」，只留角落搖桿
     this.input.floatingJoystick = !this.td;
+    document.body.classList.toggle('td-mode', !!this.td);   // CSS：守塔遊玩中把更新橫幅移到左上角（不蓋上緣入口）
     this.heroTarget = null;
     this._heroRespawn = null;
     this.player.heroLevel = 1;

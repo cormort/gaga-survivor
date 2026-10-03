@@ -16,6 +16,7 @@
 //   js/entities/EnemyProjectile.js  ENEMY_BULLET_KEYS
 //   js/entities/Turret.js           FACILITY_IMAGE_KEYS、TD_IMAGE_KEYS（守塔塔種：塔線 × 1/2/3 級＋專精）
 //   js/entities/AlliedUnit.js       UNIT_IMAGE_KEYS（守塔小兵逐格動畫）
+//   js/systems/TowerDefense.js      TD_STRUCTURE_KEYS（守塔入口巢穴與主堡）
 //   js/entities/DropItem.js         DROP_ITEM_KEYS（其中兩個放在 decor/）
 //   ＋ js/ 與 index.html / css / manifest 裡任何寫死的 `assets/...` 字串
 //
@@ -99,6 +100,7 @@ for (const [, line, list] of tdBody.matchAll(/([a-z_]+):\s*\[([^\]]*)\]/g)) {
   }
 }
 for (const k of arrStrings(read('js/entities/AlliedUnit.js'), 'UNIT_IMAGE_KEYS')) add(`assets/td/${k}.png`, 'AlliedUnit.js UNIT_IMAGE_KEYS');
+for (const k of arrStrings(read('js/systems/TowerDefense.js'), 'TD_STRUCTURE_KEYS')) add(`assets/td/${k}.png`, 'TowerDefense.js TD_STRUCTURE_KEYS');
 
 const dropSrc = read('js/entities/DropItem.js');
 for (const k of arrStrings(dropSrc, 'DROP_ITEM_KEYS')) {

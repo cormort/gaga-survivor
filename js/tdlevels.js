@@ -6,6 +6,7 @@
 //   pathWidth        —— 路寬 (px)；怪物被夾在路內
 //   bounds           —— 地圖矩形（約 1600×900，鏡頭拉遠到整張放得進畫面）
 //   sockets          —— 建塔點：守塔關只能蓋在這裡（點擊開建造選單）
+//   lair / base      —— 入口巢穴與主堡的貼圖鍵（assets/td/<鍵>.png；載入見 TowerDefense.js 的 TD_STRUCTURE_KEYS）
 //   waves            —— 手寫波次（見 wave()）：[{ hp, groups: [{ type, count, gap, path? }], boss? }]
 //   lives / startGold —— 選填，覆寫命數與開局金幣（預設見 TowerDefense.js 的 TD_LIVES / TD_START_GOLD）
 // 座標系：核心在原點；地圖範圍由各關 bounds 決定（不是生存者的 4000×4000）。
@@ -31,6 +32,8 @@ export const TD_LEVELS = {
   td_canyon: {
     ...base('storm'),
     id: 'td_canyon',
+    lair: 'lair_canyon',   // 入口巢穴貼圖（assets/td/，tools/cut_td_structures.py）
+    base: 'base_keep',
     name: '峽谷隘口',
     sub: '守塔 ‧ 單線',
     icon: '🏜️',
@@ -79,6 +82,8 @@ export const TD_LEVELS = {
   td_fork: {
     ...base('swamp'),
     id: 'td_fork',
+    lair: 'lair_swamp',   // 入口巢穴貼圖（assets/td/，tools/cut_td_structures.py）
+    base: 'base_keep',
     startGold: 320,   // 兩個入口：開局要能兩邊各蓋一座
     name: '雙叉河道',
     sub: '守塔 ‧ 雙線',
@@ -89,7 +94,7 @@ export const TD_LEVELS = {
     next: 'td_fortress',
     td: true,
     pathWidth: 90,
-    bounds: { minX: -800, maxX: 800, minY: -495, maxY: 405 },
+    bounds: { minX: -800, maxX: 800, minY: -570, maxY: 405 },   // 上緣多留 75：東門巢穴（約 133 高）才不會凸出地圖
     breakTime: 13,
     paths: [
       [[-800, -180], [-495, -180], [-495, 335], [-215, 335], [-215, 0], [0, 0]],
@@ -135,6 +140,8 @@ export const TD_LEVELS = {
   td_fortress: {
     ...base('frostvoid'),
     id: 'td_fortress',
+    lair: 'lair_void',   // 入口巢穴貼圖（assets/td/，tools/cut_td_structures.py）
+    base: 'base_keep',
     startGold: 420,   // 三個入口
     name: '三門要塞',
     sub: '守塔 ‧ 三線',
@@ -192,6 +199,8 @@ export const TD_LEVELS = {
   td_forgeworld: {
     ...base('lab'),
     id: 'td_forgeworld',
+    lair: 'lair_hive',   // 入口巢穴貼圖（assets/td/，tools/cut_td_structures.py）
+    base: 'base_reactor',
     startGold: 450,   // 終極關：開場就是快速蟲群
     name: '鑄造世界 ‧ 卡迪亞防線',
     sub: '守塔 ‧ 終極決戰',
@@ -202,7 +211,7 @@ export const TD_LEVELS = {
     next: null,
     td: true,
     pathWidth: 95,
-    bounds: { minX: -800, maxX: 800, minY: -830, maxY: 130 },
+    bounds: { minX: -800, maxX: 800, minY: -905, maxY: 130 },   // 上緣多留 75：兩座蟲巢（約 140 高）才不會凸出地圖
     breakTime: 14,
     theme: {
       top: '#180e07', mid: '#100904', bottom: '#080402',

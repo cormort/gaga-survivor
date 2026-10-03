@@ -33,6 +33,19 @@ export const ARMOR_CLASS = {
   brute: 'heavy', warden: 'heavy', chimera: 'heavy', ork_boy: 'heavy',
   bat: 'air', spore_mine: 'air',
 };
+// 入口巢穴與主堡的逐格貼圖（tools/cut_td_structures.py 產生；關卡用 lair / base 欄位指定）
+//   巢穴：2 列（待機、出怪中）× 2 格，每格 256×224、地面中心 (128, 214)
+//   主堡：4 列（完好、受損、危急、倒塌）× 4 格，每格 224×224、地面中心 (112, 214)
+export const TD_STRUCTURE_KEYS = ['lair_canyon', 'lair_swamp', 'lair_void', 'lair_hive', 'base_keep', 'base_reactor'];
+export const TD_STRUCTURE_IMAGES = {};
+if (typeof Image !== 'undefined') {
+  for (const k of TD_STRUCTURE_KEYS) {
+    const img = new Image();
+    img.src = `assets/td/${k}.png`;
+    TD_STRUCTURE_IMAGES[k] = img;
+  }
+}
+const LAIR = { w: 256, h: 224, foot: 214, scale: 0.62 };   // 畫出來約 140 寬（路寬 85~95）
 export const TD_LIVES = 20;              // 關卡沒寫 lives 時的預設命數
 export const TD_START_GOLD = 250;        // 關卡沒寫 startGold 時的開局金幣（約 4 座基礎砲台）
 export const LEAK = (e) => (e.isBoss ? 10 : 1);           // 漏一隻扣幾條命
@@ -234,6 +247,18 @@ export class TowerDefense {
     ctx.restore();
   }
 
+  // 入口巢穴：出怪中（這一波還在出）播第 2 列，其餘播待機。sx/sy 是地面中心的螢幕座標
+  drawLair(ctx, sx, sy) {
+    const img = TD_STRUCTURE_IMAGES[this.level.lair];
+    if (!img || !img.naturalWidth) return false;
+    const row = this.phase === 'wave' && this.queue.length ? 1 : 0;
+    const frame = Math.floor(this.game.gameTime * 3) % 2;
+    const w = LAIR.w * LAIR.scale;
+    const h = LAIR.h * LAIR.scale;
+    ctx.drawImage(img, frame * LAIR.w, row * LAIR.h, LAIR.w, LAIR.h, sx - w / 2, sy - LAIR.foot * LAIR.scale, w, h);
+    return true;
+  }
+
   // 入口標記（門、來怪紅圈）的位置：入口本身貼在地圖邊上，標記畫在邊上的話有一半會
   // 跑出地圖、壓進頂部 HUD（三門要塞北門被下一波預告蓋住）。所以沿路線往地圖內側挪
   // 一個標記半徑，整個標記都落在地圖裡。ix/iy 是指向地圖內側的單位向量
@@ -242,8 +267,13 @@ export class TowerDefense {
     const [x, y] = path[0];
     const ix = x <= b.minX + 1 ? 1 : x >= b.maxX - 1 ? -1 : 0;
     const iy = y <= b.minY + 1 ? 1 : y >= b.maxY - 1 ? -1 : 0;
-    const inset = this.level.pathWidth * 0.6 + 20;
-    return { x: x + ix * inset, y: y + iy * inset, ix, iy };
+    // 有巢穴貼圖時要挪到整張圖都在地圖裡：貼圖以底部中心為錨點往上長，
+    // 所以上緣入口要挪一整個圖高、左右入口挪半個圖寬，下緣入口挪一點就好
+    const base = this.level.pathWidth * 0.6 + 20;
+    const lair = this.level.lair ? { w: LAIR.w * LAIR.scale, h: LAIR.foot * LAIR.scale } : null;
+    const insetX = lair ? Math.max(base, lair.w / 2 + 6) : base;
+    const insetY = lair && iy > 0 ? Math.max(base, lair.h + 6) : base;
+    return { x: x + ix * insetX, y: y + iy * insetY, ix, iy };
   }
 
   // 路線：地面上的淺色帶狀路面 + 深色路肩，入口畫一個紅色門標
@@ -277,6 +307,7 @@ export class TowerDefense {
       ctx.stroke();
       ctx.setLineDash([]);
       const { x: gx, y: gy } = this.entranceMark(path);
+      if (this.drawLair(ctx, gx - cam.x, gy - cam.y)) continue;   // 有巢穴貼圖就不畫門牌
       ctx.fillStyle = 'rgba(255,60,80,0.35)';
       ctx.beginPath();
       ctx.arc(gx - cam.x, gy - cam.y, w * 0.6, 0, Math.PI * 2);

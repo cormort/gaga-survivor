@@ -3764,3 +3764,28 @@ body, html {
 .wp-heavy { background: #c9d3df; }
 .wp-air { background: #7fd1ff; }
 .wp-boss { color: #ffb703; font-weight: 800; }
+/* 守塔遊玩中（body.td-mode 且主選單已收起）：更新橫幅原本在頂部正中央 112px，
+   正好壓在地圖上緣的入口（三門要塞北門）。改成縮小停在 HUD 帶的左上角 ——
+   守塔的地圖整張排在 HUD 帶（128px）下面，資訊列置中，左上角是空的。 */
+body.td-mode:has(#start-screen.hidden) .pwa-banner {
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  transform: none;
+  animation: none;
+  max-width: calc(50vw - 260px);
+  min-width: 0;
+}
+body.td-mode:has(#start-screen.hidden) .pwa-banner .pwa-desc { display: none; }
+/* 窄螢幕資訊列離左邊更近：只留圖示＋按鈕 */
+@media (max-width: 1100px) {
+  body.td-mode:has(#start-screen.hidden) .pwa-banner .pwa-title { display: none; }
+  body.td-mode:has(#start-screen.hidden) .pwa-banner { max-width: none; }
+}
+/* 手機橫放：資訊列已經延伸到左邊，改停在資訊列下方的右側（任務提示與預告都置中，右側空著） */
+@media (max-width: 900px) {
+  body.td-mode:has(#start-screen.hidden) .pwa-banner {
+    top: calc(env(safe-area-inset-top) + 54px);
+    left: auto;
+    right: calc(env(safe-area-inset-right) + 12px);
+  }
+}
