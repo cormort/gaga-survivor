@@ -40,6 +40,9 @@ import {
 import { JEWELS, JEWEL_ORDER, jewelValue } from '../jewels.js';
 import { renderWeaponIconHtml } from '../weapons/WeaponSprites.js';
 import { questText } from '../quests.js';
+import { socketBonusOf } from '../tdsockets.js';
+import { TD_ELITE } from '../entities/Turret.js';
+import { waveModChips } from '../tdwaves.js';
 import { CODEX_MILESTONES, codexCategories, codexHas, codexProgress } from '../codex.js';
 import { save, STASH_CAP } from '../save.js';
 import { sound } from '../audio.js';
@@ -1069,6 +1072,8 @@ export class UIManager {
 
   // 守塔設施詳細資訊、專精升級與拆除回收彈窗
   // 守塔下一波預告：info 來自 TowerDefense.nextWaveInfo()（null＝隱藏）。只在內容變了才重寫 DOM
+  // 除了怪種／護甲，還要讓玩家一眼看到「這一波有什麼花招」：詞綴標籤、總數、入口分布。
+  // 這三樣是玩家決定「補對空／補穿甲／補範圍」的依據，看不到就只能等被打臉。
   updateWavePreview(info, names) {
     const el = this.wavePreview || (this.wavePreview = document.getElementById('td-wave-preview'));
     if (!el) return;
@@ -1078,29 +1083,83 @@ export class UIManager {
     el.classList.toggle('hidden', !info);
     if (!info) return;
     const ARMOR = { light: '輕甲', medium: '中甲', heavy: '重甲', air: '空中' };
-    el.innerHTML = `<b>下一波 ${info.index}</b>` + info.groups.map((g) =>
+    const mods = info.mods && info.mods.length
+      ? `<span class="wp-mods">${waveModChips(info.mods).map((c) =>
+        `<i class="wp-mod" style="--mod:${c.color}" title="${c.desc}">${c.icon} ${c.name}</i>`).join('')}</span>`
+      : '';
+    // 入口分布：只有多路線的關卡才顯示，單線關卡顯示「3 個入口」等於廢話
+    const lanes = (info.entrances || []).filter((n) => n > 0);
+    const route = lanes.length > 1 ? `<span class="wp-total">共 ${info.total || 0} 隻 ‧ 入口 ${lanes.join('／')}</span>` : '';
+    el.innerHTML = `<b>下一波 ${info.index}</b>${mods}` + info.groups.map((g) =>
       `<span class="wp-group">${names[g.type] || g.type} ×${g.count}<i class="wp-armor wp-${g.armor}">${ARMOR[g.armor] || ''}</i></span>`).join('')
-      + (info.boss ? `<span class="wp-group wp-boss">👑 ${info.boss}</span>` : '');
+      + (info.boss ? `<span class="wp-group wp-boss">👑 ${info.boss}</span>` : '')
+      + route;
+  }
+
+  // 守塔王國升級面板（資料來源：js/tdkingdom.js，rows 由 TowerDefense.kingdomRows() 組）。
+  // 面板本身不做任何規則判斷：買不買得起、滿級了沒，全在 rows 裡決定。
+  showKingdomPanel(show, rows = [], onBuy = null) {
+    const el = this.kingdomPanel || (this.kingdomPanel = document.getElementById('td-kingdom-panel'));
+    if (!el) return;
+    this.kingdomBuy = onBuy;
+    el.classList.toggle('hidden', !show);
+    if (!show) { el.replaceChildren(); return; }
+    const html = rows.map((r) => {
+      const pips = Array.from({ length: r.max }, (_, i) => `<i class="kp-pip${i < r.level ? ' on' : ''}"></i>`).join('');
+      const act = r.maxed
+        ? '<span class="kp-max">MAX</span>'
+        : `<button class="kp-buy${r.affordable ? '' : ' poor'}" data-key="${r.key}">${r.cost} 🪙</button>`;
+      return `<div class="kp-row"><span class="kp-ico">${r.icon}</span>`
+        + `<span class="kp-main"><b>${r.name}</b><span class="kp-pips">${pips}</span>`
+        + `<small>${r.maxed ? r.desc : r.nextText}</small></span>${act}</div>`;
+    }).join('');
+    el.innerHTML = '<div class="kp-title">🏰 <b>王國升級</b><small>不佔建塔點、不怕被拆的全局投資</small></div>'
+      + html
+      + '<button class="kp-close" type="button">關閉 (K)</button>';
+    el.querySelectorAll('.kp-buy').forEach((b) => {
+      b.addEventListener('click', () => { if (this.kingdomBuy) this.kingdomBuy(b.dataset.key); });
+    });
+    el.querySelector('.kp-close')?.addEventListener('click', () => this.showKingdomPanel(false));
   }
 
   // 守塔建造選單：pos 是建塔點的螢幕座標，選單浮在它上方（太靠上就改放下方）
-  showBuildMenu(show, pos = null, items = [], onPick = null) {
+  // socket＝選填，帶地基加成時在選單頂端顯示「這一格會給什麼」
+  showBuildMenu(show, pos = null, items = [], onPick = null, socket = null) {
     const el = this.buildMenu;
     if (!el) return;
     el.classList.toggle('hidden', !show);
     if (!show) return;
-    el.replaceChildren(...items.map((it) => {
+
+    const sb = socketBonusOf(socket);
+    const banner = document.createElement('div');
+    banner.className = `td-build-banner${sb ? '' : ' plain'}`;
+    banner.innerHTML = sb
+      ? `<b style="color:${sb.color}">${sb.icon} ${sb.label}</b><small>${sb.desc}</small>`
+      : '<b>一般建塔點</b><small>沒有地基加成，但位置通常更貼路</small>';
+
+    const rows = items.map((it, i) => {
       const b = document.createElement('button');
       b.className = `td-build-opt${it.affordable ? '' : ' poor'}`;
       b.title = it.desc;
-      b.innerHTML = `<span class="ico">${it.icon}</span><span>${it.name}</span><span class="cost">${it.cost} 🪙</span>`;
+      const tags = (it.tags || []).map((t) => `<i class="td-tag ${t.good ? 'good' : 'bad'}">${t.label}</i>`).join('');
+      // 數字鍵提示：列表順序就是 1–4，跟 Menu.js 的 keydown 對齊
+      // 兩行：第一行是可以互相比較的數字（DPS／射程／對空），第二行是機制說明
+      // （減速、派兵、火海…）。只留其中一行都會漏東西：純數字看不出「會減速」，
+      // 純文字則沒辦法比較誰打得痛。
+      b.innerHTML = `<span class="td-opt-key">${i + 1}</span><span class="ico">${it.icon}</span>`
+        + `<span class="td-opt-main"><b>${it.name}</b><small class="td-stats">${it.stats || it.desc}</small>`
+        + `<small class="td-desc">${it.stats ? it.desc : ''}</small>`
+        + `<span class="td-tags">${tags}</span></span>`
+        + `<span class="cost">${it.cost} 🪙</span>`;
       b.addEventListener('click', () => onPick(it.type));
       return b;
-    }));
-    const half = 126;   // 選單寬 236 的一半再留邊
+    });
+
+    el.replaceChildren(banner, ...rows);
+    const half = 158;   // 選單寬 306 的一半再留邊
     el.style.left = `${Math.max(half, Math.min(window.innerWidth - half, pos.x))}px`;
     el.style.top = `${pos.y}px`;
-    el.classList.toggle('below', pos.y < 230);
+    el.classList.toggle('below', pos.y < 320);   // 條列式選單比舊的 2×2 高，判定門檻跟著提高
   }
 
   showFacilityInspector(show, turret = null, callbacks = {}) {
@@ -1115,20 +1174,21 @@ export class UIManager {
         this.inspectType.textContent = (turret.facilityType === 'barracks' || turret.facilityType === 'manufactorum') ? '帝皇軍工' : '防禦工事';
       }
 
-      // 戰術地基槽狀態
-      if (turret.socket && turret.socket.bonus) {
+      // 戰術地基槽狀態：名稱／說明／圖示一律查 js/tdsockets.js（八種加成，不再寫死在這裡），
+      // 後面再接「這一座實際拿到的動態效果」——訓練場層數、金庫利率、指揮所供給／接受都只在遊玩中才有值
+      const sb = socketBonusOf(turret.socket);
+      if (sb) {
         this.inspectSocketBadge?.classList.remove('hidden');
-        if (this.inspectSocketName) this.inspectSocketName.textContent = turret.socket.label;
-        const bonusDesc = turret.socket.bonus === 'range' ? '射程 +15%' :
-                          turret.socket.bonus === 'haste' ? '攻擊冷卻 -15%' :
-                          turret.socket.bonus === 'damage' ? '傷害威力 +20%' :
-                          turret.socket.bonus === 'armor' ? '最大耐久 +30%' : '戰術增益';
-        if (this.inspectSocketDesc) this.inspectSocketDesc.textContent = bonusDesc;
-        const socketIcon = turret.socket.bonus === 'range' ? '🎯' :
-                           turret.socket.bonus === 'haste' ? '⚡' :
-                           turret.socket.bonus === 'damage' ? '⚔️' :
-                           turret.socket.bonus === 'armor' ? '🛡️' : '✨';
-        if (this.inspectSocketIcon) this.inspectSocketIcon.textContent = socketIcon;
+        if (this.inspectSocketName) this.inspectSocketName.textContent = sb.label;
+        if (this.inspectSocketIcon) this.inspectSocketIcon.textContent = sb.icon;
+        if (this.inspectSocketDesc) {
+          const live = [];
+          if (turret.vetStacks > 0) live.push(`已累積 ${turret.vetStacks} 層（威力 ×${(turret.vetMul || 1).toFixed(2)}）`);
+          if (turret.auraRadius > 0) live.push(`供給半徑 ${turret.auraRadius} 內其他塔 +${Math.round((turret.auraMul || 0) * 100)}%`);
+          if (turret.auraBoost > 0) live.push(`正接受指揮所 +${Math.round(turret.auraBoost * 100)}%`);
+          if (turret.bankRate > 0) live.push(`每波利息 ${Math.round(turret.bankRate * 100)}%（單座上限 ${turret.bankCap} 🪙）`);
+          this.inspectSocketDesc.textContent = live.length ? `${sb.desc}｜${live.join('，')}` : sb.desc;
+        }
       } else {
         this.inspectSocketBadge?.classList.add('hidden');
       }
@@ -1186,6 +1246,13 @@ export class UIManager {
         this.inspectTitle.textContent = td.title;
         this.inspectLevel.textContent = turret.branch ? 'MAX' : `LV.${turret.level}`;
         this.inspectType.textContent = { pierce: '穿刺攻擊', siege: '攻城攻擊', magic: '魔法攻擊', normal: '普通攻擊' }[turret.dmgType] || '防禦工事';
+        // 實戰歷練（B 項）：塔自己累計的擊殺與星等，直接接在傷害類型後面。
+        // 不新增 DOM 是因為檢查面板縮圖後本來就很擠，而這一行原本資訊密度就低。
+        const tier = turret.eliteTier || 0;
+        const nextNeed = turret.eliteNext ? turret.eliteNext() : null;
+        this.inspectType.textContent += tier > 0
+          ? `｜⭐${tier} ${TD_ELITE.name[tier]}（擊殺 ${turret.kills}${nextNeed != null ? `，再 ${nextNeed} 隻升星` : '，已滿星'}）`
+          : `｜擊殺 ${turret.kills || 0}（再 ${nextNeed ?? 0} 隻升 ★1）`;
         const st = turret.statSummary();
         this.inspectDmg.textContent = st?.dmg ?? '—';
         this.inspectRange.textContent = st?.range ? `${st.range} px` : '—';

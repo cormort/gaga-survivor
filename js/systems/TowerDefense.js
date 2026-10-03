@@ -15,6 +15,9 @@ import { enemyScale } from '../levels.js';
 import { projectToSegment } from '../tdlevels.js';
 import { sound } from '../audio.js';
 import { heroLevelUp, drawHeroTarget } from './TDHero.js';
+import { WAVE_MODS, waveModMul, AIR_FILLER } from '../tdwaves.js';
+import { KINGDOM_UPGRADES, kingdomValue, kingdomNextCost, kingdomTrack } from '../tdkingdom.js';
+import { applyTDStats } from '../tdtowers.js';
 
 const WAVE_BONUS = (w) => 60 + w * 15;   // 清完第 w 波的獎金
 const EARLY_GOLD_PER_SEC = 4;            // 提前開戰：每剩 1 秒休息 +4 金幣
@@ -52,7 +55,7 @@ const LAIR = { w: 256, h: 224, foot: 214, scale: 0.62 };   // 畫出來約 140 �
 export const TD_LIVES = 20;              // 關卡沒寫 lives 時的預設命數
 export const TD_START_GOLD = 250;        // 關卡沒寫 startGold 時的開局金幣（約 4 座基礎砲台）
 export const LEAK = (e) => (e.isBoss ? 10 : 1);           // 漏一隻扣幾條命
-export const bounty = (e) => (e.isBoss ? 150 : 2 + (e.exp || 1) * 2);   // 擊殺賞金
+export const bounty = (e) => Math.round((e.isBoss ? 150 : 2 + (e.exp || 1) * 2) * (e.bountyMul || 1));   // 擊殺賞金（精英詞綴會再乘）
 
 export class TowerDefense {
   constructor(game) {
@@ -73,6 +76,72 @@ export class TowerDefense {
       const m = this.entranceMark(p);
       return [[m.x, m.y], ...p.slice(1)];
     });
+    // 王國升級（js/tdkingdom.js）：每條線目前的等級，0 = 還沒買。買了的效果見 kingdomStat()
+    this.kingdom = {};
+    this._heroKingdomMul = 1;   // 英雄的加成是乘在 modeDmgMul 上，要記住上次乘到哪才不會重複疊
+  }
+
+  // 王國升級目前提供的全局數值（每次買升級／要顯示時現算，不另外快取）
+  kingdomStat() {
+    const lv = (k) => kingdomValue(k, this.kingdom[k] || 0);
+    return {
+      goldBonus: lv('economy'),
+      costCut: lv('engineering'),
+      dmg: lv('ballistics'),
+      range: lv('optics'),
+      earlyBonus: lv('logistics'),
+      hero: lv('hero'),
+    };
+  }
+
+  // 面板要用的列：UI 只負責畫，能不能買、多少錢都在這裡決定
+  kingdomRows() {
+    return KINGDOM_UPGRADES.map((t) => {
+      const level = this.kingdom[t.key] || 0;
+      const cost = kingdomNextCost(t.key, level);
+      const maxed = cost == null;
+      return {
+        key: t.key, icon: t.icon, name: t.name, desc: t.desc,
+        level, max: t.levels.length, cost, maxed,
+        value: kingdomValue(t.key, level),
+        nextText: maxed ? '' : t.levels[level].text,
+        affordable: !maxed && this.game.gold >= cost,
+      };
+    });
+  }
+
+  // 買一階王國升級。已滿級或錢不夠就只跳提示、不扣款。
+  buyKingdom(key) {
+    const g = this.game;
+    const track = kingdomTrack(key);
+    if (!track) return false;
+    const level = this.kingdom[key] || 0;
+    const cost = kingdomNextCost(key, level);
+    if (cost == null) { g.ui.say(`${track.name} 已經滿級了`, '#9aa4b2', 1.5); return false; }
+    if (g.gold < cost) { g.ui.say(`需要 ${cost} 🪙 才能升級${track.name}`, '#ff6b7a', 1.5); return false; }
+    g.gold -= cost;
+    this.kingdom[key] = level + 1;
+    this.applyKingdom();
+    g.ui.say(`🏰 ${track.name} Lv.${level + 1} — ${track.levels[level].text}`, '#ffd166', 2.4);
+    return true;
+  }
+
+  // 把王國升級的全局倍率推到「已經在場上」的東西：塔（含兵營小兵與傭兵，因為它們的
+  // damageMul 每幀跟著塔走）與英雄。已蓋好的塔要立刻受益，否則玩家會覺得升級沒用。
+  applyKingdom() {
+    const g = this.game;
+    const st = this.kingdomStat();
+    for (const t of g.turrets || []) {
+      t.kingdomDmgMul = 1 + st.dmg;
+      t.kingdomRangeMul = 1 + st.range;
+      applyTDStats(t);
+    }
+    const p = g.player;
+    if (p) {
+      const next = 1 + st.hero;
+      if (this._heroKingdomMul > 0) p.modeDmgMul *= next / this._heroKingdomMul;
+      this._heroKingdomMul = next;
+    }
   }
 
   get total() {
@@ -96,17 +165,27 @@ export class TowerDefense {
     if (this.phase !== 'break' || this.waveIdx >= this.total) return;
     const g = this.game;
     if (early && this.timer > 0) {
-      const bonus = Math.round(this.timer * EARLY_GOLD_PER_SEC);
+      // 王國升級「後勤」把每剩 1 秒的金幣從 4 往上加
+      const perSec = EARLY_GOLD_PER_SEC + this.kingdomStat().earlyBonus;
+      const bonus = Math.round(this.timer * perSec);
       g.gold += bonus;
       g.ui.say(`⏩ 提前開戰！+${bonus} 🪙`, '#ffd166', 1.8);
     }
     const wave = this.waves[this.waveIdx];
     const paths = this.paths;
+    // 波次詞綴（js/tdwaves.js）：數量與空襲要在排佇列時就決定，
+    // 血量／移速／護甲／賞金則跟著每個佇列項目帶到 spawn()（同一波可能橫跨好幾秒）
+    const mods = wave.mods || [];
+    const mm = waveModMul(mods);
+    const groups = wave.groups.map((grp) => ({ ...grp, count: Math.max(1, Math.round(grp.count * mm.count)) }));
+    // 空襲：追加一批飛行單位。數量隨波次成長，否則後期的空襲等於沒加一樣。
+    if (mods.includes('aerial')) groups.push({ type: AIR_FILLER, count: Math.round(6 + this.waveIdx * 1.5), gap: 0.4 });
+
     this.queue = [];
-    wave.groups.forEach((grp, gi) => {
+    groups.forEach((grp, gi) => {
       for (let k = 0; k < grp.count; k++) {
         const path = grp.path != null ? paths[grp.path % paths.length] : paths[(k + gi) % paths.length];
-        this.queue.push({ t: gi * GROUP_STAGGER + k * grp.gap, type: grp.type, path });
+        this.queue.push({ t: gi * GROUP_STAGGER + k * grp.gap, type: grp.type, path, mods });
       }
     });
     this.queue.sort((a, b) => a.t - b.t);
@@ -114,7 +193,8 @@ export class TowerDefense {
     this.phase = 'wave';
     this.waveIdx++;
     sound.playEvoFanfare();
-    g.ui.say(`⚔️ 第 ${this.waveIdx}/${this.total} 波來襲！`, '#ff5e5e', 2);
+    const modNames = mods.map((m) => (WAVE_MODS[m] ? WAVE_MODS[m].name : null)).filter(Boolean).join('、');
+    g.ui.say(`⚔️ 第 ${this.waveIdx}/${this.total} 波來襲！${modNames ? `〔${modNames}〕` : ''}`, '#ff5e5e', 2);
     if (wave.boss) {
       const isFinal = this.waveIdx === this.total;
       g.spawner.spawnBoss({ ...wave.boss, hp: Math.round(wave.boss.hp * TD_BOSS_HP * g.rules.enemyHpMul), final: isFinal }, g.player, g.enemies, (boss) => g.onBossSpawned(boss));
@@ -176,17 +256,21 @@ export class TowerDefense {
     return TD_HP * (this.level.hpScale || 1) * this.game.rules.enemyHpMul * waveHp;
   }
 
-  spawn({ type, path }) {
+  spawn({ type, path, mods = [] }) {
     const g = this.game;
+    const mm = waveModMul(mods);
     const scale = enemyScale(0, this.level, g.rules);   // 只取移速與傷害；血量下面重算
-    scale.speed *= TD_SPEED;
-    scale.hp = this.hpMul();
+    scale.speed *= TD_SPEED * mm.speed;
+    scale.hp = this.hpMul() * mm.hp;
     const [x, y] = path[0];
     const e = new Enemy(type, x + (Math.random() - 0.5) * this.half, y + (Math.random() - 0.5) * this.half, scale);
     const skin = this.level.enemySkins && this.level.enemySkins[type];
     if (skin) e.baseSpriteKey = skin;   // 主題地圖只換外觀（例：紅警的 brute 畫成犀牛坦克），數值與護甲照原怪種
     e.armorClass = ARMOR_CLASS[type] || 'medium';
     e.flying = e.armorClass === 'air';
+    // 重甲縱隊：只把地面單位升成重甲。若連飛行怪也改，空襲＋重甲就會把「對空塔」整條廢掉。
+    if (mods.includes('armored') && !e.flying) e.armorClass = 'heavy';
+    e.bountyMul = mm.bounty;
     if (e.flying) path = [path[0], path[path.length - 1]];   // 飛行怪不走路線，從入口直線飛向核心
     e.path = path;
     e.pathIdx = 1;
@@ -197,10 +281,37 @@ export class TowerDefense {
 
   waveCleared() {
     const g = this.game;
-    const bonus = WAVE_BONUS(this.waveIdx);
+    // 王國升級「稅收」直接放大每波清空獎金（利息的計算基準也跟著變高，這是刻意的）
+    const bonus = Math.round(WAVE_BONUS(this.waveIdx) * (1 + this.kingdomStat().goldBonus));
     g.gold += bonus;
     heroLevelUp(g);
-    g.ui.say(`✅ 第 ${this.waveIdx} 波清空！+${bonus} 🪙 ‧ 英雄升到 Lv.${g.player.heroLevel}`, '#3ddc84', 2.2);
+
+    // 地基的經濟／成長加成（定義見 js/tdsockets.js）：
+    //   金庫 bank      —— 清空當下結算利息（現有金幣 ×5%，單座上限 80）
+    //   訓練場 veteran —— 每清一波，這座塔永久 +4% 威力
+    // 兩者是相反的取捨：金庫要你「忍住不花錢」，訓練場要你「越早蓋越好」。
+    // 利息刻意用「清空當下」的金幣計算（而不是波前的存款），否則玩家可以靠預支獎金套利。
+    let interest = 0;
+    let veteranCount = 0;
+    let veteranMax = 0;
+    for (const t of g.turrets) {
+      if (t.isDead) continue;
+      if (t.bankRate > 0) interest += Math.min(t.bankCap || 0, Math.round(g.gold * t.bankRate));
+      if (t.vetRate > 0) {
+        t.vetStacks = (t.vetStacks || 0) + 1;
+        t.vetMul = (t.vetMul || 1) * (1 + t.vetRate);
+        t.dmgMul = (t.dmgMul || 1) * (1 + t.vetRate);   // 下一次升級／專精時 applyTDStats 會用 vetMul 重算
+        veteranCount++;
+        veteranMax = Math.max(veteranMax, Math.round((t.vetMul - 1) * 100));
+      }
+    }
+    if (interest > 0) g.gold += interest;
+
+    const parts = [`✅ 第 ${this.waveIdx} 波清空！+${bonus} 🪙`];
+    if (interest > 0) parts.push(`金庫利息 +${interest} 🪙`);
+    if (veteranCount > 0) parts.push(`訓練場 ×${veteranCount} 成長（最高 +${veteranMax}%）`);
+    parts.push(`英雄升到 Lv.${g.player.heroLevel}`);
+    g.ui.say(parts.join(' ‧ '), '#3ddc84', 2.2);
     if (this.waveIdx >= this.total) {
       // 走到這裡代表最後一波（含首領）都已擊殺或漏掉。擊殺首領會先在
       // cleanupDeadEnemies 判勝；首領漏掉但命數還在，也算守住了
@@ -254,17 +365,33 @@ export class TowerDefense {
   nextWaveInfo() {
     if (this.phase !== 'break' || this.waveIdx >= this.total) return null;
     const w = this.waves[this.waveIdx];
+    const mods = w.mods || [];
+    const mm = waveModMul(mods);
     const n = this.level.paths.length;
     const entrances = new Array(n).fill(0);
     const byType = new Map();   // 同一怪種分走不同入口時合併成一筆
     for (const grp of w.groups) {
-      if (grp.path != null) entrances[grp.path % n] += grp.count;
-      else for (let k = 0; k < grp.count; k++) entrances[k % n]++;
+      const count = Math.max(1, Math.round(grp.count * mm.count));
+      if (grp.path != null) entrances[grp.path % n] += count;
+      else for (let k = 0; k < count; k++) entrances[k % n]++;
       const g = byType.get(grp.type) || { type: grp.type, count: 0, armor: ARMOR_CLASS[grp.type] || 'medium' };
-      g.count += grp.count;
+      g.count += count;
       byType.set(grp.type, g);
     }
-    return { index: this.waveIdx + 1, groups: [...byType.values()], entrances, boss: w.boss ? w.boss.name : null };
+    // 空襲的追加批也要先算進來，否則預告會少報一整群（玩家就是照預告決定要不要補對空）
+    if (mods.includes('aerial')) {
+      const count = Math.round(6 + this.waveIdx * 1.5);
+      const g = byType.get(AIR_FILLER) || { type: AIR_FILLER, count: 0, armor: ARMOR_CLASS[AIR_FILLER] || 'air' };
+      g.count += count;
+      byType.set(AIR_FILLER, g);
+      for (let k = 0; k < count; k++) entrances[k % n]++;
+    }
+    const total = [...byType.values()].reduce((s, g) => s + g.count, 0);
+    return {
+      index: this.waveIdx + 1, groups: [...byType.values()], entrances,
+      boss: w.boss ? w.boss.name : null, mods, total,
+      hpPct: Math.round(mm.hp * 100), speedPct: Math.round(mm.speed * 100),
+    };
   }
 
   objective() {

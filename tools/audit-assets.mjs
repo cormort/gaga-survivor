@@ -25,8 +25,11 @@
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
+// Windows 上 `new URL(import.meta.url).pathname` 會給出 `/D:/...`，
+// 再 path.join 一次就變成 `D:\D:\...`（全部讀不到）。用 fileURLToPath 才是可攜的寫法。
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const STRICT = process.argv.includes('--strict');
 const read = (p) => readFileSync(path.join(ROOT, p), 'utf8');
 

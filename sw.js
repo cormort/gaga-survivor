@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v83';
+const FALLBACK_VERSION = 'gaga-v84';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -351,6 +351,9 @@ const PRECACHE = [
   './js/levels.js',
   './js/tdlevels.js',
   './js/tdtowers.js',
+  './js/tdsockets.js',
+  './js/tdwaves.js',
+  './js/tdkingdom.js',
   './js/meta.js',
   './js/modes.js',
   './js/save.js',

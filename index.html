@@ -151,6 +151,8 @@
 
     <!-- 守塔：點建塔點跳出的建造選單（位置由 UI.showBuildMenu 依建塔點螢幕座標設定） -->
     <div id="td-build-menu" class="hidden" role="menu" aria-label="選擇要蓋的塔"></div>
+    <!-- 王國升級面板（守塔專用）：內容由 UI.showKingdomPanel 產生 -->
+    <div id="td-kingdom-panel" class="hidden" role="dialog" aria-label="王國升級"></div>
 
     <!-- 虛擬搖桿 (觸控/滑鼠支援) -->
     <div id="joystick-zone">
@@ -225,6 +227,10 @@
       <button id="btn-next-wave" class="action-btn hidden" title="提前開戰 (N)：剩餘休息秒數換成金幣">
         <span class="action-icon">⏩</span>
         <span class="action-key">N</span>
+      </button>
+      <button id="btn-td-kingdom" class="action-btn hidden" title="王國升級 (K)：花金幣買全局加成，不佔建塔點">
+        <span class="action-icon">🏰</span>
+        <span class="action-key">K</span>
       </button>
       <button id="btn-hire" class="action-btn hire-btn" title="僱傭傭兵 (G)">
         <span class="action-icon">💂</span>

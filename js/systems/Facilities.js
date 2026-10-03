@@ -8,23 +8,40 @@
 // 外部（Progression 的里程碑獎勵、測試）走 Game 上的 goldMul() 薄包裝；
 // `game.turretCost` / `game.mercCost` 這兩個屬性存取由主檔既有的 getter 維持。
 
-import { Turret, TURRET_VARIANTS, FACILITY_TYPES } from '../entities/Turret.js';
+import { Turret, TURRET_VARIANTS, FACILITY_TYPES, TD_ELITE } from '../entities/Turret.js';
 import { Mercenary, MERC, REALM, rollMercCandidates } from '../entities/Mercenary.js';
 import { Projectile } from '../entities/Projectile.js';
 import { tdUnitSprite } from '../entities/AlliedUnit.js';
 import { sound } from '../audio.js';
 import { save } from '../save.js';
 import { enemyScale } from '../levels.js';
-import { TD_TOWERS, TD_BRANCHES, ARMOR_MUL, applyTDStats } from '../tdtowers.js';
+import { TD_TOWERS, TD_BRANCHES, ARMOR_MUL, ARMOR_NAMES, applyTDStats, tdTowerPreview } from '../tdtowers.js';
+
+// 打擊感 (E 項)：塔命中的火花顏色（跟 js/tdtowers.js 的 dmgType 對齊）
+const SPARK_COLORS = { pierce: '#ffd166', magic: '#c77dff', siege: '#ff8c42', normal: '#e9ecef' };
+// 每發命中都噴粒子的話，後期一波上百隻怪會直接把 render 時間吃光，所以只抽樣一小部分
+const TURRET_SPARK_CHANCE = 0.4;
+
+// 建造選單目前的「選了這張塔要做什麼」回呼（openBuildMenu 寫、closeBuildMenu 清）。
+// 見 openBuildMenu 的註解：不能掛在 game 上，否則 tools/check-refactor-refs.mjs 會誤判成重構殘留。
+let buildMenuPick = null;
 
 // 金幣乘數的天花板。天賦財運 × 模式 × 祝福 × 每日規則 × 淘金潮是純乘法疊加、
 // 原本沒有上限 —— 實測空存檔 23 分鐘 5.8 萬金，帶滿 meta 加成的存檔同時間 142 萬，
 // 差 25 倍，砲塔與傭兵變成無限供應。
 const GOLD_MUL_CAP = 8;
 
+// 守塔的造價與升級費：王國升級的「工程學」會打折。所有守塔的價格都必須走這裡，
+// 否則會出現「選單寫 70 🪙、實際扣 64 🪙」這種對不上的情形（舊版本就是直接讀 d.cost）。
+export function tdCost(game, base) {
+  if (!game.td) return base;
+  const cut = game.td.kingdomStat ? game.td.kingdomStat().costCut : 0;
+  return Math.max(1, Math.round(base * (1 - cut)));
+}
+
 export function getFacilityCost(game, type = 'turret') {
   const conf = FACILITY_TYPES[type] || FACILITY_TYPES.turret;
-  if (game.td) return conf.baseCost;   // 守塔關：固定價格（經典守塔），金幣來源是固定的賞金與波次獎金，不會無限膨脹
+  if (game.td) return tdCost(game, conf.baseCost);   // 守塔關：固定價格（經典守塔），金幣來源是固定的賞金與波次獎金，不會無限膨脹
   const count = game.turrets.filter((t) => (t.facilityType || 'turret') === type).length;
   // 原本是線性 (60 + 35n)，蓋 20 座也才 760 —— 後期金幣以萬計，等於無限重建。
   // 乘上 1.12^n 形成軟天花板：20 座約 7.3k、30 座約 33k、40 座約 136k。
@@ -321,11 +338,12 @@ export function inspectFacility(game, turret) {
 function tdInspectInfo(game, t) {
   const d = TD_TOWERS[t.tdKey];
   return {
-    upgradeCost: !t.branch && t.level < 3 ? d.up[t.level - 1] : null,
+    upgradeCost: !t.branch && t.level < 3 ? tdCost(game, d.up[t.level - 1]) : null,
     sellValue: Math.round(t.invested * 0.7),
     branches: !t.branch && t.level === 3 ? d.branches.map((key) => {
       const b = TD_BRANCHES[key];
-      return { name: b.name, icon: b.icon, desc: b.desc, cost: b.cost, affordable: game.gold >= b.cost, onPick: () => chooseTDBranch(game, t, key) };
+      const cost = tdCost(game, b.cost);
+      return { name: b.name, icon: b.icon, desc: b.desc, cost, affordable: game.gold >= cost, onPick: () => chooseTDBranch(game, t, key) };
     }) : null,
     title: t.branch ? TD_BRANCHES[t.branch].name : d.name,
     icon: t.branch ? TD_BRANCHES[t.branch].icon : d.icon,
@@ -341,30 +359,61 @@ export function closeFacilityInspector(game) {
 // ── 守塔關：點建塔點 → 建造選單（塔種與升級路線見 js/tdtowers.js） ──
 export function openBuildMenu(game, socket) {
   closeFacilityInspector(game);
+  game.ui.showKingdomPanel(false);   // 王國升級面板跟建造選單搶同一塊畫面，開一個就關另一個
   const s = { x: (socket.x - game.camera.x) * game.zoom, y: (socket.y - game.camera.y) * game.zoom };
-  const items = Object.entries(TD_TOWERS).map(([key, d]) => (
-    { type: key, icon: d.icon, name: d.name, desc: d.desc, cost: d.cost, affordable: game.gold >= d.cost }
-  ));
+  // 每一列除了名稱與價格，再帶一行實際數據（DPS／射程／對空）與護甲相剋標籤。
+  // 「簡陋」的來源常常不是玩法而是資訊：玩家看不到 DPS 就只能憑圖示亂蓋。
+  const items = Object.entries(TD_TOWERS).map(([key, d]) => {
+    const p = tdTowerPreview(key);
+    const tags = [];
+    if (p) {
+      for (const c of p.counters) tags.push({ label: `剋${ARMOR_NAMES[c]}`, good: true });
+      for (const c of p.weak) tags.push({ label: `弱${ARMOR_NAMES[c]}`, good: false });
+      if (p.canAir) tags.push({ label: '可對空', good: true });
+    }
+    const cost = tdCost(game, d.cost);
+    return {
+      type: key, icon: d.icon, name: d.name, desc: d.desc, cost,
+      affordable: game.gold >= cost,
+      // 兵營沒有自己的 DPS（開火的是小兵），硬寫「DPS 0」比不寫更糟 → 換一種說法。
+      // 完整機制由 desc 顯示在下一行，所以這裡只放「一眼比較得出來」的數字。
+      stats: p
+        ? (p.units
+          ? '小兵代打｜打不到空中'
+          : `DPS ${p.dps}${p.aoe ? '（範圍）' : ''}｜射程 ${Math.round(p.range)}｜${p.canAir ? '對空對地' : '只打地面'}`)
+        : '',
+      tags,
+    };
+  });
   game.buildMenuSocket = socket;
-  game.ui.showBuildMenu(true, s, items, (key) => {
+  // A 項操作打磨：把選單內容留在 game 上、回呼留在模組層，讓 Menu.js 的數字鍵 1–4 能直接選塔。
+  // 之前只有滑鼠能選，鍵盤玩家被迫在「手放在方向鍵上」與「移動滑鼠」之間來回。
+  //
+  // 回呼刻意不放 game.buildMenuPick：tools/check-refactor-refs.mjs 會把任何
+  // `game.名字(` 當成 Game 的方法呼叫，而 Game 只認 `  name(...)` 形式的成員
+  // （建構子裡的 this.x = 不算），放了就會被判定成重構殘留引用而讓驗證紅燈。
+  buildMenuPick = (key) => {
     closeBuildMenu(game);
     buildTDTower(game, socket, key);
-  });
+  };
+  game.buildMenuKeys = items.map((it, i) => ({ index: i + 1, key: it.type, cost: it.cost, name: it.name, affordable: it.affordable }));
+  game.ui.showBuildMenu(true, s, items, buildMenuPick, socket);
 }
 
 export function buildTDTower(game, socket, key) {
   const d = TD_TOWERS[key];
   if (!d || socket.occupied) return null;
-  if (game.gold < d.cost) {
-    game.ui.say(`金幣不足，${d.name}需要 ${d.cost} 🪙`, '#ffb703', 1.6);
+  const cost = tdCost(game, d.cost);
+  if (game.gold < cost) {
+    game.ui.say(`金幣不足，${d.name}需要 ${cost} 🪙`, '#ffb703', 1.6);
     sound.playHurt();
     return null;
   }
-  game.gold -= d.cost;
+  game.gold -= cost;
   const t = new Turret(socket.x, socket.y, d.type, d.variant || 'standard', socket);
   t.tdKey = key;
   t.dmgType = d.dmgType;
-  t.invested = d.cost;
+  t.invested = cost;
   if (d.type !== 'barracks') t.priority = 'first';   // 會自己挑目標的塔：預設先打走最前面的怪
   if (d.type === 'barracks') {
     t.maxUnits = 3;
@@ -384,7 +433,7 @@ export function buildTDTower(game, socket, key) {
 export function upgradeTDTower(game, t) {
   const d = TD_TOWERS[t.tdKey];
   if (t.branch || t.level >= 3) return;
-  const cost = d.up[t.level - 1];
+  const cost = tdCost(game, d.up[t.level - 1]);
   if (game.gold < cost) {
     game.ui.say(`金幣不足，升級需要 ${cost} 🪙`, '#ff0055', 1.6);
     sound.playHurt();
@@ -405,13 +454,14 @@ export function upgradeTDTower(game, t) {
 export function chooseTDBranch(game, t, key) {
   const b = TD_BRANCHES[key];
   if (!b || t.branch || t.level < 3 || !TD_TOWERS[t.tdKey].branches.includes(key)) return;
-  if (game.gold < b.cost) {
-    game.ui.say(`金幣不足，${b.name}需要 ${b.cost} 🪙`, '#ff0055', 1.6);
+  const cost = tdCost(game, b.cost);
+  if (game.gold < cost) {
+    game.ui.say(`金幣不足，${b.name}需要 ${cost} 🪙`, '#ff0055', 1.6);
     sound.playHurt();
     return;
   }
-  game.gold -= b.cost;
-  t.invested += b.cost;
+  game.gold -= cost;
+  t.invested += cost;
   t.branch = key;
   t.level = 4;
   const oldType = t.facilityType;
@@ -446,15 +496,47 @@ function removeUnitsOf(game, t) {
   if (game.alliedUnits) game.alliedUnits = game.alliedUnits.filter((u) => u.facility !== t);
 }
 
+// 實戰歷練（B 項）：把一次擊殺記在某座塔頭上，升星就立刻重算加成並報訊。
+// 兩個來源都走這裡 —— 塔自己的砲火（updateTurrets 的傷害回呼）與兵營小兵的擊殺
+// （updateAlliedUnits 讀 AlliedUnit 的 u.kills）。兵營塔自己一發子彈都不會發，
+// 少了第二條路它永遠停在 ★0。
+function creditKill(game, t) {
+  if (!t || !t.addKill || !t.addKill()) return;
+  applyTDStats(t);
+  const nm = TD_ELITE.name[t.eliteTier] || '';
+  const label = t.tdKey && TD_TOWERS[t.tdKey] ? TD_TOWERS[t.tdKey].name : '防禦塔';
+  game.ui.say(`⭐ ${label}升上「${nm}」（★${t.eliteTier}）— 累計擊殺 ${t.kills}`, '#ffd166', 1.8);
+  if (game.particles) game.particles.createShockwave(t.x, t.y, 70, '#ffd166');
+}
+
 // 攻擊類型 × 護甲（魔獸三式矩陣，見 tdtowers.js；TowerDefense 標上 e.armorClass）
 function resistMul(t, e) {
   const row = t.dmgType && ARMOR_MUL[t.dmgType];
-  return row ? row[e.armorClass || 'medium'] ?? 1 : 1;
+  if (!row) return 1;
+  const m = row[e.armorClass || 'medium'] ?? 1;
+  // 穿甲塢（地基加成，js/tdsockets.js）：把倍率往 1 拉近 ——
+  // 打重甲的穿刺 0.5 在 p=0.25 時變 0.625，對已經剋制的目標（1.5）則是往下修，
+  // 所以它是「均衡器」而不是無腦增傷，擺在長射程樞紐位才划算。
+  const p = t.armorPierce || 0;
+  return p > 0 ? m + (1 - m) * p : m;
 }
 
 export function closeBuildMenu(game) {
   game.buildMenuSocket = null;
+  buildMenuPick = null;
+  game.buildMenuKeys = null;
   game.ui.showBuildMenu(false);
+}
+
+// 數字鍵快速建塔（A 項）：回傳 true 表示按鍵被選單吃掉了，呼叫端不用再處理。
+// 金幣不足時仍然回 true —— 選單是開著的，玩家按 1 得到的是「金幣不足」而不是
+// 讓事件穿下去觸發別的快捷鍵。
+export function pickBuildMenuByIndex(game, index) {
+  if (!game.buildMenuSocket || !buildMenuPick || !game.buildMenuKeys) return false;
+  const opt = game.buildMenuKeys.find((o) => o.index === index);
+  if (!opt) return false;
+  buildMenuPick(opt.key);
+  return true;
 }
 
 // 瞄準優先序：檢查面板的按鈕循環切換（Turret.pickTarget 依此挑目標）
@@ -530,12 +612,37 @@ export function grantStarterTurret(game) {
 }
 
 export function updateTurrets(game, dt) {
+  // 指揮所光環（地基加成，js/tdsockets.js）：每幀重算一次。守塔一關最多 14 座塔，
+  // O(n²) 的距離比較可忽略；寫進 t.auraBoost 供傷害結算與檢查面板讀取。
+  // 多座指揮所不疊加（取最大值），避免整排指揮所互相灌成無限增傷。
+  const commands = game.turrets.filter((t) => t.auraRadius > 0 && !t.isDead);
+  for (const t of game.turrets) {
+    let boost = 0;
+    if (t.auraRadius <= 0) {
+      for (const c of commands) {
+        if (c === t) continue;
+        if (Math.hypot(c.x - t.x, c.y - t.y) <= c.auraRadius) boost = Math.max(boost, c.auraMul || 0);
+      }
+    }
+    t.auraBoost = boost;
+  }
+
   for (let i = game.turrets.length - 1; i >= 0; i--) {
     const t = game.turrets[i];
 
     t.update(dt, game.enemies, (target, dmg) => {
-      // 等級／地基倍率與守塔的護甲／魔抗都在這裡統一乘上
-      game.damageEnemy(target, Math.round(dmg * (t.dmgMul || 1) * resistMul(t, target)), 1, t.x, t.y, t.facilityType || 'turret');
+      // 等級／地基／訓練場／指揮所光環與守塔的護甲／魔抗都在這裡統一乘上
+      const mul = (t.dmgMul || 1) * (1 + (t.auraBoost || 0));
+      const wasDead = target.isDead;
+      game.damageEnemy(target, Math.round(dmg * mul * resistMul(t, target)), 1, t.x, t.y, t.facilityType || 'turret');
+      // 打擊感 (E 項)：命中火花。顏色跟著傷害類型走，玩家光看顏色就知道哪種塔在輸出。
+      // 用機率節流 —— 後期一波上百隻，每發都噴粒子會直接把 render 時間吃光。
+      if (game.particles && !wasDead && Math.random() < TURRET_SPARK_CHANCE) {
+        game.particles.createHitSpark(target.x, target.y, SPARK_COLORS[t.dmgType] || '#e9ecef');
+      }
+      // 實戰歷練 (B 項)：這一發打死了才算這座塔的擊殺，升星就立刻重算加成並報訊。
+      // 只認守塔模式的塔：生存者的砲台沒有走 applyTDStats()，給了星等也不會有效果。
+      if (game.td && !wasDead && target.isDead) creditKill(game, t);
       sound.playShoot();
     }, game.player, game);
 
@@ -738,6 +845,21 @@ export function updateMercenaries(game, dt) {
 
 export function updateAlliedUnits(game, dt) {
   if (!game.alliedUnits) return;
+  // 兵營小兵也吃指揮所光環：auraBoost 由 updateTurrets 每幀寫在母塔上，
+  // 這裡同步回 u.damageMul（平時 u.damageMul 是 rescaleUnits 依塔等級寫入的固定值）
+  for (const u of game.alliedUnits) {
+    const t = u.facility;
+    if (t) u.damageMul = (t.dmgMul || 1) * (1 + (t.auraBoost || 0));
+    // 兵營小兵的擊殺記回自己的兵營（見 creditKill）：u.kills 由 AlliedUnit 的
+    // enlistHit 累加，這裡只認「還沒報帳過的差額」，所以換人接手也不會記錯。
+    if (game.td && t && u.kills) {
+      const owed = u.kills - (u.killsCredited || 0);
+      if (owed > 0) {
+        u.killsCredited = u.kills;
+        for (let k = 0; k < owed; k++) creditKill(game, t);
+      }
+    }
+  }
   for (let i = game.alliedUnits.length - 1; i >= 0; i--) {
     const u = game.alliedUnits[i];
     // 有逐格動畫的守塔小兵：倒下後先播 0.8 秒陣亡動畫再移除（期間不動、不擋路）

@@ -28,6 +28,7 @@ import {
   tryUpgradeNearestTurret,
   openBuildMenu,
   closeBuildMenu,
+  pickBuildMenuByIndex,
 } from './Facilities.js';
 import { setHeroTarget } from './TDHero.js';
 import { castSkill } from './Skills.js';
@@ -345,6 +346,9 @@ export function bindEvents(game) {
       if (game.placement) cancelPlacement(game);
       if (game.inspectedTurret) closeFacilityInspector(game);
     }
+    // 建造選單開著時，數字鍵 1–4 直接選塔（A 項）。必須排在底下的設施快捷鍵之前
+    // 而且吃掉事件，否則按 1 會同時「選了選單第一座塔」＋「進入機槍砲台放置模式」。
+    if (game.buildMenuSocket && /^[1-4]$/.test(e.key) && pickBuildMenuByIndex(game, Number(e.key))) return;
     if (e.key === '1') { game.selectedFacility = 'turret'; startPlacement(game, 'turret'); }
     if (e.key === '2') { game.selectedFacility = 'electric_grid'; startPlacement(game, 'electric_grid'); }
     if (e.key === '3') { game.selectedFacility = 'purifier'; startPlacement(game, 'purifier'); }
@@ -363,6 +367,7 @@ export function bindEvents(game) {
     if (e.key === 'g' || e.key === 'G') hireMercenary(game);
     if ((e.key === 'n' || e.key === 'N') && game.state === 'PLAYING') game.td?.startWave(true);   // 守塔：提前開戰
     if ((e.key === 'x' || e.key === 'X') && game.td) toggleTDSpeed(game);
+    if ((e.key === 'k' || e.key === 'K') && game.state === 'PLAYING' && game.td) toggleKingdomPanel(game);   // 守塔：王國升級
     if (e.key === 'e' || e.key === 'E') game.usePocketItem(0);
     if (e.key === 'f' || e.key === 'F') game.usePocketItem(1);
     if (e.key === 'q' || e.key === 'Q') castSkill(game, 0);
@@ -516,6 +521,8 @@ export function bindEvents(game) {
   game.ui.hireBtn?.addEventListener('click', () => hireMercenary(game));
   document.getElementById('btn-next-wave')?.addEventListener('click', () => { if (game.state === 'PLAYING') game.td?.startWave(true); });
   document.getElementById('btn-td-speed')?.addEventListener('click', () => { if (game.td) toggleTDSpeed(game); });
+  // 王國升級 (K / 行動端按鈕)：面板由 UI 產生，這裡只負責「開／關＋買了之後重畫」
+  document.getElementById('btn-td-kingdom')?.addEventListener('click', () => toggleKingdomPanel(game));
 
   // 砲塔進化專精按鈕 (UI 建構子已掛 click，走 _turretUpCb；這裡不要再掛，避免一次點擊雙重觸發)
 
@@ -785,4 +792,17 @@ function toggleTDSpeed(game) {
   const label = document.getElementById('td-speed-label');
   if (label) label.textContent = `${game.tdSpeed}×`;
   document.getElementById('btn-td-speed')?.classList.toggle('active', game.tdSpeed === 2);
+}
+
+// 守塔王國升級面板：開／關。買了之後要重畫（錢變少、等級 +1），所以把重畫包成同一個回呼。
+function toggleKingdomPanel(game) {
+  if (!game.td) return;
+  const el = document.getElementById('td-kingdom-panel');
+  const open = el && !el.classList.contains('hidden');
+  if (open) { game.ui.showKingdomPanel(false); return; }
+  closeBuildMenu(game);   // 面板浮在同一塊區域，兩個一起開會疊在一起
+  const refresh = () => game.ui.showKingdomPanel(true, game.td.kingdomRows(), (key) => {
+    if (game.td.buyKingdom(key)) refresh();
+  });
+  refresh();
 }

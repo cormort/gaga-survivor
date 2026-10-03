@@ -20,6 +20,15 @@ const MELEE_MUL = 2.4;         // 一刀 = 基礎傷害 × 這個倍率。近戰
 const ATTACK_ANIM = 0.45;
 const UNIT_IMAGE_KEYS = ['unit_footman_1', 'unit_footman_2', 'unit_footman_3', 'unit_knight', 'unit_gi', 'unit_marine'];
 const GUN_RANGE = 120;   // 主題地圖的槍兵（盟軍大兵、陸戰隊）：在這個距離內站定開槍，仍站在路上擋怪
+
+// 小兵打死的怪要記在「自己的兵營」頭上（B 項：塔的實戰歷練），
+// 否則兵營塔永遠停在 ★0 —— 它自己一發子彈都不會發，擊殺全是小兵做的。
+// 判定統一放這裡，免得下面四個傷害呼叫點漏掉任何一個。
+function enlistHit(game, unit, target, amount, kind, source) {
+  const wasDead = target.isDead;
+  game.damageEnemy(target, amount, kind, unit.x, unit.y, source);
+  if (!wasDead && target.isDead) unit.kills = (unit.kills || 0) + 1;
+}
 if (typeof Image !== 'undefined') {
   for (const k of UNIT_IMAGE_KEYS) {
     const img = new Image();
@@ -112,7 +121,7 @@ export class GuardsmanUnit {
     if (target && !this.isMoving && this.bayonetTimer <= 0) {
       this.bayonetTimer = MELEE_CD;
       this.attackAnim = ATTACK_ANIM;
-      game.damageEnemy(target, Math.round(this.damage * MELEE_MUL * (this.damageMul || 1)), 2, this.x, this.y, 'footman');
+      enlistHit(game, this, target, Math.round(this.damage * MELEE_MUL * (this.damageMul || 1)), 2, 'footman');
       sound.playHit();
     }
   }
@@ -168,7 +177,7 @@ export class GuardsmanUnit {
       if (minDist <= this.radius + target.radius + 14 && this.bayonetTimer <= 0) {
         this.bayonetTimer = this.bayonetCd;
         const bayonetDmg = Math.round(this.damage * 1.6 * (this.damageMul || 1));
-        game.damageEnemy(target, bayonetDmg, 2, this.x, this.y, 'bayonet');
+        enlistHit(game, this, target, bayonetDmg, 2, 'bayonet');
         sound.playHit();
         const dist = Math.hypot(target.x - this.x, target.y - this.y) || 1;
         target.kbX += ((target.x - this.x) / dist) * 160;
@@ -179,7 +188,7 @@ export class GuardsmanUnit {
         this.laserTimer = 0.08;
         this.laserFx = { tx: target.x, ty: target.y };
         sound.playShoot();
-        game.damageEnemy(target, Math.round(this.damage * (this.damageMul || 1)), 1, this.x, this.y, 'lasgun');
+        enlistHit(game, this, target, Math.round(this.damage * (this.damageMul || 1)), 1, 'lasgun');
       }
     }
   }
@@ -370,7 +379,7 @@ export class LemanRussUnit {
     if (sponsonTarget && this.sponsonTimer <= 0) {
       this.sponsonTimer = this.sponsonCd;
       this.sponsonMuzzleTimer = 0.08;
-      game.damageEnemy(sponsonTarget, Math.round(36 * (this.damageMul || 1)), 1, this.x, this.y, 'heavy_bolter');
+      enlistHit(game, this, sponsonTarget, Math.round(36 * (this.damageMul || 1)), 1, 'heavy_bolter');
       if (game.particles) game.particles.createExplosion(sponsonTarget.x, sponsonTarget.y, 22);
       sound.playShoot();
     }

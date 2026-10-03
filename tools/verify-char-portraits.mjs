@@ -21,9 +21,12 @@
 import http from 'node:http';
 import path from 'node:path';
 import { createReadStream, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const pw = (await import(process.env.PW_MODULE || 'playwright')).default;
-const ROOT = path.dirname(new URL(import.meta.url).pathname);
+// Windows 上 `new URL(import.meta.url).pathname` 會給出 `/D:/...`（磁碟相對路徑），
+// 底下 SRC 就變成「D 槽根目錄下的 \D:\DevProject\...」→ 每個請求都 404、頁面永遠載不完。
+const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const SRC = path.join(ROOT, '..');
 const PORT = Number(process.env.PORTRAITS_PORT || 8903);
 const BASE = `http://127.0.0.1:${PORT}`;

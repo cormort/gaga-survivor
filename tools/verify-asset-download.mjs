@@ -20,9 +20,12 @@
 import http from 'node:http';
 import path from 'node:path';
 import { createReadStream, statSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const pw = (await import(process.env.PW_MODULE || 'playwright')).default;
-const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
+// Windows 上 `new URL(import.meta.url).pathname` 會給出 `/D:/...`，
+// 再 path.join 一次就變成 `D:\D:\...`（version.json 直接 ENOENT）。用 fileURLToPath 才可攜。
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = Number(process.env.ASSETS_PORT || 8904);
 const BASE = `http://127.0.0.1:${PORT}`;
 

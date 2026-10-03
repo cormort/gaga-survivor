@@ -7,6 +7,9 @@
 //   bounds           —— 地圖矩形（約 1600×900，鏡頭拉遠到整張放得進畫面）
 //   sockets          —— 建塔點：守塔關只能蓋在這裡（點擊開建造選單）。
 //                       離入口巢穴 110 以內的已拿掉：出怪點旁邊不能蓋塔（直接堵在洞口太強，也壓住巢穴圖）
+//   socketPlan       —— 選填，逐格指定地基加成（順序對應 sockets；八種加成見 js/tdsockets.js）。
+//                       載入時展平寫進 sockets[i].bonus / .label 後就刪掉，關卡資料不留第二份真相。
+//                       沒填到的格子＝普通建塔點（沒有加成），所以 plan 比 sockets 短是合法的。
 //   lair / base      —— 入口巢穴與主堡的貼圖鍵（assets/td/<鍵>.png；載入見 TowerDefense.js 的 TD_STRUCTURE_KEYS）
 //   soldier          —— 選填，兵營小兵的貼圖鍵（主題地圖的槍兵；見 AlliedUnit.js 的 tdUnitSprite）
 //   barracksArt      —— 選填，兵營建築外觀的前綴（Turret.js 的 TD_IMAGE_KEYS）
@@ -17,17 +20,24 @@
 // 路線與建塔點由舊版 4000×4000 版圖等比壓縮後，沿路肩每 ~170px 自動排出建塔點再烘進來。
 
 import { LEVELS } from './levels.js';
+import { SOCKET_BONUSES } from './tdsockets.js';
 
-// 手寫波次：wave(血量倍率, [群組…], 首領?)；群組 = [怪種, 數量, 出怪間隔秒, 入口?]
+// 手寫波次：wave(血量倍率, [群組…], 首領?, 詞綴?)；群組 = [怪種, 數量, 出怪間隔秒, 入口?]
 // 入口省略＝輪流走所有路線；寫數字＝固定走 paths[入口]。
 // 血量倍率乘在 TowerDefense 的基礎血量上（基礎 × 關卡 hpScale × 難度 × 這個倍率）。
+// 詞綴省略＝普通波。詞綴是字串陣列，可疊加，定義與數值見 js/tdwaves.js：
+//   swift 疾行／armored 重甲縱隊／swarm 蟲潮／aerial 空襲／elite 精英／fortified 要塞
+//   掛了詞綴的波，下一波預告會亮出標籤，來襲提示也會寫出來。
 // 設計原則：每關先教一種護甲，再逼你混搭 ——
 //   輕甲（喪屍／獵犬）→ 守衛塔；重甲（巨漢／盾衛／巨像）→ 加農砲、秘法塔；空中（蝙蝠／孢子）→ 守衛塔、飛彈塔、秘法塔
 //   （護甲倍率見 js/tdtowers.js 的 ARMOR_MUL，怪種護甲見 TowerDefense.js 的 ARMOR_CLASS）
-const wave = (hp, groups, boss = null) => ({
+// 詞綴的排法：前期關卡只在第 3 波之後零星掛，後期關卡變成常態，而且刻意掛在
+// 「這一波原本的弱點」上（例如全重甲的波掛 swift，逼你不只要穿甲還要補射程）。
+const wave = (hp, groups, boss = null, mods = []) => ({
   hp,
   groups: groups.map(([type, count, gap, path]) => ({ type, count, gap, path })),
   boss,
+  mods,
 });
 
 const base = (id) => LEVELS[id];
@@ -55,11 +65,11 @@ export const TD_LEVELS = {
     waves: [
       wave(1.0, [['walker', 10, 0.9]]),
       wave(1.1, [['walker', 12, 0.8], ['runner', 5, 0.7]]),
-      wave(1.2, [['runner', 10, 0.6], ['hound', 6, 0.5]]),                       // 快速輕甲：守衛塔
+      wave(1.2, [['runner', 10, 0.6], ['hound', 6, 0.5]], null, ['swift']),   // 快速輕甲：守衛塔（疾行：更考驗射程）
       wave(1.3, [['walker', 12, 0.6], ['brute', 4, 1.4]]),                        // 第一次重甲：加農砲／秘法塔
       wave(1.4, [['bat', 12, 0.35], ['walker', 10, 0.6]]),                        // 第一次空中：加農砲、兵營沒用
       wave(1.6, [['brute', 6, 1.1], ['spitter', 4, 1.0], ['runner', 10, 0.5]]),
-      wave(1.8, [['hound', 12, 0.4], ['bat', 10, 0.4], ['brute', 5, 1.2]]),
+      wave(1.8, [['hound', 12, 0.4], ['bat', 10, 0.4], ['brute', 5, 1.2]], null, ['swarm']),   // 蟲潮：考驗清場速度
       wave(2.0, [['walker', 16, 0.5], ['warden', 4, 1.5], ['bat', 8, 0.4]],
         { hp: 7000, name: '峽谷掠奪者', speed: 60, damage: 30, behaviors: ['summon', 'barrage'], skin: 'boss_storm' }),
     ],
@@ -76,6 +86,8 @@ export const TD_LEVELS = {
       { id: 'c11', x: 530, y: 0 },
       { id: 'c12', x: 190, y: 0 },
     ],
+    // 教學關：把四種基礎加成各擺一座，外加一座金庫（教「先投資經濟再回本」）
+    socketPlan: ['range', 'damage', 'haste', 'damage', 'bank', 'range', 'veteran', 'command', 'armor', 'armor'],
     mechs: [],
     bosses: [],
     hpScale: 1.0,
@@ -106,12 +118,12 @@ export const TD_LEVELS = {
       wave(1.0, [['walker', 8, 0.9, 0], ['walker', 8, 0.9, 1]]),
       wave(1.1, [['runner', 8, 0.7, 0], ['hound', 6, 0.6, 1]]),
       wave(1.2, [['bat', 10, 0.4], ['walker', 12, 0.6]]),
-      wave(1.3, [['brute', 4, 1.3, 0], ['runner', 12, 0.5, 1]]),                  // 西邊重甲、東邊輕甲：兩邊要蓋不同的塔
+      wave(1.3, [['brute', 4, 1.3, 0], ['runner', 12, 0.5, 1]], null, ['armored']),   // 西邊重甲、東邊輕甲：兩邊要蓋不同的塔（重甲縱隊：東邊也得穿甲）
       wave(1.4, [['walker', 14, 0.5, 0], ['medic', 3, 1.4, 0], ['warden', 3, 1.6, 1]]),
-      wave(1.55, [['bat', 14, 0.35], ['bloater', 6, 0.9]]),
-      wave(1.7, [['brute', 6, 1.1, 0], ['brute', 6, 1.1, 1]]),
+      wave(1.55, [['bat', 14, 0.35], ['bloater', 6, 0.9]], null, ['aerial']),
+      wave(1.7, [['brute', 6, 1.1, 0], ['brute', 6, 1.1, 1]], null, ['fortified']),
       wave(1.85, [['hound', 14, 0.4, 0], ['spitter', 6, 0.9, 1], ['blinker', 10, 0.5, 1]]),
-      wave(2.0, [['warden', 5, 1.3], ['bat', 14, 0.35], ['runner', 14, 0.45]]),
+      wave(2.0, [['warden', 5, 1.3], ['bat', 14, 0.35], ['runner', 14, 0.45]], null, ['elite']),
       wave(2.2, [['walker', 20, 0.4], ['brute', 6, 1.0], ['bat', 10, 0.4]],
         { hp: 16000, name: '沼澤雙頭蛇', speed: 64, damage: 34, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_swamp' }),
     ],
@@ -131,6 +143,8 @@ export const TD_LEVELS = {
       { id: 'f15', x: 80, y: 130 },
       { id: 'f16', x: 95, y: -100 },
     ],
+    // 雙線：西邊來重甲（巨漢、盾衛）→ 穿甲塢擺西側；匯流口旁的格子給指揮所
+    socketPlan: ['pierce', 'damage', 'haste', 'range', 'command', 'bank', 'range', 'pierce', 'damage', 'haste', 'veteran', 'armor', 'armor'],
     mechs: [],
     bosses: [],
     hpScale: 1.3,
@@ -162,14 +176,14 @@ export const TD_LEVELS = {
       wave(1.0, [['walker', 6, 0.9, 0], ['walker', 6, 0.9, 1], ['walker', 6, 0.9, 2]]),
       wave(1.1, [['runner', 8, 0.6, 0], ['hound', 6, 0.6, 1], ['hound', 6, 0.6, 2]]),
       wave(1.2, [['brute', 3, 1.4, 1], ['brute', 3, 1.4, 2], ['walker', 10, 0.6, 0]]),
-      wave(1.3, [['bat', 16, 0.3], ['blinker', 8, 0.6, 0]]),
+      wave(1.3, [['bat', 16, 0.3], ['blinker', 8, 0.6, 0]], null, ['swift']),
       wave(1.45, [['warden', 3, 1.6, 0], ['medic', 4, 1.2, 1], ['runner', 12, 0.5, 2]]),
       wave(1.6, [['mortar', 4, 1.6], ['brute', 6, 1.0], ['walker', 12, 0.5]]),
-      wave(1.75, [['hound', 18, 0.35], ['bat', 12, 0.35]]),
+      wave(1.75, [['hound', 18, 0.35], ['bat', 12, 0.35]], null, ['swarm']),
       wave(1.9, [['chimera', 2, 3.0, 0], ['spitter', 6, 0.9, 1], ['spitter', 6, 0.9, 2]]),   // 攻城巨像：最重的重甲
       wave(2.05, [['bloater', 8, 0.8], ['blinker', 12, 0.45], ['brute', 6, 1.0]]),
-      wave(2.2, [['warden', 6, 1.2], ['bat', 18, 0.3], ['runner', 16, 0.4]]),
-      wave(2.4, [['chimera', 3, 2.5], ['mortar', 5, 1.4], ['hound', 16, 0.35]]),
+      wave(2.2, [['warden', 6, 1.2], ['bat', 18, 0.3], ['runner', 16, 0.4]], null, ['elite']),
+      wave(2.4, [['chimera', 3, 2.5], ['mortar', 5, 1.4], ['hound', 16, 0.35]], null, ['armored']),
       wave(2.4, [['brute', 9, 0.9], ['bat', 16, 0.3], ['walker', 24, 0.35], ['chimera', 2, 3.0]],
         { hp: 24000, name: '要塞攻城巨像', speed: 56, damage: 40, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_frostvoid' }),
     ],
@@ -186,6 +200,8 @@ export const TD_LEVELS = {
       { id: 'ft13', x: 100, y: 200 },
       { id: 'ft14', x: 155, y: -40 },
     ],
+    // 三門：北門正對核心 → 最內側兩格給裝甲基座（最後一道防線）
+    socketPlan: ['command', 'damage', 'pierce', 'range', 'haste', 'bank', 'veteran', 'damage', 'armor', 'armor'],
     mechs: [],
     bosses: [],
     hpScale: 1.6,
@@ -239,18 +255,18 @@ export const TD_LEVELS = {
     waves: [
       wave(0.6, [['hormagaunt', 8, 0.9]]),
       wave(0.7, [['ork_boy', 4, 1.4, 0], ['hormagaunt', 10, 0.6, 1]]),            // 歐克小子是重甲
-      wave(0.85, [['spore_mine', 8, 0.7], ['termagant', 6, 0.9]]),                // 孢子囊會飛
+      wave(0.85, [['spore_mine', 8, 0.7], ['termagant', 6, 0.9]], null, ['aerial']),   // 孢子囊會飛（空襲）
       wave(1.0, [['hormagaunt', 12, 0.5], ['ork_boy', 4, 1.3]],
         { hp: 4500, name: '歐克戰爭頭目', speed: 64, damage: 38, behaviors: ['summon', 'barrage', 'ground'], skin: 'boss_nob' }),
       wave(1.25, [['genestealer', 8, 0.7], ['squig_bomb', 8, 0.5]]),
-      wave(1.4, [['poxwalker', 10, 0.8, 0], ['ork_boy', 6, 1.1, 1]]),
+      wave(1.4, [['poxwalker', 10, 0.8, 0], ['ork_boy', 6, 1.1, 1]], null, ['fortified']),
       wave(1.55, [['spore_mine', 12, 0.5], ['hormagaunt', 18, 0.35]]),
       wave(1.7, [['termagant', 10, 0.7], ['genestealer', 10, 0.55], ['ork_boy', 5, 1.2]],
         { hp: 11000, name: '蟲群基因原體', speed: 78, damage: 45, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' }),
-      wave(1.85, [['squig_bomb', 14, 0.35], ['poxwalker', 12, 0.6]]),
+      wave(1.85, [['squig_bomb', 14, 0.35], ['poxwalker', 12, 0.6]], null, ['swarm']),
       wave(2.0, [['ork_boy', 10, 0.9], ['spore_mine', 14, 0.45]]),
-      wave(2.2, [['genestealer', 16, 0.4], ['termagant', 12, 0.6], ['hormagaunt', 20, 0.3]]),
-      wave(2.4, [['ork_boy', 12, 0.8], ['poxwalker', 14, 0.5], ['spore_mine', 12, 0.4]],
+      wave(2.2, [['genestealer', 16, 0.4], ['termagant', 12, 0.6], ['hormagaunt', 20, 0.3]], null, ['elite']),
+      wave(2.4, [['ork_boy', 12, 0.8], ['poxwalker', 14, 0.5], ['spore_mine', 12, 0.4]], null, ['armored'],
         { hp: 24000, name: '泰倫劊子手暴君', speed: 52, damage: 60, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_carnifex' }),
     ],
     rules: { label: '卡迪亞死守令', desc: '兩條主要戰線遭受蟲群與綠皮猛烈衝擊；佈署星界軍兵營與機械製造廠構築阻絕陣線' },
@@ -268,6 +284,8 @@ export const TD_LEVELS = {
       { id: 'fw13', x: 340, y: -235 },
       { id: 'fw14', x: 55, y: -140 },
     ],
+    // 鑄造世界：綠皮與蟲群全員重甲 → 穿甲塢密度最高的一關（三座）
+    socketPlan: ['pierce', 'pierce', 'damage', 'command', 'veteran', 'range', 'haste', 'bank', 'damage', 'pierce', 'armor', 'armor'],
     mechs: [],
     bosses: [],
     hpScale: 1.8,
@@ -306,16 +324,16 @@ export const TD_LEVELS = {
       wave(1.0, [['walker', 8, 0.9, 0], ['walker', 8, 0.9, 1]]),                       // 徵召兵
       wave(1.1, [['runner', 10, 0.6], ['hound', 6, 0.55, 1]]),
       wave(1.2, [['hound', 14, 0.4]]),                                                 // 攻擊犬：快速輕甲
-      wave(1.3, [['brute', 4, 1.3, 0], ['brute', 4, 1.3, 1], ['walker', 10, 0.6]]),    // 犀牛坦克：重甲
+      wave(1.3, [['brute', 4, 1.3, 0], ['brute', 4, 1.3, 1], ['walker', 10, 0.6]], null, ['armored']),    // 犀牛坦克：重甲（重甲縱隊）
       wave(1.4, [['bat', 10, 0.4], ['runner', 10, 0.55]]),                             // 空中部隊
       wave(1.55, [['mortar', 4, 1.5], ['warden', 4, 1.4], ['walker', 14, 0.5]]),
-      wave(1.7, [['chimera', 2, 3.0, 0], ['hound', 14, 0.4, 1]]),
+      wave(1.7, [['chimera', 2, 3.0, 0], ['hound', 14, 0.4, 1]], null, ['swift']),
       wave(1.85, [['bat', 12, 0.35], ['brute', 6, 1.0]],
         { hp: 6000, name: '天啟坦克', speed: 46, damage: 50, behaviors: ['barrage', 'ground'], skin: 'boss_frost' }),
-      wave(2.0, [['warden', 6, 1.2], ['sniper', 6, 1.0], ['runner', 16, 0.4]]),
-      wave(2.2, [['chimera', 3, 2.5], ['bat', 16, 0.32], ['hound', 16, 0.35]]),
+      wave(2.0, [['warden', 6, 1.2], ['sniper', 6, 1.0], ['runner', 16, 0.4]], null, ['elite']),
+      wave(2.2, [['chimera', 3, 2.5], ['bat', 16, 0.32], ['hound', 16, 0.35]], null, ['aerial']),
       wave(2.35, [['brute', 10, 0.8], ['mortar', 6, 1.2], ['walker', 24, 0.35]]),
-      wave(2.5, [['chimera', 4, 2.2], ['bat', 18, 0.3], ['warden', 6, 1.2]],
+      wave(2.5, [['chimera', 4, 2.2], ['bat', 18, 0.3], ['warden', 6, 1.2]], null, ['fortified'],
         { hp: 20000, name: '蘇聯天啟巨坦', speed: 42, damage: 60, behaviors: ['barrage', 'ground', 'nova'], skin: 'boss_frost' }),
     ],
     rules: { label: '守塔規則', desc: '兩路裝甲縱隊同時推進；坦克是重甲、空艇與蝙蝠會飛' },
@@ -324,6 +342,8 @@ export const TD_LEVELS = {
       { id: 're5', x: -280, y: -145 }, { id: 're6', x: -295, y: -500 }, { id: 're7', x: -60, y: -315 }, { id: 're8', x: 545, y: -370 },
       { id: 're9', x: 615, y: -40 }, { id: 're10', x: 230, y: -115 }, { id: 're11', x: 240, y: 85 },
     ],
+    // 紅色警戒：裝甲縱隊血厚、開局金幣多 → 金庫給兩座，鼓勵「利息滾利息」的經濟流
+    socketPlan: ['bank', 'bank', 'haste', 'damage', 'range', 'command', 'pierce', 'veteran', 'haste', 'armor', 'armor'],
     mechs: [],
     bosses: [],
     hpScale: 1.4,
@@ -362,16 +382,16 @@ export const TD_LEVELS = {
     waves: [
       wave(0.9, [['hormagaunt', 10, 0.7, 0]]),                                          // 跳蟲
       wave(1.0, [['hormagaunt', 12, 0.6, 0], ['termagant', 4, 1.0, 1]]),
-      wave(1.1, [['bat', 12, 0.4]]),                                                    // 異龍：空中
+      wave(1.1, [['bat', 12, 0.4]], null, ['aerial']),                                    // 異龍：空中（空襲）
       wave(1.2, [['genestealer', 8, 0.7, 0], ['hormagaunt', 10, 0.5, 1]]),
-      wave(1.35, [['spore_mine', 10, 0.6], ['hormagaunt', 16, 0.4]]),
+      wave(1.35, [['spore_mine', 10, 0.6], ['hormagaunt', 16, 0.4]], null, ['swarm']),
       wave(1.5, [['chimera', 2, 3.0, 0], ['termagant', 8, 0.8, 1]]),                    // 雷獸：重甲
-      wave(1.65, [['bat', 12, 0.36], ['genestealer', 10, 0.55]],
+      wave(1.65, [['bat', 12, 0.36], ['genestealer', 10, 0.55]], null, ['swift'],
         { hp: 5000, name: '異蟲刀鋒宿主', speed: 56, damage: 50, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' }),
-      wave(1.8, [['sniper', 6, 1.0, 1], ['hormagaunt', 20, 0.35, 0]]),
+      wave(1.8, [['sniper', 6, 1.0, 1], ['hormagaunt', 20, 0.35, 0]], null, ['elite']),
       wave(1.95, [['spore_mine', 14, 0.45], ['bat', 14, 0.35], ['genestealer', 10, 0.5]]),
-      wave(2.1, [['chimera', 3, 2.5], ['termagant', 12, 0.6]]),
-      wave(2.3, [['hormagaunt', 28, 0.28], ['bat', 18, 0.3], ['genestealer', 12, 0.45]]),
+      wave(2.1, [['chimera', 3, 2.5], ['termagant', 12, 0.6]], null, ['armored']),
+      wave(2.3, [['hormagaunt', 28, 0.28], ['bat', 18, 0.3], ['genestealer', 12, 0.45]], null, ['swarm']),
       wave(2.2, [['chimera', 2, 2.5], ['spore_mine', 8, 0.5], ['hormagaunt', 20, 0.32]],
         { hp: 10000, name: '原生異蟲 ‧ 雷獸之王', speed: 44, damage: 62, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_carnifex' }),
     ],
@@ -382,6 +402,8 @@ export const TD_LEVELS = {
       { id: 'st9', x: -475, y: -200 }, { id: 'st10', x: -135, y: -200 }, { id: 'st11', x: 340, y: -215 }, { id: 'st12', x: 540, y: -215 },
       { id: 'st13', x: 355, y: -20 }, { id: 'st14', x: 175, y: 100 },
     ],
+    // 星海：主路超長 → 高台（射程）最划算；空中單位多，飛彈塔也吃得到加成
+    socketPlan: ['range', 'range', 'haste', 'damage', 'command', 'bank', 'pierce', 'veteran', 'damage', 'haste', 'range', 'armor', 'armor', 'command'],
     mechs: [],
     bosses: [],
     hpScale: 1.5,
@@ -414,16 +436,16 @@ export const TD_LEVELS = {
     waves: [
       wave(1.0, [['makai_zombie', 6, 0.9, 0], ['makai_zombie', 6, 0.9, 1], ['makai_zombie', 6, 0.9, 2]]),   // 食屍鬼
       wave(1.1, [['makai_zombie', 10, 0.6], ['hound', 8, 0.5]]),
-      wave(1.2, [['makai_red_arremer', 12, 0.4]]),                                      // 石像鬼：空中
+      wave(1.2, [['makai_red_arremer', 12, 0.4]], null, ['aerial']),                                      // 石像鬼：空中（空襲）
       wave(1.3, [['makai_woody', 4, 1.5, 1], ['makai_zombie', 12, 0.5, 0], ['medic', 3, 1.3, 2]]),
-      wave(1.45, [['brute', 4, 1.3, 0], ['brute', 4, 1.3, 2], ['makai_red_arremer', 10, 0.45, 1]]),   // 憎惡：重甲
+      wave(1.45, [['brute', 4, 1.3, 0], ['brute', 4, 1.3, 2], ['makai_red_arremer', 10, 0.45, 1]], null, ['armored']),   // 憎惡：重甲（重甲縱隊）
       wave(1.6, [['spitter', 6, 0.9], ['makai_zombie', 18, 0.4]],
         { hp: 7000, name: '恐懼魔王 ‧ 瑪爾加尼斯', speed: 54, damage: 50, behaviors: ['summon', 'nova'], skin: 'boss_arremer_king' }),
-      wave(1.75, [['makai_red_arremer', 16, 0.32], ['blinker', 12, 0.45]]),
+      wave(1.75, [['makai_red_arremer', 16, 0.32], ['blinker', 12, 0.45]], null, ['swift']),
       wave(1.9, [['makai_woody', 8, 1.0], ['warden', 5, 1.3], ['makai_zombie', 20, 0.35]]),
-      wave(2.05, [['brute', 8, 0.9], ['medic', 6, 1.0], ['makai_red_arremer', 14, 0.35]]),
-      wave(2.2, [['chimera', 2, 3.0, 1], ['makai_woody', 8, 0.9], ['hound', 18, 0.35]]),
-      wave(2.4, [['makai_zombie', 30, 0.28], ['makai_red_arremer', 18, 0.3], ['brute', 8, 0.9]]),
+      wave(2.05, [['brute', 8, 0.9], ['medic', 6, 1.0], ['makai_red_arremer', 14, 0.35]], null, ['elite']),
+      wave(2.2, [['chimera', 2, 3.0, 1], ['makai_woody', 8, 0.9], ['hound', 18, 0.35]], null, ['fortified']),
+      wave(2.4, [['makai_zombie', 30, 0.28], ['makai_red_arremer', 18, 0.3], ['brute', 8, 0.9]], null, ['swarm']),
       wave(2.5, [['makai_woody', 8, 0.9], ['chimera', 2, 2.8], ['makai_red_arremer', 14, 0.35]],
         { hp: 14000, name: '巫妖王 ‧ 寒冰王座', speed: 50, damage: 62, behaviors: ['nova', 'barrage', 'summon', 'vortex'], skin: 'boss_astaroth' }),
     ],
@@ -433,11 +455,28 @@ export const TD_LEVELS = {
       { id: 'wa5', x: -35, y: -380 }, { id: 'wa6', x: 135, y: -575 }, { id: 'wa7', x: 300, y: -395 }, { id: 'wa8', x: 115, y: -160 },
       { id: 'wa9', x: 425, y: -125 }, { id: 'wa10', x: 620, y: -125 }, { id: 'wa11', x: 435, y: 160 }, { id: 'wa12', x: 155, y: 100 },
     ],
+    // 魔獸：三路同時來、兵種最雜 → 兩座指揮所撐住中央火力圈
+    socketPlan: ['command', 'command', 'damage', 'pierce', 'veteran', 'bank', 'haste', 'range', 'veteran', 'damage', 'armor', 'armor'],
     mechs: [],
     bosses: [],
     hpScale: 1.6,
   },
 };
+
+// 地基加成展平：socketPlan 只是「逐格意圖」的書寫形式，載入時寫進 sockets[i].bonus / .label。
+// 讀取端（Turret.js 蓋塔、Facilities.js 護甲相剋與光環、UI.js 徽章、TowerDefense.draw 的六角底座）
+// 一律只看 socket.bonus，不需要知道 plan 的存在；寫完就刪，避免同一份資料有兩個來源。
+for (const level of Object.values(TD_LEVELS)) {
+  if (!level.socketPlan) continue;
+  level.sockets.forEach((s, i) => {
+    const key = level.socketPlan[i];
+    const def = Object.prototype.hasOwnProperty.call(SOCKET_BONUSES, key) ? SOCKET_BONUSES[key] : null;
+    if (!def) return;   // plan 比 sockets 短（或打錯字）＝這一格維持普通建塔點
+    s.bonus = key;
+    s.label = def.label;
+  });
+  delete level.socketPlan;
+}
 
 export const TD_ORDER = ['td_canyon', 'td_fork', 'td_fortress', 'td_forgeworld', 'td_redalert', 'td_starcraft', 'td_warcraft'];
 

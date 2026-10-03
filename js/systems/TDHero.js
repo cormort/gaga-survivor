@@ -19,8 +19,12 @@ export const TD_SKILLS = [
       const p = game.player;
       const lv = p.heroLevel || 1;
       for (const dx of [-22, 22]) {
+        // 王國升級「英雄訓練」也強化援軍：血量與傷害吃同一個倍率（援軍沒有 facility，
+        // 所以 updateAlliedUnits 不會覆寫它的 damageMul，可以放心直接設）
+        const kHero = 1 + (game.td.kingdomStat ? game.td.kingdomStat().hero : 0);
         const u = new GuardsmanUnit(p.x + dx, p.y, null, game);
-        u.maxHp = u.hp = Math.round(u.maxHp * (1 + 0.15 * (lv - 1)));
+        u.maxHp = u.hp = Math.round(u.maxHp * (1 + 0.15 * (lv - 1)) * kHero);
+        u.damageMul = kHero;
         u.ttl = 15;   // updateAlliedUnits 倒數，時間到就撤退（消失）
         applyTDSoldier(u, game.level.soldier || 'unit_footman_2', game.level);
         game.alliedUnits.push(u);
@@ -32,8 +36,10 @@ export const TD_SKILLS = [
     name: '隕石', icon: '☄️', mp: 0, cd: 25,
     desc: '隕石砸向走得最前面的 3 隻怪，各自炸傷周圍 100 範圍',
     cast(game) {
-      // 傷害跟著當前波次的怪物血量走（50 倍基礎血量），後期不會刮痧
-      const dmg = Math.round(50 * game.td.hpMul() * (1 + 0.1 * ((game.player.heroLevel || 1) - 1)));
+      // 傷害跟著當前波次的怪物血量走（50 倍基礎血量），後期不會刮痧；
+      // 再乘上王國升級「英雄訓練」的倍率
+      const kHero = 1 + (game.td.kingdomStat ? game.td.kingdomStat().hero : 0);
+      const dmg = Math.round(50 * game.td.hpMul() * (1 + 0.1 * ((game.player.heroLevel || 1) - 1)) * kHero);
       const targets = game.enemies.filter((e) => !e.isDead).sort((a, b) => (b.progress || 0) - (a.progress || 0)).slice(0, 3);
       for (const t of targets) {
         const { x, y } = t;

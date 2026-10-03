@@ -20,8 +20,11 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// 用 fileURLToPath 而不是 `.pathname`：pathname 在 Windows 上是 `/D:/…/`，
+// 進 path.join 後變成 `\D:\…`（當前磁碟根目錄下的 D: 資料夾），整個腳本會 ENOENT 掛掉。
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const MAIN = 'js/main.js';
 
 const walk = (dir, out = []) => {

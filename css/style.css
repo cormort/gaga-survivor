@@ -3708,14 +3708,19 @@ body, html {
 }
 
 
-/* 守塔建造選單：點建塔點後浮在它上方的 2×2 塔種選單 */
+/* 守塔建造選單：點建塔點後浮在它上方的塔種清單。
+   舊版是 2×2 圖示格（只有圖示、名稱、價格），看不出 DPS／射程／能不能對空 ——
+   玩家只能憑圖示亂蓋，這正是「比其他守塔遊戲簡陋」最直接的來源。
+   改成單欄條列：圖示 ＋ 名稱/數據行/相剋標籤 ＋ 價格，頂端再插一條地基加成說明。 */
 #td-build-menu {
   position: absolute;
   z-index: 30;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  width: 236px;
+  width: 306px;
+  max-height: min(64vh, 480px);
+  overflow-y: auto;
   padding: 8px;
   background: var(--bg-card);
   border: 1px solid var(--border-glow);
@@ -3724,22 +3729,51 @@ body, html {
   transform: translate(-50%, calc(-100% - 30px));
 }
 #td-build-menu.below { transform: translate(-50%, 30px); }
+
+/* 選單頂端：這一格地基是什麼加成（沒有加成也明講，免得玩家以為每格都一樣） */
+.td-build-banner {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 8px;
+  background: rgba(0, 229, 255, 0.07); font-size: 12px;
+}
+.td-build-banner small { color: var(--text-muted); font-size: 11px; line-height: 1.35; }
+.td-build-banner.plain { background: rgba(255, 255, 255, 0.03); }
+
 .td-build-opt {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 2px;
+  gap: 10px;
   min-height: 44px;
-  padding: 8px 4px;
+  padding: 8px 10px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: rgba(10, 14, 23, 0.7);
   color: var(--text-main);
   font: 700 12px var(--font-text);
   cursor: pointer;
+  text-align: left;
 }
-.td-build-opt .ico { font-size: 22px; line-height: 1.1; }
-.td-build-opt .cost { color: #ffd60a; font-family: var(--font-display); }
+.td-build-opt .ico { font-size: 24px; line-height: 1.1; width: 28px; text-align: center; flex: 0 0 auto; }
+/* 數字鍵提示：列表順序＝按鍵，讓鍵盤玩家不用碰滑鼠 */
+.td-build-opt .td-opt-key {
+  flex: 0 0 auto; width: 16px; height: 16px; line-height: 16px; text-align: center;
+  font-size: 10px; font-weight: 800; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08); color: var(--text-muted);
+}
+.td-build-opt:hover .td-opt-key, .td-build-opt:focus-visible .td-opt-key { background: var(--border-glow); color: #04121a; }
+.td-build-opt .td-opt-main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.td-build-opt .td-opt-main b { font-size: 13px; }
+.td-build-opt .td-opt-main small { color: var(--text-muted); font-size: 11px; font-weight: 500; line-height: 1.3; }
+/* 第一行是可比較的數字（亮一點），第二行是機制說明（暗一點、可以折兩行） */
+.td-build-opt .td-opt-main .td-stats { color: #cfe6f5; }
+.td-build-opt .td-opt-main .td-desc { color: rgba(138, 155, 176, 0.85); font-size: 10px; }
+.td-build-opt .td-opt-main .td-desc:empty { display: none; }
+.td-build-opt .td-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.td-tag { font-style: normal; font-size: 10px; font-weight: 800; padding: 0 5px; border-radius: 4px; }
+.td-tag.good { background: rgba(61, 220, 132, 0.2); color: #6ff2a8; }
+.td-tag.bad { background: rgba(255, 71, 87, 0.18); color: #ff8a95; }
+.td-build-opt .cost { color: #ffd60a; font-family: var(--font-display); flex: 0 0 auto; }
 .td-build-opt.poor { opacity: 0.45; }
 .td-build-opt:hover, .td-build-opt:focus-visible { border-color: var(--border-glow); background: var(--bg-card-hover); outline: none; }
 .inspect-priority { width: 100%; margin-bottom: 10px; background: rgba(0, 229, 255, 0.12); color: var(--text-main); border: 1px solid var(--border-color); }
@@ -3764,6 +3798,48 @@ body, html {
 .wp-heavy { background: #c9d3df; }
 .wp-air { background: #7fd1ff; }
 .wp-boss { color: #ffb703; font-weight: 800; }
+/* 詞綴標籤：掛在波次預告最前面，顏色由 js/tdwaves.js 的 WAVE_MODS 帶進來（--mod）。
+   用外框而不是實心，免得跟護甲標籤搶焦點 —— 護甲是「這波打什麼」，詞綴是「這波怎麼打」。 */
+.wp-mods { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.wp-mod {
+  font-style: normal; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px;
+  color: var(--mod, #ffd166); border: 1px solid var(--mod, #ffd166); background: rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+/* 入口分布與總數：壓在整條預告的最後面，用弱化色，只有多路線關卡才出現 */
+.wp-total { font-size: 11px; color: var(--text-muted); border-left: 1px solid var(--border-color); padding-left: 8px; }
+/* 守塔王國升級面板：固定貼在右側、行動列上方。跟建造選單一樣是浮層，但不跟著建塔點跑，
+   所以用 fixed；兩者會互相關閉（見 Facilities.openBuildMenu / Menu.toggleKingdomPanel）。 */
+#td-kingdom-panel {
+  position: fixed; z-index: 32; right: 12px; bottom: 96px;
+  width: min(340px, calc(100vw - 24px)); max-height: min(62vh, 520px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px; padding: 10px;
+  background: var(--bg-card); border: 1px solid var(--border-glow); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); font-size: 13px; color: var(--text-main);
+}
+#td-kingdom-panel.hidden { display: none; }
+#td-kingdom-panel .kp-title { display: flex; align-items: baseline; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); }
+#td-kingdom-panel .kp-title b { color: #ffd166; font-size: 15px; }
+#td-kingdom-panel .kp-title small { font-size: 11px; color: var(--text-muted); }
+#td-kingdom-panel .kp-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 8px; }
+#td-kingdom-panel .kp-row:hover { background: rgba(255, 255, 255, 0.04); }
+#td-kingdom-panel .kp-ico { font-size: 20px; width: 26px; text-align: center; }
+#td-kingdom-panel .kp-main { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+#td-kingdom-panel .kp-main b { font-size: 13px; display: flex; align-items: center; gap: 7px; }
+#td-kingdom-panel .kp-pips { display: inline-flex; gap: 3px; }
+#td-kingdom-panel .kp-pip { width: 12px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); }
+#td-kingdom-panel .kp-pip.on { background: #ffd166; }
+#td-kingdom-panel .kp-main small { font-size: 11px; line-height: 1.35; color: var(--text-muted); }
+#td-kingdom-panel .kp-buy {
+  flex: 0 0 auto; min-width: 66px; padding: 5px 8px; font-size: 12px; font-weight: 800;
+  color: #0a0e17; background: #ffd166; border: none; border-radius: 7px; cursor: pointer;
+}
+#td-kingdom-panel .kp-buy.poor { background: rgba(255, 255, 255, 0.12); color: var(--text-muted); }
+#td-kingdom-panel .kp-max { flex: 0 0 auto; min-width: 66px; text-align: center; font-size: 12px; font-weight: 800; color: #3ddc84; }
+#td-kingdom-panel .kp-close {
+  margin-top: 4px; padding: 6px; font-size: 12px; font-weight: 700; color: var(--text-main);
+  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer;
+}
 /* 守塔遊玩中（body.td-mode 且主選單已收起）：更新橫幅原本在頂部正中央 112px，
    正好壓在地圖上緣的入口（三門要塞北門）。改成縮小停在 HUD 帶的左上角 ——
    守塔的地圖整張排在 HUD 帶（128px）下面，資訊列置中，左上角是空的。 */

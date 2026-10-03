@@ -21,7 +21,7 @@ import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
 import { DropItem } from './entities/DropItem.js';
 import { MERC } from './entities/Mercenary.js';
-import { drawSocket, drawPlacementGhost } from './entities/Turret.js';
+import { drawSocket, drawPlacementGhost, drawTurretRange, drawTurretStars } from './entities/Turret.js';
 import './tdlevels.js';   // 守塔專屬關卡併入 LEVELS（side effect）
 import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/TowerDefense.js';
 import { heroMoveVector, updateHeroRespawn, keepHeroOnRoad } from './systems/TDHero.js';
@@ -221,6 +221,8 @@ class Game {
     this.turrets = [];
     this.placement = null;
     this.inspectedTurret = null;
+    this.buildMenuSocket = null;   // 建造選單開在哪一個建塔點（Facilities.openBuildMenu 寫入）
+    this.buildMenuKeys = null;     // 建造選單目前的 1–4 對應表（Menu.js 數字鍵讀取）
     this.lastPointer = null;
     this.selectedFacility = 'turret';
     this.mercenaries = [];
@@ -1085,6 +1087,9 @@ class Game {
     this.ui.showPlacementHUD(false);
     this.ui.showFacilityInspector(false);
     this.buildMenuSocket = null;
+    // 建造選單目前提供的選項（Facilities.openBuildMenu 寫入，Menu.js 的數字鍵 1–4 讀取）。
+    // 「選了要做什麼」的回呼留在 Facilities.js 的模組層，不放這裡。
+    this.buildMenuKeys = null;
     this.ui.showBuildMenu(false);
     // 守塔關的手指要拿來點建塔點、拖曳地圖：關掉「按哪裡搖桿就跳到哪裡」，只留角落搖桿
     this.input.floatingJoystick = !this.td;
@@ -1095,8 +1100,13 @@ class Game {
     this._coreCollapse = null;
     this.player.heroLevel = 1;
     this.player.heroHpMul = 1;
+    // 注意：modeDmgMul 這裡不能歸 1 —— 上面 1003/1065 才剛把 mode.weaponMul 與 rules.playerDmgMul
+    // 乘進去。王國升級「英雄訓練」是用「倍率差」乘上去的（TowerDefense.applyKingdom），
+    // 每次新建 TowerDefense 時 _heroKingdomMul 就是 1，所以不需要在這裡歸零。
+    this.ui.showKingdomPanel(false);   // 王國升級面板跟著上一局一起收掉
     document.getElementById('joystick-zone')?.classList.toggle('hidden', !!this.td);   // 守塔：點地移動取代搖桿
     this.tdSpeed = 1;
+    document.getElementById('btn-td-kingdom')?.classList.toggle('hidden', !this.td);
     document.getElementById('btn-td-speed')?.classList.toggle('hidden', !this.td);
     const spLabel = document.getElementById('td-speed-label');
     if (spLabel) spLabel.textContent = '1×';
@@ -1899,6 +1909,9 @@ class Game {
           e._leaked = true;
           this.core.takeDamage(LEAK(e));
           this.camera.shake = Math.max(this.camera.shake, e.isBoss ? 16 : 5);
+          // 打擊感 (E 項)：漏怪是「真的有代價發生」，用 Boss 大招同一條邊緣紅暈管線給一次
+          // 短促的紅閃（redFlash 每秒衰減 1.6，所以 0.3 只閃約 0.2 秒，不刺眼但看得到）。
+          this.redFlash = Math.max(this.redFlash, e.isBoss ? 0.8 : 0.3);
           sound.playHurt();
           continue;
         }
@@ -3541,9 +3554,15 @@ class Game {
       }
     }
 
+    // 選中的塔：先把射程圈畫在地板上（畫在塔底下才不會蓋住砲口與星等）
+    if (this.inspectedTurret && this.turrets.includes(this.inspectedTurret)) {
+      drawTurretRange(this.ctx, renderCam, this.inspectedTurret, this.gameTime);
+    }
+
     // 繪製砲塔
     for (const t of this.turrets) {
       t.draw(this.ctx, renderCam);
+      if (t.eliteTier > 0 && this.td) drawTurretStars(this.ctx, renderCam, t);
     }
 
     // 繪製怪物

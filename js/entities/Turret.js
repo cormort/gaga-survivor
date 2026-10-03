@@ -4,6 +4,16 @@ import { getSprite } from '../sprites.js';
 import { sound } from '../audio.js';
 import { VIEW } from '../config.js';
 import { GuardsmanUnit, LemanRussUnit, tdUnitSprite, applyTDSoldier } from './AlliedUnit.js';
+import { SOCKET_BONUSES } from '../tdsockets.js';
+
+// 實戰歷練 (Elite Veterancy，B 項塔種深度)：擊殺門檻與每星加成。
+// 放在模組層級而不是類別裡，讓 Facilities / UI 也能直接查門檻畫進度條。
+export const TD_ELITE = {
+  kills: [20, 60, 150],            // 升上 ★1／★2／★3 所需的「該塔累計擊殺」
+  dmg: [1, 1.07, 1.15, 1.25],      // 對應星等的傷害倍率（索引 0 = ★0）
+  range: [1, 1.03, 1.07, 1.12],    // 對應星等的射程倍率
+  name: ['', '老練', '精銳', '王牌'],
+};
 
 // 高解析度設施與防禦塔貼圖 (Banana 2D Game Assets)
 export const FACILITY_IMAGES = {};
@@ -283,15 +293,49 @@ export class Turret {
     this.socket = socket;
     this.socketId = socket ? socket.id : null;
     this.socketBonus = socket ? socket.bonus : null;
+    this.socketLabel = socket && socket.label ? socket.label : null;
 
-    // 戰術地基槽加成 (Tactical Socket Buffs)
-    this.rangeMul = 1.0;
-    this.cdrMulMod = 1.0;
-    this.dmgMul = 1.0;
-    if (this.socketBonus === 'range') this.rangeMul = 1.15;
-    if (this.socketBonus === 'haste') this.cdrMulMod = 0.85;
-    if (this.socketBonus === 'damage') this.dmgMul = 1.20;
-    if (this.socketBonus === 'armor') this.maxHp = Math.round(this.maxHp * 1.30);
+    // 戰術地基槽加成 (Tactical Socket Buffs) —— 定義集中在 js/tdsockets.js
+    //
+    // 為什麼加成要另外存 socketDmgMul / socketRangeMul，而不是直接寫進 dmgMul / rangeMul：
+    // 守塔塔蓋好、升級、專精時都會呼叫 applyTDStats()（js/tdtowers.js），
+    // 而那支會「直接指派」t.dmgMul / t.rangeMul —— 先前直接寫在這裡的 1.20 / 1.15
+    // 會在蓋好的下一行被覆寫掉，也就是地基加成從來沒有真的生效過。
+    this.socketDmgMul = 1.0;
+    this.socketRangeMul = 1.0;
+    this.socketCdrMul = 1.0;
+    this.socketHpMul = 1.0;
+    // 經濟／相剋／成長／光環類（沒有對應加成時維持中性值）
+    this.bankRate = 0;
+    this.bankCap = 0;
+    this.armorPierce = 0;
+    this.vetRate = 0;
+    this.vetStacks = 0;
+    this.vetMul = 1.0;
+    this.auraRadius = 0;
+    this.auraMul = 0;
+    this.auraBoost = 0;        // 由 Facilities.updateTurrets 每幀寫入：周圍指揮所給的加成
+
+    const sb = this.socketBonus ? SOCKET_BONUSES[this.socketBonus] : null;
+    if (sb) sb.apply(this);
+
+    this.rangeMul = this.socketRangeMul;
+    this.cdrMulMod = this.socketCdrMul;
+    this.dmgMul = this.socketDmgMul;
+    if (this.socketHpMul !== 1.0) this.maxHp = Math.round(this.maxHp * this.socketHpMul);
+
+    // 實戰歷練 (Elite Veterancy，B 項塔種深度)：守塔的塔自己累計擊殺數，跨門檻就升星。
+    //
+    // 為什麼用「擊殺數」而不是時間或波數：
+    //   1. 這樣「餵哪一座塔」變成真的決策 —— 擺在交會口的塔會自己長大，
+    //      擺在冷線的塔永遠停在 ★0，玩家會為了養塔去調整擺位。
+    //   2. 不需要新美術：星星是程式畫的（見 main.js 的 drawTurretStars）。
+    // 加成存成 eliteDmgMul / eliteRangeMul 而不是直接寫進 dmgMul / rangeMul，
+    // 理由跟上面的地基加成一樣：applyTDStats() 會直接指派那兩個欄位。
+    this.kills = 0;
+    this.eliteTier = 0;
+    this.eliteDmgMul = 1.0;
+    this.eliteRangeMul = 1.0;
 
     this.hp = this.maxHp;
     this.cooldownTimer = 0;
@@ -786,6 +830,25 @@ export class Turret {
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // 實戰歷練：累計一次擊殺。回傳 true 表示剛好跨過門檻升星，
+  // 呼叫端要重算 applyTDStats()（加成靠那裡合成）並報訊給玩家。
+  addKill() {
+    this.kills = (this.kills || 0) + 1;
+    let tier = 0;
+    for (const need of TD_ELITE.kills) if (this.kills >= need) tier++;
+    if (tier <= (this.eliteTier || 0)) return false;
+    this.eliteTier = tier;
+    this.eliteDmgMul = TD_ELITE.dmg[tier];
+    this.eliteRangeMul = TD_ELITE.range[tier];
+    return true;
+  }
+
+  // 距離下一星還差幾隻（已滿星回 null）
+  eliteNext() {
+    const t = this.eliteTier || 0;
+    return t >= TD_ELITE.kills.length ? null : TD_ELITE.kills[t] - (this.kills || 0);
   }
 
   // 檢查面板用的數值摘要（已含等級／地基倍率）
@@ -1365,20 +1428,10 @@ export function drawSocket(ctx, camera, socket, isOccupied = false, isHovered = 
   const sy = socket.y - camera.y;
   if (sx < -80 || sx > VIEW.w + 80 || sy < -80 || sy > VIEW.h + 80) return;
 
-  const colorMap = {
-    range: '#00f5ff',
-    haste: '#b5179e',
-    damage: '#f39c12',
-    armor: '#2ecc71',
-  };
-  const iconMap = {
-    range: '🎯',
-    haste: '⚡',
-    damage: '⚔️',
-    armor: '🛡️',
-  };
-  const themeColor = colorMap[socket.bonus] || '#ffd166';
-  const icon = iconMap[socket.bonus] || '⚙️';
+  // 顏色與圖示一律查 js/tdsockets.js，新增加成種類時不用回來改這裡
+  const def = socket.bonus ? SOCKET_BONUSES[socket.bonus] : null;
+  const themeColor = (def && def.color) || '#ffd166';
+  const icon = (def && def.icon) || '⚙️';
 
   ctx.save();
 
@@ -1446,6 +1499,57 @@ export function drawSocket(ctx, camera, socket, isOccupied = false, isHovered = 
 }
 
 // 繪製滑鼠/觸控建造幽靈與射程範圍預覽 (Placement Ghost)
+// 選中塔時在路面上畫出它的實際射程圈（A 項操作回饋）。
+//
+// 為什麼要做這個：檢查面板給的是數字，但射程這種東西玩家是「用眼睛比」的 ——
+// 尤其在要決定「這格該蓋高台還是蓋金庫」的時候，看不到覆蓋範圍就只能瞎猜。
+// 半徑直接取 statSummary()，所以等級／地基／王國／實戰歷練的加成全都含在裡面。
+export function drawTurretRange(ctx, camera, turret, gameTime = 0) {
+  if (!turret || turret.isDead) return;
+  const info = turret.statSummary();
+  if (!info || !info.range) return;   // 兵營這類沒有射程的塔（summary 回 null）直接跳過
+  const sx = turret.x - camera.x;
+  const sy = turret.y - camera.y;
+  const r = info.range;
+  const pulse = 0.5 + 0.5 * Math.sin(gameTime * 3.2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 209, 102, 0.06)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = `rgba(255, 209, 102, ${(0.40 + 0.28 * pulse).toFixed(3)})`;
+  ctx.setLineDash([10, 8]);
+  ctx.lineDashOffset = -gameTime * 26;   // 虛線繞圈跑，一眼看得出這圈是「活的」
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// 實戰歷練星等：畫在塔頭上方的三顆小星（B 項）。
+// 用程式畫而不是貼圖，因為星星要能隨時增減，而且不吃 assets/td/ 已經用滿的圖集。
+export function drawTurretStars(ctx, camera, turret) {
+  const tier = turret.eliteTier || 0;
+  if (tier <= 0) return;
+  const sx = turret.x - camera.x;
+  const sy = turret.y - camera.y - (turret.radius || 20) - 10;
+  const gap = 9;
+  ctx.save();
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffd166';
+  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+  ctx.lineWidth = 2.5;
+  const startX = sx - (tier - 1) * gap / 2;
+  for (let i = 0; i < tier; i++) {
+    const x = startX + i * gap;
+    ctx.strokeText('★', x, sy);
+    ctx.fillText('★', x, sy);
+  }
+  ctx.restore();
+}
+
 export function drawPlacementGhost(ctx, camera, placement, game) {
   if (!placement) return;
   const sx = placement.x - camera.x;
@@ -1454,6 +1558,7 @@ export function drawPlacementGhost(ctx, camera, placement, game) {
   const conf = FACILITY_TYPES[placement.type] || FACILITY_TYPES.turret;
   const isRangeType = placement.type === 'turret' || placement.type === 'heavy_bolter';
   let range = isRangeType ? (conf.range || 270) : (conf.pulseRadius || conf.fieldRadius || 70);
+  // 地基「高台」加成：預覽圈也要跟著放大，否則玩家看不到實際涵蓋範圍
   if (placement.socket && placement.socket.bonus === 'range') range *= 1.15;
 
   ctx.save();
