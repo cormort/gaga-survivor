@@ -89,8 +89,8 @@ export class Spawner {
 
   update(dt, gameTime, player, enemies, onBossSpawnCallback = null) {
     const level = this.level;
+    if (level.td) return;   // 守塔關：波次與首領由 TowerDefense 控制；強度只看波數，不跑動態難度
     this.updateAdaptive(dt);
-    if (level.td) return;   // 守塔關：波次與首領由 TowerDefense 控制
 
     // Boss 排程：無盡模式 = 固定週期輪播深淵 Boss；一般關卡 = 時間表
     if (level.id === 'endless') {

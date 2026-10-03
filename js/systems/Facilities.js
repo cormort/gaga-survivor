@@ -23,6 +23,7 @@ const GOLD_MUL_CAP = 8;
 
 export function getFacilityCost(game, type = 'turret') {
   const conf = FACILITY_TYPES[type] || FACILITY_TYPES.turret;
+  if (game.td) return conf.baseCost;   // 守塔關：固定價格（經典守塔），金幣來源是固定的賞金與波次獎金，不會無限膨脹
   const count = game.turrets.filter((t) => (t.facilityType || 'turret') === type).length;
   // 原本是線性 (60 + 35n)，蓋 20 座也才 760 —— 後期金幣以萬計，等於無限重建。
   // 乘上 1.12^n 形成軟天花板：20 座約 7.3k、30 座約 33k、40 座約 136k。
@@ -377,7 +378,7 @@ export function buildTurret(game) {
 }
 
 export function grantStarterTurret(game) {
-  if (!game.core || !game.mode.turrets) return;
+  if (!game.core || !game.mode.turrets || game.td) return;   // 守塔關改發開局金幣，自己決定蓋什麼
   const t = new Turret(game.core.x, game.core.y + game.core.radius + 46, 'turret');
   game.turrets.push(t);
   game.particles.createShockwave(t.x, t.y, 90, '#00e5ff');
@@ -406,7 +407,7 @@ export function updateTurrets(game, dt) {
       const d = Math.sqrt(d2);
       e.x = t.x + (dx / d) * minD;
       e.y = t.y + (dy / d) * minD;
-      t.takeDamage(e.damage * dt * 1.5, e);
+      if (!game.td) t.takeDamage(e.damage * dt * 1.5, e);   // 守塔關的塔不會被打壞
     }
 
     if (t.isDead) {

@@ -296,17 +296,10 @@ export class Enemy {
       let aimDist = dist;
       if (this.path) {
         // 守塔路線上的遠程怪：一律沿路線前進（目標是路徑點，不能繞著它放風箏），
-        // 瞄準與射程改看 aimTarget（特工）
+        // 而且只趕路不開火（經典守塔：怪不攻擊特工與砲塔）—— aimDist = 0 讓下方的射擊判定不成立
         moveX = nx * spd;
         moveY = ny * spd;
-        const at = this.aimTarget;
-        if (at) {
-          const ax = at.x - this.x;
-          const ay = at.y - this.y;
-          aimDist = Math.sqrt(ax * ax + ay * ay);
-          nx = aimDist > 0.1 ? ax / aimDist : 0;
-          ny = aimDist > 0.1 ? ay / aimDist : 0;
-        }
+        aimDist = 0;
       } else if (dist > desiredRange) {
         moveX = nx * spd;
         moveY = ny * spd;

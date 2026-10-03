@@ -22,7 +22,7 @@ import { DropItem } from './entities/DropItem.js';
 import { MERC } from './entities/Mercenary.js';
 import { drawSocket, drawPlacementGhost } from './entities/Turret.js';
 import './tdlevels.js';   // 守塔專屬關卡併入 LEVELS（side effect）
-import { TowerDefense } from './systems/TowerDefense.js';
+import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/TowerDefense.js';
 
 
 import { InputController } from './input.js';
@@ -916,8 +916,8 @@ class Game {
     setWorldBounded(!!this.mode.boundedMap);   // 生存者：無限地圖；守塔：4000×4000 圍牆
     this._recycleTimer = 0;
     this._recycleFrom = null;
-    // 守塔關卡可覆寫核心血量（只挨漏網之魚，血量比開放地圖時低）
-    this.core = this.mode.core ? new Core({ ...this.mode.core, hp: this.level.coreHp || this.mode.core.hp }) : null;
+    // 守塔關卡的核心血量就是命數（漏一隻扣 LEAK 條，見核心區塊）
+    this.core = this.mode.core ? new Core({ ...this.mode.core, hp: this.level.td ? (this.level.lives || TD_LIVES) : this.mode.core.hp }) : null;
     const spawnY = this.core ? this.core.y + this.core.radius + 90 : 0;
     this.player = new Player(this.core ? this.core.x : 0, spawnY, this.characterId);
     setGearTheme(this.characterId);
@@ -1025,12 +1025,13 @@ class Game {
     this.decals = [];
     initExplodableProps(this);
     this.destructibles = [];
-    initDestructibles(this);
+    if (!this.td) initDestructibles(this);   // 守塔關沒有撿寶木箱（金幣只來自賞金與波次獎金）
     this.extractionWell = null;
 
     this.gameTime = 0;
     this.kills = 0;
     this.gold = (this.player && this.player.startBonusGold) ? this.player.startBonusGold : 0;
+    if (this.td) this.gold += this.level.startGold || TD_START_GOLD;   // 守塔：開局金幣取代預置砲台
     // 角色的開局加成要放在「本局狀態重置之後」：turrets 等陣列在上方才被清空，
     // 放在 applyMetaTalents() 旁邊會被緊接著的 this.turrets = [] 清掉（實測踩過，
     // 工兵阿鴨的開局砲台就這樣消失無蹤）。
@@ -1131,6 +1132,7 @@ class Game {
     }
 
     this.ui.setModeButtons(this.mode);
+    document.querySelector('#core-hud .core-title').textContent = this.td ? '剩餘生命' : '基地核心';
     this.ui.updateCoreHUD(this.core);
     updateFacilityHUD(this);
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
@@ -1768,6 +1770,15 @@ class Game {
         const minD = this.core.radius + e.radius;
         const d2 = dx * dx + dy * dy;
         if (d2 >= minD * minD || d2 === 0) continue;
+        if (this.td) {
+          // 守塔：走到核心＝漏怪，扣命數後直接消失（cleanupDeadEnemies 看 _leaked 不給獎勵）
+          e.isDead = true;
+          e._leaked = true;
+          this.core.takeDamage(LEAK(e));
+          this.camera.shake = Math.max(this.camera.shake, e.isBoss ? 16 : 5);
+          sound.playHurt();
+          continue;
+        }
         const d = Math.sqrt(d2);
         // 推開，讓怪圍在核心外圈啃 (比照砲塔被啃的處理)
         e.x = this.core.x + (dx / d) * minD;
@@ -1836,7 +1847,7 @@ class Game {
       if (c.isDead) this.destructibles.splice(i, 1);
     }
     recycleScenery(this);   // 無限地圖：太遠的場景物件回收、可引爆物補回
-    if (this.destructibles.length < 12) {
+    if (!this.td && this.destructibles.length < 12) {   // 守塔關沒有撿寶木箱
       spawnSingleDestructible(this, sceneryRespawnDist());
     }
 
@@ -1980,8 +1991,8 @@ class Game {
     this.ui.updateBossHUD(this.boss);
     this.ui.setObjective(objectiveText(this));
 
-    // 14. 里程碑獎勵 (擊殺數 / 存活時間)
-    checkMilestones(this, dt);
+    // 14. 里程碑獎勵 (擊殺數 / 存活時間)：守塔關不跑 —— 祝福彈窗、天降水晶、隨機事件都是生存者的節奏
+    if (!this.td) checkMilestones(this, dt);
   }
 
   // 敵人互相推擠 (separation)。
@@ -2473,6 +2484,11 @@ class Game {
   cleanupDeadEnemies() {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
+      if (enemy._leaked) {   // 守塔漏怪：不算擊殺、不給任何獎勵
+        if (enemy.isBoss) sound.restoreLevelTheme();
+        this.enemies.splice(i, 1);
+        continue;
+      }
       if (enemy.isDead) {
         this.kills++;
         this.addCombo();
@@ -2562,9 +2578,11 @@ class Game {
             this.handleGameOver(true);
             return;
           }
-          // Boss 掉落大炸彈與全場磁鐵
-          this.dropItems.push(new DropItem(enemy.x - 20, enemy.y, 'MAGNET'));
-          this.dropItems.push(new DropItem(enemy.x + 20, enemy.y, 'BOMB'));
+          // Boss 掉落大炸彈與全場磁鐵（守塔關沒有掉落物，賞金已在 spawnDropItem 入帳）
+          if (!this.td) {
+            this.dropItems.push(new DropItem(enemy.x - 20, enemy.y, 'MAGNET'));
+            this.dropItems.push(new DropItem(enemy.x + 20, enemy.y, 'BOMB'));
+          }
         }
 
         this.enemies.splice(i, 1);
@@ -2637,6 +2655,14 @@ class Game {
       this._killsByType[enemy.typeKey] = (this._killsByType[enemy.typeKey] || 0) + 1;
       if (enemy.isBoss) this._bossKills++;
       else if (enemy.isElite) this._eliteKills++;
+    }
+    // 守塔：擊殺賞金直接入帳，不掉經驗寶石／金幣／消耗品（所以也沒有升級卡）。
+    // 裝備與珠寶是跨局收穫，照常掉落
+    if (this.td) {
+      this.gold += bounty(enemy);
+      this.rollGearDrop(enemy);
+      this.rollJewelDrop(enemy);
+      return;
     }
     const rand = Math.random();
     let kind = 'EXP_GREEN';

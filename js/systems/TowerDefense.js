@@ -1,8 +1,14 @@
 // 守塔關卡的波次與路線（只在 level.td 的關卡啟用；生存者模式完全不經過這裡）。
 //
 // 流程：休息（可蓋塔）→ 出波（怪從入口沿路線走）→ 該波清空 → 發波次獎金 → 下一段休息…
-// 最後一波附帶終極首領，擊敗即過關（沿用主迴圈既有的 isFinal 通關判定）。
+// 最後一波附帶終極首領，擊敗即過關（沿用主迴圈既有的 isFinal 通關判定）；
+// 首領漏過去但命數還在，最後一波清空時同樣過關。
 // 休息中按「提前開戰」(N) 立刻出下一波，剩餘秒數換成金幣。
+//
+// 與生存者刻意不同的規則（經典守塔）：
+//   - 命數制：怪走到核心＝漏怪，扣 LEAK 條命後消失（main.js 核心區塊），不再貼著核心啃血
+//   - 擊殺直接入帳 bounty()，不掉經驗寶石／金幣，所以也沒有升級卡
+//   - 怪的血量只看波數（TD_HP / TD_HP_GROWTH），不吃生存者時間曲線與動態難度、不擲精英
 
 import { Enemy } from '../entities/Enemy.js';
 import { enemyScale } from '../levels.js';
@@ -13,6 +19,12 @@ const WAVE_BONUS = (w) => 60 + w * 15;   // 清完第 w 波的獎金
 const EARLY_GOLD_PER_SEC = 4;            // 提前開戰：每剩 1 秒休息 +4 金幣
 const GROUP_STAGGER = 2.5;               // 同一波裡各群的起跑間隔 (秒)
 const WAYPOINT_REACH = 36;               // 走到這麼近就換下一個路徑點
+const TD_HP = 2;                         // 雜兵血量 = 基礎血量 × TD_HP × 關卡 hpScale × 難度 × 波數成長
+const TD_HP_GROWTH = 0.15;               // 每多一波 +15%（不套生存者的時間曲線、開局厚血與動態難度）
+export const TD_LIVES = 20;              // 關卡沒寫 lives 時的預設命數
+export const TD_START_GOLD = 250;        // 關卡沒寫 startGold 時的開局金幣（約 4 座基礎砲台）
+export const LEAK = (e) => (e.isBoss ? 10 : 1);           // 漏一隻扣幾條命
+export const bounty = (e) => (e.isBoss ? 150 : 2 + (e.exp || 1) * 2);   // 擊殺賞金
 
 export class TowerDefense {
   constructor(game) {
@@ -81,11 +93,10 @@ export class TowerDefense {
 
   spawn({ type, path }) {
     const g = this.game;
-    const scale = enemyScale(g.gameTime, this.level, g.rules);
-    scale.hp *= g.spawner.adaptiveHpMul * (1 + 0.1 * (this.waveIdx - 1));
+    const scale = enemyScale(0, this.level, g.rules);   // 只取移速與傷害；血量下面重算
+    scale.hp = TD_HP * (this.level.hpScale || 1) * g.rules.enemyHpMul * (1 + TD_HP_GROWTH * (this.waveIdx - 1));
     const [x, y] = path[0];
     const e = new Enemy(type, x + (Math.random() - 0.5) * this.half, y + (Math.random() - 0.5) * this.half, scale);
-    g.spawner.rollElite(e, g.gameTime);
     e.path = path;
     e.pathIdx = 1;
     e.spawnTime = g.gameTime;
@@ -99,7 +110,10 @@ export class TowerDefense {
     g.gold += bonus;
     g.ui.say(`✅ 第 ${this.waveIdx} 波清空！+${bonus} 🪙`, '#3ddc84', 2);
     if (this.waveIdx >= this.total) {
-      this.phase = 'done';   // 最後一波的首領若還活著，擊敗它就過關
+      // 走到這裡代表最後一波（含首領）都已擊殺或漏掉。擊殺首領會先在
+      // cleanupDeadEnemies 判勝；首領漏掉但命數還在，也算守住了
+      this.phase = 'done';
+      g.handleGameOver(true);
       return;
     }
     this.phase = 'break';
@@ -109,7 +123,6 @@ export class TowerDefense {
   // 沿路線走的怪：目標是下一個路徑點，走完才朝核心
   targetFor(e, core, dt = 0) {
     if (!e.path) return null;
-    e.aimTarget = this.game.player;   // 遠程怪沿路走、但朝特工開火
     if (e.pathIdx >= e.path.length) return core;
     const [wx, wy] = e.path[e.pathIdx];
     // 換下一個路徑點：夠近、或已經走過了這段（投影超出線段終點）、或卡太久
@@ -145,7 +158,7 @@ export class TowerDefense {
       return `第 ${this.waveIdx + 1}/${this.total} 波 ‧ 佈防時間 ${Math.ceil(this.timer)} 秒（N 提前開戰拿金幣）`;
     }
     if (this.phase === 'wave') return `第 ${this.waveIdx}/${this.total} 波進攻中 ‧ 守住核心！`;
-    return '最後一波！擊敗終極首領即可通關';
+    return '最後一波！守住終極首領即可通關';
   }
 
   // 路線：地面上的淺色帶狀路面 + 深色路肩，入口畫一個紅色門標

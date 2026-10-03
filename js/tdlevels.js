@@ -5,7 +5,7 @@
 //   paths: [[x,y]…]  —— 每條路線是一串折線點，第一點是入口、最後一點接到核心 (0,0)
 //   pathWidth        —— 路寬 (px)；怪物被夾在路內，砲塔只能蓋在路外
 //   waves            —— 由 genWaves 產生：[{ groups: [{ type, count, gap, path }], boss? }]
-//   coreHp           —— 覆寫模式預設的核心血量（守塔關的核心只挨漏網之魚，血量低一些）
+//   lives / startGold —— 選填，覆寫命數與開局金幣（預設見 TowerDefense.js 的 TD_LIVES / TD_START_GOLD）
 // 座標系：守塔模式是 4000×4000 有邊界地圖（±2000），核心在原點。
 
 import { LEVELS } from './levels.js';
@@ -74,7 +74,6 @@ export const TD_LEVELS = {
     dnaMult: 1.2,
     next: 'td_fork',
     td: true,
-    coreHp: 3000,
     pathWidth: 150,
     breakTime: 14,
     paths: [
@@ -112,7 +111,6 @@ export const TD_LEVELS = {
     dnaMult: 1.6,
     next: 'td_fortress',
     td: true,
-    coreHp: 3500,
     pathWidth: 140,
     breakTime: 13,
     paths: [
@@ -151,7 +149,6 @@ export const TD_LEVELS = {
     dnaMult: 2.0,
     next: 'td_forgeworld',
     td: true,
-    coreHp: 4000,
     pathWidth: 130,
     breakTime: 12,
     paths: [
@@ -192,7 +189,6 @@ export const TD_LEVELS = {
     dnaMult: 2.8,
     next: null,
     td: true,
-    coreHp: 5000,
     pathWidth: 155,
     breakTime: 14,
     theme: {
