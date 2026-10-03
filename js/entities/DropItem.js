@@ -1,6 +1,6 @@
 // 掉落物實體 (經驗水晶、磁鐵、炸彈、烤雞回血、金幣)
 
-import { DROP_TYPES } from '../config.js';
+import { DROP_TYPES, VIEW } from '../config.js';
 import { RARITIES } from '../items.js';
 import { JEWELS } from '../jewels.js';
 import { getSprite, blit } from '../sprites.js';
@@ -141,8 +141,8 @@ export class DropItem {
     const screenY = this.y - camera.y;
 
     // 視野邊界優化
-    if (screenX < -30 || screenX > window.innerWidth + 30 ||
-        screenY < -30 || screenY > window.innerHeight + 30) {
+    if (screenX < -30 || screenX > VIEW.w + 30 ||
+        screenY < -30 || screenY > VIEW.h + 30) {
       return;
     }
 
@@ -296,7 +296,7 @@ export class DestructibleCrate {
     const sx = this.x - camera.x;
     const sy = this.y - camera.y;
 
-    if (sx < -40 || sx > window.innerWidth + 40 || sy < -40 || sy > window.innerHeight + 40) return;
+    if (sx < -40 || sx > VIEW.w + 40 || sy < -40 || sy > VIEW.h + 40) return;
 
     ctx.save();
     ctx.translate(sx + (Math.random() - 0.5) * this.shake, sy + (Math.random() - 0.5) * this.shake);

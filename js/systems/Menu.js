@@ -25,6 +25,8 @@ import {
   closeFacilityInspector,
   hireMercenary,
   tryUpgradeNearestTurret,
+  openBuildMenu,
+  closeBuildMenu,
 } from './Facilities.js';
 import { castSkill } from './Skills.js';
 
@@ -335,6 +337,7 @@ export function bindEvents(game) {
   // 佈署戰場防禦設施 (1/2/3/4/5/6/7/B、HUD 按鈕、滑鼠點擊/右鍵取消)
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (game.buildMenuSocket) closeBuildMenu(game);
       if (game.placement) cancelPlacement(game);
       if (game.inspectedTurret) closeFacilityInspector(game);
     }
@@ -365,7 +368,18 @@ export function bindEvents(game) {
 
   // 守塔建築放置預覽與點擊檢查 (Canvas Pointer Events)
   const cv = game.canvas;
+  // 守塔：地圖比畫面大時（小螢幕）按住空地拖曳平移鏡頭
+  let pan = null;
+  const endPan = () => { pan = null; };
+  cv.addEventListener('pointerup', endPan);
+  cv.addEventListener('pointercancel', endPan);
   cv.addEventListener('pointermove', (e) => {
+    if (pan && game.td) {
+      game.camera.x = pan.cx - (e.clientX - pan.x) / game.zoom;
+      game.camera.y = pan.cy - (e.clientY - pan.y) / game.zoom;
+      game.clampCamera();
+      return;
+    }
     if (game.placement) {
       updatePlacement(game, e.clientX, e.clientY);
     } else {
@@ -396,8 +410,24 @@ export function bindEvents(game) {
       }
 
       // 未在建造模式時：點擊檢查既有設施或空戰術地基
-      const wx = e.clientX + game.camera.x;
-      const wy = e.clientY + game.camera.y;
+      const { x: wx, y: wy } = game.screenToWorld(e.clientX, e.clientY);
+
+      // 守塔：點塔 → 檢查面板（升級／賣出／瞄準）；點空建塔點 → 建造選單；點空地 → 收起並開始拖曳平移
+      if (game.td) {
+        const t = game.turrets.find((tt) => Math.hypot(tt.x - wx, tt.y - wy) <= (tt.radius || 24) + 18);
+        const sock = !t && game.level.sockets.find((so) => !so.occupied && Math.hypot(so.x - wx, so.y - wy) <= 45);
+        if (t) {
+          closeBuildMenu(game);
+          inspectFacility(game, t);
+        } else if (sock) {
+          openBuildMenu(game, sock);
+        } else {
+          closeBuildMenu(game);
+          if (game.inspectedTurret) closeFacilityInspector(game);
+          pan = { x: e.clientX, y: e.clientY, cx: game.camera.x, cy: game.camera.y };
+        }
+        return;
+      }
 
       // 1. 優先檢查是否點擊既有防禦設施 (半徑 35px 判定)
       const clickedTurret = game.turrets.find(

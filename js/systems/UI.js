@@ -257,6 +257,10 @@ export class UIManager {
     this.inspectUpgradeCost = document.getElementById('inspect-upgrade-cost');
     this.btnInspectRecycle = document.getElementById('btn-inspect-recycle');
     this.inspectRecycleVal = document.getElementById('inspect-recycle-val');
+    this.btnInspectPriority = document.getElementById('btn-inspect-priority');
+    this.inspectPriorityVal = document.getElementById('inspect-priority-val');
+    this.btnInspectPriority?.addEventListener('click', () => this._onInspectPriority?.());
+    this.buildMenu = document.getElementById('td-build-menu');
 
     this.btnCancelPlacement?.addEventListener('click', () => {
       if (typeof this._onCancelPlacement === 'function') this._onCancelPlacement();
@@ -1063,6 +1067,26 @@ export class UIManager {
   }
 
   // 守塔設施詳細資訊、專精升級與拆除回收彈窗
+  // 守塔建造選單：pos 是建塔點的螢幕座標，選單浮在它上方（太靠上就改放下方）
+  showBuildMenu(show, pos = null, items = [], onPick = null) {
+    const el = this.buildMenu;
+    if (!el) return;
+    el.classList.toggle('hidden', !show);
+    if (!show) return;
+    el.replaceChildren(...items.map((it) => {
+      const b = document.createElement('button');
+      b.className = `td-build-opt${it.affordable ? '' : ' poor'}`;
+      b.title = it.desc;
+      b.innerHTML = `<span class="ico">${it.icon}</span><span>${it.name}</span><span class="cost">${it.cost} 🪙</span>`;
+      b.addEventListener('click', () => onPick(it.type));
+      return b;
+    }));
+    const half = 126;   // 選單寬 236 的一半再留邊
+    el.style.left = `${Math.max(half, Math.min(window.innerWidth - half, pos.x))}px`;
+    el.style.top = `${pos.y}px`;
+    el.classList.toggle('below', pos.y < 230);
+  }
+
   showFacilityInspector(show, turret = null, callbacks = {}) {
     if (!this.facilityInspectModal) return;
     if (show && turret) {
@@ -1076,7 +1100,7 @@ export class UIManager {
       }
 
       // 戰術地基槽狀態
-      if (turret.socket) {
+      if (turret.socket && turret.socket.bonus) {
         this.inspectSocketBadge?.classList.remove('hidden');
         if (this.inspectSocketName) this.inspectSocketName.textContent = turret.socket.label;
         const bonusDesc = turret.socket.bonus === 'range' ? '射程 +15%' :
@@ -1139,6 +1163,9 @@ export class UIManager {
       this._onInspectUpgrade = callbacks.onUpgrade;
       this._onInspectRecycle = callbacks.onRecycle;
       this._onInspectClose = callbacks.onClose;
+      this.btnInspectPriority?.classList.toggle('hidden', !callbacks.priority);
+      if (callbacks.priority && this.inspectPriorityVal) this.inspectPriorityVal.textContent = callbacks.priority.label;
+      this._onInspectPriority = callbacks.priority?.onCycle;
     } else {
       this.facilityInspectModal?.classList.add('hidden');
       this._onInspectUpgrade = null;

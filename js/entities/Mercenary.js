@@ -2,7 +2,7 @@
 // 擊殺提升境界 (煉氣→化神)、會被咬死要重雇。
 // 像「會移動的砲塔」：不吃武器槽、不進升級三選一，純局內消耗金幣的戰力。
 
-import { worldBounds } from '../config.js';
+import { worldBounds, VIEW } from '../config.js';
 import { sound } from '../audio.js';
 import { getSprite, blit } from '../sprites.js';
 
@@ -235,7 +235,7 @@ export class Mercenary {
     if (this.isDead) return;
     const sx = this.x - camera.x;
     const sy = this.y - camera.y;
-    if (sx < -60 || sx > window.innerWidth + 60 || sy < -60 || sy > window.innerHeight + 60) return;
+    if (sx < -60 || sx > VIEW.w + 60 || sy < -60 || sy > VIEW.h + 60) return;
 
     const bob = Math.sin(this.sway * 2) * 1.2;   // 御氣懸浮的上下起伏
     const face = Math.cos(this.angle) >= 0 ? 1 : -1;

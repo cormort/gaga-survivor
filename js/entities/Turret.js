@@ -2,6 +2,7 @@
 
 import { getSprite } from '../sprites.js';
 import { sound } from '../audio.js';
+import { VIEW } from '../config.js';
 import { GuardsmanUnit, LemanRussUnit } from './AlliedUnit.js';
 
 // 高解析度設施與防禦塔貼圖 (Banana 2D Game Assets)
@@ -244,6 +245,33 @@ export class Turret {
     return base * (this.cdrMulMod || 1);
   }
 
+  // 挑射程內的目標。priority 未設（生存者）＝最近、首領優先；
+  // 守塔可切換 first（沿路線走最遠）／last／strong（血最多）／close。
+  // e.progress 由 TowerDefense.targetFor 每幀寫入。
+  pickTarget(enemies, range) {
+    const range2 = range * range;
+    const p = this.priority;
+    let target = null;
+    let best = Infinity;
+    for (const e of enemies) {
+      if (e.isDead) continue;
+      const dx = e.x - this.x;
+      const dy = e.y - this.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > range2) continue;
+      const score = p === 'first' ? -(e.progress || 0)
+        : p === 'last' ? (e.progress || 0)
+        : p === 'strong' ? -e.hp
+        : p === 'close' ? d2
+        : (e.isBoss ? d2 * 0.25 : d2);
+      if (score < best) {
+        best = score;
+        target = e;
+      }
+    }
+    return target;
+  }
+
   update(dt, enemies, onHit, player = null, game = null) {
     this.animTimer += dt;
     if (this.muzzleTimer > 0) this.muzzleTimer -= dt;
@@ -303,22 +331,7 @@ export class Turret {
     // 4. 重型爆彈砲座 (Heavy Bolter Emplacement) 行為：雙聯高速爆彈射擊 + 小範圍高爆濺射
     if (this.facilityType === 'heavy_bolter') {
       this.cooldownTimer -= dt;
-      let target = null;
-      const range = this.fConf.range || 380;
-      const range2 = range * range;
-      let bestScore = range2;
-      for (const e of enemies) {
-        if (e.isDead) continue;
-        const dx = e.x - this.x;
-        const dy = e.y - this.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 > range2) continue;
-        const score = e.isBoss ? d2 * 0.25 : d2;
-        if (score < bestScore) {
-          bestScore = score;
-          target = e;
-        }
-      }
+      const target = this.pickTarget(enemies, this.fConf.range || 380);
       if (!target) return;
 
       this.angle = Math.atan2(target.y - this.y, target.x - this.x);
@@ -389,22 +402,8 @@ export class Turret {
       return;
     }
 
-    // 鎖定範圍內最近的敵人
-    let target = null;
-    const range2 = this.conf.range * this.conf.range;
-    let bestScore = range2;
-    for (const e of enemies) {
-      if (e.isDead) continue;
-      const dx = e.x - this.x;
-      const dy = e.y - this.y;
-      const d2 = dx * dx + dy * dy;
-      if (d2 > range2) continue;
-      const score = e.isBoss ? d2 * 0.25 : d2;
-      if (score < bestScore) {
-        bestScore = score;
-        target = e;
-      }
-    }
+    // 鎖定範圍內的目標（依瞄準優先序）
+    const target = this.pickTarget(enemies, this.conf.range);
     if (!target) {
       this.beam = null;
       this.chainTargets = [];
@@ -480,7 +479,7 @@ export class Turret {
   draw(ctx, camera) {
     const sx = this.x - camera.x;
     const sy = this.y - camera.y;
-    if (sx < -100 || sx > window.innerWidth + 100 || sy < -100 || sy > window.innerHeight + 100) return;
+    if (sx < -100 || sx > VIEW.w + 100 || sy < -100 || sy > VIEW.h + 100) return;
 
     // ── 繪製高壓電網 ──
     if (this.facilityType === 'electric_grid') {
@@ -969,7 +968,7 @@ function hexA(hex, a) {
 export function drawSocket(ctx, camera, socket, isOccupied = false, isHovered = false, animTimer = 0) {
   const sx = socket.x - camera.x;
   const sy = socket.y - camera.y;
-  if (sx < -80 || sx > window.innerWidth + 80 || sy < -80 || sy > window.innerHeight + 80) return;
+  if (sx < -80 || sx > VIEW.w + 80 || sy < -80 || sy > VIEW.h + 80) return;
 
   const colorMap = {
     range: '#00f5ff',
@@ -1034,10 +1033,12 @@ export function drawSocket(ctx, camera, socket, isOccupied = false, isHovered = 
     ctx.textBaseline = 'middle';
     ctx.fillText(icon, sx, sy + floatY);
 
-    // 戰術加成簡短標籤
-    ctx.font = 'bold 10px sans-serif';
-    ctx.fillStyle = themeColor;
-    ctx.fillText(socket.label.split(' ')[0], sx, sy + r + 13);
+    // 戰術加成簡短標籤（守塔的一般建塔點沒有 label）
+    if (socket.label) {
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillStyle = themeColor;
+      ctx.fillText(socket.label.split(' ')[0], sx, sy + r + 13);
+    }
   } else {
     // 佔用時繪製精簡插槽指示燈
     ctx.fillStyle = themeColor;

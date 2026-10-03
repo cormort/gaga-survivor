@@ -13,7 +13,6 @@ import { Mercenary, MERC, REALM, rollMercCandidates } from '../entities/Mercenar
 import { Projectile } from '../entities/Projectile.js';
 import { sound } from '../audio.js';
 import { save } from '../save.js';
-import { nearestOnPaths } from '../tdlevels.js';
 import { enemyScale } from '../levels.js';
 
 // 金幣乘數的天花板。天賦財運 × 模式 × 祝福 × 每日規則 × 淘金潮是純乘法疊加、
@@ -59,16 +58,9 @@ export function checkPlacementValid(game, wx, wy, type, socket = null) {
     return { valid: true, reason: `戰術地基 (${socket.label})`, cost };
   }
 
-  // 3. 守塔關卡非地基點：必須在行軍道路兩側 (路肩)
+  // 3. 守塔關卡只能蓋在建塔點
   if (game.td) {
-    const near = nearestOnPaths(game.level, wx, wy);
-    const half = (game.level.pathWidth || 80) / 2;
-    if (near.d < half + 10) {
-      return { valid: false, reason: '不能蓋在行軍路面上', cost };
-    }
-    if (near.d > half + 250) {
-      return { valid: false, reason: '離行軍路線太遠', cost };
-    }
+    return { valid: false, reason: '守塔關只能蓋在建塔點', cost };
   }
 
   // 4. 與其他設施的最小間隔
@@ -92,6 +84,10 @@ export function checkPlacementValid(game, wx, wy, type, socket = null) {
 // 開始建造預覽 (滑鼠/觸控拖曳放置模式)
 export function startPlacement(game, type = 'turret') {
   if (game.state !== 'PLAYING' || !game.player) return;
+  if (game.td) {   // 守塔關沒有自由放置（快捷鍵 1~7／B 也走這裡）
+    game.ui.say('🔨 點擊路邊的建塔點來蓋塔', '#ffb703', 1.6);
+    return;
+  }
   if (!game.mode.turrets) {
     game.ui.say('目前模式無法建造防禦工事', '#8a9bb0', 1.6);
     return;
@@ -111,8 +107,8 @@ export function startPlacement(game, type = 'turret') {
   }
 
   // 初始化 placement 狀態
-  const initialX = game.lastPointer ? (game.lastPointer.x + game.camera.x) : game.player.x;
-  const initialY = game.lastPointer ? (game.lastPointer.y + game.camera.y) : game.player.y;
+  const initialX = game.lastPointer ? game.screenToWorld(game.lastPointer.x, game.lastPointer.y).x : game.player.x;
+  const initialY = game.lastPointer ? game.screenToWorld(game.lastPointer.x, game.lastPointer.y).y : game.player.y;
   const initialScreenX = game.lastPointer ? game.lastPointer.x : (game.vw / 2);
   const initialScreenY = game.lastPointer ? game.lastPointer.y : (game.vh / 2);
 
@@ -148,8 +144,7 @@ export function updatePlacement(game, screenX, screenY) {
   game.placement.screenX = screenX;
   game.placement.screenY = screenY;
 
-  let wx = screenX + game.camera.x;
-  let wy = screenY + game.camera.y;
+  let { x: wx, y: wy } = game.screenToWorld(screenX, screenY);
 
   // 戰術地基槽磁性吸附 (55px 範圍內自動吸附)
   let snappedSocket = null;
@@ -305,6 +300,11 @@ export function inspectFacility(game, turret) {
     onUpgrade: () => upgradeFacility(game, turret),
     onRecycle: () => recycleFacility(game, turret),
     onClose: () => closeFacilityInspector(game),
+    // 只有會自己挑目標開火的塔才有瞄準優先序（兵營、電網等沒有）
+    priority: turret.priority ? {
+      label: TARGET_PRIORITIES[turret.priority],
+      onCycle: () => cycleTargetPriority(game, turret),
+    } : null,
   });
 }
 
@@ -312,6 +312,38 @@ export function inspectFacility(game, turret) {
 export function closeFacilityInspector(game) {
   game.inspectedTurret = null;
   game.ui.showFacilityInspector(false);
+}
+
+// ── 守塔關：點建塔點 → 建造選單 ──
+// 守塔能蓋的塔種（生存者的電網／淨化／拒馬是就地築防用的，蓋在路邊的建塔點上沒有作用）
+export const TD_TOWERS = ['turret', 'heavy_bolter', 'barracks', 'manufactorum'];
+
+export function openBuildMenu(game, socket) {
+  closeFacilityInspector(game);
+  const s = { x: (socket.x - game.camera.x) * game.zoom, y: (socket.y - game.camera.y) * game.zoom };
+  const items = TD_TOWERS.map((type) => {
+    const conf = FACILITY_TYPES[type];
+    const cost = getFacilityCost(game, type);
+    return { type, icon: conf.icon, name: conf.name, desc: conf.desc, cost, affordable: game.gold >= cost };
+  });
+  game.buildMenuSocket = socket;
+  game.ui.showBuildMenu(true, s, items, (type) => {
+    closeBuildMenu(game);
+    buildFacility(game, type, socket.x, socket.y, socket);
+  });
+}
+
+export function closeBuildMenu(game) {
+  game.buildMenuSocket = null;
+  game.ui.showBuildMenu(false);
+}
+
+// 瞄準優先序：檢查面板的按鈕循環切換（Turret.pickTarget 依此挑目標）
+export const TARGET_PRIORITIES = { first: '最前面', last: '最後面', strong: '血最多', close: '最近' };
+export function cycleTargetPriority(game, turret) {
+  const keys = Object.keys(TARGET_PRIORITIES);
+  turret.priority = keys[(keys.indexOf(turret.priority || 'close') + 1) % keys.length];
+  inspectFacility(game, turret);
 }
 
 export function buildFacility(game, type = 'turret', targetX = null, targetY = null, socket = null) {
@@ -331,18 +363,10 @@ export function buildFacility(game, type = 'turret', targetX = null, targetY = n
   const bx = targetX !== null ? targetX : game.player.x;
   const by = targetY !== null ? targetY : game.player.y;
 
-  // 守塔關：若不是指定 socket，檢查只能蓋在路邊
-  if (game.td && !socket) {
-    const near = nearestOnPaths(game.level, bx, by);
-    const half = (game.level.pathWidth || 80) / 2;
-    if (near.d < half + 10) {
-      game.ui.say('不能蓋在路上 —— 站到路邊再佈署', '#ffb703', 1.6);
-      return;
-    }
-    if (near.d > half + 240) {
-      game.ui.say('離路線太遠了，打不到怪物', '#ffb703', 1.6);
-      return;
-    }
+  // 守塔關：只能蓋在空的建塔點
+  if (game.td && (!socket || socket.occupied)) {
+    game.ui.say('🔨 點擊路邊的建塔點來蓋塔', '#ffb703', 1.6);
+    return;
   }
 
   const minD = conf.minSpacing || 40;
@@ -364,6 +388,8 @@ export function buildFacility(game, type = 'turret', targetX = null, targetY = n
     facility.maxHp = Math.round(facility.maxHp * game.player.facilityHpMul);
     facility.hp = facility.maxHp;
   }
+  // 守塔：會自己挑目標的塔預設先打走最前面的怪（可在檢查面板切換）
+  if (game.td && (type === 'turret' || type === 'heavy_bolter')) facility.priority = 'first';
   game.turrets.push(facility);
 
   const fxColor = type === 'electric_grid' ? '#b5179e' : type === 'purifier' ? '#00f59b' : type === 'barricade' ? '#ffb703' : type === 'heavy_bolter' ? '#f39c12' : type === 'barracks' ? '#27ae60' : type === 'manufactorum' ? '#e67e22' : '#00e5ff';

@@ -141,7 +141,7 @@ export class InputController {
 
     // 畫布任一處按下都能操控：搖桿直接跳到指尖 (避開 HUD 按鈕等互動元件)
     document.addEventListener('touchstart', (e) => {
-      if (this.joystickActive) return;
+      if (this.joystickActive || this.floatingJoystick === false) return;
       const t = e.changedTouches[0];
       const el = document.elementFromPoint(t.clientX, t.clientY);
       if (!el || el.closest('button, .overlay, #hud')) return;

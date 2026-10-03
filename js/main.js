@@ -13,6 +13,7 @@ import {
   worldBounds,
   isWorldBounded,
   setWorldBounded,
+  VIEW,
 } from './config.js';
 import { Player, MP_PER_KILL } from './entities/Player.js';
 import { updateSkills } from './systems/Skills.js';
@@ -23,6 +24,11 @@ import { MERC } from './entities/Mercenary.js';
 import { drawSocket, drawPlacementGhost } from './entities/Turret.js';
 import './tdlevels.js';   // 守塔專屬關卡併入 LEVELS（side effect）
 import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/TowerDefense.js';
+
+// 守塔關的鏡頭縮放範圍：拉遠到整張圖放得進畫面；太小的螢幕最多拉到 TD_MIN_ZOOM，剩下的用拖曳平移
+const TD_MIN_ZOOM = 0.5;
+const TD_MAX_ZOOM = 1.4;
+const TD_HUD_PAD = 110;   // 頂部 HUD（計時／金幣／生命條）佔的螢幕高度：地圖排在它下面，入口才不會被蓋住
 
 
 import { InputController } from './input.js';
@@ -410,9 +416,9 @@ class Game {
 
   initWindow() {
     const resize = () => {
-      this.vw = window.innerWidth;
-      this.vh = window.innerHeight;
-      this._applyCanvasSize();
+      this.sw = window.innerWidth;   // 螢幕邏輯像素
+      this.sh = window.innerHeight;
+      this.fitView();
     };
     window.addEventListener('resize', resize);
 
@@ -431,13 +437,43 @@ class Game {
     resize();
   }
 
-  // 依目前階梯套用畫布解析度（vw/vh 是邏輯像素，畫布乘上 dpr）
+  // 鏡頭縮放：守塔關拉遠看整張圖，其他模式 1:1。
+  // sw/sh 是螢幕邏輯像素；vw/vh 是「畫面看得到的世界寬高」(= 螢幕 ÷ 縮放)，
+  // 所有繪製、剔除、相機置中都用 vw/vh，所以縮放只要在畫布變換矩陣乘一次就好。
+  fitView() {
+    const b = this.td ? worldBounds() : null;
+    this.zoom = b
+      ? Math.max(TD_MIN_ZOOM, Math.min(TD_MAX_ZOOM, this.sw / (b.maxX - b.minX), (this.sh - TD_HUD_PAD) / (b.maxY - b.minY)))
+      : 1;
+    this.vw = this.sw / this.zoom;
+    this.vh = this.sh / this.zoom;
+    VIEW.w = this.vw;
+    VIEW.h = this.vh;
+    this._applyCanvasSize();
+    if (this.td) this.clampCamera();
+  }
+
+  // 守塔：鏡頭不跟主角。地圖比畫面小 → 置中固定；比畫面大 → 夾在地圖內（拖曳平移見 Menu.js）
+  clampCamera() {
+    const b = worldBounds();
+    const fit = (lo, hi, span, v) => (hi - lo <= span ? (lo + hi - span) / 2 : Math.max(lo, Math.min(hi - span, v)));
+    this.camera.x = fit(b.minX, b.maxX, this.vw, this.camera.x);
+    this.camera.y = fit(b.minY - TD_HUD_PAD / this.zoom, b.maxY, this.vh, this.camera.y);   // 上緣多讓出 HUD 的高度
+  }
+
+  // 螢幕座標（clientX/Y）→ 世界座標
+  screenToWorld(sx, sy) {
+    return { x: sx / this.zoom + this.camera.x, y: sy / this.zoom + this.camera.y };
+  }
+
+  // 依目前階梯套用畫布解析度（sw/sh 是螢幕邏輯像素，畫布乘上 dpr；再乘鏡頭縮放）
   _applyCanvasSize() {
     const dpr = this._dprSteps[this._dprIdx];
     this.dpr = dpr;
-    this.canvas.width = Math.round(this.vw * dpr);
-    this.canvas.height = Math.round(this.vh * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.canvas.width = Math.round(this.sw * dpr);
+    this.canvas.height = Math.round(this.sh * dpr);
+    const z = dpr * (this.zoom || 1);
+    this.ctx.setTransform(z, 0, 0, z, 0, 0);
     // 暫停/結算中改變解析度時補畫一幀，避免畫布留白
     if (this.player && this.state !== 'PLAYING') this.render();
   }
@@ -913,7 +949,7 @@ class Game {
 
     // 模式：守塔在場中央生出基地核心，玩家開場站在核心下方讓出位置
     this.mode = getMode(this.modeId);
-    setWorldBounded(!!this.mode.boundedMap);   // 生存者：無限地圖；守塔：4000×4000 圍牆
+    setWorldBounded(!!this.mode.boundedMap, this.level.bounds);   // 生存者：無限地圖；守塔：關卡自己的地圖矩形
     this._recycleTimer = 0;
     this._recycleFrom = null;
     // 守塔關卡的核心血量就是命數（漏一隻扣 LEAK 條，見核心區塊）
@@ -923,6 +959,7 @@ class Game {
     setGearTheme(this.characterId);
     this.player.game = this;
     this.td = this.level.td && this.core ? new TowerDefense(this) : null;   // 守塔：路線＋分波
+    this.fitView();   // 守塔拉遠看整張圖；其他模式還原 1:1
     this.weaponManager = new WeaponManager(this.player);
     // 武器系統也要能呼叫回遊戲層 (宙斯連鎖閃電 game.chainShock、商人臨時增益
     // 在被動重算後補回)。先前只設了 player.game，WeaponManager 自己讀的
@@ -1014,6 +1051,10 @@ class Game {
     this.inspectedTurret = null;
     this.ui.showPlacementHUD(false);
     this.ui.showFacilityInspector(false);
+    this.buildMenuSocket = null;
+    this.ui.showBuildMenu(false);
+    // 守塔關的手指要拿來點建塔點、拖曳地圖：關掉「按哪裡搖桿就跳到哪裡」，只留角落搖桿
+    this.input.floatingJoystick = !this.td;
     if (this.level && this.level.sockets) {
       for (const s of this.level.sockets) {
         s.occupied = false;
@@ -1023,7 +1064,8 @@ class Game {
     this.mercenaries = [];
     this.alliedUnits = [];
     this.decals = [];
-    initExplodableProps(this);
+    if (this.td) this.explodableProps = [];   // 守塔關：小地圖上的可引爆物只會壓到建塔點與路線
+    else initExplodableProps(this);
     this.destructibles = [];
     if (!this.td) initDestructibles(this);   // 守塔關沒有撿寶木箱（金幣只來自賞金與波次獎金）
     this.extractionWell = null;
@@ -1042,8 +1084,9 @@ class Game {
     this.combo = 0;
     this.comboTimer = 0;
     this.frenzyTimer = 0;
-    this.camera.x = 0;
-    this.camera.y = 0;
+    this.camera.x = this.td ? this.core.x - this.vw / 2 : 0;   // 守塔：地圖比畫面大時先對準核心
+    this.camera.y = this.td ? this.core.y - this.vh / 2 : 0;
+    if (this.td) this.clampCamera();
     this.camera.shake = 0;
     this.hazards = [];
     this._mechTimers = {};       // 每種 mech 各自計時
@@ -1131,8 +1174,10 @@ class Game {
       }
     }
 
-    this.ui.setModeButtons(this.mode);
+    // 守塔關只能點建塔點蓋塔：收起「走到空地蓋」的建造鈕與設施列
+    this.ui.setModeButtons(this.td ? { ...this.mode, turrets: false } : this.mode);
     document.querySelector('#core-hud .core-title').textContent = this.td ? '剩餘生命' : '基地核心';
+    document.getElementById('exp-bar-container')?.classList.toggle('hidden', !!this.td);   // 守塔沒有經驗值
     this.ui.updateCoreHUD(this.core);
     updateFacilityHUD(this);
     this.ui.updateHireBtn(this.mercCost, this.gold >= (this.mercCost || 1e9));
@@ -1545,7 +1590,10 @@ class Game {
         if (this.bossCutscene && this.bossCutscene.active) {
           this.bossCutscene.update(dt);
           this.render();
-          this.bossCutscene.draw(this.ctx, this.vw, this.vh);
+          // 過場是螢幕座標的版面：暫時拿掉鏡頭縮放，否則守塔關拉遠時字會跟著縮小
+          this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+          this.bossCutscene.draw(this.ctx, this.sw, this.sh);
+          this.ctx.setTransform(this.dpr * this.zoom, 0, 0, this.dpr * this.zoom, 0, 0);
         } else if (this.hitstopTimer > 0) {
           this.hitstopTimer = Math.max(0, this.hitstopTimer - dt);
           this.render();
@@ -1619,11 +1667,15 @@ class Game {
       return;
     }
 
-    // 2. 更新相機追隨
-    const targetCamX = this.player.x - this.vw / 2;
-    const targetCamY = this.player.y - this.vh / 2;
-    this.camera.x += (targetCamX - this.camera.x) * 0.12;
-    this.camera.y += (targetCamY - this.camera.y) * 0.12;
+    // 2. 更新相機追隨（守塔關不跟主角：整張圖固定在畫面上，只夾邊界）
+    if (this.td) {
+      this.clampCamera();
+    } else {
+      const targetCamX = this.player.x - this.vw / 2;
+      const targetCamY = this.player.y - this.vh / 2;
+      this.camera.x += (targetCamX - this.camera.x) * 0.12;
+      this.camera.y += (targetCamY - this.camera.y) * 0.12;
+    }
 
     // 螢幕震動衰減
     if (this.camera.shake > 0) {
@@ -1793,7 +1845,7 @@ class Game {
         this.particles.createShockwave(this.core.x, this.core.y, 420, '#ff0055');
         sound.playExplosion();
         this.camera.shake = 24;
-        this.ui.say('💥 基地核心被摧毀！任務失敗', '#ff0055', 3);
+        this.ui.say(this.td ? '💥 防線失守！生命耗盡' : '💥 基地核心被摧毀！任務失敗', '#ff0055', 3);
         this.handleGameOver(false);
         return;
       }
@@ -1817,11 +1869,12 @@ class Game {
     if (this.core && this.mode.turrets && !this._buildHintShown
         && this.gold >= getFacilityCost(this, 'turret')) {
       this._buildHintShown = true;
-      this.ui.say('🪙 金幣足夠了 — 走到空地按建造鈕，多一座砲台就多一道防線', '#ffb703', 4);
+      this.ui.say(this.td ? '🔨 點擊路邊的建塔點蓋塔 — 點已蓋好的塔可升級、賣出或改瞄準目標'
+        : '🪙 金幣足夠了 — 走到空地按建造鈕，多一座砲台就多一道防線', '#ffb703', 4);
     }
 
     // 檢測是否在標準砲塔附近 (顯示進化按鈕)
-    const nearStandardTurret = this.turrets.find(
+    const nearStandardTurret = !this.td && this.turrets.find(   // 守塔關改點擊塔來升級
       (t) => t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125
     );
     if (nearStandardTurret && this.gold >= 50) {
@@ -3407,7 +3460,7 @@ class Game {
     if (this.level && this.level.sockets) {
       for (const s of this.level.sockets) {
         const isOccupied = this.turrets.some(t => t.socket === s || (Math.hypot(t.x - s.x, t.y - s.y) < 25));
-        const isHovered = this.placement && this.placement.socket === s;
+        const isHovered = (this.placement && this.placement.socket === s) || this.buildMenuSocket === s;
         drawSocket(this.ctx, renderCam, s, isOccupied, isHovered, this.gameTime);
       }
     }
@@ -3482,8 +3535,8 @@ class Game {
       drawPlacementGhost(this.ctx, renderCam, this.placement, this);
     }
 
-    // 小地圖
-    this.drawMinimap();
+    // 小地圖（守塔關整張圖都在畫面上，不需要）
+    if (!this.td) this.drawMinimap();
   }
 
 

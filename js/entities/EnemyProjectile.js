@@ -1,6 +1,6 @@
 // 敵方投射物實體 (遠程怪酸液彈、Boss 散彈幕等)
 
-import { worldBounds } from '../config.js';
+import { worldBounds, VIEW } from '../config.js';
 
 // 酸液彈光暈烘焙：原本每顆每幀都設 shadowBlur = 10 再填圓。陰影模糊是 Canvas2D
 // 最貴的操作之一（活躍彈上限 150 = 每幀 150 次），但彈體是固定形狀、顏色只有少數
@@ -115,8 +115,8 @@ export class EnemyProjectile {
     const screenY = this.y - camera.y;
 
     // 螢幕視野裁切
-    if (screenX < -50 || screenX > window.innerWidth + 50 ||
-        screenY < -50 || screenY > window.innerHeight + 50) {
+    if (screenX < -50 || screenX > VIEW.w + 50 ||
+        screenY < -50 || screenY > VIEW.h + 50) {
       return;
     }
 

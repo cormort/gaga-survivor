@@ -20,6 +20,7 @@ const EARLY_GOLD_PER_SEC = 4;            // 提前開戰：每剩 1 秒休息 +4
 const GROUP_STAGGER = 2.5;               // 同一波裡各群的起跑間隔 (秒)
 const WAYPOINT_REACH = 36;               // 走到這麼近就換下一個路徑點
 const TD_HP = 2;                         // 雜兵血量 = 基礎血量 × TD_HP × 關卡 hpScale × 難度 × 波數成長
+const TD_SPEED = 0.6;                     // 地圖壓到約 1600×900 後路線短了一半，怪走慢一點才有時間被火網消耗
 const TD_HP_GROWTH = 0.15;               // 每多一波 +15%（不套生存者的時間曲線、開局厚血與動態難度）
 export const TD_LIVES = 20;              // 關卡沒寫 lives 時的預設命數
 export const TD_START_GOLD = 250;        // 關卡沒寫 startGold 時的開局金幣（約 4 座基礎砲台）
@@ -94,6 +95,7 @@ export class TowerDefense {
   spawn({ type, path }) {
     const g = this.game;
     const scale = enemyScale(0, this.level, g.rules);   // 只取移速與傷害；血量下面重算
+    scale.speed *= TD_SPEED;
     scale.hp = TD_HP * (this.level.hpScale || 1) * g.rules.enemyHpMul * (1 + TD_HP_GROWTH * (this.waveIdx - 1));
     const [x, y] = path[0];
     const e = new Enemy(type, x + (Math.random() - 0.5) * this.half, y + (Math.random() - 0.5) * this.half, scale);
@@ -133,10 +135,15 @@ export class TowerDefense {
     if (Math.hypot(e.x - wx, e.y - wy) < WAYPOINT_REACH || passed || e._wpTime > 25) {
       e._wpTime = 0;
       e.pathIdx++;
-      if (e.pathIdx >= e.path.length) return core;
+      if (e.pathIdx >= e.path.length) {
+        e.progress = e.pathIdx * 1e5;
+        return core;
+      }
       e._wp.x = e.path[e.pathIdx][0];
       e._wp.y = e.path[e.pathIdx][1];
     }
+    // 沿路線走了多遠（砲塔「打最前面」用）：段數為主、離下一個路徑點越近越前面
+    e.progress = e.pathIdx * 1e5 - Math.hypot(e.x - e._wp.x, e.y - e._wp.y);
     return e._wp;
   }
 

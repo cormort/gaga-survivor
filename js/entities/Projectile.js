@@ -1,6 +1,6 @@
 // 武器投射物與攻擊實體 (苦無、旋轉輪盤、火箭爆破、地面积火、落雷、彈跳足球)
 
-import { GAME_CONFIG, CHARGE, worldBounds } from '../config.js';
+import { GAME_CONFIG, CHARGE, worldBounds, VIEW } from '../config.js';
 import { drawGlow, drawStreak } from '../weapons/ProjectileFX.js';
 import { drawFlyingSword } from './Mercenary.js';
 import { weaponImages } from '../weapons/WeaponArt.js';
@@ -423,8 +423,8 @@ export class Projectile {
     const screenY = this.y - camera.y;
 
     // 視野優化
-    if (screenX < -150 || screenX > window.innerWidth + 150 ||
-        screenY < -150 || screenY > window.innerHeight + 150) {
+    if (screenX < -150 || screenX > VIEW.w + 150 ||
+        screenY < -150 || screenY > VIEW.h + 150) {
       return;
     }
 

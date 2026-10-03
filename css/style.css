@@ -3697,3 +3697,39 @@ body, html {
   color: #ffd60a;
 }
 
+
+/* 守塔建造選單：點建塔點後浮在它上方的 2×2 塔種選單 */
+#td-build-menu {
+  position: absolute;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  width: 236px;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glow);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, calc(-100% - 30px));
+}
+#td-build-menu.below { transform: translate(-50%, 30px); }
+.td-build-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(10, 14, 23, 0.7);
+  color: var(--text-main);
+  font: 700 12px var(--font-text);
+  cursor: pointer;
+}
+.td-build-opt .ico { font-size: 22px; line-height: 1.1; }
+.td-build-opt .cost { color: #ffd60a; font-family: var(--font-display); }
+.td-build-opt.poor { opacity: 0.45; }
+.td-build-opt:hover, .td-build-opt:focus-visible { border-color: var(--border-glow); background: var(--bg-card-hover); outline: none; }
+.inspect-priority { width: 100%; margin-bottom: 10px; background: rgba(0, 229, 255, 0.12); color: var(--text-main); border: 1px solid var(--border-color); }

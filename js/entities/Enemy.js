@@ -1,6 +1,6 @@
 // 怪物實體類別 (普通殭屍、突襲蝙蝠、生化巨漢、自爆蟲、噴吐者、衝刺獵犬、孵化胞囊、攻城巨像、Boss 暴君)
 
-import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE } from '../config.js';
+import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE, VIEW } from '../config.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
 
 // 狀態光暈烘焙：灼燒/中毒原本每隻每幀都重建一個徑向漸層，再填一個半徑 1.5 倍的
@@ -736,7 +736,7 @@ export class Enemy {
   // 灼燒／中毒光暈：整批一次畫完。原本每隻怪各自 save/translate/切 'lighter'/restore，
   // 250 隻怪就是 250 次合成模式切換；改成全場只切一次、直接用螢幕座標。
   static drawStatusGlows(ctx, camera, enemies) {
-    const W = window.innerWidth, H = window.innerHeight;
+    const W = VIEW.w, H = VIEW.h;
     let on = false;
     // 光暈是加色混合，成本在塗抹面積：中狀態的怪越多，光暈越小 (<=40 隻原尺寸，>=160 隻 0.55 倍)
     let n = 0;
@@ -778,8 +778,8 @@ export class Enemy {
     const screenY = this.y - camera.y;
 
     // 視野裁切 (超出螢幕過多則跳過繪製以優化效能)
-    if (screenX < -90 || screenX > window.innerWidth + 90 ||
-        screenY < -90 || screenY > window.innerHeight + 90) {
+    if (screenX < -90 || screenX > VIEW.w + 90 ||
+        screenY < -90 || screenY > VIEW.h + 90) {
       return;
     }
 

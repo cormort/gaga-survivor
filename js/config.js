@@ -33,7 +33,13 @@ export const UNBOUNDED = { minX: -Infinity, maxX: Infinity, minY: -Infinity, max
 let activeBounds = GAME_CONFIG.WORLD_BOUNDS;
 export function worldBounds() { return activeBounds; }
 export function isWorldBounded() { return activeBounds !== UNBOUNDED; }
-export function setWorldBounded(bounded) { activeBounds = bounded ? GAME_CONFIG.WORLD_BOUNDS : UNBOUNDED; }
+// rect：守塔關傳自己的地圖矩形（js/tdlevels.js 的 bounds），其餘有邊界的模式用 WORLD_BOUNDS
+export function setWorldBounded(bounded, rect = GAME_CONFIG.WORLD_BOUNDS) { activeBounds = bounded ? rect : UNBOUNDED; }
+
+// 目前畫面看得到的世界寬高（= 螢幕邏輯像素 ÷ 鏡頭縮放）。守塔關會把鏡頭拉遠看整張圖，
+// 這時「畫面外就不畫」的剔除判定不能再用 window.innerWidth —— 那是螢幕寬，不是世界寬。
+// 由 Game 在調整縮放時更新。
+export const VIEW = { w: 1280, h: 720 };
 
 // 武器定義
 export const WEAPONS = {

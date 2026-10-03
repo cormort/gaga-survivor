@@ -3,6 +3,7 @@
 
 import { getSprite } from '../sprites.js';
 import { sound } from '../audio.js';
+import { VIEW } from '../config.js';
 import { Projectile } from './Projectile.js';
 import { nearestOnPaths, projectToSegment } from '../tdlevels.js';
 
@@ -116,7 +117,7 @@ export class GuardsmanUnit {
   draw(ctx, camera) {
     const sx = this.x - camera.x;
     const sy = this.y - camera.y;
-    if (sx < -60 || sx > window.innerWidth + 60 || sy < -60 || sy > window.innerHeight + 60) return;
+    if (sx < -60 || sx > VIEW.w + 60 || sy < -60 || sy > VIEW.h + 60) return;
 
     // 繪製雷射槍光束 (緋紅高能離子射線)
     if (this.laserTimer > 0 && this.laserFx) {
@@ -298,7 +299,7 @@ export class LemanRussUnit {
   draw(ctx, camera) {
     const sx = this.x - camera.x;
     const sy = this.y - camera.y;
-    if (sx < -90 || sx > window.innerWidth + 90 || sy < -90 || sy > window.innerHeight + 90) return;
+    if (sx < -90 || sx > VIEW.w + 90 || sy < -90 || sy > VIEW.h + 90) return;
 
     // 繪製車體底盤
     const sp = getSprite('leman_russ');

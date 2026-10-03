@@ -142,6 +142,9 @@
     <!-- 角色台詞氣泡 -->
     <div id="dialogue-bubble" class="hidden"></div>
 
+    <!-- 守塔：點建塔點跳出的建造選單（位置由 UI.showBuildMenu 依建塔點螢幕座標設定） -->
+    <div id="td-build-menu" class="hidden" role="menu" aria-label="選擇要蓋的塔"></div>
+
     <!-- 虛擬搖桿 (觸控/滑鼠支援) -->
     <div id="joystick-zone">
       <div id="joystick-base">
@@ -286,6 +289,11 @@
             </div>
           </div>
         </div>
+
+        <button id="btn-inspect-priority" class="game-btn inspect-btn inspect-priority hidden" title="切換這座塔優先攻擊的目標">
+          <span>🎯 瞄準目標</span>
+          <span id="inspect-priority-val" class="btn-cost-tag">最前面</span>
+        </button>
 
         <div class="inspect-actions">
           <button id="btn-inspect-upgrade" class="game-btn primary-btn inspect-btn">
