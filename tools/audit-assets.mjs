@@ -86,6 +86,8 @@ for (const id of [...groundIds.matchAll(/'([^']+)'/g)].map((x) => x[1])) {
 // 而關卡 id 就是 levels.js 裡的 id。少這一段，12 張地表會被誤判成死檔。
 const levelSrc = read('js/levels.js');
 for (const m of levelSrc.matchAll(/^\s*id:\s*'([a-z_0-9]+)'/gm)) add(`assets/ground/ground_${m[1]}.png`, 'Ground.js 地表貼圖（進關才抓）');
+// 守塔關卡（js/tdlevels.js）也一樣是一關一張地表貼圖
+for (const m of read('js/tdlevels.js').matchAll(/^\s*id:\s*'([a-z_0-9]+)'/gm)) add(`assets/ground/ground_${m[1]}.png`, 'Ground.js 地表貼圖（守塔關，進關才抓）');
 
 const bulletSrc = read('js/entities/EnemyProjectile.js');
 for (const k of arrStrings(bulletSrc, 'ENEMY_BULLET_KEYS')) add(`assets/bullets/${k}.png`, 'EnemyProjectile.js');

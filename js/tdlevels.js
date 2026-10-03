@@ -270,12 +270,12 @@ export const TD_LEVELS = {
     hpScale: 1.8,
   },
   // ── 紅色警戒主題：蘇聯寒冬前線（兩路長蛇形；攻擊犬、坦克、空艇）──
-  // 地面貼圖待補：assets/ground/ground_td_redalert.png（沒有時用 frost 主題的程序化地面）
+  // 地面貼圖：assets/ground/ground_td_redalert.png（tools/make_ground_tile.py 轉成 1024 無縫）
   td_redalert: {
     ...base('frost'),
     id: 'td_redalert',
     lair: 'lair_void',
-    base: 'base_reactor',
+    base: 'base_redalert',   // 盟軍建造廠
     name: '紅色警戒 ‧ 寒冬前線',
     sub: '守塔 ‧ 蘇聯裝甲',
     icon: '☭',

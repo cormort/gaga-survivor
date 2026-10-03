@@ -38,7 +38,7 @@ export const ARMOR_CLASS = {
 // 入口巢穴與主堡的逐格貼圖（tools/cut_td_structures.py 產生；關卡用 lair / base 欄位指定）
 //   巢穴：2 列（待機、出怪中）× 2 格，每格 256×224、地面中心 (128, 214)
 //   主堡：4 列（完好、受損、危急、倒塌）× 4 格，每格 224×224、地面中心 (112, 214)
-export const TD_STRUCTURE_KEYS = ['lair_canyon', 'lair_swamp', 'lair_void', 'lair_hive', 'base_keep', 'base_reactor'];
+export const TD_STRUCTURE_KEYS = ['lair_canyon', 'lair_swamp', 'lair_void', 'lair_hive', 'base_keep', 'base_reactor', 'base_redalert'];
 export const TD_STRUCTURE_IMAGES = {};
 if (typeof Image !== 'undefined') {
   for (const k of TD_STRUCTURE_KEYS) {

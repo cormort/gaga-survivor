@@ -5,3 +5,6 @@ node_modules/
 assets/td/unit_footman_*.jpeg
 # 守塔建物原始合成設定圖（約 3.5MB）：遊戲只用 tools/cut_td_structures.py 切出的 PNG
 assets/td/structures_sheet.jpeg
+# 守塔素材原始生成圖（Gemini 輸出的大圖）：遊戲只用 tools/ 轉出的 PNG
+assets/td/0*.jpeg
+assets/td/Gemini_Generated_Image_*.jpeg

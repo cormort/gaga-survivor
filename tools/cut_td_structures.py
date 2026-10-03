@@ -1,6 +1,11 @@
 # 守塔建物：從一張合成設定圖切出 4 種敵人巢穴與 2 種主堡的逐格動畫，去背、以地面接觸點對齊。
 # 用法：python3 tools/cut_td_structures.py [assets/td/structures_sheet.jpeg]
 #   → assets/td/lair_canyon / lair_swamp / lair_void / lair_hive .png、base_keep / base_reactor .png
+# 單張設定圖（每個建物一張，2048×2048 的 4×4 主堡／1024×1024 的 2×2 巢穴）：
+#   python3 tools/cut_td_structures.py base <來源> <輸出鍵> [magenta|green] [每列取哪幾格，如 1230,1213,0103,0123]
+#   python3 tools/cut_td_structures.py lair <來源> <輸出鍵> [magenta|green]
+#   取格順序：遊戲每列循環前 3 格（倒塌列 0→3 播一次），設定圖的 4 格常常是「越來越嚴重」的漸進，
+#   直接循環會一閃一閃，所以每列可以指定要放哪幾格（例 1230＝第 2、3、4 格循環，第 1 格放最後）
 #
 # 來源圖排法（Gemini 產出的實際排法，不是當初給的規格）：外圍深灰底＋檔名文字，8 塊純色底面板
 #   上排 4 塊：巢穴（峽谷/沼澤 洋紅底、虛空/蟲巢 純綠底），每塊 2×2：上列待機、下列出怪中
@@ -78,7 +83,9 @@ def grid(panel, cols, rows):
     return [[(int(x0 + c * cw), int(y0 + r * ch), int(x0 + (c + 1) * cw), int(y0 + (r + 1) * ch)) for c in range(cols)] for r in range(rows)]
 
 
-def assemble(img, rows_of_cells, kind, cw, chh, foot, span, out):
+def assemble(img, rows_of_cells, kind, cw, chh, foot, span, out, order=None):
+    if order:   # 每列重排：order[r] 是這一列依序要放的原始格索引
+        rows_of_cells = [[row[int(k)] for k in order[r]] for r, row in enumerate(rows_of_cells)]
     frames = [[cutout(img, b, kind) for b in row] for row in rows_of_cells]
     scale = span / ground(frames[0][0])[2]   # 第一格（完好／待機）縮到 span 寬，其餘格同比例
     sheet = Image.new('RGBA', (cw * len(frames[0]), chh * len(frames)), (0, 0, 0, 0))
@@ -92,6 +99,19 @@ def assemble(img, rows_of_cells, kind, cw, chh, foot, span, out):
     sheet.quantize(256, method=Image.Quantize.FASTOCTREE).save(f'assets/td/{out}.png', optimize=True)
     print(out, sheet.size, 'scale', round(scale, 3))
 
+
+if __name__ == '__main__' and len(sys.argv) > 3 and sys.argv[1] in ('base', 'lair'):
+    mode, src, out = sys.argv[1], sys.argv[2], sys.argv[3]
+    key = sys.argv[4] if len(sys.argv) > 4 else 'magenta'
+    order = sys.argv[5].split(',') if len(sys.argv) > 5 else None
+    img = np.array(Image.open(src).convert('RGB'))
+    h, w = img.shape[:2]
+    whole = (0, 0, w, h, key)
+    if mode == 'base':
+        assemble(img, grid(whole, 4, 4), key, BASE_W, BASE_H, BASE_FOOT, BASE_SPAN, out, order)
+    else:
+        assemble(img, grid(whole, 2, 2), key, LAIR_W, LAIR_H, LAIR_FOOT, LAIR_SPAN, out, order)
+    sys.exit(0)
 
 if __name__ == '__main__':
     src = sys.argv[1] if len(sys.argv) > 1 else 'assets/td/structures_sheet.jpeg'
