@@ -21,7 +21,7 @@ const EARLY_GOLD_PER_SEC = 4;            // 提前開戰：每剩 1 秒休息 +4
 const GROUP_STAGGER = 2.5;               // 同一波裡各群的起跑間隔 (秒)
 const WAYPOINT_REACH = 36;               // 走到這麼近就換下一個路徑點
 const TD_HP = 4;                         // 雜兵血量 = 基礎血量 × TD_HP × 關卡 hpScale × 難度 × 波數成長
-const TD_BOSS_HP = 0.6;                   // 關卡資料裡的首領血量 × 這個倍率（調難度用的總旋鈕）
+const TD_BOSS_HP = 0.5;                   // 關卡資料裡的首領血量 × 這個倍率（調難度用的總旋鈕）
 const TD_SPEED = 0.6;                     // 地圖壓到約 1600×900 後路線短了一半，怪走慢一點才有時間被火網消耗
 const TD_HP_GROWTH = 0.15;               // 波次沒寫 hp 時：每多一波 +15%（不套生存者的時間曲線、開局厚血與動態難度）
 // 怪種護甲（魔獸三式）：light / medium / heavy / air（首領一律 boss）。

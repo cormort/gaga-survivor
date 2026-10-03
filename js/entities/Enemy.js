@@ -1,6 +1,6 @@
 // 怪物實體類別 (普通殭屍、突襲蝙蝠、生化巨漢、自爆蟲、噴吐者、衝刺獵犬、孵化胞囊、攻城巨像、Boss 暴君)
 
-import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE, VIEW } from '../config.js';
+import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE, ENEMY_ELEMENTS, LEVEL_ENEMY_ELEMENTS, elementOf, VIEW } from '../config.js';
 import { getSprite, blit, FRAMES } from '../sprites.js';
 
 // 狀態光暈烘焙：灼燒/中毒原本每隻每幀都重建一個徑向漸層，再填一個半徑 1.5 倍的
@@ -117,6 +117,17 @@ export class Enemy {
     this.color = config.color;
     this.exp = config.exp;
     this.isBoss = !!config.isBoss;
+
+    // 攻擊屬性 (元素)。優先序：關卡主題覆寫 > 敵人自己的 element 欄位 > 全域對照表 > 物理。
+    // scale.levelId / scale.elem 由 levels.js 的 enemyScale 帶進來（Spawner 與所有
+    // 生成路徑共用同一份係數），所以「同一隻雜兵在冰封荒原與商業街不一樣」是資料驅動的。
+    const lvOverride = (scale.levelId && LEVEL_ENEMY_ELEMENTS[scale.levelId]) || null;
+    // elementOf() 對未知 key 會退回物理 —— 打錯字不會讓整隻怪變成 NaN 傷害。
+    this.element = elementOf(
+      (lvOverride && lvOverride[typeKey]) || config.element || ENEMY_ELEMENTS[typeKey] || 'physical'
+    ).id;
+    // 屬性壓力倍率：跟著時間成長（enemyScale().elem），決定 DoT 的絕對傷害。
+    this.elementPotency = scale.elem || 1;
     // 外觀變異：一般怪隨機套一組烘焙好的尺寸變體，成群時不會看起來都一樣
     // (Boss 用關卡主題 skin，不套尺寸抖動)
     this.spriteVariant = this.isBoss ? 0 : Math.floor(Math.random() * 3);
@@ -146,6 +157,9 @@ export class Enemy {
     this.slamTimer = ai.slam ? ai.slam.every * 0.6 : 0;
     this.fuseMax = ai.fuse || 0.8;             // 自爆引信長度 (原為引擎硬寫 0.8)
     this.ranged = config.ranged ? { ...config.ranged } : null; // 遠程噴吐怪
+    // 遠程彈的屬性預設繼承這隻怪的近戰屬性（酸液噴吐者 = 毒），個別敵人可以用
+    // ranged.element 覆寫。打到玩家時除了當下傷害，還會留下同屬性的持續傷害。
+    if (this.ranged) this.ranged.element = elementOf(this.ranged.element || this.element).id;
     this.shootTimer = this.ranged ? Math.random() * this.ranged.cd : 0;
     this.hatchMinion = config.hatchMinion || null; // 增殖胞囊：定時孵化雜兵
     this.hatchInterval = config.hatchInterval || 0;
@@ -420,6 +434,9 @@ export class Enemy {
         radius: this.ranged.radius,
         color: this.eliteColor || this.ranged.color,
         glow: this.eliteColor || this.ranged.color,
+        // 屬性與壓力倍率一起帶到彈上：命中時 main.js 會把它交給 Player.takeDamage
+        element: this.ranged.element || this.element,
+        potency: this.elementPotency,
       });
     }
   }

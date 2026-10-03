@@ -2218,12 +2218,16 @@ export class UIManager {
 
     for (const [id, item] of weaponManager.weapons.entries()) {
       const def = WEAPONS[id];
-      const pct = totalDmg > 0 ? Math.round((item.totalDamage / totalDmg) * 100) : 0;
+      const pct = totalDmg > 0 ? Math.round((Math.round(item.totalDamage || 0) / totalDmg) * 100) : 0;
       const row = document.createElement('div');
       row.className = 'damage-stat-item';
+      // Math.round：持續傷害（燃燒／中毒）是以「每秒傷害 × dt」逐幀累加的浮點數，
+      // 直接 toLocaleString() 會在結算面板上印出「7,432.676」這種帶小數的總傷害，
+      // 而隔壁整數傷害的列沒有小數，看起來像壞掉（實測試玩時看到）。
+      const shown = Math.round(item.totalDamage || 0);
       row.innerHTML = `
         <span>${def.icon} ${def.name}</span>
-        <strong>${item.totalDamage.toLocaleString()} (${pct}%)</strong>
+        <strong>${shown.toLocaleString()} (${pct}%)</strong>
       `;
       dmgList.appendChild(row);
     }

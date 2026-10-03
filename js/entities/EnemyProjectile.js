@@ -75,6 +75,10 @@ export class EnemyProjectile {
     this.glow = options.glow || options.color || '#06d6a0';
     this.isDead = false;
     this.animTimer = Math.random() * 10;
+    // 屬性攻擊：命中玩家時除了當下傷害，還會依元素留下持續傷害（見 config.js 的 ELEMENTS）。
+    // 沒帶就是純物理，行為與改動前完全一樣。
+    this.element = options.element || 'physical';
+    this.potency = options.potency || 1;
     this.bulletType = options.bulletType || this.inferBulletType(options);
   }
 

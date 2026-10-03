@@ -52,13 +52,14 @@ export const WEAPONS = {
     evoTarget: 'ghost_shuriken',
     pairPassive: 'atk_scroll',
     maxLevel: 5,
-    baseDamage: 22,
+    baseDamage: 27,  // 射程定位校準（原 27）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 22）
     baseCooldown: 0.7, // 秒
     cooldownGrowth: -0.07,
     speed: 650,
     projectiles: [1, 2, 3, 4, 5], // 各等級發射數量
     pierce: [1, 1, 2, 2, 3],
     charge: { every: 5, effect: 'burn' }, // 每 5 發射出一枚燃燒苦無
+    range: 480,               // 中程：鎖定後直線飛行，射程中等
   },
   guardian: {
     id: 'guardian',
@@ -69,12 +70,13 @@ export const WEAPONS = {
     evoTarget: 'eternal_domain',
     pairPassive: 'max_hp_vest',   // 護身武器 ↔ 生存配件 (原 magnet)
     maxLevel: 5,
-    baseDamage: 16,
+    baseDamage: 9,  // 射程定位校準（原 19）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 16）
     baseCooldown: 2.2, // 冷卻（非超武時有旋轉週期）
     duration: 3.5, // 持續旋轉時間
     spinSpeed: 3.5,
     count: [2, 3, 4, 5, 6],
     radius: [65, 75, 80, 90, 95],
+    pierceAll: true,          // 範圍型：旋轉刀刃掃到就中
   },
   rocket: {
     id: 'rocket',
@@ -85,7 +87,7 @@ export const WEAPONS = {
     evoTarget: 'shark_torpedo',
     pairPassive: 'magnet',        // 爆炸清場 → 自動吸寶 (原 range_fuel)
     maxLevel: 5,
-    baseDamage: 35,                // 鎖定追蹤後幾乎發發命中，單發傷害比直線版低
+    baseDamage: 44,  // 射程定位校準（原 44）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 35）                // 鎖定追蹤後幾乎發發命中，單發傷害比直線版低
     baseCooldown: 2.5,
     cooldownGrowth: -0.3,
     speed: 380,
@@ -93,6 +95,8 @@ export const WEAPONS = {
     explosionRadius: [70, 85, 95, 110, 130],
     count: [1, 2, 2, 3, 4],
     charge: { every: 3, effect: 'poison' }, // 每 3 發射出毒氣彈，爆炸範圍內全部中毒
+    range: 620,               // 鎖定飛彈的追擊距離（飛行 380×2.5s，實際交戰距離較短）
+    pierceAll: true,          // 撞到即爆，爆炸半徑內全中
   },
   molotov: {
     id: 'molotov',
@@ -103,12 +107,13 @@ export const WEAPONS = {
     evoTarget: 'napalm_sea',
     pairPassive: 'range_fuel',    // 火海範圍加大 (原 speed_shoes)
     maxLevel: 5,
-    baseDamage: 8, // 每跳傷害
+    baseDamage: 5,  // 射程定位校準（原 10）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 8） // 每跳傷害
     baseCooldown: 3.4,
     cooldownGrowth: -0.2,          // 升級加快投擲 (3.4 → 2.6 秒)
     duration: 3.8,
     radius: [55, 65, 75, 85, 95],
     count: [1, 2, 3, 4, 5],
+    pierceAll: true,          // 範圍型：火海每跳燒到範圍內全部
   },
   lightning: {
     id: 'lightning',
@@ -119,12 +124,14 @@ export const WEAPONS = {
     evoTarget: 'plasma_storm',
     pairPassive: 'cdr_battery',
     maxLevel: 5,
-    baseDamage: 32,                // 落點不再重複、又多了電網，單發比舊版略低
+    baseDamage: 30,  // 射程定位校準（原 34）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 32）                // 落點不再重複、又多了電網，單發比舊版略低
     baseCooldown: 2.4,
     cooldownGrowth: -0.15,
     strikes: [1, 2, 3, 4, 5],
     linkDamageMul: 0.15,           // 電網線段的傷害倍率
     linkWidth: 18,
+    range: 260,               // 落雷的索敵距離（不是飛行距離）
+    pierceAll: true,          // 天頂落雷：落點內全中
   },
   soccer: {
     id: 'soccer',
@@ -135,13 +142,15 @@ export const WEAPONS = {
     evoTarget: 'quantum_sphere',
     pairPassive: 'speed_shoes',   // 走位控球/追球 (原 max_hp_vest)
     maxLevel: 5,
-    baseDamage: 28,
+    baseDamage: 33,  // 射程定位校準（原 33）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 28）
     baseCooldown: 3.2,
     cooldownGrowth: -0.35,         // 升級加快出球 (3.2 → 1.8 秒)
     speed: 520,
     bounces: [4, 5, 6, 7, 8],      // 彈射次數（命中彈向下一個敵人、撞畫面邊緣都算一次）
     count: [1, 2, 2, 3, 4],
     charge: { every: 3, effect: 'freeze' }, // 每 3 顆射出冰凍球
+    range: 520,               // 彈跳球的飛行距離（殺傷靠彈射次數，不靠穿透）
+    pierceAll: true,          // 彈射型：撞到不消耗（吃群靠 bounces 彈射次數，不是靠穿透）
   },
 
   // 超武 (Evo Weapons)
@@ -154,7 +163,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'kunai',
-    baseDamage: 60,  // 40 時單體 DPS 反而略低於滿級苦無
+    baseDamage: 79,  // 射程定位校準（原 79）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 60）  // 40 時單體 DPS 反而略低於滿級苦無
     baseCooldown: 0.12, // 極致機槍射速
     speed: 800,
     projectiles: 1,
@@ -162,6 +171,7 @@ export const WEAPONS = {
     charge: { every: 6, effect: 'burn' }, // 射速快，間隔拉長
     projType: 'shuriken',
     homing: 6.0,
+    range: 560,               // 直線穿透的飛行距離
   },
   eternal_domain: {
     id: 'eternal_domain',
@@ -172,7 +182,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'guardian',
-    baseDamage: 78,  // 傷害節奏改由 rehit (0.4s) 控制，單刀要拉高才撐得起超武定位
+    baseDamage: 54,  // 射程定位校準（原 109）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 78）  // 傷害節奏改由 rehit (0.4s) 控制，單刀要拉高才撐得起超武定位
     baseCooldown: 0, // 無 CD，永久旋轉
     duration: 999999,
     spinSpeed: 5.5,
@@ -180,6 +190,7 @@ export const WEAPONS = {
     radius: 110,
     forceField: true,              // 力場：跟著玩家的圓形領域（WeaponManager.fireForceField）
     stormEvery: 2.0,               // 擊退風暴間隔（秒）
+    pierceAll: true,          // 持續領域：範圍內全部
   },
   shark_torpedo: {
     id: 'shark_torpedo',
@@ -190,7 +201,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'rocket',
-    baseDamage: 195,
+    baseDamage: 249,  // 射程定位校準（原 249）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 195）
     baseCooldown: 1.2,  // 1.8 時單體 DPS 反而低於滿級火箭
     speed: 460,
     homing: 3.2,                   // 鯊魚轉彎比飛彈鈍，但會一直追
@@ -198,6 +209,8 @@ export const WEAPONS = {
     explosionRadius: 220,
     count: 2,
     charge: { every: 2, effect: 'poison' },
+    range: 660,               // 追咬距離
+    pierceAll: true,          // 核爆：範圍內全中
   },
   napalm_sea: {
     id: 'napalm_sea',
@@ -208,7 +221,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'molotov',
-    baseDamage: 52,  // 滿級燃燒瓶每跳就是 24，超武不能原地踏步
+    baseDamage: 46,  // 射程定位校準（原 70）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 52）  // 滿級燃燒瓶每跳就是 24，超武不能原地踏步
     baseCooldown: 2.0,
     duration: 5.5,
     radius: 140,
@@ -216,6 +229,7 @@ export const WEAPONS = {
     spreadFrom: 0.6,               // 火海半徑從 60% 擴散到 130%（2.5 秒內）
     spreadTo: 1.3,
     spreadTime: 2.5,
+    pierceAll: true,          // 範圍型：火海每跳燒到範圍內全部
   },
   plasma_storm: {
     id: 'plasma_storm',
@@ -226,13 +240,15 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'lightning',
-    baseDamage: 98,
+    baseDamage: 98,  // 射程定位校準（原 98）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 98）
     baseCooldown: 1.1,
     strikes: 6,                    // 中心 1 + 外圈 5
     starBurst: true,
     starRadius: 80,
     linkDamageMul: 0.2,
     linkWidth: 20,
+    range: 320,               // 星形落雷的索敵距離
+    pierceAll: true,          // 落點與星芒內全中
   },
   quantum_sphere: {
     id: 'quantum_sphere',
@@ -243,13 +259,15 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'soccer',
-    baseDamage: 58,                // 命中裂變 + 敵間彈射，命中數遠多於舊版飛出畫面的球
+    baseDamage: 70,  // 射程定位校準（原 70）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 58）                // 命中裂變 + 敵間彈射，命中數遠多於舊版飛出畫面的球
     baseCooldown: 2.2,
     speed: 700,
     bounces: 10,
     count: 4,
     charge: { every: 4, effect: 'freeze' },
     splitGen: 1,                   // 命中裂變的世代上限（子球不再裂變）
+    range: 560,               // 彈射球的飛行距離
+    pierceAll: true,          // 彈射型：撞到就彈向下一隻（吃群靠彈射，不是靠穿透）
   },
 
   // 新增武器 (內容擴充批)：開路穿透型 ─ 相位飛刃
@@ -267,7 +285,7 @@ export const WEAPONS = {
     evoTarget: 'twin_storm',
     pairPassive: 'guardian',     // 雙武合成：迴力鏢 + 守護輪盤 → 雙刃風暴
     maxLevel: 5,
-    baseDamage: 26,
+    baseDamage: 31,  // 射程定位校準（原 31）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 26）
     baseCooldown: 1.15,
     cooldownGrowth: -0.1,
     speed: 520,
@@ -277,6 +295,7 @@ export const WEAPONS = {
     count: [1, 2, 2, 3, 4],
     pierce: [2, 2, 3, 3, 4],
     rehit: 0.45,
+    range: 520,               // 去回各一刀的飛行距離
   },
   railgun: {
     id: 'railgun',
@@ -287,13 +306,14 @@ export const WEAPONS = {
     evoTarget: 'annihilation_beam',
     pairPassive: 'atk_scroll',   // 配件滿級即可合成
     maxLevel: 5,
-    baseDamage: 58,
+    baseDamage: 82,  // 射程定位校準（原 82）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 58）
     baseCooldown: 2.6,
     cooldownGrowth: -0.4,
     projType: 'rail_beam',
     range: 900,
     width: [26, 30, 34, 38, 42],
     laneCount: 1,
+    pierceAll: true,          // 光束：一條線整排貫穿（長射程＝高穿透）
   },
 
   twin_storm: {
@@ -305,15 +325,16 @@ export const WEAPONS = {
     evoTarget: null,
     maxLevel: 5,
     evoGrowth: 0.25,             // 覺醒：每級傷害 +25%（見 WeaponManager 的傷害計算）
-    baseDamage: 94,
+    baseDamage: 114,  // 射程定位校準（原 114）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 94）
     baseCooldown: 0.62,
     speed: 610,
     projType: 'boomerang',
     outTime: [0.55, 0.55, 0.55, 0.55, 0.55],
     count: [2, 2, 3, 3, 4],
-    pierce: [99, 99, 99, 99, 99],
+    pierce: [6, 6, 7, 7, 8],        // 雙迴力鏢：中長射程的中高穿透（不是無限）
     rehit: 0.30,
     burnOnHit: 4,                // 命中點燃（每秒 4 點、由 molotov 的燃燒系統處理）
+    range: 560,               // 雙迴力鏢的飛行距離
   },
   annihilation_beam: {
     id: 'annihilation_beam',
@@ -324,13 +345,14 @@ export const WEAPONS = {
     evoTarget: null,
     maxLevel: 5,
     evoGrowth: 0.25,
-    baseDamage: 172,
+    baseDamage: 252,  // 射程定位校準（原 252）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 172）
     baseCooldown: 1.25,
     projType: 'rail_beam',
     range: 1200,
     width: [64, 64, 64, 64, 64],
     laneCount: 3,
     burnOnHit: 6,
+    pierceAll: true,          // 光束：一條線整排貫穿（最長射程）
   },
 
   phase_blade: {
@@ -342,7 +364,7 @@ export const WEAPONS = {
     evoTarget: 'phase_storm',
     pairPassive: 'kunai',          // 武器+武器合成 (VS 黑白鴿精神)
     maxLevel: 5,
-    baseDamage: 22,                // 相位跳躍讓命中率大增，單發傷害相應調低
+    baseDamage: 24,  // 射程定位校準（原 24）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 22）                // 相位跳躍讓命中率大增，單發傷害相應調低
     baseCooldown: 1.4,
     cooldownGrowth: -0.12,
     speed: 560,
@@ -352,6 +374,7 @@ export const WEAPONS = {
     projType: 'drill',
     phaseJump: 200,                // 相位跳躍搜尋半徑
     phaseJumps: 1,                 // 每發最多跳幾次
+    range: 340,               // 貼近的鑽頭：短射程 + 相位跳躍
   },
   // 新增武器 (內容擴充批)：護身環繞型 ─ 重力環鋸
   orbit_saw: {
@@ -363,7 +386,7 @@ export const WEAPONS = {
     evoTarget: 'singularity_ring',
     pairPassive: 'cdr_battery',
     maxLevel: 5,
-    baseDamage: 18,
+    baseDamage: 10,  // 射程定位校準（原 20）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 18）
     baseCooldown: 1.9,
     duration: 3.2,
     spinSpeed: 4.2,
@@ -373,6 +396,7 @@ export const WEAPONS = {
     projType: 'saw',
     pullRadius: 110,               // 重力場：鋸環外 110px 內的雜兵被往內拉
     pullSpeed: 55,
+    pierceAll: true,          // 範圍型：鋸環掃到就中
   },
 
   // 雙武合體超武：相位風暴 (消耗 相位飛刃 + 苦無)
@@ -385,16 +409,17 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'phase_blade',
-    baseDamage: 58,
+    baseDamage: 69,  // 射程定位校準（原 69）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 58）
     baseCooldown: 0.3,             // 裂隙射出 + 相位跳躍，命中率高，射速相應放慢
     speed: 720,
     projectiles: 1,
-    pierce: 3,
+    pierce: 4,                     // 中短射程的中穿透（相位跳躍另計，不是靠穿透）
     charge: { every: 8, effect: 'chain' }, // 合體超武射速極快，間隔再拉長
     projType: 'drill',
     phaseJump: 240,
     phaseJumps: 1,
     riftRadius: 70,                // 相位裂隙：出生點在玩家周圍 70px 的圓上
+    range: 420,               // 裂隙射出的鑽頭：中短射程
   },
   // 護身超武：重力奇點環 (重力環鋸的永續型態)
   singularity_ring: {
@@ -406,7 +431,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'orbit_saw',
-    baseDamage: 91,  // 同上：軌道更貼身、範圍更小，單刀給得比守護力場高
+    baseDamage: 52,  // 射程定位校準（原 105）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 91）  // 同上：軌道更貼身、範圍更小，單刀給得比守護力場高
     baseCooldown: 0,
     duration: 999999,
     spinSpeed: 6.2,
@@ -415,6 +440,7 @@ export const WEAPONS = {
     projType: 'saw',
     pullRadius: 200,
     pullSpeed: 110,
+    pierceAll: true,          // 範圍型：奇點環內全部
   },
 
   // ── 第三輪擴充：兩把新基礎武器 ──────────────────────────────────────
@@ -430,31 +456,37 @@ export const WEAPONS = {
     evoTarget: 'absolute_zero',
     pairPassive: 'range_fuel',     // 範圍型武器 ↔ 範圍配件
     maxLevel: 5,
-    baseDamage: 30,
+    baseDamage: 24,  // 射程定位校準（原 48）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 30）
     baseCooldown: 1.8,
     cooldownGrowth: -0.25,
     radius: [110, 120, 135, 150, 165],
     slowDur: 2.0,                  // 比冷卻長：範圍內的敵人會被持續減速（赫爾碎冰也靠這個）
+    pierceAll: true,          // 範圍型：脈衝半徑內全部
   },
   shotgun: {
     id: 'shotgun',
     name: '特工霰彈槍',
     icon: '💥',
-    description: '朝最近敵人轟出扇形霰彈，射程短但彈丸多、擊退強。每打完一匣 3 發要停下來換彈；升級縮短換彈時間。',
+    description: '朝最近敵人轟出扇形霰彈，射程短但彈丸多、擊退強。單發射擊後強制換彈（幫浦行程）；升級縮短換彈時間。射程越短，每顆彈丸越痛。',
     isEvo: false,
     evoTarget: 'dragon_breath',
     pairPassive: 'max_hp_vest',    // 近戰距離武器 ↔ 生存配件
     maxLevel: 5,
-    baseDamage: 17,                // 單顆彈丸（升級不加傷害，超武才提高攻擊力）
-    baseCooldown: 0.42,            // 同一匣內的連發間隔
-    magazine: 3,                   // 一匣發數，打完進入換彈卡頓
-    reload: [2.2, 1.85, 1.5, 1.2, 0.9],   // 換彈秒數：升級的主要收益
+    baseDamage: 21,  // 射程定位校準（原 21）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 17）                // 單顆彈丸（升級不加傷害，超武才提高攻擊力）；
+                                   // 實際傷害 = 這個值 × rangeDamageMul（見下方反比規則）。
+                                   // 13 → 17：單發換彈讓每分鐘擊發次數掉到約 1/3，
+                                   // 拉高單顆威力才不會讓「改成單發」變成純粹的削弱
+                                   // （預設型態赫米斯 +30% 射程，反比規則會再打 0.77 折）
+    baseCooldown: 0.42,
+    magazine: 1,                   // 單發：擊發一次就進入換彈（幫浦／上彈）
+    reload: [1.5, 1.32, 1.14, 0.94, 0.75],  // 換彈秒數：升級的主要收益
     speed: 720,
     projType: 'pellet',
-    pellets: [6, 6, 6, 6, 6],
+    pellets: [8, 8, 8, 8, 8],
     spread: 0.8,                   // 扇形總角度（弧度）
-    range: 165,                    // 240 → 165：真正的貼臉武器
+    range: 165,                    // 240 → 165：真正的貼臉武器（也是傷害加成的來源）
     pierce: [1, 1, 1, 2, 2],
+    pierce: [1, 1, 1, 1, 2],  // 最短射程＝最低穿透（滿級才多穿一隻）
   },
 
   absolute_zero: {
@@ -466,32 +498,35 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,
     baseWeapon: 'frost_nova',
-    baseDamage: 110,
+    baseDamage: 113,  // 射程定位校準（原 113）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 110）
     baseCooldown: 1.2,
     radius: 230,
     slowDur: 2.5,
     freezeOnHit: 1.0,              // 雜兵凍結秒數（Boss 改吃減速，見 Enemy.applyFreeze）
+    pierceAll: true,          // 範圍型：絕對零度領域內全部
   },
   dragon_breath: {
     id: 'dragon_breath',
     name: '龍息霰彈 (超武)',
     icon: '🐲',
-    description: '霰彈化為龍息烈焰，一次噴出 12 顆燃燒彈丸，貫穿並點燃整片怪群。攻擊力大幅提升，仍需換彈。',
+    description: '霰彈化為龍息烈焰，一次噴出 12 顆燃燒彈丸，貫穿並點燃整片怪群。攻擊力大幅提升，仍需換彈（單發）。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.25,               // 超武覺醒每級 +25% 基礎傷害（主打攻擊力）
     baseWeapon: 'shotgun',
-    baseDamage: 48,                // 32 → 48
+    baseDamage: 94,  // 射程定位校準（原 94）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 88）                // 32 → 48 → 66 → 88：與霰彈槍同一條 rangeDamageMul 反比規則
+                                   // （單發換彈後每輪少打兩發，威力要補回來）
     baseCooldown: 0.36,
-    magazine: 3,
-    reload: 0.9,                   // 繼承霰彈槍滿級的換彈時間
+    magazine: 1,                   // 繼承霰彈槍的單發換彈手感
+    reload: 0.9,
     speed: 780,
     projType: 'pellet',
     pellets: 12,
     spread: 1.0,
     range: 210,                    // 300 → 210
-    pierce: 3,
+    pierce: 2,                     // 短射程→低穿透
     burnOnHit: 6,
+    pierce: 2,                // 短射程但龍息夠厚，比霰彈槍多穿一隻（仍遠低於光束）
   },
 
   // ── 戰鎚 40K 擴充武器 ─────────────────────────────────────────────
@@ -504,7 +539,7 @@ export const WEAPONS = {
     evoTarget: 'storm_bolter',
     pairPassive: 'atk_scroll',     // 強力卷軸滿級合成
     maxLevel: 5,
-    baseDamage: 38,
+    baseDamage: 47,  // 射程定位校準（原 47）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 38）
     baseCooldown: 0.85,
     cooldownGrowth: -0.08,
     speed: 760,
@@ -512,6 +547,7 @@ export const WEAPONS = {
     pierce: [1, 1, 2, 2, 2],
     explosionRadius: [40, 45, 52, 60, 70],
     projType: 'bolter',
+    range: 600,               // 爆彈槍的飛行距離（穿透低，靠爆炸吃群）
   },
   chainsword: {
     id: 'chainsword',
@@ -522,7 +558,7 @@ export const WEAPONS = {
     evoTarget: 'power_sword',
     pairPassive: 'max_hp_vest',    // 防護背心滿級合成
     maxLevel: 5,
-    baseDamage: 28,
+    baseDamage: 17,  // 射程定位校準（原 34）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 28）
     baseCooldown: 1.35,
     cooldownGrowth: -0.15,
     radius: [75, 85, 95, 105, 120],
@@ -531,6 +567,7 @@ export const WEAPONS = {
     projType: 'chainsword',
     bleedDps: 12,
     bleedDur: 3.0,
+    pierceAll: true,          // 揮砍弧：弧內全部
   },
 
   storm_bolter: {
@@ -542,13 +579,14 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,
     baseWeapon: 'bolter',
-    baseDamage: 88,
+    baseDamage: 112,  // 射程定位校準（原 112）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 88）
     baseCooldown: 0.38,
     speed: 860,
     projectiles: [2, 3, 4, 4, 5],
     pierce: [2, 2, 3, 3, 4],
     explosionRadius: [75, 80, 85, 90, 100],
     projType: 'storm_bolter',
+    range: 660,               // 風暴爆彈槍的飛行距離
   },
   power_sword: {
     id: 'power_sword',
@@ -559,15 +597,35 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,
     baseWeapon: 'chainsword',
-    baseDamage: 115,
+    baseDamage: 88,  // 射程定位校準（原 176）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 115）
     baseCooldown: 0.85,
     radius: 145,
     projType: 'power_sword',
     shockwaveDmg: 85,
     shockwaveSpeed: 520,
     shockwavePierce: 99,
+    pierceAll: true,          // 揮砍弧：弧內全部
   },
 };
+
+// ── 射程的正規化（單一真相）──────────────────────────────────────────
+//
+// 「範圍就是射程」的武器（環繞刀刃、火海、冰霜脈動、揮砍弧）不另外寫一份 range，
+// 直接沿用 radius —— 兩份數字一定會漂移，而漂移的方向永遠是「改了 radius 但忘記
+// 改 range，於是傷害倍率默默算錯」。這裡補齊之後，下面每一把武器的 range 都保證有值。
+for (const def of Object.values(WEAPONS)) {
+  if (def.range === undefined && def.radius !== undefined) def.range = def.radius;
+}
+
+// 開機體檢：射程與穿透是「射程 ↔ 攻擊力 ↔ 穿透」三軸定位的必要資料，
+// 缺一個就等於那把武器不參與規則（而且不會有任何錯誤訊息）。
+for (const [id, def] of Object.entries(WEAPONS)) {
+  if (def.range === undefined) console.warn(`[config] 武器 ${id} 沒有 range，射程規則對它無效`);
+  if (def.pierce === undefined && !def.pierceAll) {
+    console.warn(`[config] 武器 ${id} 沒有 pierce 也沒有 pierceAll（穿透無法區隔）`);
+  }
+}
+
 
 // 蓄能彈 (Charged Shot)：投射武器每打出固定發數，下一發附帶元素效果。
 // burn  = 命中後持續灼燒 (重複命中只刷新時間，不疊層)
@@ -579,6 +637,163 @@ export const CHARGE = {
   freeze: { duration: 1.1, bossSlow: 2.2, color: '#7fd8ff' },
   // 中毒：單層比燃燒弱，但持續久且可疊層 — 定位是打高血量目標
   poison: { dps: 7, duration: 5, maxStacks: 5, color: '#7dff8f' },
+};
+
+// ── 敵人攻擊屬性（元素）────────────────────────────────────────────────
+//
+// 為什麼要有這一層：玩家的防禦是「多層相乘 + 上限」的堆疊（護甲 ≤50%、鐵壁藥水
+// 再 ×0.5、聖域再 ×(1-resist)、護盾吸收、以及最關鍵的 **0.5 秒無敵影格**）。
+// 相乘之後，雜兵的接觸傷害只有「每 0.5 秒一下」這個上限 —— 一旦玩家的
+// 生命＋回復超過 2×單下傷害÷減傷，**任何人數的雜兵都殺不死他**。
+// 這正是「過了一個強度就基本不死」的結構原因：不是敵人太弱，是傷害只有一個
+// 通道，而那個通道被無敵影格與減傷封死了。
+//
+// 所以這裡加的是**第二條通道**：屬性傷害。
+//   ① armorPierce —— 護甲（metaArmor）對屬性傷害只有部分效果，堆滿 50% 也擋不住。
+//   ② dotPct / dotFlat —— 命中後在玩家身上留下持續傷害。持續傷害是**逐幀結算**，
+//      完全不受 0.5 秒無敵影格限制，所以「站著不動」永遠是危險的。
+//   ③ dotPct 是「玩家最大生命的比例」—— 這是讓曲線平滑的核心：傷害自動跟著
+//      玩家的成長曲線走，不會在後期變成 0，也不會在前期一擊秒殺。
+//
+// 數值刻意保守：單層最多 1.0~1.6%/秒，疊滿 3~5 層約 4~6%/秒（約 17~25 秒致命），
+// 而且離開攻擊源後數秒內自動消退 —— 是「逼你走位」的壓力，不是無法應對的死刑。
+export const ELEMENTS = {
+  physical: {
+    id: 'physical', name: '物理', icon: '🩸', color: '#ffffff',
+    armorPierce: 0, dotFlat: 0, dotPct: 0, dotDur: 0, maxStacks: 0, speedMul: 1,
+  },
+  toxic: {
+    id: 'toxic', name: '劇毒', icon: '☠️', color: '#7dff8f',
+    armorPierce: 0.5,        // 護甲只擋一半
+    dotFlat: 1.4,            // × enemyScale().elem（時間曲線）
+    dotPct: 0.012,           // 每層每秒 1.2% 最大生命
+    dotDur: 4.5,
+    maxStacks: 5,
+    speedMul: 1,
+  },
+  fire: {
+    id: 'fire', name: '燃燒', icon: '🔥', color: '#ff7b00',
+    armorPierce: 0.35,
+    dotFlat: 2.2,
+    dotPct: 0.018,
+    dotDur: 3.0,
+    maxStacks: 3,
+    speedMul: 1,
+  },
+  shock: {
+    id: 'shock', name: '電擊', icon: '⚡', color: '#00e5ff',
+    armorPierce: 0.6,        // 金屬護甲反而導電
+    dotFlat: 1.1,
+    dotPct: 0.009,
+    dotDur: 2.5,
+    maxStacks: 4,
+    speedMul: 0.88,
+  },
+  frost: {
+    id: 'frost', name: '冰凍', icon: '❄️', color: '#7fd8ff',
+    armorPierce: 0.25,
+    dotFlat: 0.8,
+    dotPct: 0.006,
+    dotDur: 3.0,
+    maxStacks: 3,
+    speedMul: 0.78,          // 減速才是冰凍的主效果，傷害只是附帶
+  },
+};
+
+export const ELEMENT_IDS = Object.keys(ELEMENTS).filter((k) => k !== 'physical');
+
+// ── 射程 ↔ 攻擊力 ↔ 穿透（設計原則，玩家指定）────────────────────────
+//
+// 「射程越短的攻擊力越強」對**所有**武器成立，而且「穿透能力也要有所區隔」。
+// 三條軸合起來就是每一把武器的定位：
+//
+//   短射程 ── 高單發傷害 ── 低穿透   （霰彈槍、鏈鋸劍、環鋸、火海）
+//   中射程 ── 中單發傷害 ── 中穿透   （苦無、迴力鏢、爆彈槍）
+//   長射程 ── 低單發傷害 ── 高穿透   （軌道炮、殲滅光束：一條線整排)
+//
+// 怎麼讓它「真的成立」而不是只寫在說明文字裡 —— 三個部件：
+//
+//   ① `WEAPONS[*].range`：每一把武器都必須明列射程（見檔案下方的正規化）。
+//      沒有這個欄位就沒有規則可言，所以它同時是資料也是契約（verify-weapons 會驗）。
+//   ② `rangeDamageMul()`：規則本體。用 **(REF/range)^EXP 再夾住**，而不是單純的
+//      REF/range —— 武器的射程橫跨 34px（環鋸）到 1200px（殲滅光束），線性反比會變成
+//      35 倍的傷害差，那不是定位而是失衡。取 0.45 次方把 35 倍壓成 2.6 倍，
+//      再夾在 0.6~2.2 之間。這個值用來**校準 baseDamage**（見每把武器的註解）。
+//   ③ `rangeTradeoffMul()`：玩家端的動態取捨。高能燃料（+15%/級）、烈焰之觸（範圍 +20%）、
+//      赫米斯型態（射程 +30%）拉長射程時，傷害會依同一條規則下降。
+//
+// 為什麼 ③ 要用「比值」而不是絕對值：等級成長也會放大射程（守護輪盤 L1 65 → L5 95、
+// 烈焰新星 110 → 165）。如果直接乘絕對值，**升級反而會讓武器變弱**。
+// 用「拉長後的射程 ÷ 原始射程」當比值，升級的射程成長不列入取捨，只有玩家主動
+// 用配件／型態換覆蓋範圍時才付代價。
+export const RANGE_DAMAGE_REF = 320;     // 基準射程（中程武器 ≈ ×1）
+export const RANGE_DAMAGE_EXP = 0.45;    // 壓縮指數：把 35 倍的射程差壓成 2.6 倍
+export const RANGE_DAMAGE_MIN = 0.6;     // 長射程武器的下限（不會被懲罰到負值）
+export const RANGE_DAMAGE_MAX = 2.2;     // 貼臉武器的上限（不會無限膨脹）
+
+export function rangeDamageMul(range) {
+  const r = Math.max(20, Number(range) || RANGE_DAMAGE_REF);
+  const raw = Math.pow(RANGE_DAMAGE_REF / r, RANGE_DAMAGE_EXP);
+  return Math.min(RANGE_DAMAGE_MAX, Math.max(RANGE_DAMAGE_MIN, raw));
+}
+
+// 一把武器的「射程定位倍率」：由它宣告的射程決定。短射程 > 1、長射程 < 1。
+// 取宣告值（陣列取第一級）而不是當前等級的值 —— 等級造成的射程成長是升級獎勵，
+// 不該反過來扣傷害（守護輪盤 L1 65 → L5 95，用當前值會讓升級變成變弱）。
+export function weaponRangeTier(def) {
+  if (!def || def.range === undefined) return 1;
+  const r = Array.isArray(def.range) ? def.range[0] : def.range;
+  return rangeDamageMul(r);
+}
+
+// 玩家把射程拉長 k 倍之後，傷害要乘多少。k = 1 → 1（原封不動）。
+export function rangeTradeoffMul(k) {
+  const kk = Math.max(0.35, Number(k) || 1);
+  return Math.min(RANGE_DAMAGE_MAX, Math.max(RANGE_DAMAGE_MIN, Math.pow(1 / kk, RANGE_DAMAGE_EXP)));
+}
+
+// 一次開火實際的射程倍率（型態的 rangeMul / radiusMul × 玩家的範圍倍率）。
+// 寫成純函式是為了讓 verify-weapons 能在 Node 直接驗，不必起瀏覽器。
+export function weaponRangeMul(stats = {}, playerRangeMultiplier = 1) {
+  return (playerRangeMultiplier || 1) * ((stats && (stats.rangeMul || stats.radiusMul)) || 1);
+}
+
+// 「觸及即命中全部」：範圍型（火海／脈動／旋轉領域）與貫穿型（光束／揮砍弧）用這個
+// 當穿透值。原本是散在 WeaponManager 各處的魔術數字 9999，改成一个具名常數。
+export const PIERCE_ALL = 9999;
+
+export function elementOf(id) {
+  return ELEMENTS[id] || ELEMENTS.physical;
+}
+
+// 哪一種敵人的攻擊帶哪一種屬性。沒有列到的就是純物理 —— 名單刻意只覆蓋
+// 「主題上說得通」的那一批（酸液、火焰、電擊、冰霜），大約四成，
+// 這樣「堆護甲」仍然是有意義的選擇，而不是被屬性傷害全面作廢。
+export const ENEMY_ELEMENTS = {
+  // 毒／酸：噴吐、孢子、自爆、焦油、毒氣
+  boomer: 'toxic', spitter: 'toxic', spore_host: 'toxic', sporeling: 'toxic',
+  hatcher: 'toxic', sniper: 'toxic', tar_slug: 'toxic', bloater: 'toxic',
+  medic: 'toxic', termagant: 'toxic', poxwalker: 'toxic', spore_mine: 'toxic',
+  boss_broodlord: 'toxic', rat_evil: 'toxic', snake_evil: 'toxic',
+  ink_gas_boar: 'toxic', ink_ape_mother: 'toxic', pig_evil: 'toxic',
+  // 火：砲擊、巨像重擊、龍息、狐火、爆破
+  mortar: 'fire', chimera: 'fire', dragon_evil: 'fire', squig_bomb: 'fire',
+  makai_red_arremer: 'fire', tiger_evil: 'fire', dog_evil: 'fire',
+  ink_fox: 'fire', ink_fox_guard: 'fire', ink_boar_king: 'fire',
+  // 電：相位閃現、風刃、電場型
+  blinker: 'shock', warden: 'shock', rooster_evil: 'shock',
+  horse_evil: 'shock', goat_evil: 'shock', ink_gale_wolf: 'shock',
+  // 冰：寒霜主題
+  ink_shadow_crow: 'frost', ink_fox_spirit: 'frost', rabbit_evil: 'frost',
+};
+
+// 依關卡主題追加的屬性覆寫：同一隻雜兵在「冰封荒原」與「淪陷商業街」不該一樣冷。
+// key 是關卡 id，值是 { 敵人 key: 元素 }。只覆寫有列到的。
+export const LEVEL_ENEMY_ELEMENTS = {
+  frost: { walker: 'frost', bat: 'frost', brute: 'frost', hound: 'frost', warden: 'frost' },
+  frostvoid: { walker: 'frost', bat: 'frost', brute: 'frost', hound: 'frost', warden: 'frost', bloater: 'frost' },
+  foundry: { walker: 'fire', brute: 'fire', hound: 'fire', warden: 'fire' },
+  storm: { walker: 'shock', bat: 'shock', runner: 'shock', hound: 'shock' },
 };
 
 // 被動配件定義
@@ -1352,7 +1567,7 @@ export const WEAPON_ASPECTS = {
   ],
   shotgun: [
     { id: 'hermes',     name: '赫米斯 (速射)', icon: '💨', tag: '快速連轟',
-      desc: '開火冷卻 -25%，射程 +30%。',
+      desc: '開火冷卻 -25%，射程 +30%（依反比規則，單發威力會隨之下降）。',
       stats: { cdMul: 0.75, rangeMul: 1.3 } },
     { id: 'hephaestus', name: '赫菲斯托斯 (燃燒彈)', icon: '🔥', tag: '點燃彈丸',
       desc: '彈丸命中點燃（每秒 5 點），扇形收窄 25% 讓彈丸更集中。',

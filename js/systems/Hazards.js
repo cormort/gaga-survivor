@@ -8,8 +8,8 @@
 // 呼叫端：main.js 以 hazards.updateHazards(this, dt) 這種形式呼叫；
 // 外部（例如 WeaponManager 的爆炸波及木箱）則走 Game 上的同名薄包裝。
 
-import { GAME_CONFIG, FX, worldBounds, isWorldBounded } from '../config.js';
-import { LEVELS } from '../levels.js';
+import { GAME_CONFIG, FX, worldBounds, isWorldBounded, elementOf } from '../config.js';
+import { LEVELS, hazardDmgScale } from '../levels.js';
 import { onPath } from '../tdlevels.js';
 import { DropItem, DestructibleCrate } from '../entities/DropItem.js';
 import { JEWEL_DROP, rollJewel } from '../jewels.js';
@@ -67,6 +67,24 @@ function defaultHazardSource(type) {
     case 'sanctuary': return '聖域靈氣';
     case 'pool': return '地面毒池';
     default: return null;
+  }
+}
+
+// 地形傷害的屬性。地形是玩家「無法用火力清除」的壓力來源，也是後期唯一
+// 穩定存在的傷害通道：雜兵會被清光，地形不會。屬性讓它同時留下持續傷害，
+// 所以站在裡面「快速穿過」與「站著不動」有完全不同的代價。
+function defaultHazardElement(type) {
+  switch (type) {
+    case 'pool': return 'toxic';
+    case 'tar': return 'toxic';
+    case 'quicksand': return 'toxic';
+    case 'safeZone': return 'toxic';
+    case 'shrinkCircle': return 'toxic';
+    case 'lava': return 'fire';
+    case 'geyser': return 'fire';
+    case 'mine': return 'fire';
+    case 'electro': return 'shock';
+    default: return 'physical';
   }
 }
 
@@ -314,6 +332,30 @@ export function dropCrateLoot(game, x, y, kind = 'crate') {
   }
 }
 
+// 地形命中玩家的單一出入口。
+//
+// 兩個關鍵行為，跟「雜兵撞到玩家」刻意不同：
+//   ① 傷害乘上這次生成的強度倍率（h.scale）—— 地形不再是寫死的常數。
+//   ② **無敵影格只擋得住當下傷害，擋不住屬性附著**。原本所有地形傷害都走
+//      p.takeDamage()，而它在 invulnerableTimer > 0 時直接 return false ——
+//      於是「剛被怪撞到」的那 0.5 秒裡，站在毒池／岩漿裡完全不會有事，
+//      地形壓力被無敵影格整段吃掉。現在改成：被無敵擋下時仍然附上屬性層數，
+//      靠逐幀結算的持續傷害讓「站進去」永遠有代價。
+function hurtByHazard(game, h, rawDmg, source) {
+  const p = game.player;
+  if (!p || p.isDead) return false;
+  const element = h.element || 'physical';
+  const dmg = Math.max(0, rawDmg) * (h.scale || 1);
+  const landed = p.takeDamage(dmg, source, element, h.scale || 1);
+  if (landed) {
+    game.particles.createHurtText(p.x, p.y, dmg, elementOf(element).color);
+  } else if (element !== 'physical') {
+    // 無敵影格中：不吃當下傷害，但屬性照樣附著
+    p.applyElement(element, h.scale || 1, source);
+  }
+  return landed;
+}
+
 export function updateHazards(game, dt) {
   const level = game.level || LEVELS.street;
   // 向下相容：舊的 mech 單物件自動包成陣列
@@ -338,7 +380,7 @@ export function updateHazards(game, dt) {
       if (dist > sc.radius) {
         if (sc.tick <= 0) {
           sc.tick = mech.dmgInterval || 0.4;
-          if (p.takeDamage(mech.dmg, '毒圈收縮')) game.particles.createHurtText(p.x, p.y, mech.dmg);
+          hurtByHazard(game, { element: 'toxic', scale: hazardDmgScale(game.gameTime) }, mech.dmg, '毒圈收縮');
         }
         // 微推向圈心
         if (dist > 0) {
@@ -374,7 +416,7 @@ export function updateHazards(game, dt) {
         const dy = p.y - h.y;
         const rr = h.r + p.radius;
         if (dx * dx + dy * dy < rr * rr) {
-          if (p.takeDamage(h.dmg, h.source || '地面毒池')) game.particles.createHurtText(p.x, p.y, h.dmg);
+          hurtByHazard(game, h, h.dmg, h.source || '地面毒池');
         }
       }
       if (h.t >= h.dur) game.hazards.splice(i, 1);
@@ -387,7 +429,7 @@ export function updateHazards(game, dt) {
         const dy = p.y - h.y;
         const rr = h.r + p.radius;
         if (dx * dx + dy * dy > rr * rr) {
-          if (p.takeDamage(h.dmg, '安全區外')) game.particles.createHurtText(p.x, p.y, h.dmg);
+          hurtByHazard(game, h, h.dmg, '安全區外');
         }
       }
       if (h.t >= h.dur) game.hazards.splice(i, 1);
@@ -402,13 +444,18 @@ export function updateHazards(game, dt) {
         game.hazards.splice(i, 1);
       }
     } else if (h.kind === 'spring') {
-      // 回復泉：站在裡面持續回血，逼玩家在「去喝水」與「維持走位」之間取捨
+      // 回復泉：站在裡面持續回血，逼玩家在「去喝水」與「維持走位」之間取捨。
+      // 另外淨化身上的屬性層數 —— 這是屬性傷害的**主要對策**：
+      // 中了毒不一定要逃，也可以主動去找泉水（關卡機制每 30~45 秒生一個）。
       h.tick -= dt;
       if (h.tick <= 0) {
         h.tick = 0.5;
         const dx = p.x - h.x;
         const dy = p.y - h.y;
-        if (dx * dx + dy * dy < h.r * h.r && p.hp < p.maxHp) p.heal(h.heal);
+        if (dx * dx + dy * dy < h.r * h.r) {
+          if (p.hp < p.maxHp) p.heal(h.heal);
+          if (p.elementStatus && Object.keys(p.elementStatus).length > 0) p.clearElements();
+        }
       }
       if (h.t >= h.dur) game.hazards.splice(i, 1);
     } else if (h.kind === 'lava') {
@@ -420,8 +467,7 @@ export function updateHazards(game, dt) {
         const dy = p.y - h.y;
         const rr = h.r + p.radius;
         if (dx * dx + dy * dy < rr * rr) {
-          if (p.takeDamage(h.dmg, h.source || '熔岩灼燒')) {
-            game.particles.createHurtText(p.x, p.y, h.dmg);
+          if (hurtByHazard(game, h, h.dmg, h.source || '熔岩灼燒')) {
             game.particles.createHitSpark(p.x, p.y, '#ff4500');
           }
         }
@@ -474,10 +520,8 @@ export function updateHazards(game, dt) {
         const dx = p.x - h.x;
         const dy = p.y - h.y;
         const rr = h.r + p.radius;
-        if (dx * dx + dy * dy < rr * rr) {
-          if (h.dmg > 0 && p.takeDamage(h.dmg, h.source || '感應過載')) {
-            game.particles.createHurtText(p.x, p.y, h.dmg);
-          }
+        if (dx * dx + dy * dy < rr * rr && h.dmg > 0) {
+          hurtByHazard(game, h, h.dmg, h.source || '感應過載');
         }
         if (h.dmgEnemy > 0) {
           const hrr = h.r;
@@ -508,8 +552,10 @@ export function updateHazards(game, dt) {
       h.tick -= dt;
       if (h.tick <= 0) {
         h.tick = 0.5;
-        if (dx * dx + dy * dy < rr * rr && p.hp < p.maxHp) {
-          p.heal(h.heal || 3);
+        if (dx * dx + dy * dy < rr * rr) {
+          if (p.hp < p.maxHp) p.heal(h.heal || 3);
+          // 聖域同時淨化屬性層數（與回復泉同一條對策，但聖域還會給減傷）
+          if (p.elementStatus && Object.keys(p.elementStatus).length > 0) p.clearElements();
           game.particles.createHitSpark(p.x, p.y, '#ffd700');
         }
         if (h.dmgEnemy > 0) {
@@ -598,6 +644,13 @@ export function placeHazard(game, mech, x, y) {
     pullSpeed: mech.pullSpeed || 55,
     speedMul: SPEED_ZONES[type] ? (mech.speedMul || SPEED_ZONES[type]) : 0,
     source: mech.source || defaultHazardSource(type),
+    // 屬性，以及「這次生成的整體強度倍率」。
+    // 為什麼要有這個倍率：關卡的 mech 傷害是寫死的常數（毒池 6~15、岩漿 6~7），
+    // 8 分鐘之後那些數字對玩家等於 0 —— 地形是唯一玩家無法用火力清掉的壓力來源，
+    // 讓它隨時間同步成長（levels.js 的 hazardDmgScale），難度曲線才不會只剩
+    // 「怪物數量」這一根柱子。同一個倍率也餵給屬性 DoT。
+    element: mech.element || defaultHazardElement(type),
+    scale: hazardDmgScale(game.gameTime || 0),
   });
 }
 
@@ -619,7 +672,10 @@ export function explodeHazard(game, h) {
     }
   }
   const pd = Math.hypot(game.player.x - h.x, game.player.y - h.y);
-  if (pd < rr + game.player.radius) game.player.takeDamage(h.dmg, h.source || (h.kind === 'geyser' ? '地面噴發' : '地雷'));
+  if (pd < rr + game.player.radius) {
+    // 走同一條地形傷害入口：吃到時間倍率、帶屬性，而且無敵影格不會連屬性一起吃掉
+    hurtByHazard(game, h, h.dmg, h.source || (h.kind === 'geyser' ? '地面噴發' : '地雷'));
+  }
 }
 
 export function drawHazards(game, cam) {

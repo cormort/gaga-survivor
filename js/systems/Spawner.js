@@ -2,9 +2,9 @@
 // 無盡模式 (endless) 是唯一例外：波次間隔/數量隨時間成長，Boss 固定 90 秒輪播。
 
 import { Enemy } from '../entities/Enemy.js';
-import { LEVELS, OPENING, openingFactor, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL, endlessBossInterval } from '../levels.js';
+import { LEVELS, OPENING, openingFactor, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL, endlessBossInterval, spawnRate } from '../levels.js';
 import { worldBounds } from '../config.js';
-import { ELITE_AFFIXES } from '../config.js';
+import { ELITE_AFFIXES, elementOf } from '../config.js';
 import { hasSprite } from '../sprites.js';
 
 // 場上敵人硬上限（main.js 的孵化／裂解上限由 spawner.maxEnemies 推導）。
@@ -92,6 +92,10 @@ export class Spawner {
     if (level.td) return;   // 守塔關：波次與首領由 TowerDefense 控制；強度只看波數，不跑動態難度
     this.updateAdaptive(dt);
 
+    // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)。
+    // 提到最前面算：首領生成也要吃到同一份係數（屬性壓力 elem 與關卡 levelId）。
+    const scale = enemyScale(gameTime, level, this.rules);
+
     // Boss 排程：無盡模式 = 固定週期輪播深淵 Boss；一般關卡 = 時間表
     if (level.id === 'endless') {
       if (gameTime >= this.nextEndlessBossAt) {
@@ -101,14 +105,14 @@ export class Spawner {
         // 血量與時俱進，名稱加「深淵·」前綴區隔；剝掉 final 旗標避免被誤判為通關
         this.spawnBoss(
           { ...def, final: false, hp: Math.round(def.hp * (1 + gameTime / 350)), name: '深淵·' + def.name },
-          player, enemies, onBossSpawnCallback
+          player, enemies, onBossSpawnCallback, scale
         );
       }
     } else {
       const nextBoss = level.bosses[this.bossIndex];
       if (nextBoss && gameTime >= nextBoss.at) {
         this.bossIndex++;
-        this.spawnBoss(nextBoss, player, enemies, onBossSpawnCallback);
+        this.spawnBoss(nextBoss, player, enemies, onBossSpawnCallback, scale);
       }
     }
 
@@ -116,14 +120,21 @@ export class Spawner {
     this.spawnTimer += dt;
     const wave = currentWave(level, gameTime);
 
-    // 無盡模式：間隔隨時間縮短、單次數量增加 (有上限避免一口氣灌爆)
+    // 生成率（隻／秒）是這一輪的主要旋鈕，不再是 interval / batch 各自跳。
+    // 為什麼：波次表的 interval / batch 是分段常數，邊界直接跳 —— street 第 6 分鐘
+    // 2.22 → 6.67 隻/秒（+200%）、第 8 分鐘再跳 +131%，敵人數就在那一分鐘從幾十隻
+    // 衝到幾百隻。這是「怪潮毫無預警湧上來」的真正來源（見 levels.js 的 spawnRate / nominalSpawnRate）。
+    //
+    // batch 維持整數（一次生幾隻是離散的），由 interval 吸收內插：率連續，數量就不會一跳。
     const rules = this.rules || RULE_DEFAULTS;
-    let interval = wave.interval;
     let batch = wave.batch;
     if (level.id === 'endless') {
-      interval = Math.max(0.15, 0.55 - gameTime * 0.00055);
       batch = 1 + Math.min(5, Math.floor(gameTime / 150));
     }
+    // 由平滑後的「率」回推間隔。rate <= 0 只可能在關卡資料壞掉時發生，
+    // 那時退回這一波原本的 interval（不要讓整個生成器停擺）。
+    const rate = spawnRate(level, gameTime);
+    let interval = rate > 0 ? Math.max(0.05, batch / rate) : wave.interval;
 
     // 生成密度：直接縮短間隔 (關卡規則 / 每日詞綴共用)
     interval /= rules.spawnMul;
@@ -135,8 +146,6 @@ export class Spawner {
 
     if (enemies.length >= this.maxEnemies) return;
 
-    // 雜兵血量與傷害隨時間、關卡難度成長 (公式集中在 levels.js)
-    const scale = enemyScale(gameTime, level, rules);
     scale.hp *= this.adaptiveHpMul;
     for (let i = 0; i < batch; i++) {
       // 生成距離隨時間縮短 (520 → 440)：後期玩家的清場半徑遠大於此，
@@ -166,11 +175,16 @@ export class Spawner {
     enemy.makeElite(keys[Math.floor(Math.random() * keys.length)]);
   }
 
-  spawnBoss(def, player, enemies, onBossSpawnCallback) {
+  spawnBoss(def, player, enemies, onBossSpawnCallback, scale = null) {
     const pos = this.getSpawnPosition(player, 550);
     const boss = new Enemy('boss', pos.x, pos.y);
     boss.maxHp = boss.hp = def.hp;
     boss.name = def.name;
+    // 首領的屬性：關卡資料可以指定 def.element（沒有就用 ENEMY_ELEMENTS 的預設）。
+    // 首領生成不走 new Enemy(typeKey, ..., scale)，所以這兩行要在這裡補 ——
+    // 少了 elementPotency，首領的屬性傷害會永遠停在 ×1，後期等於沒有屬性。
+    if (def.element) boss.element = elementOf(def.element).id;
+    boss.elementPotency = (scale && scale.elem) || 1;
     // 關卡主題外觀：一般 Boss 用該關皮膚，最終 Boss 換更大號的「最終」變體
     boss.skin = def.skin ? (def.final ? def.skin + '_final' : def.skin) : undefined;
     // 關卡專屬技能：charge 內建衝鋒，額外技能由 def.behaviors 帶入

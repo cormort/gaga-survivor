@@ -10,12 +10,13 @@
 //
 // 用法：node tools/verify-balance.mjs
 import { readFileSync } from 'node:fs';
-import { DIFFICULTIES, RULE_DEFAULTS, enemyScale, LEVELS, ENEMY_SPEED_BASE } from '../js/levels.js';
-import { BLESSINGS, blessingPool, BOMB_TUNING, ENEMY_TYPES } from '../js/config.js';
+import { DIFFICULTIES, RULE_DEFAULTS, enemyScale, LEVELS, ENEMY_SPEED_BASE, hazardDmgScale, spawnRate, nominalSpawnRate, openingFactor, OPENING, LEVEL_ORDER } from '../js/levels.js';
+import { BLESSINGS, blessingPool, BOMB_TUNING, ENEMY_TYPES, ELEMENTS, WEAPONS, rangeDamageMul, rangeTradeoffMul } from '../js/config.js';
 
 // 原始碼層級：確認實際抽祝福的路徑真的走 blessingPool（而不是各自再寫一次 filter）
 const progressionSrc = readFileSync(new URL('../js/systems/Progression.js', import.meta.url), 'utf8');
 const mainSrc = readFileSync(new URL('../js/main.js', import.meta.url), 'utf8');
+const hazardsSrc = readFileSync(new URL('../js/systems/Hazards.js', import.meta.url), 'utf8');
 
 let passed = 0, failed = 0;
 const ok = (name, cond, detail = '') => {
@@ -107,11 +108,32 @@ console.log('\n=== A2. 敵人傷害曲線：後期必須真的會痛 ===');
   ok('傷害隨時間單調成長（10 / 20 / 30 分）',
     dmgAt(10) < dmgAt(20) && dmgAt(20) < dmgAt(30),
     `${dmgAt(10).toFixed(1)} → ${dmgAt(20).toFixed(1)} → ${dmgAt(30).toFixed(1)}`);
-  ok('傷害有最終封頂，不會變成必死（40 分鐘 ≤ 12 倍）',
-    dmgAt(40) <= 12.01, `40 分 ×${dmgAt(40).toFixed(2)}`);
+
+  // ── 曲線要平滑，而不是階梯 ──
+  //
+  // 玩家回報：「過了一個強度就基本不死了」。原因是舊曲線帶著**不連續**：
+  //   舊版 = min(12, min(5.5, 1+分鐘×0.14) × (1 + max(0, 分鐘-10)² × 0.010))
+  //   ① 10 分鐘處斜率從 0.14 突然跳到 0.14 + 0.2×(分鐘-10)（折線）
+  //   ② 約 24 分鐘撞到硬封頂 12 之後完全水平 —— 之後再久都不會更痛
+  // 這裡把「不能有折點、不能有硬封頂」直接寫成數值契約，避免又被調回階梯。
+  const slopes = [];
+  for (let m = 1; m <= 40; m++) slopes.push(dmgAt(m + 0.5) - dmgAt(m - 0.5));   // 每分鐘的斜率
+  let worstKink = 0;
+  let worstAt = 0;
+  for (let i = 1; i < slopes.length; i++) {
+    const rel = Math.abs(slopes[i] - slopes[i - 1]) / Math.max(1e-6, slopes[i - 1]);
+    if (rel > worstKink) { worstKink = rel; worstAt = i + 1; }
+  }
+  ok('傷害曲線處處平滑：相鄰斜率變化 < 25%（沒有折點／階梯）',
+    worstKink < 0.25, `最大斜率跳動 ${(worstKink * 100).toFixed(1)}%（第 ${worstAt} 分鐘附近）`);
+  ok('沒有硬封頂：60 分鐘仍嚴格大於 40 分鐘，40 分鐘大於 30 分鐘',
+    dmgAt(60) > dmgAt(40) && dmgAt(40) > dmgAt(30),
+    `30 分 ×${dmgAt(30).toFixed(1)} → 40 分 ×${dmgAt(40).toFixed(1)} → 60 分 ×${dmgAt(60).toFixed(1)}`);
+  ok('成長是次指數的（不會爆炸成必死）：40 分鐘 ≤ 20 分鐘的 3 倍',
+    dmgAt(40) <= dmgAt(20) * 3, `20 分 ×${dmgAt(20).toFixed(2)} → 40 分 ×${dmgAt(40).toFixed(2)}`);
   ok('20 分鐘的傷害倍率 ≥ 6.5（舊版封頂只有 3.5，後期不痛）',
     dmgAt(20) >= 6.5, `20 分 ×${dmgAt(20).toFixed(2)}`);
-  ok('30 分鐘的傷害倍率 ≥ 10（後期二次項要有感）',
+  ok('30 分鐘的傷害倍率 ≥ 10（後期要有感）',
     dmgAt(30) >= 10, `30 分 ×${dmgAt(30).toFixed(2)}`);
   ok('血量也持續成長，不會出現「血薄到秒殺」的反向失衡',
     hpAt(30) > hpAt(10) * 1.5, `10 分 ×${hpAt(10).toFixed(1)} → 30 分 ×${hpAt(30).toFixed(1)}`);
@@ -145,8 +167,73 @@ console.log('\n=== A2. 敵人傷害曲線：後期必須真的會痛 ===');
   const dps = (min) => (BASE_CONTACT * dmgAt(min)) / 0.5;
   ok('20 分鐘的單怪接觸 DPS 上限 ≥ 90（舊版約 28，後期完全無威脅）',
     dps(20) >= 90, `約 ${dps(20).toFixed(0)} DPS（舊版約 28）`);
-  ok('封頂後單下傷害 ≤ 100（有減傷與裝備的老手撐得住，站著不動的必死）',
-    BASE_CONTACT * dmgAt(60) <= 100, `40 分單下約 ${(BASE_CONTACT * dmgAt(40)).toFixed(0)} 點`);
+  ok('單下傷害仍受控（40 分鐘 ≤ 150；有減傷與裝備的老手撐得住，站著不動的必死）',
+    BASE_CONTACT * dmgAt(40) <= 150, `40 分單下約 ${(BASE_CONTACT * dmgAt(40)).toFixed(0)} 點`);
+}
+
+console.log('\n=== A2b. 屬性傷害與地形傷害：不能被無敵影格吃掉 ===');
+{
+  // 為什麼要有這一節：玩家的防禦是「多層相乘 + 上限」（護甲 ≤50%、鐵壁藥水 ×0.5、
+  // 聖域 ×(1-resist)、護盾吸收）再加上最關鍵的 **0.5 秒無敵影格**。相乘之後，
+  // 一次性傷害的通道被鎖死在「每秒最多 2 下」，於是只要生命＋回復超過那個上限，
+  // 敵人再多都殺不死玩家。屬性持續傷害（DoT）逐幀結算、完全不吃無敵影格，
+  // 是唯一能讓「站著不動」永遠有代價的通道。地形傷害同理（玩家無法用火力清掉）。
+  const lv = LEVELS.street || Object.values(LEVELS)[0];
+  const elemAt = (min) => enemyScale(min * 60, lv).elem;
+
+  ok('enemyScale 有 elem（屬性壓力）軸，且 > 0',
+    typeof elemAt(1) === 'number' && elemAt(1) > 0, `1 分 ×${elemAt(1).toFixed(2)}`);
+  ok('屬性壓力隨時間單調成長（3 / 10 / 20 / 30 分）',
+    elemAt(3) < elemAt(10) && elemAt(10) < elemAt(20) && elemAt(20) < elemAt(30),
+    `${elemAt(3).toFixed(2)} → ${elemAt(10).toFixed(2)} → ${elemAt(20).toFixed(2)} → ${elemAt(30).toFixed(2)}`);
+  {
+    const es = [];
+    for (let m = 1; m <= 40; m++) es.push(elemAt(m + 0.5) - elemAt(m - 0.5));
+    let worst = 0;
+    for (let i = 1; i < es.length; i++) {
+      const rel = Math.abs(es[i] - es[i - 1]) / Math.max(1e-6, es[i - 1]);
+      if (rel > worst) worst = rel;
+    }
+    ok('屬性壓力曲線也平滑：相鄰斜率變化 < 25%', worst < 0.25, `最大 ${(worst * 100).toFixed(1)}%`);
+  }
+
+  // 地形傷害：常數在中期就變成 0，必須隨時間成長，而且同樣平滑
+  const hz = (min) => hazardDmgScale(min * 60);
+  ok('地形傷害會隨時間成長（1 分 < 8 分 < 20 分）',
+    hz(1) < hz(8) && hz(8) < hz(20), `${hz(1).toFixed(2)} → ${hz(8).toFixed(2)} → ${hz(20).toFixed(2)}`);
+  ok('地形傷害在 8 分鐘的關卡內有明顯成長（≥ 2 倍）',
+    hz(8) >= 2, `8 分 ×${hz(8).toFixed(2)}`);
+  {
+    const hs = [];
+    for (let m = 1; m <= 40; m++) hs.push(hz(m + 0.5) - hz(m - 0.5));
+    let worst = 0;
+    for (let i = 1; i < hs.length; i++) {
+      const rel = Math.abs(hs[i] - hs[i - 1]) / Math.max(1e-6, hs[i - 1]);
+      if (rel > worst) worst = rel;
+    }
+    ok('地形傷害曲線同樣平滑：相鄰斜率變化 < 25%', worst < 0.25, `最大 ${(worst * 100).toFixed(1)}%`);
+  }
+
+  // 每一個屬性都要有「穿透護甲」與「持續傷害」——否則屬性只是換顏色
+  const badEl = Object.values(ELEMENTS).filter((e) => e.id !== 'physical')
+    .filter((e) => !(e.armorPierce > 0) || !(e.dotPct > 0 || e.dotFlat > 0) || !(e.maxStacks > 0));
+  ok('每個屬性都有護甲穿透、持續傷害與疊層上限（不是只有換顏色）',
+    badEl.length === 0, badEl.map((e) => e.id).join('、') || `${Object.keys(ELEMENTS).length - 1} 種屬性全部合格`);
+
+  // 原始碼層級：DoT 的結算路徑不得經過 takeDamage（那條會被 invulnerableTimer 擋掉）
+  const playerSrc = readFileSync(new URL('../js/entities/Player.js', import.meta.url), 'utf8');
+  const tickBody = (playerSrc.match(/function tickPlayerElements[\s\S]*?\n}/) || [''])[0];
+  ok('屬性 DoT 的逐幀結算不經過 takeDamage（否則會被 0.5 秒無敵影格吃掉）',
+    tickBody.length > 0 && !/takeDamage\s*\(/.test(tickBody) && /p\.hp\s*-=/.test(tickBody),
+    tickBody ? `${tickBody.split('\n').length} 行實作` : '找不到 tickPlayerElements');
+  ok('玩家受傷會把屬性帶進狀態（takeDamage 內有 applyElement 呼叫）',
+    /if \(el\.id !== 'physical'\) this\.applyElement\(/.test(playerSrc));
+  ok('有對策：回復泉與聖域會淨化屬性層數',
+    /clearElements\(\)/.test(hazardsSrc), 'spring / sanctuary');
+
+  // 難度軸：屬性壓力也要吃難度的 damageTakenMul（地獄的屬性傷害比標準痛）
+  ok('屬性 DoT 走 damageTakenMul（難度的受傷倍率對屬性一樣有效）',
+    /p\.damageTakenMul/.test(tickBody));
 }
 
 console.log('\n=== A3. 發射投射物的敵人（玩家要求「多一些」）===');
@@ -214,6 +301,178 @@ console.log('\n=== B. 引力異常的等級門檻 ===');
   const gated = BLESSINGS.filter((b) => b.minLevel);
   ok('所有有 minLevel 的祝福門檻都是正整數', gated.every((b) => Number.isInteger(b.minLevel) && b.minLevel > 0),
     gated.map((b) => `${b.name}=${b.minLevel}`).join('、') || '（目前只有引力異常）');
+}
+
+console.log('\n=== D. 射程 ↔ 攻擊力 ↔ 穿透（玩家要求：全武器適用 ＋ 穿透區隔） ===');
+{
+  // 「射程越短的攻擊力越強」原本只寫在霰彈槍裡，其餘武器把射程拉長是純賺；
+  // 穿透更是散在各 fire 方法裡自己讀 def.pierce、自己寫 9999。這一節把三軸定位
+  // 變成可回歸的契約：資料要宣告、規則要單調、引擎要在**同一個地方**套用。
+  const wmSrc = readFileSync(new URL('../js/weapons/WeaponManager.js', import.meta.url), 'utf8');
+  const ids = Object.keys(WEAPONS);
+
+  // D1 每一把武器都要宣告射程
+  const noRange = ids.filter((id) => WEAPONS[id].range === undefined);
+  ok(`D1 ${ids.length} 把武器都宣告了 range（射程規則才有作用對象）`,
+    noRange.length === 0, noRange.join('、') || '全部有 range');
+
+  // D2 每一把武器都要宣告穿透（或是明確的「觸及即全中」）
+  const noPierce = ids.filter((id) => WEAPONS[id].pierce === undefined && !WEAPONS[id].pierceAll);
+  ok('D2 每一把武器都宣告了 pierce 或 pierceAll（沒有靜默的 undefined）',
+    noPierce.length === 0, noPierce.join('、') || `線型 ${ids.filter((i) => WEAPONS[i].pierce !== undefined).length} 把、範圍型 ${ids.filter((i) => WEAPONS[i].pierceAll).length} 把`);
+
+  // D3 規則本體必須嚴格遞減（射程越長、倍率越低）
+  const ranges = [];
+  for (let r = 20; r <= 2000; r += 5) ranges.push(r);
+  const muls = ranges.map((r) => rangeDamageMul(r));
+  // 注意：兩端是刻意夾住的（MAX 2.2 / MIN 0.6），夾住區間內持平是預期行為，
+  // 所以「嚴格遞減」只要求在未夾住的區間成立。
+  const increasing = ranges.filter((r, i) => i > 0 && muls[i] > muls[i - 1] + 1e-9);
+  const unclamped = ranges.filter((r) => muls[ranges.indexOf(r)] < 2.199 && muls[ranges.indexOf(r)] > 0.601);
+  const notStrict = unclamped.filter((r) => {
+    const i = ranges.indexOf(r);
+    return i > 0 && !(muls[i] < muls[i - 1] - 1e-9) && ranges[i - 1] >= 20 && muls[i - 1] < 2.199;
+  });
+  ok('D3 rangeDamageMul 在未夾住的區間嚴格遞減、全區間不遞增', increasing.length === 0 && notStrict.length === 0,
+    increasing.length ? `在 ${increasing[0]}px 反而上升` : `${muls[0].toFixed(2)}（20px） → ${muls[muls.length - 1].toFixed(2)}（2000px），夾住區間 ±0`);
+
+  // D4 玩家端的動態取捨：k=1 不動、拉長要付代價、縮短要拿到好處
+  ok('D4 rangeTradeoffMul(1) = 1、拉長 1.75 倍 ≤ 0.87、縮短到 0.6 倍 ≥ 1.15',
+    Math.abs(rangeTradeoffMul(1) - 1) < 1e-9 && rangeTradeoffMul(1.75) <= 0.87 && rangeTradeoffMul(0.6) >= 1.15,
+    `k=1 → ${rangeTradeoffMul(1).toFixed(3)}、k=1.75 → ${rangeTradeoffMul(1.75).toFixed(3)}、k=0.6 → ${rangeTradeoffMul(0.6).toFixed(3)}`);
+
+  // D5 定位真的有落到資料上：短射程三分之一全部拿到加成、長射程三分之一全部付代價
+  const sorted = [...ids].sort((a, b) => {
+    const ra = Array.isArray(WEAPONS[a].range) ? WEAPONS[a].range[0] : WEAPONS[a].range;
+    const rb = Array.isArray(WEAPONS[b].range) ? WEAPONS[b].range[0] : WEAPONS[b].range;
+    return ra - rb;
+  });
+  const third = Math.max(1, Math.floor(sorted.length / 3));
+  const shortThird = sorted.slice(0, third);
+  const longThird = sorted.slice(-third);
+  const tierOf = (id) => {
+    const d = WEAPONS[id];
+    return rangeDamageMul(Array.isArray(d.range) ? d.range[0] : d.range);
+  };
+  const shortBad = shortThird.filter((id) => tierOf(id) < 1);
+  const longBad = longThird.filter((id) => tierOf(id) >= 1);
+  ok(`D5 最短射程的 ${third} 把全部拿到攻擊力加成（tier ≥ 1）`,
+    shortBad.length === 0, shortBad.map((i) => `${i}(${tierOf(i).toFixed(2)})`).join('、') || shortThird.map((i) => `${i}(${tierOf(i).toFixed(2)})`).join(' '));
+  ok(`D5b 最長射程的 ${third} 把全部付出攻擊力代價（tier < 1）`,
+    longBad.length === 0, longBad.map((i) => `${i}(${tierOf(i).toFixed(2)})`).join('、') || longThird.map((i) => `${i}(${tierOf(i).toFixed(2)})`).join(' '));
+
+  // D6 穿透區隔：線型武器的穿透值必須真的分佈開，不能全部一樣
+  const linePierce = ids.filter((id) => WEAPONS[id].pierce !== undefined)
+    .map((id) => {
+      const p = WEAPONS[id].pierce;
+      return Array.isArray(p) ? p[p.length - 1] : p;
+    });
+  const distinct = new Set(linePierce);
+  ok('D6 線型武器的穿透值至少有 4 種不同值（有區隔，不是全部一樣）',
+    distinct.size >= 4, `${distinct.size} 種：${[...distinct].sort((a, b) => a - b).join('/')}`);
+
+  // D7 穿透與射程的極值關係：最短射程的兩把線型武器必須比最長射程的兩把更不穿透
+  //
+  // 這裡刻意**不**要求「整份名單的穿透隨射程單調上升」——那不會成立，也不該成立：
+  // 爆彈槍／火箭／足球靠爆炸與彈射吃群（濺射型），穿透對它們本來就不是主要手段。
+  // 真正的契約是「兩端的差距」與「濺射型不得同時擁有高穿透」。
+  const lineSorted = sorted.filter((id) => WEAPONS[id].pierce !== undefined);
+  const pierceAt = (id) => { const p = WEAPONS[id].pierce; return Array.isArray(p) ? p[p.length - 1] : p; };
+  const shortest = lineSorted[0];
+  const longest = lineSorted[lineSorted.length - 1];
+  ok('D7 最長射程的線型武器，穿透至少是最短射程線型武器的 2 倍（兩端真的有區隔）',
+    pierceAt(longest) >= pierceAt(shortest) * 2,
+    `${shortest}(射程 ${WEAPONS[shortest].range})＝${pierceAt(shortest)} vs ${longest}(射程 ${WEAPONS[longest].range})＝${pierceAt(longest)}`);
+  // 濺射／彈射型：靠爆炸半徑或彈射次數吃群，穿透必須壓在低位（否則就是全能武器）。
+  // 風暴爆彈槍不在名單裡 —— 它是爆彈槍的**超武**，定位刻意換成「貫穿型的高穿透線武器」
+  // （射程 660、穿透 4），那正是它與基礎版爆彈槍的區隔。
+  const splash = ['bolter', 'rocket', 'shark_torpedo'].filter((id) => pierceAt(id) !== undefined);
+  const splashBad = splash.filter((id) => pierceAt(id) > 2);
+  ok('D7b 濺射型武器的穿透 ≤ 2（吃群的手段是爆炸，不是穿透）',
+    splashBad.length === 0, splashBad.map((i) => `${i}=${pierceAt(i)}`).join('、') || splash.map((i) => `${i}(${WEAPONS[i].range}px)=${pierceAt(i)}`).join(' '));
+  // 彈射型（足球／量子星雲球）：吃群靠 bounces，所以穿透必須是「撞到不消耗」，
+  // 否則第一隻敵人就把球吃掉、彈射次數形同虛設（實測：把 pierce 寫成 1 會讓 DPS 掉 46%）。
+  const bounce = ['soccer', 'quantum_sphere'];
+  const bounceBad = bounce.filter((id) => !WEAPONS[id].pierceAll || !WEAPONS[id].bounces);
+  ok('D7c 彈射型武器必須 pierceAll（撞到不消耗）且宣告 bounces',
+    bounceBad.length === 0, bounceBad.join('、') || bounce.map((id) => `${id}(bounces ${Array.isArray(WEAPONS[id].bounces) ? WEAPONS[id].bounces[0] : WEAPONS[id].bounces})`).join(' '));
+
+  // D8 引擎層級：射程取捨必須在 fireWeapon 統一結算（不是各武器自己算一份）
+  const fw = (wmSrc.match(/  fireWeapon\([\s\S]*?\n  \}/) || [''])[0];
+  ok('D8 fireWeapon 統一套用 rangeTradeoffMul（全武器適用，不是只有霰彈槍）',
+    /rangeTradeoffMul\(/.test(fw) && /weaponRangeMul\(/.test(fw),
+    `fireWeapon ${fw.split('\n').length} 行`);
+  const perWeapon = (wmSrc.match(/rangeTradeoffMul\(/g) || []).length;
+  ok('D8b 射程取捨只有一處套用（沒有武器自己再乘一次，避免重複計算）',
+    perWeapon === 1, `rangeTradeoffMul 在 WeaponManager 出現 ${perWeapon} 次`);
+
+  // D9 穿透只有一個來源：宣告值 → declaredPierce()；不得再有魔術數字 9999
+  ok('D9 穿透統一由 declaredPierce() 讀取（單一來源）',
+    /declaredPierce\(def/.test(wmSrc) && (wmSrc.match(/this\.declaredPierce\(/g) || []).length >= 8,
+    `${(wmSrc.match(/this\.declaredPierce\(/g) || []).length} 處呼叫`);
+  // 比對前先去掉註解 —— 註解裡提到「先前寫 9999」不該讓契約變紅
+  const wmCode = wmSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\/\/.*$/gm, '');
+  ok('D9b WeaponManager 的程式碼不再有魔術數字 9999（改用 PIERCE_ALL 常數）',
+    !/9999/.test(wmCode), (wmCode.match(/9999/g) || []).length ? `還有 ${(wmCode.match(/9999/g) || []).length} 處` : 'PIERCE_ALL');
+}
+
+console.log('\n=== E. 生成率曲線：怪潮牆（第二個階梯） ===');
+{
+  // 第一輪把傷害公式的折點與硬封頂拿掉之後，tools/playtest.mjs 仍然在**每一張關卡**
+  // 都量到同一個結構性階梯：第 6~7 分鐘，敵人數從幾十隻衝到幾百隻。原因不在傷害，
+  // 在生成率 —— 波次表的 interval / batch 是分段常數，邊界直接跳（street 第 6 分鐘
+  // 2.22 → 6.67 隻/秒，+200%）。這一組把「生成率曲線必須平滑」寫成契約。
+  const levels = LEVEL_ORDER.map((id) => LEVELS[id]).filter((lv) => lv && !lv.td && lv.waves);
+  const effRate = (lv, t) => spawnRate(lv, t) / (1 + (OPENING.sparse - 1) * openingFactor(t));
+
+  // E1 名目率的相鄰波次不得跳超過 1.5 倍（資料層的階梯）
+  const bigSteps = [];
+  for (const lv of levels) {
+    const rates = lv.waves.map((w) => (w.batch || 1) / w.interval);
+    for (let i = 1; i < rates.length; i++) {
+      // 1.52 而不是 1.50：interval 是四捨五入到小數三位的，倍率會有一點捨入誤差
+      if (rates[i] > rates[i - 1] * 1.52) {
+        bigSteps.push(`${lv.id}#${i + 1} ${rates[i - 1].toFixed(2)}→${rates[i].toFixed(2)}（${(rates[i] / rates[i - 1]).toFixed(2)}×）`);
+      }
+    }
+  }
+  ok('E1 每個波次的生成率不超過前一波的 1.5 倍（資料層沒有階梯；容許 1.5% 捨入誤差）',
+    bigSteps.length === 0, bigSteps.slice(0, 4).join('、') || `${levels.length} 關共 ${levels.reduce((a, l) => a + l.waves.length, 0)} 個波次全部合格`);
+
+  // E2 平滑後的曲線必須單調不減
+  const notMono = [];
+  for (const lv of levels) {
+    for (let t = 0; t <= 600; t += 5) {
+      if (effRate(lv, t + 5) < effRate(lv, t) - 1e-9) { notMono.push(`${lv.id}@${t}s`); break; }
+    }
+  }
+  ok('E2 生成率隨時間單調不減（不會突然變少又變多）',
+    notMono.length === 0, notMono.join('、') || '13 關全部單調');
+
+  // E3 30 秒內不得跳超過 60%（移動平均的代價：爬升前移，不能變成另一種懸崖）
+  let worstRise = 0; let worstRiseAt = '';
+  for (const lv of levels) {
+    for (let t = 0; t <= 570; t += 5) {
+      const a = effRate(lv, t); const b = effRate(lv, t + 30);
+      if (a > 0 && b / a - 1 > worstRise) { worstRise = b / a - 1; worstRiseAt = `${lv.id}@${t}s`; }
+    }
+  }
+  ok('E3 生成率在任 30 秒內增幅 ≤ 60%（沒有懸崖）',
+    worstRise <= 0.6, `最大 ${(worstRise * 100).toFixed(1)}%（${worstRiseAt}）`);
+
+  // E4 但也不能太平：後段仍然要明顯比前段兇，否則就是從「階梯」變成「沒有難度曲線」
+  const growth = levels.map((lv) => ({ id: lv.id, g: effRate(lv, 480) / effRate(lv, 120) }));
+  const flat = growth.filter((x) => !(x.g >= 3));
+  ok('E4 8 分鐘的生成率仍 ≥ 2 分鐘的 3 倍（拉平的是階梯，不是把後期沒收）',
+    flat.length === 0, flat.length ? flat.map((x) => `${x.id} ${x.g.toFixed(2)}×`).join('、')
+      : `最低 ${Math.min(...growth.map((x) => x.g)).toFixed(2)}×（${growth.sort((a, b) => a.g - b.g)[0].id}）`);
+
+  // E5 引擎層級：Spawner 必須走 spawnRate()，不能自己回頭用 wave.interval
+  const spSrc = readFileSync(new URL('../js/systems/Spawner.js', import.meta.url), 'utf8');
+  const uses = /spawnRate\(level, gameTime\)/.test(spSrc);
+  const rawUse = /let interval = wave\.interval;/.test(spSrc) && !uses;
+  ok('E5 Spawner 用 spawnRate() 取得生成率（沒有自己回頭用分段常數的 wave.interval）',
+    uses && !rawUse, uses ? '走 spawnRate()' : '找不到 spawnRate() 呼叫');
 }
 
 console.log('\n=== C. 全面引爆類炸彈（回報：威力太大） ===');

@@ -18,8 +18,9 @@ const MELEE_ENGAGE = 130;      // 離集結點這麼遠以內的怪才去打
 const MELEE_CD = 0.8;
 const MELEE_MUL = 2.4;         // 一刀 = 基礎傷害 × 這個倍率。近戰只能打到身邊，比原本 250 射程的雷射槍接敵時間短，單發要重一點
 const ATTACK_ANIM = 0.45;
+const UNIT_IMAGE_KEYS = ['unit_footman_1', 'unit_footman_2', 'unit_footman_3', 'unit_knight'];
 if (typeof Image !== 'undefined') {
-  for (const k of ['unit_footman_1', 'unit_footman_2', 'unit_footman_3', 'unit_knight']) {
+  for (const k of UNIT_IMAGE_KEYS) {
     const img = new Image();
     img.src = `assets/td/${k}.png`;
     UNIT_IMAGES[k] = img;

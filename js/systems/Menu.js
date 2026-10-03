@@ -9,6 +9,7 @@
 
 import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
 import { DIFFICULTIES, LEVELS, getDailyChallenge } from '../levels.js';
+import { whenSpritesReady } from '../sprites.js';
 import { MODES, MODE_ORDER, getMode } from '../modes.js';
 import { RUN_CARDS, RUN_CARD_ORDER } from '../runcards.js';
 import { MAX_BOOSTER_STACK, MAX_STASH_CAP, SHOP_BOOSTERS, SHOP_CRATES, STASH_EXPANSION_STEP, stashExpandCost, shopItemLevel } from '../shop.js';
@@ -211,14 +212,16 @@ export function bindEvents(game) {
     });
   }
 
-  // 開始遊戲按鈕
-  document.getElementById('btn-start-game').addEventListener('click', () => {
+  // 開始遊戲按鈕：先確定「這一場會用到的貼圖」到手再開場
+  document.getElementById('btn-start-game').addEventListener('click', async () => {
+    await prepareRunSprites(game);
     game.ui.startScreen.classList.add('hidden');
     game.start();
   });
 
-  // 重新開始按鈕
-  document.getElementById('btn-restart').addEventListener('click', () => {
+  // 重新開始按鈕（貼圖通常已經在了，走同一條路以免有例外狀況）
+  document.getElementById('btn-restart').addEventListener('click', async () => {
+    await prepareRunSprites(game);
     game.ui.gameOverModal.classList.add('hidden');
     game.start();
   });
@@ -714,8 +717,60 @@ export function startDailyChallenge(game) {
   game.dailyConfig = getDailyChallenge();
   game.modeId = 'survivor';
   game.mode = getMode('survivor');
-  game.ui.startScreen.classList.add('hidden');
-  game.start(true);
+  prepareRunSprites(game).then(() => {
+    game.ui.startScreen.classList.add('hidden');
+    game.start(true);
+  });
+}
+
+// ── 進場前把「這一場真的會用到的貼圖」準備好 ──
+//
+// 為什麼要這一步：貼圖還沒到時 `getSprite()` 會**靜默**退回 BUILDERS 字面值裡的程式繪圖
+// ——那正是美術重繪前的舊圖。於是換版後（Service Worker 清空快取、重新下載幾十 MB 素材）
+// 的前一兩分鐘，整場都是舊角色，玩家看到的是「我的角色怎麼變回舊的了」。
+// 實測：把 duck.png 的請求吊住時 getSprite('duck') 是舊向量圖（w=64），
+// 貼圖到了才是重繪版（w=74）。
+//
+// 等的是「這一場會出場的角色」：玩家自己的特工 + 本關波次會生的怪 + 本關首領。
+// 上限 RUN_SPRITE_WAIT_MS，逾時照樣開場 —— 寧可先玩舊圖，也不能把玩家卡在載入。
+const RUN_SPRITE_WAIT_MS = 8000;
+
+function runSpriteKeys(game) {
+  const keys = [CHARACTERS[game.characterId]?.sprite];
+  const levels = game.modeId === 'towerDefense'
+    ? Object.values(LEVELS).filter((l) => l && /^td_/.test(l.id || ''))
+    : [LEVELS[game.modeId === 'towerDefense' ? 'td' : (game.isDaily ? game.dailyConfig?.levelKey : game.levelId)] || LEVELS.street];
+  for (const level of levels) {
+    for (const w of level.waves || []) {
+      for (const entry of w.pool || []) keys.push(Array.isArray(entry) ? entry[0] : entry);  // 生存者：[[key, 權重], …]
+      for (const g of w.groups || []) keys.push(g.type);                                    // 守塔：{ type, count, … }
+      if (w.boss && w.boss.skin) keys.push(w.boss.skin);
+    }
+    for (const b of level.bosses || []) keys.push(b.skin);
+  }
+  return [...new Set(keys.filter(Boolean))];
+}
+
+async function prepareRunSprites(game) {
+  const btn = document.getElementById('btn-start-game');
+  const keys = runSpriteKeys(game);
+  // 地表貼圖現在是一關一抓，所以在這裡就先把它叫下來：等玩家按下出擊才抓的話，
+  // 第一次 render 會先烘焙 1024² 的程序化地表磚（貴），PNG 到了又得重烘一次。
+  const levelId = game.modeId === 'towerDefense' ? null : (game.isDaily ? game.dailyConfig?.levelKey : game.levelId);
+  try { game.ground?._ensureGroundPng?.(levelId || 'street'); } catch (err) { /* 預抓失敗不影響開場 */ }
+  if (!keys.length) return;
+  const original = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = `載入角色中… 0/${keys.length}`; }
+  try {
+    const res = await whenSpritesReady(keys, RUN_SPRITE_WAIT_MS, (ready, total) => {
+      if (btn) btn.textContent = `載入角色中… ${ready}/${total}`;
+    });
+    if (res.timedOut) console.info(`[run] 貼圖等待逾時，先開場（${res.ready}/${res.total}）`);
+  } catch (err) {
+    console.warn('[run] 等待貼圖時出錯，直接開場：', err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = original; }
+  }
 }
 
 // 守塔遊戲速度 1× ↔ 2×（主迴圈依 game.tdSpeed 每幀多跑一步）

@@ -99,30 +99,28 @@ export class GroundRenderer {
     this._groundTextures = new LevelCache();
     this.entityContrast = ENTITY_CONTRAST;
 
-    // 高解析度無接縫 PNG 地表貼圖預載
+    // 高解析度無接縫 PNG 地表貼圖：**只載入真的會用到的那一關**
     this._pngImages = new Map();
     this._pngLoaded = new Map();
-    this._initGroundPngs();
   }
 
-  _initGroundPngs() {
-    const ids = [
-      'street', 'lab', 'frost', 'core', 'subway', 'swamp',
-      'storm', 'foundry', 'frostvoid', 'voidroad', 'endless', 'inkmount', 'makaimura'
-    ];
-    for (const id of ids) {
-      const img = new Image();
-      img.src = `assets/ground/ground_${id}.png`;
-      img.onload = () => {
-        this._pngLoaded.set(id, true);
-        // 若該關在載入完成前先用程序化生成了磚，載入成功後立即清除快取，下一幀切換為高解析度 PNG
-        this._groundTextures.delete(id);
-      };
-      img.onerror = () => {
-        this._pngLoaded.set(id, false);
-      };
-      this._pngImages.set(id, img);
-    }
+  // 地表貼圖改成一關一抓。
+  // 原本這裡在開場就把 12 張全部 new Image() —— 12 張各 1.4~2.3MB，合計 22.6MB，
+  // 而一場只玩得到其中一關（1.9MB）。那 20MB 白抓之外，還跟角色貼圖搶同一條 4G，
+  // 直接拉長「換版後大家看到舊角色」的時間。現在改成進關（第一次畫該關地板）才抓。
+  _ensureGroundPng(id) {
+    if (!id || this._pngImages.has(id)) return;
+    const img = new Image();
+    this._pngImages.set(id, img);
+    img.src = `assets/ground/ground_${id}.png`;
+    img.onload = () => {
+      this._pngLoaded.set(id, true);
+      // 若該關在載入完成前先用程序化生成了磚，載入成功後立即清除快取，下一幀切換為高解析度 PNG
+      this._groundTextures.delete(id);
+    };
+    img.onerror = () => {
+      this._pngLoaded.set(id, false);
+    };
   }
 
   // 清掉地表磚快取。主要給「量測冷啟動成本」與未來的換關釋放路徑用 ——
@@ -383,6 +381,7 @@ export class GroundRenderer {
     const hit = this._groundTextures.get(id);
     if (hit) return hit;
 
+    this._ensureGroundPng(id);   // 一關一抓：第一次真的要畫這關時才下載它的貼圖
     const T = 1024;           // 成品磚大小
 
     // 若有高畫質 PNG 無接縫地表貼圖且已就緒，直接採用並疊合主題環境調色
