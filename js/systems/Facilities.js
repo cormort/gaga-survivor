@@ -551,6 +551,30 @@ export function updateTurrets(game, dt) {
       if (!game.td) t.takeDamage(e.damage * dt * 1.5, e);   // 守塔關的塔不會被打壞
     }
 
+    // 角色也不能穿過設施：推到外圈，再往切線方向滑一點 ——
+    // 只推回外圈的話，正對塔心走（守塔點地移動常見）會永遠卡在塔前
+    const p = game.player;
+    if (p && !p.isDead) {
+      const dx = p.x - t.x;
+      const dy = p.y - t.y;
+      const minD = t.radius + p.radius;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < minD * minD && d2 > 0) {
+        const d = Math.sqrt(d2);
+        // 繞行方向在第一次碰到這座塔時決定、離開前不換 —— 每幀重算的話，
+        // 越過塔心那條線就會翻面，變成在塔前來回抖
+        if (p._slideTower !== t) {
+          p._slideTower = t;
+          p._slideSide = dy >= 0 ? 1 : -1;
+        }
+        const slide = (p.speed || 200) * dt;   // 滑動速度＝走路速度，才贏得過「繼續往塔心走」的拉力
+        p.x = t.x + (dx / d) * minD - (dy / d) * p._slideSide * slide;
+        p.y = t.y + (dy / d) * minD + (dx / d) * p._slideSide * slide;
+      } else if (p._slideTower === t) {
+        p._slideTower = null;
+      }
+    }
+
     if (t.isDead) {
       game.particles.createExplosion(t.x, t.y, 70);
       sound.playExplosion();
