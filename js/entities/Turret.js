@@ -18,6 +18,8 @@ const TD_SPRITE_SCALE = 0.85;   // 設定圖每格約 100px；一、二級塔原
 const TD_IMAGE_KEYS = {
   guard: ['missile', 'multishot'], arcane: ['storm', 'frost'],
   cannon: ['siege', 'flamestrike'], barracks: ['knight', 'bunker'],
+  // 主題兵營（關卡 barracksArt；tools/cut_td_barracks.py）：紅警軍營、星海兵營
+  barracks_redalert: ['knight', 'bunker'], barracks_starcraft: ['knight', 'bunker'],
 };
 if (typeof Image !== 'undefined') {
   for (const [line, branches] of Object.entries(TD_IMAGE_KEYS)) {
@@ -691,7 +693,7 @@ export class Turret {
   // 守塔塔：用設定圖裁出的貼圖（assets/td/<塔線>_<等級或專精>.png，tools/cut_td_towers.py 產生），
   // 射擊特效沿用原本的畫法。圖還沒載入時回傳 false，呼叫端退回程式繪製。
   drawTD(ctx, camera, sx, sy) {
-    const img = TD_IMAGES[`${this.tdKey}_${this.branch || this.level}`];
+    const img = TD_IMAGES[`${this.artKey || this.tdKey}_${this.branch || this.level}`];   // artKey：主題地圖的兵營外觀
     if (!img || !img.naturalWidth) return false;
     this.drawShots(ctx, camera, sx, sy);
     const w = img.naturalWidth * TD_SPRITE_SCALE;

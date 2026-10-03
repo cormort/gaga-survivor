@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v81';
+const FALLBACK_VERSION = 'gaga-v82';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -215,6 +215,16 @@ const PRECACHE = [
   './assets/td/barracks_3.png',
   './assets/td/barracks_knight.png',
   './assets/td/barracks_bunker.png',
+  './assets/td/barracks_redalert_1.png',
+  './assets/td/barracks_redalert_2.png',
+  './assets/td/barracks_redalert_3.png',
+  './assets/td/barracks_redalert_knight.png',
+  './assets/td/barracks_redalert_bunker.png',
+  './assets/td/barracks_starcraft_1.png',
+  './assets/td/barracks_starcraft_2.png',
+  './assets/td/barracks_starcraft_3.png',
+  './assets/td/barracks_starcraft_knight.png',
+  './assets/td/barracks_starcraft_bunker.png',
   './assets/td/unit_footman_1.png',
   './assets/td/unit_footman_2.png',
   './assets/td/unit_footman_3.png',

@@ -366,7 +366,10 @@ export function buildTDTower(game, socket, key) {
   t.dmgType = d.dmgType;
   t.invested = d.cost;
   if (d.type !== 'barracks') t.priority = 'first';   // 會自己挑目標的塔：預設先打走最前面的怪
-  if (d.type === 'barracks') t.maxUnits = 3;
+  if (d.type === 'barracks') {
+    t.maxUnits = 3;
+    if (game.level.barracksArt) t.artKey = game.level.barracksArt;   // 主題地圖換兵營外觀（紅警軍營、星海兵營）
+  }
   applyTDStats(t);
   socket.occupied = true;
   socket.turret = t;
