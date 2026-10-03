@@ -755,7 +755,7 @@ export const LEVELS = {
     name: '深淵無盡戰',
     sub: '極限生存',
     icon: '🌀',
-    desc: '擊敗水墨仙山的天劫雷尊後解鎖。無限波次、Boss 每 90 秒輪播降臨，撐得越久拿得越多。',
+    desc: '擊敗魔界村落的雙面魔王阿斯塔羅特後解鎖。無限波次、Boss 每 90 秒輪播降臨，撐得越久拿得越多。',
     difficulty: 13,   // 魔界村（12）插在它前面之後要再往上一階，難度才會沿 LEVEL_ORDER 嚴格遞增
     dnaMult: 6.4,
     next: null,
