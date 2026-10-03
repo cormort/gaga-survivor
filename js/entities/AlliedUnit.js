@@ -18,7 +18,8 @@ const MELEE_ENGAGE = 130;      // 離集結點這麼遠以內的怪才去打
 const MELEE_CD = 0.8;
 const MELEE_MUL = 2.4;         // 一刀 = 基礎傷害 × 這個倍率。近戰只能打到身邊，比原本 250 射程的雷射槍接敵時間短，單發要重一點
 const ATTACK_ANIM = 0.45;
-const UNIT_IMAGE_KEYS = ['unit_footman_1', 'unit_footman_2', 'unit_footman_3', 'unit_knight'];
+const UNIT_IMAGE_KEYS = ['unit_footman_1', 'unit_footman_2', 'unit_footman_3', 'unit_knight', 'unit_gi', 'unit_marine'];
+const GUN_RANGE = 120;   // 主題地圖的槍兵（盟軍大兵、陸戰隊）：在這個距離內站定開槍，仍站在路上擋怪
 if (typeof Image !== 'undefined') {
   for (const k of UNIT_IMAGE_KEYS) {
     const img = new Image();
@@ -27,9 +28,18 @@ if (typeof Image !== 'undefined') {
   }
 }
 
-// 守塔兵營派出的小兵外觀：依兵營等級（民兵→步兵→重步兵），騎士營專精換騎士
-export function tdUnitSprite(t) {
+// 守塔兵營派出的小兵外觀：依兵營等級（民兵→步兵→重步兵），騎士營專精換騎士；
+// 主題地圖（level.soldier，例：紅警的盟軍大兵）一律用那張圖（騎士營只加血）
+export function tdUnitSprite(t, level = null) {
+  if (level && level.soldier) return level.soldier;
   return t.branch === 'knight' ? 'unit_knight' : `unit_footman_${Math.min(3, t.level)}`;
+}
+
+// 小兵套用主題外觀與射程（兵營出兵、英雄援軍共用）
+export function applyTDSoldier(u, sprite, level) {
+  u.spriteKey = sprite;
+  u.melee = true;
+  u.gunRange = level && level.soldier ? GUN_RANGE : 0;
 }
 
 export class GuardsmanUnit {
@@ -91,7 +101,7 @@ export class GuardsmanUnit {
     const dx = goal.x - this.x;
     const dy = goal.y - this.y;
     const dist = Math.hypot(dx, dy);
-    const reach = target ? this.radius + target.radius + 6 : 6;
+    const reach = target ? (this.gunRange || this.radius + target.radius + 6) : 6;
     this.isMoving = dist > reach;
     if (this.isMoving) {
       const step = Math.min(dist - reach, this.speed * dt);

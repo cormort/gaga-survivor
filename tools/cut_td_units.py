@@ -1,5 +1,8 @@
 # 守塔小兵動畫：從洋紅底的 4×4 精靈設定圖切出逐格動畫、去背、以腳底對齊，輸出成遊戲用的精靈表。
 # 用法：python3 tools/cut_td_units.py  → assets/td/unit_footman_1~3.png、unit_knight.png
+#       python3 tools/cut_td_units.py <來源> <輸出鍵> [magenta|green]            → 士兵：assets/td/<鍵>.png（4×4，同上格式）
+#       python3 tools/cut_td_units.py <來源> <輸出鍵> [magenta|green] strip      → 敵人：assets/td/enemies/<鍵>.png
+#   strip：只取第 2 列「移動」4 格，腳底對齊後裁成一條橫向 4 格（守塔的怪只會走路，其他列用不到）
 #
 # 輸出格式（Turret/AlliedUnit 讀取的約定）：4 列 × 4 欄、每格 CELL_W×CELL_H，
 #   列 0 待機、1 走路、2 攻擊（第 3 格是砍中）、3 陣亡；人物面朝右，腳底中心對齊 (CELL_W/2, FOOT_Y)。
@@ -7,6 +10,8 @@
 # 來源圖兩種排法：
 #   unit_footman_2~4.jpeg：列＝動作、欄＝格數，每格 512px，沒有文字
 #   unit_footman_1.jpeg  ：欄＝動作、列＝格數，每格約 492px，上下有文字標籤、待機與走路每格畫了兩個人（取左邊那個）
+import os
+import sys
 import numpy as np
 from scipy import ndimage
 from PIL import Image
@@ -36,13 +41,17 @@ def boxes(kind):
     return out
 
 
-def cutout(img, box):
+def cutout(img, box, key='magenta'):
     x0, y0, x1, y1 = box
     a = img[y0:y1, x0:x1].astype(int)
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
-    bg = (r - g >= 40) & (b - g >= 25)            # 洋紅底與它的深色投影
-    # 邊緣洋紅暈：跟背景相鄰、還帶一點洋紅色調的像素一起去掉（JPEG 壓縮造成）
-    tint = (r - g >= 25) & (b - g >= 15)
+    if key == 'green':   # 純綠底（主體帶粉紫色的異蟲用）
+        bg = g - np.maximum(r, b) >= 60
+        tint = g - np.maximum(r, b) >= 30
+    else:
+        bg = (r - g >= 40) & (b - g >= 25)            # 洋紅底與它的深色投影
+        # 邊緣洋紅暈：跟背景相鄰、還帶一點洋紅色調的像素一起去掉（JPEG 壓縮造成）
+        tint = (r - g >= 25) & (b - g >= 15)
     near = np.zeros_like(bg)
     near[1:] |= bg[:-1]; near[:-1] |= bg[1:]; near[:, 1:] |= bg[:, :-1]; near[:, :-1] |= bg[:, 1:]
     bg |= tint & near
@@ -73,9 +82,9 @@ def anchor(im):
     return int(np.median(xs[band])), int(bottom), (xs.min(), ys.min(), xs.max(), ys.max())
 
 
-def build(name, path, kind):
+def build(name, path, kind, key='magenta'):
     img = np.array(Image.open(path).convert('RGB'))
-    frames = [[cutout(img, b) for b in row] for row in boxes(kind)]
+    frames = [[cutout(img, b, key) for b in row] for row in boxes(kind)]
     _, _, (bx0, by0, bx1, by1) = anchor(frames[0][0])
     scale = IDLE_H / (by1 - by0)
     sheet = Image.new('RGBA', (CELL_W * 4, CELL_H * 4), (0, 0, 0, 0))
@@ -95,6 +104,40 @@ def build(name, path, kind):
     print(name, 'scale', round(scale, 3))
 
 
+STRIP_SCALE = 0.35   # 敵人橫條：來源每格 512，0.35 倍已經遠大於遊戲裡的顯示尺寸（約 40~75 px 高）
+
+
+def build_strip(name, path, key, row=1):
+    img = np.array(Image.open(path).convert('RGB'))
+    frames = [cutout(img, b, key) for b in boxes('row')[row]]   # 預設第 2 列：移動
+    anchors = [anchor(im) for im in frames]
+    # 4 格腳底對齊到同一點後，取聯集外框裁成一條（同一個裁切框，動畫才不會抖）
+    W, H = 512, 512
+    canvas = [Image.new('RGBA', (W, H), (0, 0, 0, 0)) for _ in frames]
+    for c, (im, (fx, fy, _)) in enumerate(zip(frames, anchors)):
+        canvas[c].alpha_composite(im, (W // 2 - fx, H - 24 - fy))
+    boxes_ = [c.getbbox() for c in canvas]
+    x0 = min(b[0] for b in boxes_); y0 = min(b[1] for b in boxes_)
+    x1 = max(b[2] for b in boxes_); y1 = max(b[3] for b in boxes_)
+    cw, ch = round((x1 - x0) * STRIP_SCALE), round((y1 - y0) * STRIP_SCALE)
+    strip = Image.new('RGBA', (cw * 4, ch), (0, 0, 0, 0))
+    for c, cv in enumerate(canvas):
+        strip.alpha_composite(cv.crop((x0, y0, x1, y1)).resize((cw, ch), Image.LANCZOS), (c * cw, 0))
+    os.makedirs('assets/td/enemies', exist_ok=True)
+    strip.quantize(256, method=Image.Quantize.FASTOCTREE).save(f'assets/td/enemies/{name}.png', optimize=True)
+    print(name, strip.size)
+
+
 if __name__ == '__main__':
-    for name, (path, kind) in SRC.items():
-        build(name, path, kind)
+    if len(sys.argv) > 2:
+        src, name = sys.argv[1], sys.argv[2]
+        key = sys.argv[3] if len(sys.argv) > 3 else 'magenta'
+        if len(sys.argv) > 4 and sys.argv[4].startswith('strip'):
+            # strip0＝改取第 1 列待機：生成圖的走路列有時道具不一致（徵召兵只有第 1 格拿槍，其餘空手），
+            # 循環起來槍會一閃一閃；這種就用待機列，走路的上下起伏交給程式（stripBuilder 的 hop）
+            build_strip(name, src, key, 0 if sys.argv[4] == 'strip0' else 1)
+        else:
+            build(name, src, 'row', key)
+    else:
+        for name, (path, kind) in SRC.items():
+            build(name, path, kind)

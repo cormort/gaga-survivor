@@ -72,6 +72,7 @@ for (const k of objKeys(spritesSrc, 'DECOR_PNG_SPRITES')) add(`assets/decor/${k}
 for (const k of objKeys(spritesSrc, 'ZODIAC_SPRITES')) add(`assets/zodiac/${k}.png`, 'sprites.js ZODIAC_SPRITES');
 for (const k of objKeys(spritesSrc, 'BOSS_PNG_SPRITES')) add(`assets/bosses/${k}.png`, 'sprites.js BOSS_PNG_SPRITES');
 for (const k of objKeys(spritesSrc, 'MAKAIMURA_SPRITES')) add(`assets/makaimura/${k}.png`, 'sprites.js MAKAIMURA_SPRITES');
+for (const k of objKeys(spritesSrc, 'TD_ENEMY_SPRITES')) add(`assets/td/enemies/${k}.png`, 'sprites.js TD_ENEMY_SPRITES（守塔主題敵人）');
 
 const weaponSrc = read('js/weapons/WeaponArt.js');
 for (const id of objKeysBraced(weaponSrc, 'WEAPON_ART')) add(`assets/weapons/${id}.png`, 'WeaponArt.js WEAPON_ART');

@@ -435,7 +435,7 @@ function rescaleUnits(game, t, oldHpMul) {
     u.maxHp = Math.round(u.maxHp * k);
     u.hp = Math.round(u.hp * k);
     u.damageMul = t.dmgMul;
-    u.spriteKey = tdUnitSprite(t);   // 升級後換裝（民兵→步兵→重步兵→騎士）
+    u.spriteKey = tdUnitSprite(t, game.level);   // 升級後換裝（民兵→步兵→重步兵→騎士；主題地圖不變）
   }
 }
 

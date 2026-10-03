@@ -803,13 +803,23 @@ export class Enemy {
     const sprite = getSprite(this.spriteKey);
     const frame = Math.floor(this.animTimer * 1.4) % FRAMES;
     const scale = this.spriteScale || 1;
+    // 有方向的貼圖（守塔主題敵人，面朝右）：依實際移動方向左右翻轉
+    let flip = 1;
+    if (sprite.faceRight) {
+      if (this._px != null) {
+        if (this.x < this._px - 0.3) this._faceLeft = true;
+        else if (this.x > this._px + 0.3) this._faceLeft = false;
+      }
+      this._px = this.x;
+      if (this._faceLeft) flip = -1;
+    }
 
     if (scale !== 1) {
       // 巨獸詞綴：整隻放大 (自爆膨脹與詞綴倍率疊乘)
       ctx.save();
       ctx.translate(screenX, screenY);
       const swell = this.explodes && this.fuseTimer > 0 ? 1 + this.fuseTimer * 0.3 : 1;
-      ctx.scale(scale * swell, scale * swell);
+      ctx.scale(scale * swell * flip, scale * swell);
       blit(ctx, sprite, frame, 0, 0, this.flashTimer > 0);
       ctx.restore();
     } else if (this.explodes && this.fuseTimer > 0) {
@@ -817,7 +827,13 @@ export class Enemy {
       const swell = 1 + this.fuseTimer * 0.3;
       ctx.save();
       ctx.translate(screenX, screenY);
-      ctx.scale(swell, swell);
+      ctx.scale(swell * flip, swell);
+      blit(ctx, sprite, frame, 0, 0, this.flashTimer > 0);
+      ctx.restore();
+    } else if (flip < 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.scale(-1, 1);
       blit(ctx, sprite, frame, 0, 0, this.flashTimer > 0);
       ctx.restore();
     } else {

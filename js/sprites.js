@@ -7574,6 +7574,36 @@ const MAKAIMURA_SPRITES = {
   makai_woody: 66,
 };
 
+// 守塔主題敵人（紅警／星海）：tools/cut_td_units.py 的 strip 模式切出「移動」4 格橫條
+// （assets/td/enemies/<鍵>.png，面朝右）。數字＝遊戲裡的顯示高度；TD_AIR＝飛行單位（不畫地面影子）。
+// 只換外觀：關卡用 enemySkins 把既有怪種對應到這些鍵（js/tdlevels.js），數值與行為不變
+const TD_ENEMY_SPRITES = {
+  ra_conscript: 56, ra_dog: 40, ra_rhino: 52, ra_apocalypse: 66, ra_helicopter: 50,
+  sc_zergling: 42, sc_hydralisk: 62, sc_mutalisk: 54, sc_overlord: 62, sc_ultralisk: 72,
+};
+const TD_AIR = new Set(['ra_helicopter', 'sc_mutalisk', 'sc_overlord']);
+
+// 4 格橫條 → 遊戲的 FRAMES(8) 格：每格用兩次。faceRight 讓 Enemy.draw 依移動方向左右翻轉
+function stripBuilder(img, height, air) {
+  const fw = img.width / 4;
+  const w = fw * (height / img.height);
+  return {
+    w: w + 10, h: height + 12, image: true, faceRight: true,
+    fn: (x, t) => {
+      const col = Math.floor(t * 4) % 4;
+      const foot = height / 2 + 2;
+      const hop = air ? Math.sin(t * Math.PI * 2) * 2 : Math.abs(Math.sin(t * Math.PI * 4)) * 1.6;   // 飛的上下浮、走的小跳步
+      if (!air) {
+        x.fillStyle = 'rgba(0,0,0,0.28)';
+        x.beginPath();
+        x.ellipse(0, foot, w * 0.32, w * 0.08, 0, 0, Math.PI * 2);
+        x.fill();
+      }
+      x.drawImage(img, col * fw, 0, fw, img.height, -w / 2, foot - height - hop, w, height);
+    },
+  };
+}
+
 function bossImageBuilder(img, height, final = false, charging = false) {
   const h = final ? Math.round(height * 1.25) : height;
   const k = h / img.height;
@@ -7764,6 +7794,11 @@ export const imageSpritesReady = typeof Image === 'undefined' ? Promise.resolve(
         if (k.startsWith(key)) cache.delete(k);
       }
     })),
+  ...Object.entries(TD_ENEMY_SPRITES).map(([key, height]) => loadSpriteImage(
+    key, `./assets/td/enemies/${key}.png`, (img) => {
+      BUILDERS[key] = stripBuilder(img, height, TD_AIR.has(key));
+      for (const k of [...cache.keys()]) if (k === key || k.startsWith(key + ':')) cache.delete(k);
+    })),
   ...Object.entries(MAKAIMURA_SPRITES).map(([key, height]) => loadSpriteImage(
     key, `./assets/makaimura/${key}.png?v=20261002b`, (img) => {
       if (key === 'arthur') {
@@ -7821,7 +7856,7 @@ export function getSprite(key) {
     if (accent) materialize(frame, accent, sil, rim);
     frames.push(frame);
   }
-  s = { frames, flash: b.static ? frames : frames.map(whiten), w, h };
+  s = { frames, flash: b.static ? frames : frames.map(whiten), w, h, faceRight: !!b.faceRight };   // faceRight：Enemy.draw 依移動方向翻轉
   cache.set(key, s);
   return s;
 }

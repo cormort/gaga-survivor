@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v80';
+const FALLBACK_VERSION = 'gaga-v81';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -219,6 +219,18 @@ const PRECACHE = [
   './assets/td/unit_footman_2.png',
   './assets/td/unit_footman_3.png',
   './assets/td/unit_knight.png',
+  './assets/td/unit_gi.png',
+  './assets/td/unit_marine.png',
+  './assets/td/enemies/ra_conscript.png',
+  './assets/td/enemies/ra_dog.png',
+  './assets/td/enemies/ra_rhino.png',
+  './assets/td/enemies/ra_apocalypse.png',
+  './assets/td/enemies/ra_helicopter.png',
+  './assets/td/enemies/sc_zergling.png',
+  './assets/td/enemies/sc_hydralisk.png',
+  './assets/td/enemies/sc_mutalisk.png',
+  './assets/td/enemies/sc_overlord.png',
+  './assets/td/enemies/sc_ultralisk.png',
   './assets/td/lair_canyon.png',
   './assets/td/lair_swamp.png',
   './assets/td/lair_void.png',

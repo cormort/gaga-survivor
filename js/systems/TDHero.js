@@ -4,7 +4,7 @@
 //   陣亡不會結束遊戲：RESPAWN 秒後在核心旁復活
 //   Q / R 是兩招守塔技能（所有角色共用、只看冷卻不吃靈力；技能欄沿用 Skills.js）
 
-import { GuardsmanUnit } from '../entities/AlliedUnit.js';
+import { GuardsmanUnit, applyTDSoldier } from '../entities/AlliedUnit.js';
 import { sound } from '../audio.js';
 
 const RESPAWN = 8;          // 復活秒數
@@ -22,8 +22,7 @@ export const TD_SKILLS = [
         const u = new GuardsmanUnit(p.x + dx, p.y, null, game);
         u.maxHp = u.hp = Math.round(u.maxHp * (1 + 0.15 * (lv - 1)));
         u.ttl = 15;   // updateAlliedUnits 倒數，時間到就撤退（消失）
-        u.spriteKey = 'unit_footman_2';
-        u.melee = true;
+        applyTDSoldier(u, game.level.soldier || 'unit_footman_2', game.level);
         game.alliedUnits.push(u);
       }
       game.particles.createShockwave(p.x, p.y, 80, '#4d8dff');

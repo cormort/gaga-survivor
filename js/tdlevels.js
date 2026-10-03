@@ -8,6 +8,8 @@
 //   sockets          —— 建塔點：守塔關只能蓋在這裡（點擊開建造選單）。
 //                       離入口巢穴 110 以內的已拿掉：出怪點旁邊不能蓋塔（直接堵在洞口太強，也壓住巢穴圖）
 //   lair / base      —— 入口巢穴與主堡的貼圖鍵（assets/td/<鍵>.png；載入見 TowerDefense.js 的 TD_STRUCTURE_KEYS）
+//   soldier          —— 選填，兵營小兵的貼圖鍵（主題地圖的槍兵；見 AlliedUnit.js 的 tdUnitSprite）
+//   enemySkins       —— 選填，{ 原怪種: 主題外觀鍵 }，只換外觀（sprites.js 的 TD_ENEMY_SPRITES）
 //   waves            —— 手寫波次（見 wave()）：[{ hp, groups: [{ type, count, gap, path? }], boss? }]
 //   lives / startGold —— 選填，覆寫命數與開局金幣（預設見 TowerDefense.js 的 TD_LIVES / TD_START_GOLD）
 // 座標系：核心在原點；地圖範圍由各關 bounds 決定（不是生存者的 4000×4000）。
@@ -276,6 +278,12 @@ export const TD_LEVELS = {
     id: 'td_redalert',
     lair: 'lair_redalert',
     base: 'base_redalert',   // 盟軍建造廠
+    soldier: 'unit_gi',   // 兵營派盟軍大兵（槍兵）
+    // 只換外觀（數值、護甲照原怪種）：徵召兵、攻擊犬、犀牛坦克、天啟坦克、武裝直升機
+    enemySkins: {
+      walker: 'ra_conscript', runner: 'ra_conscript', sniper: 'ra_conscript', hound: 'ra_dog',
+      brute: 'ra_rhino', warden: 'ra_rhino', mortar: 'ra_rhino', chimera: 'ra_apocalypse', bat: 'ra_helicopter',
+    },
     name: '紅色警戒 ‧ 寒冬前線',
     sub: '守塔 ‧ 蘇聯裝甲',
     icon: '☭',
@@ -326,6 +334,12 @@ export const TD_LEVELS = {
     id: 'td_starcraft',
     lair: 'lair_starcraft',
     base: 'base_starcraft',
+    soldier: 'unit_marine',   // 兵營派陸戰隊（槍兵）
+    // 只換外觀：跳蟲、刺蛇、異龍、王蟲、雷獸
+    enemySkins: {
+      hormagaunt: 'sc_zergling', genestealer: 'sc_zergling', termagant: 'sc_hydralisk', sniper: 'sc_hydralisk',
+      bat: 'sc_mutalisk', spore_mine: 'sc_overlord', chimera: 'sc_ultralisk',
+    },
     name: '星海爭霸 ‧ 查爾灰燼',
     sub: '守塔 ‧ 異蟲狂潮',
     icon: '🛰️',

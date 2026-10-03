@@ -183,6 +183,8 @@ export class TowerDefense {
     scale.hp = this.hpMul();
     const [x, y] = path[0];
     const e = new Enemy(type, x + (Math.random() - 0.5) * this.half, y + (Math.random() - 0.5) * this.half, scale);
+    const skin = this.level.enemySkins && this.level.enemySkins[type];
+    if (skin) e.baseSpriteKey = skin;   // 主題地圖只換外觀（例：紅警的 brute 畫成犀牛坦克），數值與護甲照原怪種
     e.armorClass = ARMOR_CLASS[type] || 'medium';
     e.flying = e.armorClass === 'air';
     if (e.flying) path = [path[0], path[path.length - 1]];   // 飛行怪不走路線，從入口直線飛向核心
