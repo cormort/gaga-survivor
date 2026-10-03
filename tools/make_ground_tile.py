@@ -10,11 +10,15 @@ from PIL import Image
 
 SIZE = 1024
 BAND = 0.22   # 從邊界往內這個比例的範圍內漸變到原圖
+# 副本的錯位比例。不用 1/2：生成器的「2×2 重複」圖在正中央有一條拼接線，錯位半張會把那條線
+# 剛好搬到新磚的邊界上（實測墓園左右接縫混接後仍在 97%）。0.37 讓新邊界落在一般的內部位置，
+# 而副本自己的接縫（原圖的邊）落在 [BAND, 1-BAND] 之間、完全被原圖蓋住
+SHIFT = 0.37
 
 
 def tileable(a):
     h, w = a.shape[:2]
-    shifted = np.roll(a, (h // 2, w // 2), axis=(0, 1))
+    shifted = np.roll(a, (int(h * SHIFT), int(w * SHIFT)), axis=(0, 1))
     y = np.minimum(np.arange(h), h - 1 - np.arange(h)) / (h * BAND)
     x = np.minimum(np.arange(w), w - 1 - np.arange(w)) / (w * BAND)
     wt = np.clip(np.minimum.outer(y, x), 0, 1)
@@ -31,11 +35,17 @@ def seams(a):
     return np.mean(col < d(a[:, 0], a[:, -1])) * 100, np.mean(row < d(a[0], a[-1])) * 100
 
 
+def load(img):
+    a = np.array(img.resize((SIZE, SIZE), Image.LANCZOS)).astype(float)
+    # 接縫已經在正常範圍就不混：混接會在邊界帶留下淡淡的重影
+    if max(seams(a)) <= 90:
+        return '整張縮小', a, a
+    return '整張縮小＋邊界混接', a, tileable(a)
+
+
 if __name__ == '__main__':
     src, out = sys.argv[1], sys.argv[2]
-    a = np.array(Image.open(src).convert('RGB').resize((SIZE, SIZE), Image.LANCZOS)).astype(float)
-    before = seams(a)
-    t = tileable(a)
-    after = seams(t)
+    how, a, t = load(Image.open(src).convert('RGB'))
+    before, after = seams(a), seams(t)
     Image.fromarray(np.clip(t, 0, 255).astype(np.uint8)).save(out, optimize=True)
-    print(f'{out}：接縫在圖內相鄰差的百分位 左右 {before[0]:.0f}%→{after[0]:.0f}%、上下 {before[1]:.0f}%→{after[1]:.0f}%（~90% 以內看不出）')
+    print(f'{out}（{how}）：接縫在圖內相鄰差的百分位 左右 {before[0]:.0f}%→{after[0]:.0f}%、上下 {before[1]:.0f}%→{after[1]:.0f}%（~90% 以內看不出）')

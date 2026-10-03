@@ -7,4 +7,7 @@ assets/td/unit_footman_*.jpeg
 assets/td/structures_sheet.jpeg
 # 守塔素材原始生成圖（Gemini 輸出的大圖）：遊戲只用 tools/ 轉出的 PNG
 assets/td/0*.jpeg
+assets/td/ground_td_*.jpeg
+assets/td/lair_*.jpeg
+assets/td/base_*.jpeg
 assets/td/Gemini_Generated_Image_*.jpeg

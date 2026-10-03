@@ -274,7 +274,7 @@ export const TD_LEVELS = {
   td_redalert: {
     ...base('frost'),
     id: 'td_redalert',
-    lair: 'lair_void',
+    lair: 'lair_redalert',
     base: 'base_redalert',   // 盟軍建造廠
     name: '紅色警戒 ‧ 寒冬前線',
     sub: '守塔 ‧ 蘇聯裝甲',
@@ -320,12 +320,12 @@ export const TD_LEVELS = {
   },
 
   // ── 星海爭霸主題：查爾星灰燼平台（超長 S 形主路＋右側短突襲路；空中單位多）──
-  // 地面貼圖待補：assets/ground/ground_td_starcraft.png（沒有時用 core 熔岩主題）
+  // 地面貼圖：assets/ground/ground_td_starcraft.png（tools/make_ground_tile.py 轉成 1024 無縫）
   td_starcraft: {
     ...base('core'),
     id: 'td_starcraft',
-    lair: 'lair_hive',
-    base: 'base_reactor',
+    lair: 'lair_starcraft',
+    base: 'base_starcraft',
     name: '星海爭霸 ‧ 查爾灰燼',
     sub: '守塔 ‧ 異蟲狂潮',
     icon: '🛰️',
@@ -371,11 +371,11 @@ export const TD_LEVELS = {
   },
 
   // ── 魔獸爭霸主題：洛丹倫天譴之地（三路：西、北、東；食屍鬼、石像鬼、憎惡）──
-  // 地面貼圖待補：assets/ground/ground_td_warcraft.png（沒有時用 makaimura 墓園主題）
+  // 地面貼圖：assets/ground/ground_td_warcraft.png（tools/make_ground_tile.py 轉成 1024 無縫）
   td_warcraft: {
     ...base('makaimura'),
     id: 'td_warcraft',
-    lair: 'lair_swamp',
+    lair: 'lair_warcraft',
     base: 'base_keep',
     name: '魔獸爭霸 ‧ 洛丹倫天譴',
     sub: '守塔 ‧ 天譴軍團',
