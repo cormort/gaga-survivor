@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v69';
+const FALLBACK_VERSION = 'gaga-v70';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -236,6 +236,10 @@ const PRECACHE = [
   './assets/td/barracks_3.png',
   './assets/td/barracks_knight.png',
   './assets/td/barracks_bunker.png',
+  './assets/td/unit_footman_1.png',
+  './assets/td/unit_footman_2.png',
+  './assets/td/unit_footman_3.png',
+  './assets/td/unit_knight.png',
   // 道具／補給箱／金幣／磁鐵／炸彈 (DropItem.js)
   './assets/items/battery.png',
   './assets/items/chest_boss.png',
@@ -364,6 +368,7 @@ const PRECACHE = [
   './js/systems/ParticleSystem.js',
   './js/systems/Spawner.js',
   './js/systems/TowerDefense.js',
+  './js/systems/TDHero.js',
   './js/systems/Terrain.js',
   './js/systems/Texture.js',
   './js/systems/UI.js',

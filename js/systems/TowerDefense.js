@@ -14,6 +14,7 @@ import { Enemy } from '../entities/Enemy.js';
 import { enemyScale } from '../levels.js';
 import { projectToSegment } from '../tdlevels.js';
 import { sound } from '../audio.js';
+import { heroLevelUp, drawHeroTarget } from './TDHero.js';
 
 const WAVE_BONUS = (w) => 60 + w * 15;   // 清完第 w 波的獎金
 const EARLY_GOLD_PER_SEC = 4;            // 提前開戰：每剩 1 秒休息 +4 金幣
@@ -105,13 +106,19 @@ export class TowerDefense {
     }
   }
 
+  // 目前這一波雜兵的血量倍率（基礎 × 關卡 × 難度 × 波次）；英雄的隕石也拿它算傷害
+  hpMul() {
+    const w = Math.max(1, this.waveIdx);
+    const wave = this.waves[w - 1];
+    const waveHp = wave && wave.hp != null ? wave.hp : 1 + TD_HP_GROWTH * (w - 1);
+    return TD_HP * (this.level.hpScale || 1) * this.game.rules.enemyHpMul * waveHp;
+  }
+
   spawn({ type, path }) {
     const g = this.game;
     const scale = enemyScale(0, this.level, g.rules);   // 只取移速與傷害；血量下面重算
     scale.speed *= TD_SPEED;
-    const wave = this.waves[this.waveIdx - 1];
-    const waveHp = wave && wave.hp != null ? wave.hp : 1 + TD_HP_GROWTH * (this.waveIdx - 1);
-    scale.hp = TD_HP * (this.level.hpScale || 1) * g.rules.enemyHpMul * waveHp;
+    scale.hp = this.hpMul();
     const [x, y] = path[0];
     const e = new Enemy(type, x + (Math.random() - 0.5) * this.half, y + (Math.random() - 0.5) * this.half, scale);
     e.armorClass = ARMOR_CLASS[type] || 'medium';
@@ -128,7 +135,8 @@ export class TowerDefense {
     const g = this.game;
     const bonus = WAVE_BONUS(this.waveIdx);
     g.gold += bonus;
-    g.ui.say(`✅ 第 ${this.waveIdx} 波清空！+${bonus} 🪙`, '#3ddc84', 2);
+    heroLevelUp(g);
+    g.ui.say(`✅ 第 ${this.waveIdx} 波清空！+${bonus} 🪙 ‧ 英雄升到 Lv.${g.player.heroLevel}`, '#3ddc84', 2.2);
     if (this.waveIdx >= this.total) {
       // 走到這裡代表最後一波（含首領）都已擊殺或漏掉。擊殺首領會先在
       // cleanupDeadEnemies 判勝；首領漏掉但命數還在，也算守住了
@@ -266,6 +274,7 @@ export class TowerDefense {
       ctx.textBaseline = 'middle';
       ctx.fillText('🚪', gx - cam.x, gy - cam.y);
     }
+    drawHeroTarget(this.game, ctx, cam);
     // 休息時：下一波會從哪些入口來、各來幾隻（脈動紅圈＋數字）
     const info = this.nextWaveInfo();
     if (info) {

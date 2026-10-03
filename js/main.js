@@ -24,6 +24,7 @@ import { MERC } from './entities/Mercenary.js';
 import { drawSocket, drawPlacementGhost } from './entities/Turret.js';
 import './tdlevels.js';   // 守塔專屬關卡併入 LEVELS（side effect）
 import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/TowerDefense.js';
+import { heroMoveVector, updateHeroRespawn } from './systems/TDHero.js';
 
 // 守塔關的鏡頭縮放範圍：拉遠到整張圖放得進畫面；太小的螢幕最多拉到 TD_MIN_ZOOM，剩下的用拖曳平移
 const TD_MIN_ZOOM = 0.5;
@@ -1056,6 +1057,11 @@ class Game {
     this.ui.showBuildMenu(false);
     // 守塔關的手指要拿來點建塔點、拖曳地圖：關掉「按哪裡搖桿就跳到哪裡」，只留角落搖桿
     this.input.floatingJoystick = !this.td;
+    this.heroTarget = null;
+    this._heroRespawn = null;
+    this.player.heroLevel = 1;
+    this.player.heroHpMul = 1;
+    document.getElementById('joystick-zone')?.classList.toggle('hidden', !!this.td);   // 守塔：點地移動取代搖桿
     this.tdSpeed = 1;
     document.getElementById('btn-td-speed')?.classList.toggle('hidden', !this.td);
     const spLabel = document.getElementById('td-speed-label');
@@ -1663,15 +1669,19 @@ class Game {
     pr.dpr = this.dpr;
 
     // 1. 更新特工玩家
-    this.player.update(dt, this.input.vector);
+    this.player.update(dt, this.td ? heroMoveVector(this) : this.input.vector);   // 守塔：點地移動的英雄
     updateSkills(this, dt);
     tickBlessingEffects(this, dt);
     updateMerchant(this, dt);
 
-    // 檢查特工是否身亡
+    // 檢查特工是否身亡（守塔的英雄會復活，不結束遊戲）
     if (this.player.isDead) {
-      this.handleGameOver(false);
-      return;
+      if (this.td) {
+        updateHeroRespawn(this, dt);
+      } else {
+        this.handleGameOver(false);
+        return;
+      }
     }
 
     // 2. 更新相機追隨（守塔關不跟主角：整張圖固定在畫面上，只夾邊界）
@@ -1992,7 +2002,7 @@ class Game {
 
     // 5. 武器庫冷卻與攻擊 (連擊狂潮下攻速加速 35%)
     const weaponDt = this.frenzyTimer > 0 ? dt * 1.35 : dt;
-    this.weaponManager.update(weaponDt, this.enemies, this.particles);
+    if (!this.player.isDead) this.weaponManager.update(weaponDt, this.enemies, this.particles);
 
     // 6. 投射物與怪物/環境碰撞檢測
     this.checkProjectileCollisions();
@@ -3508,7 +3518,7 @@ class Game {
     this.weaponManager.drawHeldWeapons(this.ctx, renderCam, 'back');
 
     // 繪製主角特工鴨
-    this.player.draw(this.ctx, renderCam);
+    if (!(this.td && this.player.isDead)) this.player.draw(this.ctx, renderCam);   // 守塔英雄陣亡等復活時不畫
 
     // 手上的武器畫在角色之上：這是「帶了什麼武器」最直接的視覺答案
     this.weaponManager.drawHeldWeapons(this.ctx, renderCam, 'front');

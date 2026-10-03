@@ -28,6 +28,7 @@ import {
   openBuildMenu,
   closeBuildMenu,
 } from './Facilities.js';
+import { setHeroTarget } from './TDHero.js';
 import { castSkill } from './Skills.js';
 
 export function bindEvents(game) {
@@ -369,13 +370,20 @@ export function bindEvents(game) {
 
   // 守塔建築放置預覽與點擊檢查 (Canvas Pointer Events)
   const cv = game.canvas;
-  // 守塔：地圖比畫面大時（小螢幕）按住空地拖曳平移鏡頭
+  // 守塔：在空地上「點一下」＝英雄走過去；「按住拖曳」＝平移鏡頭（地圖比畫面大的小螢幕才有效果）
   let pan = null;
-  const endPan = () => { pan = null; };
-  cv.addEventListener('pointerup', endPan);
-  cv.addEventListener('pointercancel', endPan);
+  cv.addEventListener('pointerup', (e) => {
+    if (pan && !pan.moved && game.td && game.state === 'PLAYING') {
+      const w = game.screenToWorld(e.clientX, e.clientY);
+      setHeroTarget(game, w.x, w.y);
+    }
+    pan = null;
+  });
+  cv.addEventListener('pointercancel', () => { pan = null; });
   cv.addEventListener('pointermove', (e) => {
     if (pan && game.td) {
+      if (!pan.moved && Math.hypot(e.clientX - pan.x, e.clientY - pan.y) < 8) return;   // 手指微抖不算拖曳
+      pan.moved = true;
       game.camera.x = pan.cx - (e.clientX - pan.x) / game.zoom;
       game.camera.y = pan.cy - (e.clientY - pan.y) / game.zoom;
       game.clampCamera();

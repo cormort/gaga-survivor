@@ -3,7 +3,7 @@
 import { getSprite } from '../sprites.js';
 import { sound } from '../audio.js';
 import { VIEW } from '../config.js';
-import { GuardsmanUnit, LemanRussUnit } from './AlliedUnit.js';
+import { GuardsmanUnit, LemanRussUnit, tdUnitSprite } from './AlliedUnit.js';
 
 // 高解析度設施與防禦塔貼圖 (Banana 2D Game Assets)
 export const FACILITY_IMAGES = {};
@@ -545,6 +545,10 @@ export class Turret {
             // 守塔的等級／專精倍率（生存者兩者都是 1）
             u.maxHp = u.hp = Math.round(u.maxHp * (this.unitHpMul || 1));
             u.damageMul = this.dmgMul || 1;
+            if (this.tdKey && this.facilityType === 'barracks') {   // 守塔兵營：魔獸風格近戰步兵
+              u.spriteKey = tdUnitSprite(this);
+              u.melee = true;
+            }
             game.alliedUnits.push(u);
             if (!this.tdKey) {   // 守塔關兵營會一直補兵，不要每次都跳字
               game.ui.say(this.facilityType === 'barracks' ? '💂 星界軍步兵受命奔赴前線！' : '🚜 黎曼魯斯主戰戰車出廠推進！',

@@ -240,6 +240,12 @@ export class WeaponManager {
       this.player.hp = Math.min(nextMax, this.player.hp + Math.max(0, nextMax - prevMax));
       this.player.hpRegen = 1.2 * vestLevel;
     }
+    // 守塔英雄的等級血量倍率（TDHero.heroLevelUp 累乘）：放在所有加法之後，重算時不會被洗掉
+    if (this.player.heroHpMul) {
+      const prev = this.player.maxHp;
+      this.player.maxHp = Math.round(prev * this.player.heroHpMul);
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.max(0, this.player.maxHp - prev));
+    }
 
     // 模式的武器輸出倍率 (守塔模式壓低玩家自身火力，讓砲塔成為主力)
     if (this.player.modeDmgMul !== undefined) {

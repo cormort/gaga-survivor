@@ -11,6 +11,7 @@
 import { Turret, TURRET_VARIANTS, FACILITY_TYPES } from '../entities/Turret.js';
 import { Mercenary, MERC, REALM, rollMercCandidates } from '../entities/Mercenary.js';
 import { Projectile } from '../entities/Projectile.js';
+import { tdUnitSprite } from '../entities/AlliedUnit.js';
 import { sound } from '../audio.js';
 import { save } from '../save.js';
 import { enemyScale } from '../levels.js';
@@ -434,6 +435,7 @@ function rescaleUnits(game, t, oldHpMul) {
     u.maxHp = Math.round(u.maxHp * k);
     u.hp = Math.round(u.hp * k);
     u.damageMul = t.dmgMul;
+    u.spriteKey = tdUnitSprite(t);   // 升級後換裝（民兵→步兵→重步兵→騎士）
   }
 }
 
@@ -711,7 +713,17 @@ export function updateAlliedUnits(game, dt) {
   if (!game.alliedUnits) return;
   for (let i = game.alliedUnits.length - 1; i >= 0; i--) {
     const u = game.alliedUnits[i];
+    // 有逐格動畫的守塔小兵：倒下後先播 0.8 秒陣亡動畫再移除（期間不動、不擋路）
+    if (u.isDead && u.spriteKey) {
+      u.deathT = (u.deathT || 0) + dt;
+      if (u.deathT >= 0.8) game.alliedUnits.splice(i, 1);
+      continue;
+    }
     u.update(dt, game.enemies, game);
+    if (u.ttl != null && (u.ttl -= dt) <= 0) {   // 英雄「援軍」的限時步兵：時間到就撤離
+      game.alliedUnits.splice(i, 1);
+      continue;
+    }
 
     // 敵人貼近碰撞與推擠阻截（飛行怪從頭上飛過去）
     for (const e of game.enemies) {
@@ -746,10 +758,10 @@ export function updateAlliedUnits(game, dt) {
         if (game.camera) game.camera.shake = 10;
         game.ui.say('💥 黎曼魯斯坦克殉爆！為帝皇盡忠！', '#e67e22', 2.0);
       } else {
-        if (game.particles) game.particles.createExplosion(u.x, u.y, 25);
+        if (!u.spriteKey && game.particles) game.particles.createExplosion(u.x, u.y, 25);
         sound.playHurt();
       }
-      game.alliedUnits.splice(i, 1);
+      if (!u.spriteKey) game.alliedUnits.splice(i, 1);   // 有動畫的留給上面的陣亡倒數
     }
   }
 }

@@ -3,6 +3,7 @@
 
 import { enemyScale } from '../levels.js';
 import { sound } from '../audio.js';
+import { TD_SKILLS } from './TDHero.js';
 
 const KEYS = ['Q', 'R'];
 
@@ -150,7 +151,9 @@ export const SKILLS = {
   ],
 };
 
-export function skillsFor(characterId) {
+// 守塔關一律換成守塔英雄的兩招（TDHero.js），生存者照角色決定
+export function skillsFor(characterId, game = null) {
+  if (game && game.td) return TD_SKILLS;
   return SKILLS[characterId] || null;
 }
 
@@ -158,16 +161,16 @@ export function skillsFor(characterId) {
 export function castSkill(game, idx) {
   if (game.state !== 'PLAYING' || !game.player || game.player.isDead) return false;
   const p = game.player;
-  const list = skillsFor(game.characterId);
+  const list = skillsFor(game.characterId, game);
   const s = list?.[idx];
   if (!s) return false;
   p.skillCd = p.skillCd || [0, 0];
   if (p.skillCd[idx] > 0) return false;
-  if (p.mp < s.mp) {
+  if (s.mp && p.mp < s.mp) {
     game.ui.say(`靈力不足（${s.name} 需要 ${s.mp}）`, '#4d8dff', 1.2);
     return false;
   }
-  p.mp -= s.mp;
+  if (s.mp) p.mp -= s.mp;
   p.skillCd[idx] = s.cd;
   s.cast(game);
   sound.playEvoFanfare();
@@ -178,7 +181,7 @@ export function castSkill(game, idx) {
 // 每幀：冷卻倒數 + 技能欄 HUD
 export function updateSkills(game, dt) {
   const p = game.player;
-  const list = skillsFor(game.characterId);
+  const list = skillsFor(game.characterId, game);
   const bar = document.getElementById('skill-bar');
   if (!bar) return;
   if (!list || !p) {
@@ -187,13 +190,14 @@ export function updateSkills(game, dt) {
   }
   p.skillCd = p.skillCd || [0, 0];
   for (let i = 0; i < p.skillCd.length; i++) if (p.skillCd[i] > 0) p.skillCd[i] = Math.max(0, p.skillCd[i] - dt);
-  if (bar.dataset.char !== game.characterId) {
-    bar.dataset.char = game.characterId;
+  const barKey = game.td ? 'td' : game.characterId;   // 同一角色在守塔／生存者之間切換也要重建技能欄
+  if (bar.dataset.char !== barKey) {
+    bar.dataset.char = barKey;
     bar.innerHTML = list.map((s, i) => `
-      <button class="skill-slot" data-skill="${i}" title="【${s.name}】${s.desc}（靈力 ${s.mp}，冷卻 ${s.cd} 秒，按 ${KEYS[i]}）">
+      <button class="skill-slot" data-skill="${i}" title="【${s.name}】${s.desc}（${s.mp ? `靈力 ${s.mp}，` : ''}冷卻 ${s.cd} 秒，按 ${KEYS[i]}）">
         <span class="skill-icon">${s.icon}</span>
         <span class="skill-key">${KEYS[i]}</span>
-        <span class="skill-mp">${s.mp}</span>
+        ${s.mp ? `<span class="skill-mp">${s.mp}</span>` : ''}
         <span class="skill-cd"></span>
       </button>`).join('');
     bar.querySelectorAll('[data-skill]').forEach((b) => b.addEventListener('click', () => castSkill(game, Number(b.dataset.skill))));
@@ -201,7 +205,7 @@ export function updateSkills(game, dt) {
   bar.classList.remove('hidden');
   bar.querySelectorAll('[data-skill]').forEach((b, i) => {
     const cd = p.skillCd[i];
-    const lack = p.mp < list[i].mp;
+    const lack = !!list[i].mp && p.mp < list[i].mp;
     b.classList.toggle('no-mp', lack && cd <= 0);
     const ov = b.querySelector('.skill-cd');
     const h = cd > 0 ? `${Math.round((cd / list[i].cd) * 100)}%` : '0%';

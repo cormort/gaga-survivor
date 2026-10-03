@@ -7,6 +7,30 @@ import { VIEW } from '../config.js';
 import { Projectile } from './Projectile.js';
 import { nearestOnPaths, projectToSegment } from '../tdlevels.js';
 
+// 守塔近戰小兵的逐格動畫（tools/cut_td_units.py 產生）：4 列（待機/走路/攻擊/陣亡）× 4 格，
+// 每格 160×128、面朝右、腳底在 (80, 120)
+export const UNIT_IMAGES = {};
+const UNIT_CELL_W = 160;
+const UNIT_CELL_H = 128;
+const UNIT_FOOT_Y = 120;
+const UNIT_SCALE = 0.5;        // 待機高 96px → 世界 48px
+const MELEE_ENGAGE = 130;      // 離集結點這麼遠以內的怪才去打
+const MELEE_CD = 0.8;
+const MELEE_MUL = 2.4;         // 一刀 = 基礎傷害 × 這個倍率。近戰只能打到身邊，比原本 250 射程的雷射槍接敵時間短，單發要重一點
+const ATTACK_ANIM = 0.45;
+if (typeof Image !== 'undefined') {
+  for (const k of ['unit_footman_1', 'unit_footman_2', 'unit_footman_3', 'unit_knight']) {
+    const img = new Image();
+    img.src = `assets/td/${k}.png`;
+    UNIT_IMAGES[k] = img;
+  }
+}
+
+// 守塔兵營派出的小兵外觀：依兵營等級（民兵→步兵→重步兵），騎士營專精換騎士
+export function tdUnitSprite(t) {
+  return t.branch === 'knight' ? 'unit_knight' : `unit_footman_${Math.min(3, t.level)}`;
+}
+
 export class GuardsmanUnit {
   constructor(x, y, facility, game) {
     this.x = x;
@@ -43,8 +67,51 @@ export class GuardsmanUnit {
     }
   }
 
+  // 守塔近戰（melee）：守在路上的集結點，附近有地面怪就上前砍，打完走回集結點。
+  // 怪物撞上小兵會被推擠擋住（updateAlliedUnits），所以站在路中間就是擋路。
+  updateMelee(dt, enemies, game) {
+    if (this.bayonetTimer > 0) this.bayonetTimer -= dt;
+    if (this.attackAnim > 0) this.attackAnim -= dt;
+    // 同一座兵營的兵各自站在集結點旁一點，不然三個人疊成一個
+    if (!this.slot) this.slot = { x: (Math.random() - 0.5) * 44, y: (Math.random() - 0.5) * 30 };
+    const home = { x: this.targetWp.x + this.slot.x, y: this.targetWp.y + this.slot.y };
+    let target = null;
+    let best = Infinity;
+    for (const e of enemies) {
+      if (e.isDead || e.flying) continue;
+      if (Math.hypot(e.x - home.x, e.y - home.y) > MELEE_ENGAGE) continue;
+      const d = Math.hypot(e.x - this.x, e.y - this.y);
+      if (d < best) {
+        best = d;
+        target = e;
+      }
+    }
+    const goal = target || home;
+    const dx = goal.x - this.x;
+    const dy = goal.y - this.y;
+    const dist = Math.hypot(dx, dy);
+    const reach = target ? this.radius + target.radius + 6 : 6;
+    this.isMoving = dist > reach;
+    if (this.isMoving) {
+      const step = Math.min(dist - reach, this.speed * dt);
+      this.x += (dx / dist) * step;
+      this.y += (dy / dist) * step;
+    }
+    if (Math.abs(dx) > 1) this.facing = dx >= 0 ? 1 : -1;
+    if (target && !this.isMoving && this.bayonetTimer <= 0) {
+      this.bayonetTimer = MELEE_CD;
+      this.attackAnim = ATTACK_ANIM;
+      game.damageEnemy(target, Math.round(this.damage * MELEE_MUL * (this.damageMul || 1)), 2, this.x, this.y, 'footman');
+      sound.playHit();
+    }
+  }
+
   update(dt, enemies, game) {
     this.animTimer += dt;
+    if (this.melee) {
+      this.updateMelee(dt, enemies, game);
+      return;
+    }
     if (this.laserTimer > 0) this.laserTimer -= dt;
     if (this.shootTimer > 0) this.shootTimer -= dt;
     if (this.bayonetTimer > 0) this.bayonetTimer -= dt;
@@ -141,19 +208,45 @@ export class GuardsmanUnit {
       ctx.restore();
     }
 
-    // 繪製士兵本體
-    const sp = getSprite('guardsman');
-    if (sp) {
+    // 守塔近戰小兵：逐格動畫（陣亡 → 攻擊 → 走路 → 待機）
+    const img = this.spriteKey && UNIT_IMAGES[this.spriteKey];
+    if (img && img.naturalWidth) {
+      let row = 0;
+      let frame = Math.floor(this.animTimer * 4) % 4;
+      if (this.isDead) {
+        row = 3;
+        frame = Math.min(3, Math.floor((this.deathT || 0) / 0.2));
+      } else if (this.attackAnim > 0) {
+        row = 2;
+        frame = Math.min(3, Math.floor((1 - this.attackAnim / ATTACK_ANIM) * 4));
+      } else if (this.isMoving) {
+        row = 1;
+        frame = Math.floor(this.animTimer * 8) % 4;
+      }
+      const w = UNIT_CELL_W * UNIT_SCALE;
+      const h = UNIT_CELL_H * UNIT_SCALE;
+      const footY = sy + this.radius * 0.6;   // 腳踩在碰撞圓的下緣附近
       ctx.save();
-      ctx.translate(sx, sy);
+      ctx.translate(sx, footY);
       if (this.facing < 0) ctx.scale(-1, 1);
-      const frameIdx = Math.floor(this.animTimer * 6) % sp.frames.length;
-      ctx.drawImage(sp.frames[frameIdx], -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+      ctx.drawImage(img, frame * UNIT_CELL_W, row * UNIT_CELL_H, UNIT_CELL_W, UNIT_CELL_H,
+        -w / 2, -UNIT_FOOT_Y * UNIT_SCALE, w, h);
       ctx.restore();
+    } else {
+      // 繪製士兵本體
+      const sp = getSprite('guardsman');
+      if (sp) {
+        ctx.save();
+        ctx.translate(sx, sy);
+        if (this.facing < 0) ctx.scale(-1, 1);
+        const frameIdx = Math.floor(this.animTimer * 6) % sp.frames.length;
+        ctx.drawImage(sp.frames[frameIdx], -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+        ctx.restore();
+      }
     }
 
     // 血條
-    if (this.hp < this.maxHp) {
+    if (this.hp < this.maxHp && !this.isDead) {
       const w = 28;
       ctx.fillStyle = 'rgba(5,8,15,0.85)';
       ctx.fillRect(sx - w / 2 - 1, sy - 24, w + 2, 5);

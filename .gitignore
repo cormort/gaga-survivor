@@ -1,2 +1,5 @@
 .DS_Store
 node_modules/
+
+# 守塔小兵原始設定圖（約 9MB）：遊戲只用 tools/cut_td_units.py 切出的 PNG
+assets/td/unit_footman_*.jpeg
