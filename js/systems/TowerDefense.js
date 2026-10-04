@@ -30,7 +30,7 @@ const GROUP_STAGGER = 2.5;               // 同一波裡各群的起跑間隔 (�
 const WAYPOINT_REACH = 36;               // 走到這麼近就換下一個路徑點
 const TD_HP = 3.6;                         // 雜兵血量 = 基礎血量 × TD_HP × 關卡 hpScale × 難度 × 波數成長
 const TD_BOSS_HP = 0.45;                   // 關卡資料裡的首領血量 × 這個倍率（調難度用的總旋鈕）
-const TD_SPEED = 0.6;                     // 地圖壓到約 1600×900 後路線短了一半，怪走慢一點才有時間被火網消耗
+const TD_SPEED = 0.75;                     // v92 地圖放大 1.3 倍、路線平均長 1.25 倍（實測 1634→2050），移速同步乘回來，抵達核心的時間不變
 const TD_HP_GROWTH = 0.15;               // 波次沒寫 hp 時：每多一波 +15%（不套生存者的時間曲線、開局厚血與動態難度）
 // 怪種護甲（魔獸三式）：light / medium / heavy / air（首領一律 boss）。
 // 塔的攻擊類型 × 護甲倍率見 js/tdtowers.js 的 ARMOR_MUL。沒列到的怪種算 medium。
@@ -316,6 +316,84 @@ export class TowerDefense {
     // 王國升級（js/tdkingdom.js）：每條線目前的等級，0 = 還沒買。買了的效果見 kingdomStat()
     this.kingdom = {};
     this._heroKingdomMul = 1;   // 英雄的加成是乘在 modeDmgMul 上，要記住上次乘到哪才不會重複疊
+    this.tour = null;           // 開場鏡頭導覽的狀態（startTour；自動化測試可先設 game.tourEnabled = false）
+  }
+
+  // ── 開場鏡頭導覽（v92）────────────────────────────────────────────────────
+  // 地圖放大到一張畫面塞不下之後，「先看整張圖、再看敵人巢穴」是必要的開場資訊：
+  //   全覽 → 每個巢穴（路線起點）→ 核心，每一站停留一下下，然後把鏡頭交還玩家。
+  // 導覽期間不扣備戰倒數（見 update），點畫面或按任何鍵都會立刻跳過（見 js/systems/Menu.js）。
+  startTour() {
+    const g = this.game;
+    if (g.tourEnabled === false || this.tour) return;
+    const b = this.level.bounds;
+    const stops = [{
+      z: g.tdFitAllZoom(),
+      x: (b.minX + b.maxX) / 2,
+      y: (b.minY + b.maxY) / 2,
+      label: '🗺️ 戰場全覽：看清楚路線與敵人巢穴',
+    }];
+    // 巢穴＝路線起點（lair 關卡已由 entranceMark 挪進地圖內）。兩條線共用同一座巢穴時只停一次。
+    const nests = [];
+    for (const p of this.paths) {
+      const [x, y] = p[0];
+      if (nests.some((n) => Math.hypot(n.x - x, n.y - y) < 220)) continue;
+      nests.push({ x, y });
+    }
+    const playZ = g.tdPlayZoom();
+    nests.forEach((n, i) => stops.push({
+      z: playZ,
+      x: n.x,
+      y: n.y - 50,   // 巢穴貼圖以洞口為底往上長，鏡頭跟著往上挪一點才對得上
+      label: nests.length > 1 ? `🕳️ 敵人巢穴 ${i + 1}／${nests.length}：怪物從這裡出來` : '🕳️ 敵人巢穴：怪物從這裡出來',
+    }));
+    stops.push({ z: playZ, x: 0, y: 0, label: '🏰 守住核心！' });
+    this.tour = { stops, idx: 0, move: 0, hold: 0, from: this.tourView() };
+  }
+
+  // 導覽中的鏡頭狀態用「畫面看到的世界中心點 ＋ 縮放」表示，插值不會被 clamp 誤差累積
+  tourView() {
+    const g = this.game;
+    return { x: g.camera.x + g.vw / 2, y: g.camera.y + g.vh / 2, z: g.zoom };
+  }
+
+  tourActive() { return !!this.tour; }
+
+  // 收掉導覽（自然結束或玩家跳過）：鏡頭停在同一個世界中心，只把縮放還原成遊玩視角
+  skipTour(quiet = true) {
+    if (!this.tour) return;
+    this.tour = null;
+    const g = this.game;
+    const view = this.tourView();
+    g.setTdZoom(g.tdPlayZoom());
+    g.camera.x = view.x - g.vw / 2;
+    g.camera.y = view.y - g.vh / 2;
+    g.clampCamera();
+    if (!quiet) g.ui.say('🛠️ 點擊路邊的建塔點開始佈防（按住拖曳可平移地圖）', '#ffd166', 2.6);
+  }
+
+  updateTour(dt) {
+    const g = this.game;
+    const T = this.tour;
+    const stop = T.stops[T.idx];
+    T.move += dt;
+    const k = Math.min(1, T.move / 0.65);          // 每站之間飛 0.65 秒
+    const e = k * k * (3 - 2 * k);                 // smoothstep：起步與停下都不要有硬轉折
+    g.setTdZoom(T.from.z + (stop.z - T.from.z) * e);
+    const cx = T.from.x + (stop.x - T.from.x) * e;
+    const cy = T.from.y + (stop.y - T.from.y) * e;
+    g.camera.x = cx - g.vw / 2;
+    g.camera.y = cy - g.vh / 2;
+    g.clampCamera();
+    if (k < 1) return;
+    if (T.hold === 0 && stop.label) g.ui.say(stop.label, '#7dd3fc', 1.2);
+    T.hold += dt;
+    if (T.hold < 0.85) return;                     // 每一站停留 0.85 秒
+    T.idx++;
+    if (T.idx >= T.stops.length) { this.skipTour(false); return; }
+    T.from = this.tourView();
+    T.move = 0;
+    T.hold = 0;
   }
 
   // 王國升級目前提供的全局數值（每次買升級／要顯示時現算，不另外快取）
@@ -386,6 +464,8 @@ export class TowerDefense {
   }
 
   update(dt) {
+    // 開場鏡頭導覽還在跑：鏡頭交給導覽，備戰倒數也先不扣（導覽結束才開始算佈防時間）
+    if (this.tour) { this.updateTour(dt); return; }
     if (this.phase === 'break') {
       this.timer -= dt;
       if (this.timer <= 0) this.startWave();
@@ -446,7 +526,7 @@ export class TowerDefense {
       g.boss.y = path[0][1];
       g.boss.path = path;
       g.boss.armorClass = 'boss';
-      g.boss.speed *= TD_SPEED;   // 首領也照路線縮短的比例放慢，否則 20 秒就走完全程、必定漏掉
+      g.boss.speed *= TD_SPEED;   // 首領也吃同一條移速補償，否則路線變長後會在火網外多走一大段
       g.boss.pathIdx = 1;
       g.boss._wp = { x: path[1][0], y: path[1][1], radius: 0 };
     }

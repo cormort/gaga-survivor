@@ -105,7 +105,9 @@ export function initTDLevelBaselines(level) {
     level._defaultBounds = JSON.parse(JSON.stringify(level.bounds));
   }
   if (!level._initialSocketCount) {
-    level._initialSocketCount = (level.sockets && level.sockets.length) || 10;
+    // socketTarget 是「地圖放大後要幾個塔位」的宣告（見 js/tdlevels.js），
+    // 沒寫就沿用關卡原始 sockets 的數量 —— 生成器只認數量，座標每次都由程序排出。
+    level._initialSocketCount = level.socketTarget || (level.sockets && level.sockets.length) || 10;
   }
   if (!level._bonusPool) {
     level._bonusPool = (level.sockets || [])

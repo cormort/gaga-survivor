@@ -1,7 +1,7 @@
 // 怪物實體類別 (普通殭屍、突襲蝙蝠、生化巨漢、自爆蟲、噴吐者、衝刺獵犬、孵化胞囊、攻城巨像、Boss 暴君)
 
 import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE, ENEMY_ELEMENTS, LEVEL_ENEMY_ELEMENTS, elementOf, VIEW } from '../config.js';
-import { getSprite, blit, FRAMES } from '../sprites.js';
+import { getSprite, blit, FRAMES, firstSpriteKey } from '../sprites.js';
 
 // 狀態光暈烘焙：灼燒/中毒原本每隻每幀都重建一個徑向漸層，再填一個半徑 1.5 倍的
 // 加色大圓 —— 後期滿場中燒時這是最貴的一段 (實測 250 隻：開啟 21fps / 關閉 48fps)。
@@ -746,8 +746,16 @@ export class Enemy {
   get spriteKey() {
     if (this.explodes && this.fuseTimer > 0) return 'boomer_armed';
     if (this.isBoss) {
+      // 關卡資料給的 skin 可能是基底（boss_carnifex）；spawnBoss 會在最終首領後面接 _final，
+      // 這裡遇到衝鋒再接 _charging。但 _final／_charging 只有 PNG 首領有圖，程序繪製的首領
+      // 只有基底 key——直接回未知 key 會被 getSprite 靜默換成雜兵 walker（文字是首領、圖是雜兵）。
+      // 逐級退回真的存在的圖，再退回 'boss'（v92）。
       const base = this.skin || 'boss';
-      return this.isCharging ? base + '_charging' : base;
+      const plain = base.replace(/_final$/, '');
+      return firstSpriteKey(
+        this.isCharging ? [base + '_charging', base, plain, 'boss'] : [base, plain, 'boss'],
+        base,
+      );
     }
     // 靜態鍵在建構子就算好：原本每幀重建字串 (250 隻就是每幀 250 次串接)
     return this.baseSpriteKey;

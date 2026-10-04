@@ -117,7 +117,7 @@ python3 -m http.server 8791
 
 ### 🎯 八種戰術地基槽（`js/tdsockets.js`）
 
-建塔點不再是「位置不同的同一格」。七張關卡共 82 個建塔點，每一格都掛一種加成，
+建塔點不再是「位置不同的同一格」。七張關卡共 130 個建塔點（v92 地圖放大後由 82 提高），每一格都掛一種加成，
 滑鼠移上去、開建造選單、或點既有塔的檢查面板都會顯示**這一格會給什麼**：
 
 | 地基 | 效果 | 為什麼有這個取捨 |
@@ -185,12 +185,12 @@ python3 -m http.server 8791
 
 出擊前可選 **橫屏 16:9 / 竪屏 9:16 / 自動跟隨螢幕**，守塔地圖會**每一局重新生成**：
 
-- **地圖邊界隨視野伸縮**：橫屏沿用關卡原本的寬幅邊界（例：`td_fortress` 1600×1200），
+- **地圖邊界隨視野伸縮**：橫屏沿用關卡原本的寬幅邊界（v92 起 ×1.3，例：`td_fortress` 2080×1560），
   竪屏改成 920 寬的長條（高 1400~1680），核心固定在地圖下緣
 - **道路每局不同**：七張圖各有一支生成器（蛇谷／雙叉／三門要塞／鑄造世界／紅色警戒／星海／魔獸），
   生成後必須通過 `validatePathClearance()`（任兩條路線最近不得低於 `路寬 + 18`）才算數，最多重試 10 次
-- **地基沿路肩泊松盤分佈**：每張圖的建塔點總數固定（10~14 格），位置沿路肩隨機，
-  所以「這一局的塔位」不等於「上一局的塔位」
+- **地基沿路肩泊松盤分佈**：每張圖的建塔點總數固定（v92 起由關卡 `socketTarget` 指定，16~22 格），
+  位置沿路肩隨機，所以「這一局的塔位」不等於「上一局的塔位」
 - **七張主題路面貼圖**（`assets/td/path_*.png`）：路面改成貼圖，並烘成**離屏靜態圖層**
   （每局／每次換視野烘一次，每幀只 `drawImage` 加一條動態流向虛線）
 
@@ -286,11 +286,43 @@ python3 -m http.server 8791
 > 正好是地獄的 ×3.0。到 22.5 秒一波時壓力來自「同一段路同時更多怪」，而不是「怪更多」。
 > 這也是為什麼沒有另外給守塔一份難度表：它的關卡階梯（`tdlevels.js` 的星等與 `dnaMult`）本來就在，
 > 全域難度是玩家自己選的加壓層。
+>
+> **v92 修掉「首領的文字與圖對不上」**：`getSprite()` 對未知 key 會**靜默退回雜兵 `walker`**
+> （`js/sprites.js:7843`，同檔的註解自己寫明了這件事），而首領的 `_final` / `_charging` /
+> `_final_charging` 三個變體**只有 PNG 首領會註冊**（`BOSS_PNG_SPRITES` 的註冊迴圈），程序繪製的
+> 首領（`boss_nob` / `boss_broodlord` / `boss_carnifex`）只有基底 key。於是
+> `boss_carnifex_final`（星海最終首領「原生異蟲 ‧ 雷獸之王」）在場上與過場半身像**都是一隻 41.72×64
+> 的小殭屍**，沒有任何錯誤訊息；盤點 36 個首領 key 有 **9 個**中招（`boss_nob` / `boss_broodlord` /
+> `boss_carnifex` 的三個變體）。
+>
+> 修法是新增 `js/sprites.js` 的 `firstSpriteKey(candidates, fallback)`，由
+> `Enemy.spriteKey` 與 `BossCutscene` 的兩處 `bossKey` 依序挑**第一個真的畫得出來**的 key
+> （變體 → 去掉 `_final` 的基底 → `boss`），而不是丟給 `getSprite()` 自己猜。
+> 另外兩個同源的缺陷一起補：過場的 `getProfile()` 只認關卡資料的 `def.final`，但傳進去的
+> 是 **Enemy 實例**（最終旗標在 `isFinal`），所以守塔的最終首領掉回一般稱號
+> 【戰區強敵・二階領主】而不是【終末天罰・滅世宿敵】；`BOSS_CINEMA_PROFILES` 也少了六位守塔首領
+> （天啟坦克／蘇聯天啟巨坦／異蟲刀鋒宿主／原生異蟲 ‧ 雷獸之王／恐懼魔王 ‧ 馬爾加尼斯／
+> 巫妖王 ‧ 寒冰王座），現在都有專屬字卡稱號。
+>
+> **v92 也把守塔地圖真的放大，並在開場掃一遍戰場**：`tdlevels.js` 七關的 `bounds` 一律 ×1.3
+> （`td_canyon` 1600×960 → 2080×1250），路線中位數 1,634 → 2,050 世界單位（×1.25），
+> 建塔點由 82 提高到 **130**（新增 `socketTarget` 欄位，生成器只認數量、座標每局重排）。
+> 地圖變大不能讓「走到核心的時間」跟著變長，所以 `TD_SPEED` 由 0.6 反向調到 **0.75**
+> （它原本的註解就是「地圖壓到 1600×900 後路線短了一半，怪走慢一點才有時間被火網消耗」）。
+> 鏡頭改成「fit 寬度 × 1.15」：看得見的範圍與放大前幾乎相同（1,809×1,130 對 1,828×1,142），
+> 差別是世界變大、需要拖曳平移 —— 所以開場有一段 **4.2 秒的鏡頭導覽**：全覽 → 每個敵人巢穴
+> （`path[0]`，距離 < 220 視為同一座）→ 核心，導覽期間**備戰倒數凍結**（看完地圖才開始算），
+> 點畫面、按 Esc 或 N 隨時可跳過。
+>
+> **v92 順手修掉「蓋完塔那顆按鈕還亮著」**：`.td-build-opt` 的 `:hover` 在觸控裝置會**黏在最後
+> 點過那一列**，而選單關閉時只把 `hidden` 加上去、DOM 與 `:focus` 都留著，看起來就像還選著同一種塔。
+> 現在 `:hover` 樣式包進 `@media (hover: hover)`（`:focus-visible` 另留給鍵盤），關閉時會
+> `blur()` 掉選單內的焦點並 `replaceChildren()` 清空。
 
 ### ✅ 回歸測試（`tools/verify-td-deep.mjs`）
 
 ```bash
-node tools/verify-td-deep.mjs        # 103 項：關卡資料／道路生成器（純 Node）+ 實機（Playwright）
+node tools/verify-td-deep.mjs        # 120 項：關卡資料／道路生成器（純 Node）+ 實機（Playwright）
 ```
 
 **為什麼要單獨一支**：既有的 `verify-levels.mjs` / `verify-balance.mjs` 看不到 `td_*` 關卡 ——
@@ -337,6 +369,18 @@ node tools/verify-td-deep.mjs        # 103 項：關卡資料／道路生成器�
   （`eliteChance()` 回 0）與「機率吃難度倍率」（地獄 0.255 對標準 0.085）
 - **難度是分模式的**（v91）：守塔的地獄不會滲進生存者，兩邊各自讀自己的欄位
   （`g.diffKey` 與 `save.data.difficulty` / `tdDifficulty` 交叉比對）
+- **地圖放大與移速補償**（v92）：`bounds` 必須是 2080 寬、塔位數等於 `socketTarget` 且 > 10；
+  路線長度**開五局取中位數**（單局會抖，放大器後中位數 > 4600，放大前實測 4084），
+  再用「同一種怪、同一組關卡倍率的未補償速度」當分母驗 `TD_SPEED` 真的是 0.75
+  （比值只剩 `0.75 × 本波詞綴`，所以分母要先除掉 `waveModMul`）
+- **開場導覽**（v92）：第一站的縮放必須等於 `tdFitAllZoom()`（與遊玩視角差 > 0.05）、至少三站、
+  全覽站真的把鏡頭拉到最遠、**導覽期間備戰倒數完全不動**、鏡頭真的在移動、播完會自己收尾
+  並開始倒數，以及「跳過後縮放回到遊玩視角」——反面案例留給 `boot()` 的 `tourEnabled = false`
+  （不然點擊座標會跟著飛）
+- **蓋完塔不留焦點**（v92）：真的用 DOM `click()` 點第一列（不是直接呼叫 `buildTDTower`），
+  之後選單必須 `hidden`、`.td-build-opt` 數量 0、`document.activeElement` 不在選單內
+- **首領貼圖不再變成雜兵**（v92）：`boss_carnifex_final` 要退回 `boss_carnifex`，
+  且該 sprite 的寬度 > 2× `walker`（只驗 key 名字會漏掉「名字對、圖還是殭屍」）
 
 ---
 
@@ -1303,7 +1347,7 @@ tools/                smoke-branches.mjs (罕見分支煙霧測試，含流浪�
    | 玩家受傷 | `player.baseDamageTaken` | 同一條（英雄就是英雄） |
    | 生成密度 | `Spawner.js:140 interval /= spawnMul` | **波次佇列時間軸 `/ spawnMul`**（每波總數不變） |
    | 菁英機率 | `Spawner.js:172` 逐怪擲詞綴 | **`spawn()` 內逐怪擲詞綴**（前兩波 0、上限 45%） |
-   | 敵人移速 | `enemyScale().speed` | `TD_SPEED × scale.speed`（`TowerDefense.js:496`） |
+   | 敵人移速 | `enemyScale().speed` | `TD_SPEED × scale.speed`（`TowerDefense.js:596`，v92 起 `TD_SPEED = 0.75`） |
    | 金幣收益 | `Facilities.goldMul` | 同一條（`game.rules.goldMul`） |
 
    難度**解鎖**也是分模式的：`modes.js` 的 `difficultyLevels` 決定「前一階要全通關哪些關卡」——

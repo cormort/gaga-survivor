@@ -10,7 +10,7 @@
 // ============================================================================
 
 import { sound } from '../audio.js';
-import { getSprite } from '../sprites.js';
+import { getSprite, firstSpriteKey } from '../sprites.js';
 
 // 各關卡首領專屬設定庫 (涵蓋 11 大主線關卡、無盡模式與塔防/戰鎚首領)
 export const BOSS_CINEMA_PROFILES = {
@@ -417,6 +417,64 @@ export const BOSS_CINEMA_PROFILES = {
     bgType: 'foundry',
     eyeColor: '#00f5d4',
   },
+
+  // ── 守塔（TD）後段首領（v92 補齊）──
+  // 這 6 位原本沒有 profile，字卡只能套用通用的「戰區強敵・二階領主」，
+  // 玩家看到的稱號跟畫面上的首領對不起來。
+  '天啟坦克': {
+    title: '【鋼鐵洪流・天啟重坦】',
+    code: 'APOCALYPSE TANK // THREAT: S',
+    quote: '雙主砲已上膛——在我的履帶之下，沒有哪一道防線是輾不過去的。',
+    themeColor: '#d90429',
+    accentColor: '#ffd60a',
+    bgType: 'core',
+    eyeColor: '#ffea00',
+  },
+  '蘇聯天啟巨坦': {
+    title: '【赤色鋼鐵・末日雙砲】',
+    code: 'SOVIET APOCALYPSE // THREAT: SS',
+    quote: '祖國的鋼鐵不會停下來。你們的塔，只是我砲管上的一層鏽。',
+    themeColor: '#ff3d00',
+    accentColor: '#ffd60a',
+    bgType: 'core_fire',
+    eyeColor: '#ff2200',
+  },
+  '異蟲刀鋒宿主': {
+    title: '【蟲巢先鋒・刀鋒宿主】',
+    code: 'ZERG BLADE HOST // THREAT: A',
+    quote: '嘶——蟲群已經聞到你們的血，這座峽谷很快就會變成蟲巢。',
+    themeColor: '#9d4edd',
+    accentColor: '#80ffdb',
+    bgType: 'hive',
+    eyeColor: '#c77dff',
+  },
+  '原生異蟲 ‧ 雷獸之王': {
+    title: '【蟲群主宰・雷獸之王】',
+    code: 'PRIMAL ULTRALISK // THREAT: SSS',
+    quote: '大地在震。牠的骨刃張開了——這片灰燼，將成為蟲群的巢床。',
+    themeColor: '#8338ec',
+    accentColor: '#80ffdb',
+    bgType: 'hive_ruins',
+    eyeColor: '#ff0055',
+  },
+  '恐懼魔王 ‧ 瑪爾加尼斯': {
+    title: '【焚天劫火・恐懼魔王】',
+    code: 'DREADLORD MAL\'GANIS // THREAT: SS',
+    quote: '你們的勇氣嚐起來真甜美……我會慢慢享用這場屠殺。',
+    themeColor: '#d90429',
+    accentColor: '#ff7b00',
+    bgType: 'makaimura_hellfire',
+    eyeColor: '#ffea00',
+  },
+  '巫妖王 ‧ 寒冰王座': {
+    title: '【永凍王座・寒冰巫妖】',
+    code: 'THE LICH KING // THREAT: SSS',
+    quote: '這裡沒有勝利，只有無盡的寒冬——而你們，將會成為我的士兵。',
+    themeColor: '#4cc9f0',
+    accentColor: '#a0f0ff',
+    bgType: 'frostvoid_abyss',
+    eyeColor: '#a0f0ff',
+  },
 };
 
 // 各 Boss 名稱對應的專屬 Skin 映射
@@ -465,7 +523,13 @@ export const BOSS_NAME_TO_SKIN = {
   '劊子手甲蟲': 'boss_carnifex',
   '峽谷掠奪者': 'boss_storm',
   '沼澤雙頭蛇': 'boss_swamp',
-  '要塞攻城巨像': 'boss_foundry',
+  '要塞攻城巨像': 'boss_frostvoid',
+  '天啟坦克': 'boss_frost',
+  '蘇聯天啟巨坦': 'boss_frost',
+  '異蟲刀鋒宿主': 'boss_broodlord',
+  '原生異蟲 ‧ 雷獸之王': 'boss_carnifex',
+  '恐懼魔王 ‧ 瑪爾加尼斯': 'boss_arremer_king',
+  '巫妖王 ‧ 寒冰王座': 'boss_astaroth',
   '深淵魔煞': 'boss',
   '魔化子鼠': 'rat_evil',
   '魔化丑牛': 'ox_evil',
@@ -515,11 +579,15 @@ export function getProfile(bossName, def = {}) {
   else if (skin.includes('void')) { themeColor = '#8338ec'; bgType = 'voidroad'; }
   else if (skin.includes('ink') || skin.includes('thunder')) { themeColor = '#c9443a'; bgType = 'inkmount'; }
 
+  // def 可能是關卡資料（wave.boss，用 final）或敵人實例（Enemy，用 isFinal）——
+  // 只認 final 會讓守塔的最終首領掉回一般稱號（v92）
+  const isFinal = !!(def.final || def.isFinal);
+
   return {
     skin,
-    title: def.final ? '【終末天罰・滅世宿敵】' : '【戰區強敵・二階領主】',
+    title: isFinal ? '【終末天罰・滅世宿敵】' : '【戰區強敵・二階領主】',
     code: `CLASS-S THREAT // CONTACT DETECTED`,
-    quote: def.final ? '「特工鴨，你的戰術推演在絕對實力面前……毫無勝算！」' : '「哼……擅闖此地者，唯有死路一條！」',
+    quote: isFinal ? '「特工鴨，你的戰術推演在絕對實力面前……毫無勝算！」' : '「哼……擅闖此地者，唯有死路一條！」',
     themeColor,
     accentColor: '#ffffff',
     bgType,
@@ -837,7 +905,10 @@ export class BossCutscene {
     ctx.restore();
 
     // 遠處剪影浮現
-    const bossKey = this.boss ? (this.boss.skin || 'boss') : 'boss';
+    const bossKey = firstSpriteKey(
+      [this.boss && this.boss.skin, this.boss && this.boss.skin && this.boss.skin.replace(/_final$/, ''), 'boss'],
+      'boss',
+    );
     const spr = getSprite(bossKey);
     if (spr) {
       ctx.save();
@@ -994,7 +1065,15 @@ export class BossCutscene {
     ctx.fill();
 
     // 首領 Sprite 放大立繪 (2.4x ~ 2.8x 巨大化，並帶有呼吸起伏)
-    const bossKey = (this.boss && this.boss.skin) || (this.profile && this.profile.skin) || 'boss';
+    const bossKey = firstSpriteKey(
+      [
+        this.boss && this.boss.skin,
+        this.boss && this.boss.skin && this.boss.skin.replace(/_final$/, ''),
+        this.profile && this.profile.skin,
+        'boss',
+      ],
+      'boss',
+    );
     const spr = getSprite(bossKey);
     if (spr) {
       const breath = Math.sin(t * 6) * 4;

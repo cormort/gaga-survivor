@@ -4,7 +4,8 @@
 //   td: true         —— Spawner 改走波次狀態機（js/systems/TowerDefense.js）
 //   paths: [[x,y]…]  —— 每條路線是一串折線點，第一點是入口（貼地圖邊）、最後一點接到核心 (0,0)
 //   pathWidth        —— 路寬 (px)；怪物被夾在路內
-//   bounds           —— 地圖矩形（約 1600×900，鏡頭拉遠到整張放得進畫面）
+//   bounds           —— 地圖矩形（v92 起約 2080×1250；鏡頭預設 fit 寬度，比畫面高時靠拖曳或開場導覽平移）
+//   socketTarget     —— 選填，開局程序化生成的建塔點數量（覆寫 sockets.length；見 tdprocedural.js）
 //   sockets          —— 建塔點：守塔關只能蓋在這裡（點擊開建造選單）。
 //                       離入口巢穴 110 以內的已拿掉：出怪點旁邊不能蓋塔（直接堵在洞口太強，也壓住巢穴圖）
 //   socketPlan       —— 選填，逐格指定地基加成（順序對應 sockets；八種加成見 js/tdsockets.js）。
@@ -18,6 +19,9 @@
 //   lives / startGold —— 選填，覆寫命數與開局金幣（預設見 TowerDefense.js 的 TD_LIVES / TD_START_GOLD）
 // 座標系：核心在原點；地圖範圍由各關 bounds 決定（不是生存者的 4000×4000）。
 // 路線與建塔點由舊版 4000×4000 版圖等比壓縮後，沿路肩每 ~170px 自動排出建塔點再烘進來。
+// v92：七關 bounds 一律 ×1.3（地圖真的變大、路線平均長 1.25 倍 → TowerDefense.js 的 TD_SPEED
+//      由 0.6 提到 0.75 補償，怪物走完路線的時間與放大前相同），塔位目標數（socketTarget）
+//      也一起提高，讓單位面積的佈防密度不變。
 
 import { LEVELS } from './levels.js';
 import { SOCKET_BONUSES } from './tdsockets.js';
@@ -58,7 +62,8 @@ export const TD_LEVELS = {
     next: 'td_fork',
     td: true,
     pathWidth: 95,
-    bounds: { minX: -880, maxX: 720, minY: -830, maxY: 130 },
+    socketTarget: 16,
+    bounds: { minX: -1145, maxX: 935, minY: -1080, maxY: 170 },
     breakTime: 14,
     paths: [
       [[0, -830], [0, -555], [-780, -555], [-780, -290], [615, -290], [615, -105], [0, -105], [0, 0]],
@@ -109,7 +114,8 @@ export const TD_LEVELS = {
     next: 'td_fortress',
     td: true,
     pathWidth: 90,
-    bounds: { minX: -800, maxX: 800, minY: -570, maxY: 405 },   // 上緣多留 75：東門巢穴（約 133 高）才不會凸出地圖
+    socketTarget: 20,
+    bounds: { minX: -1040, maxX: 1040, minY: -740, maxY: 530 },   // 上緣多留 95：東門巢穴（約 133 高）才不會凸出地圖
     breakTime: 13,
     paths: [
       [[-800, -180], [-495, -180], [-495, 335], [-215, 335], [-215, 0], [0, 0]],
@@ -166,7 +172,8 @@ export const TD_LEVELS = {
     next: 'td_forgeworld',
     td: true,
     pathWidth: 85,
-    bounds: { minX: -800, maxX: 800, minY: -655, maxY: 545 },
+    socketTarget: 16,
+    bounds: { minX: -1040, maxX: 1040, minY: -850, maxY: 710 },
     breakTime: 12,
     paths: [
       [[0, -655], [0, -380], [-235, -380], [-235, -160], [0, -160], [0, 0]],
@@ -223,7 +230,8 @@ export const TD_LEVELS = {
     next: 'td_redalert',
     td: true,
     pathWidth: 95,
-    bounds: { minX: -800, maxX: 800, minY: -905, maxY: 130 },   // 上緣多留 75：兩座蟲巢（約 140 高）才不會凸出地圖
+    socketTarget: 19,
+    bounds: { minX: -1040, maxX: 1040, minY: -1175, maxY: 170 },   // 上緣多留 100：兩座蟲巢（約 140 高）才不會凸出地圖
     breakTime: 14,
     theme: {
       top: '#180e07', mid: '#100904', bottom: '#080402',
@@ -315,7 +323,8 @@ export const TD_LEVELS = {
     td: true,
     startGold: 450,
     pathWidth: 90,
-    bounds: { minX: -800, maxX: 800, minY: -660, maxY: 240 },
+    socketTarget: 18,
+    bounds: { minX: -1040, maxX: 1040, minY: -860, maxY: 310 },
     breakTime: 13,
     paths: [
       [[-800, -460], [-620, -460], [-620, -60], [-380, -60], [-380, -400], [-160, -400], [-160, -40], [0, 0]],
@@ -374,7 +383,8 @@ export const TD_LEVELS = {
     td: true,
     startGold: 480,
     pathWidth: 88,
-    bounds: { minX: -800, maxX: 800, minY: -660, maxY: 240 },
+    socketTarget: 22,
+    bounds: { minX: -1040, maxX: 1040, minY: -860, maxY: 310 },
     breakTime: 13,
     paths: [
       [[600, -660], [600, -500], [-560, -500], [-560, -300], [440, -300], [440, -120], [0, -120], [0, 0]],
@@ -427,7 +437,8 @@ export const TD_LEVELS = {
     td: true,
     startGold: 520,
     pathWidth: 85,
-    bounds: { minX: -800, maxX: 800, minY: -660, maxY: 240 },
+    socketTarget: 19,
+    bounds: { minX: -1040, maxX: 1040, minY: -860, maxY: 310 },
     breakTime: 13,
     paths: [
       [[-800, -180], [-560, -180], [-560, 120], [-260, 120], [-260, 0], [0, 0]],

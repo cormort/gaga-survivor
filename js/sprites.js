@@ -7819,6 +7819,16 @@ export function hasSprite(key) {
   return !!(m && BUILDERS[m[1]]);
 }
 
+// 依序回傳第一個「真的畫得出來」的 key，全都不存在時回最後一個候選。
+// 為什麼需要它：首領的 _final／_charging／_final_charging 變體只有 PNG 首領會註冊
+// （BOSS_PNG_SPRITES，見下方註冊迴圈），程序繪製的首領（boss_nob／boss_broodlord／
+// boss_carnifex…）只有基底 key。getSprite 對未知 key 靜默退回雜兵 walker，所以畫面會變成
+// 「字寫著泰倫劊子手暴君、圖是一隻小殭屍」而沒有任何錯誤訊息（v92 修）。
+export function firstSpriteKey(candidates, fallback = 'walker') {
+  for (const k of candidates) if (k && hasSprite(k)) return k;
+  return fallback;
+}
+
 // 這張貼圖是不是「真的圖」——也就是已經由非同步載入的 PNG 換掉了。
 // BUILDERS 的字面值裡有生肖／基礎角色的程式繪圖佔位（rat_hero 是 drawWalker、
 // dragon_hero 是 drawBrute…），所以 hasSprite() 對它們永遠是 true，分不出真假；

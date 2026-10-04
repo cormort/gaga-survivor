@@ -28,9 +28,10 @@ import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/T
 import { heroMoveVector, updateHeroRespawn, keepHeroOnRoad } from './systems/TDHero.js';
 import { COLLAPSE_FRAME } from './entities/Core.js';
 
-// 守塔關的鏡頭縮放範圍：拉遠到整張圖放得進畫面；太小的螢幕最多拉到 TD_MIN_ZOOM，剩下的用拖曳平移
+// 守塔關的鏡頭縮放範圍：fit 地圖寬度再乘上 TD_ZOOM_IN（見 tdPlayZoom）；太小的螢幕最多拉到 TD_MIN_ZOOM，剩下的用拖曳平移
 const TD_MIN_ZOOM = 0.45;
 const TD_MAX_ZOOM = 1.4;
+const TD_ZOOM_IN = 1.15;   // 視野收進來的比例：讓 2080 寬的地圖「看得到的範圍」≈ 放大前的 1600 寬地圖
 const ENEMY_NAMES = Object.fromEntries(Object.entries(ENEMY_TYPES).map(([k, v]) => [k, v.name]));   // 守塔下一波預告用
 // 頂部 HUD 佔的螢幕高度：資訊列＋任務提示＋下一波預告（實測底部約 118px）。地圖排在它下面，
 // 貼著上緣的入口（三門要塞北門）才不會被蓋住。生命改放進資訊列，就是為了不讓這塊再往下長。
@@ -589,19 +590,39 @@ class Game {
     }
   }
 
-  // 鏡頭縮放：守塔關拉遠看整張圖，其他模式 1:1。
-  // sw/sh 是螢幕邏輯像素；vw/vh 是「畫面看得到的世界寬高」(= 螢幕 ÷ 縮放)，
-  // 所有繪製、剔除、相機置中都用 vw/vh，所以縮放只要在畫布變換矩陣乘一次就好。
-  fitView() {
-    const b = this.td ? worldBounds() : null;
-    this.zoom = b
-      ? Math.max(TD_MIN_ZOOM, Math.min(TD_MAX_ZOOM, this.sw / (b.maxX - b.minX), (this.sh - TD_HUD_PAD) / (b.maxY - b.minY)))
-      : 1;
+  // 守塔的「遊玩視角」縮放：地圖寬度塞滿畫面後再放大一點點。
+  // 舊版是寬高兩軸都塞進畫面（fit 兩軸），v92 地圖放大 1.3 倍之後那樣會把整張圖壓得
+  // 更小、才剛放大的角色又縮回去；改成只 fit 寬度（地圖比畫面高時可拖曳平移），
+  // 再乘上 TD_ZOOM_IN 讓視野稍微收進來 —— 這樣「看得到的範圍」和放大前差不多，
+  // 世界本身變大 → 欄位與巢穴之間需要移動鏡頭，開場導覽才有東西可以飛。
+  tdPlayZoom() {
+    const b = worldBounds();
+    if (!b) return 1;
+    return Math.max(TD_MIN_ZOOM, Math.min(TD_MAX_ZOOM, (this.sw / (b.maxX - b.minX)) * TD_ZOOM_IN));
+  }
+
+  // 開場導覽的「全覽」用：兩軸都塞得進畫面（＝舊版的 fit 兩軸）
+  tdFitAllZoom() {
+    const b = worldBounds();
+    if (!b) return 1;
+    return Math.max(TD_MIN_ZOOM, Math.min(TD_MAX_ZOOM, this.sw / (b.maxX - b.minX), (this.sh - TD_HUD_PAD) / (b.maxY - b.minY)));
+  }
+
+  // 只改縮放（守塔導覽逐格插值用）：vw/vh 與 VIEW 是「畫面看得到的世界寬高」，必須一起重算
+  setTdZoom(z) {
+    this.zoom = Math.max(TD_MIN_ZOOM, Math.min(TD_MAX_ZOOM, z));
     this.vw = this.sw / this.zoom;
     this.vh = this.sh / this.zoom;
     VIEW.w = this.vw;
     VIEW.h = this.vh;
     this._applyCanvasSize();
+  }
+
+  // 鏡頭縮放：守塔關拉遠看整張圖，其他模式 1:1。
+  // sw/sh 是螢幕邏輯像素；vw/vh 是「畫面看得到的世界寬高」(= 螢幕 ÷ 縮放)，
+  // 所有繪製、剔除、相機置中都用 vw/vh，所以縮放只要在畫布變換矩陣乘一次就好。
+  fitView() {
+    this.setTdZoom(this.td ? this.tdPlayZoom() : 1);
     if (this.td) this.clampCamera();
   }
 
@@ -1280,6 +1301,7 @@ class Game {
     this.camera.x = this.td ? this.core.x - this.vw / 2 : 0;   // 守塔：地圖比畫面大時先對準核心
     this.camera.y = this.td ? this.core.y - this.vh / 2 : 0;
     if (this.td) this.clampCamera();
+    if (this.td) this.td.startTour();   // 開場鏡頭導覽：全覽 → 巢穴 → 核心（地圖放大後才需要）
     this.camera.shake = 0;
     this.hazards = [];
     this._mechTimers = {};       // 每種 mech 各自計時

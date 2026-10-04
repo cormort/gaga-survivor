@@ -197,11 +197,14 @@ const out = await page.evaluate(async () => {
   // 七關要全部玩得到，否則後面的煙霧測試會卡在解鎖而不是卡在程式碼。
   for (const id of TD_ORDER) save.unlock(id, 'defense');
 
-  const boot = async (level) => {
+  const boot = async (level, { tour = false } = {}) => {
     g.ui.startScreen.classList.add('hidden');
     g.triggerLevelUp = () => {};
     g.modeId = 'defense';
     g.levelId = level;
+    // 開場鏡頭導覽（全覽 → 巢穴 → 核心）會一邊飛一邊凍結備戰倒數，點擊座標也會跟著鏡頭跑；
+    // 這裡要的是可重現的定點畫面，導覽另外在 B14 單獨驗（那條會傳 tour: true）。
+    g.tourEnabled = tour;
     g.start(false);
     const t0 = Date.now();
     while (!g.td && Date.now() - t0 < 8000) await new Promise((res) => setTimeout(res, 40));
@@ -555,6 +558,10 @@ const out = await page.evaluate(async () => {
 
   await boot('td_canyon');
   const tkey = (TD_PATH_STYLES[g.levelId] || {}).texture;
+  // 先畫一帧再讀 transform：boot() 內的 _applyCanvasSize() 會把 canvas 尺寸重設、連帶把
+  // ctx 的 transform 打回 identity，這時候讀到的 a/d 是 1 而不是 zoom，換算出來的取樣點會
+  // 落在畫布外（getImageData 回 0,0,0，貼圖有沒有效看起來都一樣）。
+  g.render();
   const trn = g.ctx.getTransform();
   const midPt = g.td.paths[0][Math.floor(g.td.paths[0].length / 2)];
   const roadPx = [Math.round((midPt[0] - g.camera.x) * trn.a), Math.round((midPt[1] - g.camera.y) * trn.d)];
@@ -677,6 +684,122 @@ const out = await page.evaluate(async () => {
     await new Promise((res) => setTimeout(res, 300));
     ok('生存者模式的英雄維持原尺寸（drawScale === 1，只有守塔放大）',
       g.player.drawScale === 1, `modeId=${g.modeId} levelId=${g.levelId} drawScale=${g.player.drawScale}`);
+  }
+  // ── B14. v92：地圖放大、開場導覽、蓋塔後清掉選單焦點、首領貼圖不再變雜兵 ──
+  {
+    g.tourEnabled = false;
+    let td2 = await boot('td_canyon');
+    const b = g.level.bounds;
+    const mapW = Math.round(b.maxX - b.minX), mapH = Math.round(b.maxY - b.minY);
+    ok('守塔地圖真的變大（td_canyon 由 1600 寬放大到 2080）', mapW === 2080 && td2 === g.td, `bounds=${mapW}x${mapH}`);
+
+    const sockets = g.level.sockets || [];
+    ok('放大後塔位目標數跟著提高，而且真的排得出來',
+      g.level.socketTarget > 10 && sockets.length === g.level.socketTarget,
+      `socketTarget=${g.level.socketTarget} sockets=${sockets.length}`);
+
+    // 路線長度：路線是程序生成的，單局樣本會抖（放大前 td_canyon 實測中位數 4084），
+    // 所以這裡開五局取中位數，跟 probe-td-map.mjs 的算法一致。
+    const routeOf = (paths) => {
+      let sum = 0;
+      for (const p of paths) for (let i = 1; i < p.length; i++) sum += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+      return sum;
+    };
+    const lens = [routeOf(td2.paths)];
+    for (let i = 0; i < 4; i++) { td2 = await boot('td_canyon'); lens.push(routeOf(td2.paths)); }
+    lens.sort((a, b) => a - b);
+    const medianLen = lens[Math.floor(lens.length / 2)];
+    ok('路線跟著地圖一起變長（五局中位數，放大前實測 4084，放大後應 > 4600）', medianLen > 4600,
+      `median=${Math.round(medianLen)} min=${Math.round(lens[0])} max=${Math.round(lens[lens.length - 1])}`);
+
+    // 移速補償：地圖放大 1.3 倍、路線長 1.25 倍，怪若照原速走會多花 25% 時間才到核心。
+    const { enemyScale } = await imp('js/levels.js');
+    const { waveModMul } = await imp('js/tdwaves.js');
+    const { Enemy } = await imp('js/entities/Enemy.js');
+    const waveMods = (td2.waves[td2.waveIdx] && td2.waves[td2.waveIdx].mods) || [];
+    const mmSpeed = waveModMul(waveMods).speed;
+    const plainScale = enemyScale(0, g.level, g.rules);
+    td2.phase = 'break'; td2.timer = 0.2; td2.startWave(true);
+    await new Promise((res) => setTimeout(res, 400));
+    const walker = (g.enemies || []).find((e) => !e.isDead && e.path && !e.isBoss);
+    // 同一種怪、同一組關卡倍率的「未補償」速度當分母，比值就只剩 v92 的 TD_SPEED 與本波詞綴
+    const ref = walker ? new Enemy(walker.type, 0, 0, plainScale) : null;
+    const spdRatio = ref && ref.speed ? walker.speed / ref.speed / mmSpeed : 0;
+    ok('路線變長後移速有補償（TD_SPEED 0.75，抵達核心的時間不變）',
+      !!walker && Math.abs(spdRatio - 0.75) < 0.02,
+      `type=${walker && walker.type} speed=${walker && walker.speed.toFixed(1)} ref=${ref && ref.speed.toFixed(1)} mods=${mmSpeed} ratio=${spdRatio.toFixed(3)}`);
+
+    // 需求 1：蓋完塔之後，建造選單的按鈕不能還亮著 focus（看起來像還選著同一種塔）
+    g.gold = 999999;
+    const freeSocket = sockets.find((s) => !s.occupied);
+    fac.openBuildMenu(g, freeSocket);
+    const menuEl = document.getElementById('td-build-menu');
+    const firstOpt = menuEl.querySelector('.td-build-opt');
+    ok('建造選單打開時有塔種選項', !!firstOpt, `rows=${menuEl.querySelectorAll('.td-build-opt').length}`);
+    if (firstOpt) firstOpt.focus();
+    const beforeTurrets = g.turrets.length;
+    if (firstOpt) firstOpt.click();     // 真的用 DOM 點下去（走 UI 的 click 監聽，不是直接呼叫 buildTDTower）
+    const rowsLeft = menuEl.querySelectorAll('.td-build-opt').length;
+    ok('蓋完塔後建造選單收起且清空，不會留下看起來還被選中的按鈕',
+      menuEl.classList.contains('hidden') && rowsLeft === 0,
+      `hidden=${menuEl.classList.contains('hidden')} rows=${rowsLeft}`);
+    ok('蓋完塔後焦點不在選單按鈕上（手機的 :focus 不會黏住最後點過那列）',
+      !menuEl.contains(document.activeElement),
+      `active=${(document.activeElement && (document.activeElement.id || document.activeElement.className)) || 'body'}`);
+    ok('從選單點下去真的蓋出一座塔', g.turrets.length === beforeTurrets + 1 && freeSocket.occupied === true,
+      `turrets=${beforeTurrets}→${g.turrets.length} occupied=${freeSocket.occupied}`);
+
+    // 需求 3：程序繪製的首領（40K 三隻）只有基底 key，_final 變體以前會靜默退回雜兵 walker
+    const { firstSpriteKey, getSprite } = await imp('js/sprites.js');
+    const fakeBoss = new Enemy('boss', 0, 0);
+    fakeBoss.isBoss = true;
+    fakeBoss.skin = 'boss_carnifex_final';
+    const bossW = getSprite(fakeBoss.spriteKey).w;
+    const walkerW = getSprite('walker').w;
+    ok('首領的 _final 變體會退回程序繪製的基底貼圖（td_starcraft 最終首領不再是一隻雜兵）',
+      fakeBoss.spriteKey === 'boss_carnifex' && firstSpriteKey(['boss_nob_final_charging', 'boss_nob'], 'walker') === 'boss_nob',
+      `skin=${fakeBoss.skin} spriteKey=${fakeBoss.spriteKey}`);
+    ok('退回後的貼圖尺寸明顯不是雜兵（> 2× walker）', bossW > walkerW * 2, `boss=${Math.round(bossW)} walker=${Math.round(walkerW)}`);
+
+    // 需求 2b：開場鏡頭導覽（全覽 → 敵人巢穴 → 核心），導覽期間不倒數、可跳過
+    const td3 = await boot('td_canyon', { tour: true });
+    const playZoom = g.tdPlayZoom(), fitZoom = g.tdFitAllZoom();
+    const stop0 = td3.tour && td3.tour.stops[0];
+    ok('開場導覽會啟動，第一站是「整張圖放得進畫面」的戰場全覽',
+      !!td3.tour && !!stop0 && Math.abs(stop0.z - fitZoom) < 0.001 && fitZoom < playZoom - 0.05,
+      `tour=${!!td3.tour} stop0z=${stop0 ? stop0.z.toFixed(3) : '-'} fit=${fitZoom.toFixed(3)} play=${playZoom.toFixed(3)}`);
+    ok('導覽會走訪每個敵人巢穴與核心（至少三站）', !!td3.tour && td3.tour.stops.length >= 3,
+      `stops=${td3.tour ? td3.tour.stops.length : 0}`);
+    await new Promise((res) => setTimeout(res, 800));
+    ok('全覽站真的把鏡頭拉到最遠（看得完整張地圖）', Math.abs(g.zoom - fitZoom) < 0.02,
+      `zoom=${g.zoom.toFixed(3)} fit=${fitZoom.toFixed(3)}`);
+    const frozenTimer = td3.timer;
+    const cam0 = { x: g.camera.x, y: g.camera.y };
+    await new Promise((res) => setTimeout(res, 1100));
+    ok('導覽期間備戰倒數不會被吃掉（看完地圖再開始算）',
+      td3.timer === frozenTimer && td3.phase === 'break', `timer=${td3.timer}/${frozenTimer} phase=${td3.phase}`);
+    ok('導覽真的在移動鏡頭（全覽 → 巢穴 → 核心）',
+      !td3.tour || Math.hypot(g.camera.x - cam0.x, g.camera.y - cam0.y) > 20,
+      td3.tour ? `dx=${Math.round(g.camera.x - cam0.x)} dy=${Math.round(g.camera.y - cam0.y)}` : '導覽已結束');
+    // 快轉到最後一站，確認導覽自己會收尾（不用玩家干預）並把倒數還給玩家
+    if (td3.tour) {
+      td3.tour.idx = td3.tour.stops.length - 1;
+      td3.tour.move = 1; td3.tour.hold = 1;
+      await new Promise((res) => setTimeout(res, 400));
+      const afterTimer = td3.timer;
+      await new Promise((res) => setTimeout(res, 800));
+      ok('導覽播完會自己回到遊玩視角並開始倒數',
+        !td3.tour && Math.abs(g.zoom - playZoom) < 0.001 && td3.timer < afterTimer,
+        `tour=${!!td3.tour} zoom=${g.zoom.toFixed(3)} timer=${td3.timer.toFixed(2)} < ${afterTimer.toFixed(2)}`);
+      await new Promise((res) => setTimeout(res, 500));
+    }
+    // 玩家點一下（或按 Esc）就能跳過，而且跳過後不會再被鏡頭帶走
+    td3.startTour();
+    const hadTour = !!td3.tour;
+    td3.skipTour();
+    ok('導覽可以立即跳過（點畫面或按 Esc 就回到遊玩視角）',
+      hadTour && !td3.tour && Math.abs(g.zoom - playZoom) < 0.001, `hadTour=${hadTour} tour=${!!td3.tour} zoom=${g.zoom.toFixed(3)}`);
+    g.tourEnabled = false;
   }
   return r;
 });

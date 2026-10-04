@@ -3832,7 +3832,13 @@ body.orient-auto,
   font-size: 10px; font-weight: 800; border-radius: 4px;
   background: rgba(255, 255, 255, 0.08); color: var(--text-muted);
 }
-.td-build-opt:hover .td-opt-key, .td-build-opt:focus-visible .td-opt-key { background: var(--border-glow); color: #04121a; }
+/* hover 只在「真的有滑鼠」時生效：觸控裝置上 :hover 會黏在最後點過的那一列，
+   蓋完塔之後那顆按鈕還亮著，玩家會以為「之前選的塔種沒有被清掉」（v92 修正） */
+@media (hover: hover) {
+  .td-build-opt:hover .td-opt-key { background: var(--border-glow); color: #04121a; }
+  .td-build-opt:hover { border-color: var(--border-glow); background: var(--bg-card-hover); }
+}
+.td-build-opt:focus-visible .td-opt-key { background: var(--border-glow); color: #04121a; }
 .td-build-opt .td-opt-main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .td-build-opt .td-opt-main b { font-size: 13px; }
 .td-build-opt .td-opt-main small { color: var(--text-muted); font-size: 11px; font-weight: 500; line-height: 1.3; }
@@ -3846,7 +3852,9 @@ body.orient-auto,
 .td-tag.bad { background: rgba(255, 71, 87, 0.18); color: #ff8a95; }
 .td-build-opt .cost { color: #ffd60a; font-family: var(--font-display); flex: 0 0 auto; }
 .td-build-opt.poor { opacity: 0.45; }
-.td-build-opt:hover, .td-build-opt:focus-visible { border-color: var(--border-glow); background: var(--bg-card-hover); outline: none; }
+/* 鍵盤（Tab／數字鍵）選到時留框；滑鼠／觸控點過的那一顆不留任何「被選中」的樣子 */
+.td-build-opt:focus-visible { border-color: var(--border-glow); background: var(--bg-card-hover); outline: none; }
+.td-build-opt:focus:not(:focus-visible) { outline: none; }
 .inspect-priority { width: 100%; margin-bottom: 10px; background: rgba(0, 229, 255, 0.12); color: var(--text-main); border: 1px solid var(--border-color); }
 /* 守塔檢查面板：第 3 級後的專精二選一 */
 .inspect-branches { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }

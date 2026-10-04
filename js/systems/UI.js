@@ -1129,7 +1129,14 @@ export class UIManager {
     const el = this.buildMenu;
     if (!el) return;
     el.classList.toggle('hidden', !show);
-    if (!show) return;
+    if (!show) {
+      // 蓋完／取消之後不能留下「上一顆塔種按鈕還亮著」的狀態（v92）：
+      // 1. 焦點交還 body——被點過的那一顆會保持 :focus，看起來就像還選著；
+      // 2. 內容清空——讓下一次開啟一定是全新、沒有任何選取痕跡的一列。
+      if (document.activeElement && el.contains(document.activeElement)) document.activeElement.blur();
+      el.replaceChildren();
+      return;
+    }
 
     const sb = socketBonusOf(socket);
     const banner = document.createElement('div');
@@ -1152,7 +1159,9 @@ export class UIManager {
         + `<small class="td-desc">${it.stats ? it.desc : ''}</small>`
         + `<span class="td-tags">${tags}</span></span>`
         + `<span class="cost">${it.cost} 🪙</span>`;
-      b.addEventListener('click', () => onPick(it.type));
+      // 選完立刻放掉焦點：這一顆按鈕下一步就會被關閉選單清掉，
+      // 但 blur 讓「點過的按鈕還亮著」在任何瀏覽器都不會發生（v92）。
+      b.addEventListener('click', () => { b.blur(); onPick(it.type); });
       return b;
     });
 

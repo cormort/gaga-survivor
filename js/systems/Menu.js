@@ -341,6 +341,7 @@ export function bindEvents(game) {
 
   // 佈署戰場防禦設施 (1/2/3/4/5/6/7/B、HUD 按鈕、滑鼠點擊/右鍵取消)
   window.addEventListener('keydown', (e) => {
+    if (game.td?.tourActive()) game.td.skipTour();   // 開場導覽：按任何鍵都跳過（這一鍵本身照常生效）
     if (e.key === 'Escape') {
       if (game.buildMenuSocket) closeBuildMenu(game);
       if (game.placement) cancelPlacement(game);
@@ -411,8 +412,9 @@ export function bindEvents(game) {
     }
     if (game.state !== 'PLAYING') return;
 
-    // 右鍵取消建造
+    // 右鍵取消建造（順便收掉開場導覽：這一擊不進下面的世界座標計算）
     if (e.button === 2) {
+      if (game.td?.tourActive()) game.td.skipTour();
       if (game.placement) {
         cancelPlacement(game);
       }
@@ -428,6 +430,10 @@ export function bindEvents(game) {
 
       // 未在建造模式時：點擊檢查既有設施或空戰術地基
       const { x: wx, y: wy } = game.screenToWorld(e.clientX, e.clientY);
+      // 開場導覽：點一下就跳過，但這一擊照常處理（玩家看到什麼就點什麼，不吞掉輸入）。
+      // 必須排在 screenToWorld 之後：skipTour 會把縮放從「全覽」還原成遊玩視角，
+      // zoom 一變，同一個螢幕點對到的世界座標也跟著變，先跳過就會點到隔壁那一格。
+      if (game.td?.tourActive()) game.td.skipTour();
 
       // 守塔：點塔 → 檢查面板（升級／賣出／瞄準）；點空建塔點 → 建造選單；點空地 → 收起並開始拖曳平移
       if (game.td) {
