@@ -846,6 +846,31 @@ const out = await page.evaluate(async () => {
         && recModal.classList.contains('hidden'),
       `turrets=${g.turrets.length} occupied=${recSocket.occupied} gold=${goldArmed}→${g.gold} modalHidden=${recModal.classList.contains('hidden')}`);
   }
+  // ── B16. 守塔不開戰術撤離井（v94）──
+  // 那口井是生存者「帶著戰利品提前離場」的機制（pendingGear 全部入庫＋DNA／金幣＋清場），
+  // 守塔沒有待回收裝備也不能離開戰場，擺一口井只會讓玩家白跑。gameTime 直接設進開啟窗口，
+  // 不必真的等 2:30；重點是同一段窗在生存者要開得出來（正面對照），否則就是功能壞掉。
+  {
+    const wellTd = await boot('td_canyon');
+    g.gameTime = 152;                       // 150~155 是井的第一個開啟窗口
+    await new Promise((res) => setTimeout(res, 300));
+    ok('守塔模式不會開戰術撤離井（時間到了也不開）',
+      g.extractionWell === null && !!wellTd && g.gameTime >= 150,
+      `modeId=${g.modeId} gameTime=${g.gameTime.toFixed(1)} well=${g.extractionWell}`);
+
+    const { LEVEL_ORDER } = await imp('js/levels.js');
+    g.modeId = 'survivor';
+    g.td = null;
+    g.levelId = LEVEL_ORDER[0];
+    g.start(false);
+    await new Promise((res) => setTimeout(res, 200));
+    g.gameTime = 152;
+    await new Promise((res) => setTimeout(res, 300));
+    ok('同一時間窗在生存者仍會開出撤離井（證明是分模式，不是功能壞掉）',
+      !!g.extractionWell && g.extractionWell.active === true,
+      `modeId=${g.modeId} gameTime=${g.gameTime.toFixed(1)} well=${g.extractionWell ? `r=${g.extractionWell.radius} life=${g.extractionWell.life.toFixed(1)}` : 'null'}`);
+    g.extractionWell = null;                // 收乾淨，免得影響後面的視窗大小測試
+  }
   return r;
 });
 

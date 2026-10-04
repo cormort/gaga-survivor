@@ -2161,7 +2161,10 @@ class Game {
     }
 
     // 4.8 撤離井刷新與倒數 (生成位置 clamp 在世界邊界內，避免貼牆時開在界外)
-    if (!this.extractionWell && ((this.gameTime >= 150 && this.gameTime < 155) || (this.gameTime >= 330 && this.gameTime < 335))) {
+    // 守塔模式不開這口井（v94）：它是生存者的「帶著戰利品提前離場」機制（把 pendingGear 全部
+    // 安全入庫、給 180 DNA／150 金幣、再半徑 500 清場），但守塔沒有待回收裝備、也沒有離開戰場
+    // 這回事，擺一口井只會讓玩家白跑一趟。兩個條件都掛上 !this.td，井就不會在守塔誕生。
+    if (!this.td && !this.extractionWell && ((this.gameTime >= 150 && this.gameTime < 155) || (this.gameTime >= 330 && this.gameTime < 335))) {
       const ang = Math.random() * Math.PI * 2;
       const d = 360 + Math.random() * 120;
       const b = worldBounds();
@@ -2178,7 +2181,7 @@ class Game {
       this.ui.say('🚨 戰術撤離井已開啟！前往光環完成撤離獲取巨額獎勵！', '#00e5ff', 4.5);
     }
 
-    if (this.extractionWell && this.extractionWell.active) {
+    if (!this.td && this.extractionWell && this.extractionWell.active) {
       this.extractionWell.life -= dt;
       if (this.extractionWell.life <= 0) {
         // 錯過窗口：關閉並清掉，下一窗口才能再開
