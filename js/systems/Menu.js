@@ -612,6 +612,36 @@ export function refreshLevelSelect(game) {
     }
     renderRunCardDesc(card.value);
   }
+
+  // 螢幕視野方向 (橫屏 / 竪屏 / 自動)
+  const orientSel = document.getElementById('orientation-select');
+  if (orientSel) {
+    const curOrient = save.data.settings?.orientation || 'auto';
+    orientSel.value = curOrient;
+    if (!orientSel.dataset.bound) {
+      orientSel.dataset.bound = '1';
+      orientSel.addEventListener('change', () => {
+        const val = orientSel.value;
+        save.set({ settings: { ...save.data.settings, orientation: val } });
+        sound.playGem();
+        game.setOrientation(val);
+        renderOrientationDesc(val);
+      });
+    }
+    renderOrientationDesc(curOrient);
+  }
+}
+
+export function renderOrientationDesc(key) {
+  const el = document.getElementById('orientation-desc');
+  if (!el) return;
+  if (key === 'landscape') {
+    el.textContent = '🖥️ 橫向寬螢幕視野（16:9 廣域視野，視野更開闊，適合雙手操作或電腦大螢幕）';
+  } else if (key === 'portrait') {
+    el.textContent = '📱 直向街機視野（9:16 縱深視野，聚焦前進通道，適合單手直握手機操作）';
+  } else {
+    el.textContent = '🔄 自動跟隨螢幕（依裝置即時長寬比例自適應縮放）';
+  }
 }
 
 function renderRunCardDesc(key) {

@@ -624,6 +624,15 @@
             <select id="runcard-select" aria-describedby="runcard-desc"></select>
             <span id="runcard-desc" class="difficulty-desc"></span>
           </div>
+          <div class="difficulty-row orientation-row">
+            <label class="difficulty-label" for="orientation-select">螢幕視野</label>
+            <select id="orientation-select" aria-describedby="orientation-desc">
+              <option value="auto">🔄 自動 (跟隨螢幕)</option>
+              <option value="landscape">🖥️ 橫屏 (16:9 寬視野)</option>
+              <option value="portrait">📱 竪屏 (9:16 直式視野)</option>
+            </select>
+            <span id="orientation-desc" class="difficulty-desc"></span>
+          </div>
           <div id="start-status" class="menu-status"></div>
           <button id="btn-start-game" class="game-btn primary-btn pulse">立即出擊 🚀</button>
         </div>

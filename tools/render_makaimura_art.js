@@ -1,23 +1,23 @@
 // tools/render_makaimura_art.js
-// High-fidelity procedural rendering pipeline for Ghosts 'n Goblins (魔界村) assets in Gaga Survivor
-// Uses the game's authentic Canvas 2D shading, multi-tone gradients, cel-shaded outlines, and rim lighting.
+// High-fidelity procedural rendering pipeline for Ghosts 'n Goblins (魔界村) assets
+// REDESIGNED IN 100% AUTHENTIC WARHAMMER 40K / GRIMDARK GOTHIC STYLE
 
 import fs from 'fs';
 import path from 'path';
 
-const task = await taskSpace("render-makaimura-art-" + Date.now());
+const task = await taskSpace("render-warhammer-makaimura-" + Date.now());
 const page = task.page("p1");
 
 console.log("Navigating to local dev server to initialize rendering context...");
 await page.goto("http://127.0.0.1:8899/index.html?t=" + Date.now());
 await page.waitForLoadState("load");
 
-console.log("Rendering Makaimura assets in page context...");
+console.log("Rendering Warhammer-style Makaimura assets in page context...");
 
 const renderedAssets = await page.evaluate(async () => {
   const results = {};
 
-  // Utility: tight bounding box crop
+  // Utility: tight bounding box crop with padding
   function cropToBBox(sourceCanvas, pad = 6) {
     const sw = sourceCanvas.width;
     const sh = sourceCanvas.height;
@@ -29,7 +29,7 @@ const renderedAssets = await page.evaluate(async () => {
     for (let y = 0; y < sh; y++) {
       for (let x = 0; x < sw; x++) {
         const a = data[(y * sw + x) * 4 + 3];
-        if (a > 10) {
+        if (a > 12) {
           if (x < minX) minX = x;
           if (x > maxX) maxX = x;
           if (y < minY) minY = y;
@@ -57,16 +57,7 @@ const renderedAssets = await page.evaluate(async () => {
     return outCanvas.toDataURL('image/png');
   }
 
-  // Shading helpers
-  function sphereGrad(ctx, color, r, cx, cy) {
-    const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.35, r * 0.1, cx, cy, r);
-    g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.25, color);
-    g.addColorStop(0.85, darken(color, 0.45));
-    g.addColorStop(1, '#05030a');
-    return g;
-  }
-
+  // Linear gradient helper
   function linearGrad(ctx, x0, y0, x1, y1, c0, c1, c2 = null) {
     const g = ctx.createLinearGradient(x0, y0, x1, y1);
     g.addColorStop(0, c0);
@@ -79,253 +70,352 @@ const renderedAssets = await page.evaluate(async () => {
     return g;
   }
 
-  function darken(hex, factor = 0.5) {
-    let c = hex.replace('#', '');
-    if (c.length === 3) c = c.split('').map(x => x + x).join('');
-    const num = parseInt(c, 16);
-    const r = Math.max(0, Math.floor(((num >> 16) & 255) * factor));
-    const g = Math.max(0, Math.floor(((num >> 8) & 255) * factor));
-    const b = Math.max(0, Math.floor((num & 255) * factor));
-    return `rgb(${r},${g},${b})`;
+  // Draw Purity Seal (40K Signature)
+  function drawPuritySeal(ctx, x, y, size = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(size, size);
+    // Red wax seal
+    ctx.fillStyle = '#991b1b';
+    ctx.strokeStyle = '#450a0a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Inner skull stamp
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(0, -0.5, 2, 0, Math.PI * 2);
+    ctx.fill();
+    // Hanging parchment scroll
+    ctx.fillStyle = '#fef3c7';
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-3, 4);
+    ctx.lineTo(3, 4);
+    ctx.lineTo(3.5, 16);
+    ctx.lineTo(0, 14);
+    ctx.lineTo(-3.5, 16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Text markings on parchment
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(-2, 7, 4, 1);
+    ctx.fillRect(-2, 10, 4, 1);
+    ctx.restore();
+  }
+
+  // Draw Imperial Skull Emblem
+  function drawImperialSkull(ctx, x, y, r = 6) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = '#f1f5f9';
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.2;
+    // Cranium
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.2, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Jaw
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.5, r * 0.4, r, r * 0.6, 1.5);
+    ctx.fill();
+    ctx.stroke();
+    // Eye sockets
+    ctx.fillStyle = '#020617';
+    ctx.beginPath();
+    ctx.arc(-r * 0.35, -r * 0.1, r * 0.25, 0, Math.PI * 2);
+    ctx.arc(r * 0.35, -r * 0.1, r * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
   // ==========================================
-  // 1. ARTHUR (魔界騎士 亞瑟)
+  // 1. ARTHUR (WARHAMMER PALADIN / BLACK TEMPLAR)
   // ==========================================
-  function renderArthur() {
+  function renderArthurWarhammer() {
     const c = document.createElement('canvas');
     c.width = 320; c.height = 320;
     const ctx = c.getContext('2d');
     const cx = 160, cy = 175;
 
     ctx.save();
-    // Drop shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.55)';
+    // Shadow
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.6)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 95, 55, 18, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 96, 58, 20, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Steel Boots & Greaves
+    // Backpack Power Unit Exhaust Vents (Space Marine pattern)
     for (const s of [-1, 1]) {
-      const bx = cx + s * 28;
-      const by = cy + 72;
-      // Leg armor
-      ctx.fillStyle = linearGrad(ctx, bx - 14, by, bx + 14, by, '#cbd5e1', '#475569');
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 3.5;
+      const vx = cx + s * 42;
+      const vy = cy - 48;
+      ctx.fillStyle = linearGrad(ctx, vx - 12, vy, vx + 12, vy, '#64748b', '#0f172a');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.roundRect(bx - 12, by - 18, 24, 24, 4);
+      ctx.arc(vx, vy, 12, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-
-      // Foot boot
-      ctx.fillStyle = linearGrad(ctx, bx - 16, by + 6, bx + 16, by + 18, '#e2e8f0', '#334155');
+      // Glowing thermal heat grill
+      ctx.fillStyle = '#f97316';
       ctx.beginPath();
-      ctx.roundRect(bx - 14, by + 6, 28, 16, [4, 4, 6, 6]);
+      ctx.arc(vx, vy, 5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
-
-      // Gold buckle trim
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(bx - 10, by + 8, 20, 3.5);
     }
 
-    // Iconic Strawberry Boxer Shorts peek
+    // Heavy Ceramite Greaves & Sabatons
+    for (const s of [-1, 1]) {
+      const bx = cx + s * 28;
+      const by = cy + 70;
+      // Greaves
+      ctx.fillStyle = linearGrad(ctx, bx - 14, by - 16, bx + 14, by + 16, '#64748b', '#1e293b');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.roundRect(bx - 14, by - 16, 28, 26, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      // Armored Power Boot
+      ctx.fillStyle = linearGrad(ctx, bx - 16, by + 8, bx + 16, by + 22, '#94a3b8', '#0f172a');
+      ctx.beginPath();
+      ctx.roundRect(bx - 16, by + 8, 32, 18, [4, 4, 8, 8]);
+      ctx.fill();
+      ctx.stroke();
+
+      // Brass Trim & Studs
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(bx - 12, by + 10, 24, 3.5);
+      ctx.beginPath();
+      ctx.arc(bx - 6, by - 4, 2, 0, Math.PI * 2);
+      ctx.arc(bx + 6, by - 4, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Battle Tabard with Sacred Strawberry Oath Relic (40K Easter Egg)
     ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#0f172a';
+    ctx.strokeStyle = '#020617';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(cx - 30, cy + 32, 60, 26, 4);
+    ctx.moveTo(cx - 24, cy + 26);
+    ctx.lineTo(cx + 24, cy + 26);
+    ctx.lineTo(cx + 18, cy + 62);
+    ctx.lineTo(cx - 18, cy + 62);
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Red strawberry pattern dots
-    ctx.fillStyle = '#ef4444';
-    const strawPoints = [[-18, 40], [-6, 46], [6, 38], [18, 44], [-12, 50], [12, 52]];
-    for (const [sx, sy] of strawPoints) {
+    // Sacred Strawberry pattern on tabard
+    ctx.fillStyle = '#dc2626';
+    for (const [sx, sy] of [[-10, 36], [8, 38], [-2, 48], [-8, 54], [8, 54]]) {
       ctx.beginPath();
       ctx.arc(cx + sx, cy + sy, 3, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#10b981';
+      ctx.fillStyle = '#16a34a';
       ctx.fillRect(cx + sx - 1, cy + sy - 4, 2, 2);
-      ctx.fillStyle = '#ef4444';
+      ctx.fillStyle = '#dc2626';
     }
 
-    // Steel Tassets / Skirt Armor
-    ctx.fillStyle = linearGrad(ctx, cx - 34, cy + 26, cx + 34, cy + 26, '#e2e8f0', '#475569');
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.roundRect(cx - 32, cy + 24, 64, 16, 3);
-    ctx.fill();
-    ctx.stroke();
-    // Gold rivets
-    ctx.fillStyle = '#fbbf24';
-    for (let r = -24; r <= 24; r += 12) {
-      ctx.beginPath();
-      ctx.arc(cx + r, cy + 32, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Purity seal hanging from tabard
+    drawPuritySeal(ctx, cx - 18, cy + 28, 1.1);
 
-    // Breastplate Body Armor
-    const bGrad = ctx.createLinearGradient(cx - 36, cy - 25, cx + 36, cy + 28);
-    bGrad.addColorStop(0, '#f8fafc');
-    bGrad.addColorStop(0.3, '#cbd5e1');
-    bGrad.addColorStop(0.7, '#64748b');
-    bGrad.addColorStop(1, '#1e293b');
+    // Ceramite Cuirass / Artificer Breastplate
+    const bGrad = ctx.createLinearGradient(cx - 38, cy - 25, cx + 38, cy + 28);
+    bGrad.addColorStop(0, '#94a3b8');
+    bGrad.addColorStop(0.35, '#475569');
+    bGrad.addColorStop(0.75, '#1e293b');
+    bGrad.addColorStop(1, '#020617');
     ctx.fillStyle = bGrad;
-    ctx.strokeStyle = '#0f172a';
+    ctx.strokeStyle = '#020617';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(cx - 32, cy - 20);
-    ctx.lineTo(cx + 32, cy - 20);
-    ctx.lineTo(cx + 28, cy + 25);
-    ctx.lineTo(cx - 28, cy + 25);
-    ctx.closePath();
+    ctx.roundRect(cx - 34, cy - 22, 68, 48, [10, 10, 6, 6]);
     ctx.fill();
     ctx.stroke();
 
-    // Holy Cross on Breastplate
+    // Golden Imperial Aquila & Skull on Breastplate
     ctx.fillStyle = '#f59e0b';
-    ctx.fillRect(cx - 5, cy - 14, 10, 32);
-    ctx.fillRect(cx - 18, cy - 5, 36, 9);
-    ctx.strokeStyle = '#b45309';
+    ctx.strokeStyle = '#78350f';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(cx - 5, cy - 14, 10, 32);
-    ctx.strokeRect(cx - 18, cy - 5, 36, 9);
+    // Wings
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + 2);
+    ctx.lineTo(cx - 22, cy - 6);
+    ctx.lineTo(cx - 20, cy + 8);
+    ctx.lineTo(cx, cy + 12);
+    ctx.lineTo(cx + 20, cy + 8);
+    ctx.lineTo(cx + 22, cy - 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Center skull
+    drawImperialSkull(ctx, cx, cy + 4, 4.5);
 
-    // Pauldrons (Spike Shoulder Guards)
+    // Massive Astartes Gothic Pauldrons (Shoulder Armor)
     for (const s of [-1, 1]) {
-      const px = cx + s * 42;
-      const py = cy - 18;
-      ctx.fillStyle = linearGrad(ctx, px - 18, py - 18, px + 18, py + 18, '#f1f5f9', '#334155');
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 3.5;
+      const px = cx + s * 46;
+      const py = cy - 14;
+      ctx.fillStyle = linearGrad(ctx, px - 20, py - 20, px + 20, py + 20, '#cbd5e1', '#0f172a');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.ellipse(px, py, 18, 14, s * 0.25, 0, Math.PI * 2);
+      ctx.roundRect(px - 18, py - 18, 36, 32, [8, 8, 4, 4]);
       ctx.fill();
       ctx.stroke();
 
-      // Gold Trim
+      // Golden Rim Border
       ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.strokeRect(px - 16, py - 16, 32, 28);
+
+      // Skull on pauldron
+      drawImperialSkull(ctx, px, py - 2, 4);
+
+      // Purity Seal on pauldron
+      if (s === -1) {
+        drawPuritySeal(ctx, px - 12, py + 8, 0.9);
+      }
     }
 
-    // Left Arm Kite Shield
+    // Left Arm: Heavy Gothic Storm Shield with Reliquary Skull
     ctx.save();
-    ctx.translate(cx - 52, cy + 8);
-    ctx.rotate(0.15);
-    const sGrad = ctx.createLinearGradient(-24, -30, 24, 30);
-    sGrad.addColorStop(0, '#e2e8f0');
-    sGrad.addColorStop(0.5, '#64748b');
-    sGrad.addColorStop(1, '#0f172a');
+    ctx.translate(cx - 56, cy + 8);
+    ctx.rotate(0.12);
+    // Shield Body
+    const sGrad = ctx.createLinearGradient(-26, -35, 26, 35);
+    sGrad.addColorStop(0, '#475569');
+    sGrad.addColorStop(0.5, '#1e293b');
+    sGrad.addColorStop(1, '#020617');
     ctx.fillStyle = sGrad;
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
-    ctx.moveTo(-20, -32);
-    ctx.lineTo(20, -32);
-    ctx.lineTo(20, 8);
-    ctx.lineTo(0, 38);
-    ctx.lineTo(-20, 8);
+    ctx.moveTo(-24, -36);
+    ctx.lineTo(24, -36);
+    ctx.lineTo(24, 12);
+    ctx.lineTo(0, 44);
+    ctx.lineTo(-24, 12);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    // Shield Gold Cross
-    ctx.fillStyle = '#f59e0b';
-    ctx.fillRect(-4, -28, 8, 54);
-    ctx.fillRect(-18, -15, 36, 8);
-    ctx.restore();
 
-    // Right Arm with Knight's Holy Spear / Lance
-    ctx.save();
-    ctx.translate(cx + 46, cy + 6);
-    // Arm
-    ctx.fillStyle = '#64748b';
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.roundRect(-8, -12, 16, 24, 4);
-    ctx.fill();
-    ctx.stroke();
-    // Spear Shaft
-    ctx.fillStyle = '#78350f';
-    ctx.strokeStyle = '#451a03';
-    ctx.lineWidth = 2;
-    ctx.fillRect(8, -85, 7, 165);
-    ctx.strokeRect(8, -85, 7, 165);
-    // Spear Blade
-    const bladeGrad = ctx.createLinearGradient(0, -115, 20, -85);
-    bladeGrad.addColorStop(0, '#f8fafc');
-    bladeGrad.addColorStop(1, '#475569');
-    ctx.fillStyle = bladeGrad;
-    ctx.strokeStyle = '#0f172a';
+    // Brass Gothic Rim & Bolts
+    ctx.strokeStyle = '#f59e0b';
     ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(11.5, -125);
-    ctx.lineTo(22, -85);
-    ctx.lineTo(1, -85);
-    ctx.closePath();
-    ctx.fill();
     ctx.stroke();
-    // Holy spear crossguard
+
+    // Reliquary Cross & Skull on Shield
     ctx.fillStyle = '#f59e0b';
-    ctx.fillRect(-2, -85, 27, 6);
+    ctx.fillRect(-4, -30, 8, 62);
+    ctx.fillRect(-18, -14, 36, 8);
+    drawImperialSkull(ctx, 0, -10, 7);
     ctx.restore();
 
-    // Knight Helmet & Face
-    const hx = cx, hy = cy - 46;
-    // Visor Helmet Base
-    const hGrad = ctx.createRadialGradient(hx - 8, hy - 12, 6, hx, hy, 32);
-    hGrad.addColorStop(0, '#ffffff');
-    hGrad.addColorStop(0.3, '#cbd5e1');
-    hGrad.addColorStop(0.8, '#475569');
-    hGrad.addColorStop(1, '#0f172a');
-    ctx.fillStyle = hGrad;
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 4;
+    // Right Arm: Nemesis Force Lance / Power Halberd
+    ctx.save();
+    ctx.translate(cx + 50, cy + 6);
+    // Arm bracer
+    ctx.fillStyle = '#334155';
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.roundRect(hx - 26, hy - 24, 52, 46, [16, 16, 10, 10]);
+    ctx.roundRect(-8, -12, 16, 26, 4);
     ctx.fill();
     ctx.stroke();
 
-    // Eye Visor Opening
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(hx - 20, hy - 4, 40, 10);
-    // Gallant eyes behind visor
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillRect(hx - 14, hy - 2, 8, 5);
-    ctx.fillRect(hx + 6, hy - 2, 8, 5);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(hx - 12, hy - 2, 3, 3);
-    ctx.fillRect(hx + 8, hy - 2, 3, 3);
-
-    // Iconic Gallant Knight Mustache & Beard
-    ctx.fillStyle = '#78350f';
-    ctx.strokeStyle = '#451a03';
+    // Halberd Shaft (Iron & Brass)
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(8, -95, 7, 185);
+    ctx.strokeStyle = '#020617';
     ctx.lineWidth = 2;
+    ctx.strokeRect(8, -95, 7, 185);
+
+    // Power Field Generator & Battery Casing
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(4, -98, 15, 12);
+
+    // Power Blade with Disruption Field
+    const bladeGrad = ctx.createLinearGradient(0, -135, 25, -95);
+    bladeGrad.addColorStop(0, '#e0f2fe');
+    bladeGrad.addColorStop(0.4, '#38bdf8');
+    bladeGrad.addColorStop(1, '#0369a1');
+    ctx.fillStyle = bladeGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.moveTo(hx - 18, hy + 12);
-    ctx.quadraticCurveTo(hx, hy + 6, hx + 18, hy + 12);
-    ctx.quadraticCurveTo(hx + 12, hy + 22, hx, hy + 24);
-    ctx.quadraticCurveTo(hx - 12, hy + 22, hx - 18, hy + 12);
+    ctx.moveTo(11.5, -140);
+    ctx.lineTo(26, -95);
+    ctx.lineTo(-3, -95);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Knight Plume (Ruby Red Feather Crest)
-    const plumeGrad = ctx.createLinearGradient(hx - 10, hy - 60, hx + 25, hy - 20);
-    plumeGrad.addColorStop(0, '#f87171');
-    plumeGrad.addColorStop(0.4, '#dc2626');
-    plumeGrad.addColorStop(1, '#7f1d1d');
+    // Crackling Lightning Disruption Arcs
+    ctx.strokeStyle = '#67e8f9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(11.5, -135); ctx.lineTo(18, -115); ctx.lineTo(6, -105);
+    ctx.stroke();
+    ctx.restore();
+
+    // Knight Greathelm (Astartes Crusader Pattern)
+    const hx = cx, hy = cy - 44;
+    const hGrad = ctx.createRadialGradient(hx - 8, hy - 14, 8, hx, hy, 36);
+    hGrad.addColorStop(0, '#f1f5f9');
+    hGrad.addColorStop(0.35, '#94a3b8');
+    hGrad.addColorStop(0.75, '#334155');
+    hGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = hGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.roundRect(hx - 26, hy - 26, 52, 50, [16, 16, 12, 12]);
+    ctx.fill();
+    ctx.stroke();
+
+    // Crusader T-Visor
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(hx - 18, hy - 6, 36, 7);
+    ctx.fillRect(hx - 3.5, hy - 6, 7, 24);
+
+    // Glowing Cyan Tactical Visor Lenses
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(hx - 16, hy - 5, 11, 5);
+    ctx.fillRect(hx + 5, hy - 5, 11, 5);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(hx - 14, hy - 4, 3, 2);
+    ctx.fillRect(hx + 7, hy - 4, 3, 2);
+
+    // Rebreather / Vox Grill (Space Marine Vox)
+    ctx.fillStyle = '#475569';
+    for (let r = 0; r < 3; r++) {
+      ctx.fillRect(hx - 10, hy + 8 + r * 3, 6, 1.8);
+      ctx.fillRect(hx + 4, hy + 8 + r * 3, 6, 1.8);
+    }
+
+    // Legendary Gallant Mustache & Beard under Vox
+    ctx.fillStyle = '#78350f';
+    ctx.beginPath();
+    ctx.arc(hx, hy + 18, 5, 0, Math.PI);
+    ctx.fill();
+
+    // Red Crusader Crest Plume
+    const plumeGrad = ctx.createLinearGradient(hx - 10, hy - 65, hx + 25, hy - 25);
+    plumeGrad.addColorStop(0, '#ef4444');
+    plumeGrad.addColorStop(0.5, '#b91c1c');
+    plumeGrad.addColorStop(1, '#450a0a');
     ctx.fillStyle = plumeGrad;
-    ctx.strokeStyle = '#0f172a';
+    ctx.strokeStyle = '#020617';
     ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.moveTo(hx - 6, hy - 24);
-    ctx.quadraticCurveTo(hx - 18, hy - 58, hx + 12, hy - 62);
-    ctx.quadraticCurveTo(hx + 28, hy - 45, hx + 10, hy - 22);
+    ctx.moveTo(hx - 8, hy - 26);
+    ctx.quadraticCurveTo(hx - 20, hy - 68, hx + 14, hy - 72);
+    ctx.quadraticCurveTo(hx + 30, hy - 52, hx + 12, hy - 24);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -335,269 +425,108 @@ const renderedAssets = await page.evaluate(async () => {
   }
 
   // ==========================================
-  // 2. STAGE ENEMIES
+  // 2. STAGE ENEMIES (NURGLE / KHORNE / CHAOS)
   // ==========================================
-  function renderZombie() {
+  function renderZombieWarhammer() {
+    // Nurgle Poxwalker / Rotting Servitor
     const c = document.createElement('canvas');
     c.width = 240; c.height = 260;
     const ctx = c.getContext('2d');
     const cx = 120, cy = 135;
 
     ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.45)';
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.5)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 90, 45, 14, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 92, 45, 14, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Decayed Legs & Tattered Trousers
+    // Rotting Poxwalker Legs
     for (const s of [-1, 1]) {
-      const lx = cx + s * 18;
+      const lx = cx + s * 16;
       const ly = cy + 62;
-      ctx.fillStyle = linearGrad(ctx, lx - 10, ly, lx + 10, ly + 25, '#334155', '#0f172a');
+      ctx.fillStyle = '#4d7c0f';
       ctx.strokeStyle = '#020617';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.roundRect(lx - 10, ly - 10, 20, 32, 3);
-      ctx.fill();
-      ctx.stroke();
-
-      // Bony bare feet
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.roundRect(lx - 9, ly + 20, 22, 10, 3);
+      ctx.roundRect(lx - 9, ly - 8, 18, 30, 3);
       ctx.fill();
       ctx.stroke();
     }
 
-    // Tattered Grave Shroud / Vest
-    const vGrad = ctx.createLinearGradient(cx - 26, cy - 20, cx + 26, cy + 50);
-    vGrad.addColorStop(0, '#15803d');
-    vGrad.addColorStop(0.6, '#166534');
-    vGrad.addColorStop(1, '#052e16');
-    ctx.fillStyle = vGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(cx - 24, cy - 15);
-    ctx.lineTo(cx + 24, cy - 15);
-    ctx.lineTo(cx + 28, cy + 45);
-    // Jagged hem
-    ctx.lineTo(cx + 16, cy + 52);
-    ctx.lineTo(cx + 6, cy + 44);
-    ctx.lineTo(cx - 8, cy + 53);
-    ctx.lineTo(cx - 20, cy + 46);
-    ctx.lineTo(cx - 26, cy + 42);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Exposed Ribs / Decay Wounds
-    ctx.fillStyle = '#090d16';
-    ctx.fillRect(cx - 10, cy + 4, 20, 16);
-    ctx.fillStyle = '#f1f5f9';
-    for (let r = 0; r < 3; r++) {
-      ctx.fillRect(cx - 8, cy + 6 + r * 5, 16, 2.5);
-    }
-
-    // Outstretched Grasping Zombie Arms
-    for (const s of [-1, 1]) {
-      const ax = cx + s * 34;
-      const ay = cy + 4;
-      ctx.fillStyle = linearGrad(ctx, ax - 8, ay - 8, ax + 8, ay + 20, '#94a3b8', '#475569');
-      ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.roundRect(ax - 8, ay - 10, 16, 32, 4);
-      ctx.fill();
-      ctx.stroke();
-
-      // Sharp rotting claws
-      ctx.fillStyle = '#cbd5e1';
-      for (let f = -4; f <= 4; f += 4) {
-        ctx.beginPath();
-        ctx.moveTo(ax + f, ay + 22);
-        ctx.lineTo(ax + f + s * 2, ay + 34);
-        ctx.lineTo(ax + f - 2, ay + 22);
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
-
-    // Zombie Head
-    const zx = cx, zy = cy - 42;
-    const hGrad = ctx.createRadialGradient(zx - 6, zy - 10, 6, zx, zy, 28);
-    hGrad.addColorStop(0, '#cbd5e1');
-    hGrad.addColorStop(0.4, '#94a3b8');
-    hGrad.addColorStop(0.8, '#475569');
-    hGrad.addColorStop(1, '#0f172a');
-    ctx.fillStyle = hGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.roundRect(zx - 24, zy - 24, 48, 50, [14, 14, 20, 20]);
-    ctx.fill();
-    ctx.stroke();
-
-    // Hollow Gaping Eye Sockets with Sinister Yellow Glowing Eyes
-    for (const s of [-1, 1]) {
-      const ex = zx + s * 11;
-      const ey = zy - 4;
-      ctx.fillStyle = '#020617';
-      ctx.beginPath();
-      ctx.arc(ex, ey, 7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glowing amber iris
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.arc(ex, ey, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(ex - 1, ey - 2, 2, 2);
-    }
-
-    // Gaping Maw with Jagged Teeth
-    ctx.fillStyle = '#020617';
-    ctx.beginPath();
-    ctx.roundRect(zx - 14, zy + 14, 28, 12, 4);
-    ctx.fill();
-    ctx.fillStyle = '#f8fafc';
-    for (let t = -10; t <= 10; t += 5) {
-      ctx.fillRect(zx + t, zy + 15, 3, 4);
-      ctx.fillRect(zx + t, zy + 21, 3, 4);
-    }
-
-    ctx.restore();
-    return cropToBBox(c);
-  }
-
-  function renderRedArremer() {
-    const c = document.createElement('canvas');
-    c.width = 280; c.height = 280;
-    const ctx = c.getContext('2d');
-    const cx = 140, cy = 140;
-
-    ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 95, 50, 16, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Large Demonic Scalloped Bat Wings
-    for (const s of [-1, 1]) {
-      const wx = cx + s * 35;
-      const wy = cy - 25;
-      ctx.save();
-      ctx.translate(wx, wy);
-      ctx.scale(s, 1);
-
-      // Wing Membrane
-      const wGrad = ctx.createLinearGradient(0, -60, 80, 50);
-      wGrad.addColorStop(0, '#dc2626');
-      wGrad.addColorStop(0.5, '#7f1d1d');
-      wGrad.addColorStop(1, '#180709');
-      ctx.fillStyle = wGrad;
-      ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(25, -65);
-      ctx.lineTo(82, -35);
-      ctx.quadraticCurveTo(62, -10, 72, 15);
-      ctx.quadraticCurveTo(45, 25, 42, 48);
-      ctx.quadraticCurveTo(20, 32, 0, 35);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Wing Bone Struts
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(0, 0); ctx.lineTo(82, -35);
-      ctx.moveTo(25, -65); ctx.lineTo(72, 15);
-      ctx.moveTo(35, -20); ctx.lineTo(42, 48);
-      ctx.stroke();
-
-      ctx.restore();
-    }
-
-    // Barbed Demonic Tail
-    ctx.strokeStyle = '#991b1b';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy + 50);
-    ctx.quadraticCurveTo(cx - 45, cy + 75, cx - 35, cy + 95);
-    ctx.stroke();
-    ctx.fillStyle = '#ef4444';
-    ctx.beginPath();
-    ctx.moveTo(cx - 35, cy + 95);
-    ctx.lineTo(cx - 46, cy + 85);
-    ctx.lineTo(cx - 24, cy + 88);
-    ctx.closePath();
-    ctx.fill();
-
-    // Muscular Crimson Torso
-    const tGrad = ctx.createLinearGradient(cx - 25, cy - 15, cx + 25, cy + 45);
-    tGrad.addColorStop(0, '#f87171');
-    tGrad.addColorStop(0.4, '#dc2626');
-    tGrad.addColorStop(0.8, '#991b1b');
-    tGrad.addColorStop(1, '#450a0a');
+    // Diseased Bloated Torso with Pustules & Guts
+    const tGrad = ctx.createLinearGradient(cx - 25, cy - 20, cx + 25, cy + 45);
+    tGrad.addColorStop(0, '#84cc16');
+    tGrad.addColorStop(0.5, '#4d7c0f');
+    tGrad.addColorStop(1, '#14532d');
     ctx.fillStyle = tGrad;
     ctx.strokeStyle = '#020617';
     ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.roundRect(cx - 22, cy - 10, 44, 55, 12);
+    ctx.roundRect(cx - 24, cy - 14, 48, 56, 10);
     ctx.fill();
     ctx.stroke();
 
-    // Clawed Talon Feet
-    for (const s of [-1, 1]) {
-      const lx = cx + s * 22;
-      const ly = cy + 48;
-      ctx.fillStyle = '#b91c1c';
-      ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 3;
+    // Toxic Nurgle Pustules (Bubbling boils)
+    const pustules = [[-12, 4, 5], [10, -2, 4], [-4, 22, 6], [12, 18, 5]];
+    for (const [px, py, pr] of pustules) {
+      ctx.fillStyle = '#fde047';
+      ctx.strokeStyle = '#713f12';
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.roundRect(lx - 9, ly, 18, 30, 4);
+      ctx.arc(cx + px, cy + py, pr, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-
-      // Sharp talons
-      ctx.fillStyle = '#f8fafc';
-      for (let t = -6; t <= 6; t += 6) {
-        ctx.beginPath();
-        ctx.moveTo(lx + t, ly + 28);
-        ctx.lineTo(lx + t + s * 2, ly + 38);
-        ctx.lineTo(lx + t - 2, ly + 28);
-        ctx.fill();
-      }
     }
 
-    // Demonic Head & Horns
+    // Arms: Left mutated claw, Right arm wielding rusted scrap cleaver (Choppa)
+    // Left mutated claw
+    ctx.fillStyle = '#65a30d';
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(cx - 38, cy + 2, 14, 30, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(cx - 40, cy + 28, 4, 8);
+    ctx.fillRect(cx - 34, cy + 30, 4, 9);
+    ctx.fillRect(cx - 28, cy + 28, 4, 8);
+
+    // Right arm with Rusted Choppa
+    ctx.fillStyle = '#4d7c0f';
+    ctx.beginPath();
+    ctx.roundRect(cx + 24, cy - 4, 14, 28, 4);
+    ctx.fill();
+    ctx.stroke();
+    // Heavy rusted scrap cleaver
+    ctx.fillStyle = '#78350f';
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + 32, cy + 20);
+    ctx.lineTo(cx + 32, cy - 25);
+    ctx.lineTo(cx + 52, cy - 18);
+    ctx.lineTo(cx + 46, cy + 24);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Poxwalker Head with Corrupted Nurgle Horn Spur
     const hx = cx, hy = cy - 38;
-    // Sweeping Black & Red Horns
-    for (const s of [-1, 1]) {
-      ctx.fillStyle = linearGrad(ctx, hx, hy - 40, hx + s * 45, hy - 10, '#f87171', '#0f172a');
-      ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(hx + s * 14, hy - 14);
-      ctx.quadraticCurveTo(hx + s * 42, hy - 42, hx + s * 34, hy - 58);
-      ctx.quadraticCurveTo(hx + s * 22, hy - 35, hx + s * 8, hy - 20);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
+    // Mutated Nurgle Horn
+    ctx.fillStyle = '#ca8a04';
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(hx + 10, hy - 14);
+    ctx.quadraticCurveTo(hx + 36, hy - 45, hx + 28, hy - 58);
+    ctx.quadraticCurveTo(hx + 18, hy - 35, hx + 4, hy - 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
 
-    // Head
-    const headGrad = ctx.createRadialGradient(hx - 5, hy - 6, 5, hx, hy, 26);
-    headGrad.addColorStop(0, '#f87171');
-    headGrad.addColorStop(0.5, '#dc2626');
-    headGrad.addColorStop(1, '#450a0a');
-    ctx.fillStyle = headGrad;
+    // Head base
+    ctx.fillStyle = tGrad;
     ctx.strokeStyle = '#020617';
     ctx.lineWidth = 3.5;
     ctx.beginPath();
@@ -605,961 +534,1077 @@ const renderedAssets = await page.evaluate(async () => {
     ctx.fill();
     ctx.stroke();
 
-    // Fierce Amber Slit Eyes
-    for (const s of [-1, 1]) {
-      const ex = hx + s * 10;
-      const ey = hy - 4;
-      ctx.fillStyle = '#fde047';
-      ctx.beginPath();
-      ctx.ellipse(ex, ey, 6, 4, s * 0.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(ex - 1.2, ey - 4, 2.4, 8);
-    }
-
-    // Fanged Snarl
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.roundRect(hx - 12, hy + 10, 24, 8, 3);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(hx - 9, hy + 9, 3.5, 5);
-    ctx.fillRect(hx + 5.5, hy + 9, 3.5, 5);
-
-    ctx.restore();
-    return cropToBBox(c);
-  }
-
-  function renderWoody() {
-    const c = document.createElement('canvas');
-    c.width = 240; c.height = 240;
-    const ctx = c.getContext('2d');
-    const cx = 120, cy = 125;
-
-    ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 85, 40, 12, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Flapping Imp Wings
-    for (const s of [-1, 1]) {
-      ctx.fillStyle = linearGrad(ctx, cx, cy - 20, cx + s * 55, cy + 20, '#a855f7', '#3b0764');
-      ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(cx + s * 18, cy - 10);
-      ctx.quadraticCurveTo(cx + s * 58, cy - 45, cx + s * 62, cy - 10);
-      ctx.quadraticCurveTo(cx + s * 45, cy + 25, cx + s * 16, cy + 15);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Chubby Purple Imp Body
-    const iGrad = ctx.createRadialGradient(cx - 8, cy - 8, 8, cx, cy, 38);
-    iGrad.addColorStop(0, '#c084fc');
-    iGrad.addColorStop(0.4, '#9333ea');
-    iGrad.addColorStop(0.85, '#6b21a8');
-    iGrad.addColorStop(1, '#2e1065');
-    ctx.fillStyle = iGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 10, 30, 36, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Chubby belly highlight
-    ctx.fillStyle = 'rgba(233, 213, 255, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 18, 18, 20, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Miniature Pitchfork / Trident
-    ctx.fillStyle = '#f59e0b';
-    ctx.strokeStyle = '#78350f';
-    ctx.lineWidth = 2.5;
-    // Shaft
-    ctx.fillRect(cx + 34, cy - 45, 5, 85);
-    ctx.strokeRect(cx + 34, cy - 45, 5, 85);
-    // Prongs
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fillRect(cx + 25, cy - 56, 23, 5);
-    ctx.fillRect(cx + 25, cy - 68, 4, 14);
-    ctx.fillRect(cx + 34.5, cy - 72, 4, 18);
-    ctx.fillRect(cx + 44, cy - 68, 4, 14);
-
-    // Mischievous Head with Pointy Goblin Ears
-    const hx = cx, hy = cy - 28;
-    for (const s of [-1, 1]) {
-      ctx.fillStyle = '#9333ea';
-      ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(hx + s * 16, hy - 4);
-      ctx.lineTo(hx + s * 42, hy - 22);
-      ctx.lineTo(hx + s * 22, hy + 8);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Head base
-    ctx.fillStyle = iGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.arc(hx, hy, 26, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Big glowing yellow eyes
-    for (const s of [-1, 1]) {
-      const ex = hx + s * 10;
-      const ey = hy - 4;
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(ex, ey, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(ex + s * 1.5, ey, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(ex + s * 1.5 - 1, ey - 2, 2, 2);
-    }
-
-    // Wide Mischievous Grin
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.arc(hx, hy + 12, 12, 0, Math.PI);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(hx - 8, hy + 12, 4, 4);
-    ctx.fillRect(hx + 4, hy + 12, 4, 4);
-
-    ctx.restore();
-    return cropToBBox(c);
-  }
-
-  // ==========================================
-  // 3. TERRAIN DECOR OBJECTS
-  // ==========================================
-  function renderTombstone() {
-    const c = document.createElement('canvas');
-    c.width = 260; c.height = 300;
-    const ctx = c.getContext('2d');
-    const cx = 130, cy = 160;
-
-    ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.55)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 95, 65, 22, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Pedestal Stone Base
-    ctx.fillStyle = linearGrad(ctx, cx - 60, cy + 60, cx + 60, cy + 95, '#64748b', '#1e293b');
-    ctx.strokeStyle = '#090d16';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(cx - 55, cy + 65, 110, 28, [6, 6, 2, 2]);
-    ctx.fill();
-    ctx.stroke();
-
-    // Stele Slab
-    const sGrad = ctx.createLinearGradient(cx - 45, cy - 70, cx + 45, cy + 65);
-    sGrad.addColorStop(0, '#cbd5e1');
-    sGrad.addColorStop(0.3, '#94a3b8');
-    sGrad.addColorStop(0.7, '#475569');
-    sGrad.addColorStop(1, '#1e293b');
-    ctx.fillStyle = sGrad;
-    ctx.strokeStyle = '#090d16';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(cx - 42, cy + 65);
-    ctx.lineTo(cx - 42, cy - 25);
-    ctx.arc(cx, cy - 25, 42, Math.PI, 0);
-    ctx.lineTo(cx + 42, cy + 65);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Gothic Cross Top Carving
-    ctx.fillStyle = '#090d16';
-    ctx.fillRect(cx - 6, cy - 65, 12, 60);
-    ctx.fillRect(cx - 26, cy - 48, 52, 12);
-
-    // Carved Relic Skull in Medallion
-    ctx.fillStyle = '#e2e8f0';
-    ctx.beginPath();
-    ctx.arc(cx, cy + 8, 16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillRect(cx - 10, cy + 16, 20, 10);
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.arc(cx - 6, cy + 7, 4, 0, Math.PI * 2);
-    ctx.arc(cx + 6, cy + 7, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillRect(cx - 6, cy + 18, 3, 5);
-    ctx.fillRect(cx + 3, cy + 18, 3, 5);
-
-    // Chiseled Stone Cracks & Spectral Moss
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx + 25, cy - 20); ctx.lineTo(cx + 12, cy + 5); ctx.lineTo(cx + 30, cy + 35);
-    ctx.stroke();
-
-    // Creeping Eerie Cyan Moss
-    ctx.fillStyle = '#0d9488';
-    ctx.beginPath();
-    ctx.ellipse(cx - 30, cy + 65, 18, 8, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx + 25, cy + 68, 22, 10, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-    return cropToBBox(c);
-  }
-
-  function renderDeadTree() {
-    const c = document.createElement('canvas');
-    c.width = 300; c.height = 360;
-    const ctx = c.getContext('2d');
-    const cx = 150, cy = 190;
-
-    ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.55)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 125, 75, 24, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Twisted Haunted Trunk
-    const tGrad = ctx.createLinearGradient(cx - 40, cy - 80, cx + 40, cy + 120);
-    tGrad.addColorStop(0, '#475569');
-    tGrad.addColorStop(0.3, '#334155');
-    tGrad.addColorStop(0.7, '#1e293b');
-    tGrad.addColorStop(1, '#090d16');
-    ctx.fillStyle = tGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 4.5;
-
-    // Gnarled roots
-    ctx.beginPath();
-    ctx.moveTo(cx - 45, cy + 125);
-    ctx.quadraticCurveTo(cx - 30, cy + 85, cx - 22, cy + 20);
-    // Main trunk knot
-    ctx.quadraticCurveTo(cx - 40, cy - 30, cx - 18, cy - 80);
-    // Left major branch
-    ctx.quadraticCurveTo(cx - 75, cy - 120, cx - 110, cy - 145);
-    ctx.quadraticCurveTo(cx - 85, cy - 135, cx - 60, cy - 100);
-    ctx.quadraticCurveTo(cx - 35, cy - 135, cx - 45, cy - 165);
-    ctx.quadraticCurveTo(cx - 25, cy - 135, cx - 5, cy - 105);
-    // Center branch
-    ctx.quadraticCurveTo(cx, cy - 145, cx + 15, cy - 175);
-    ctx.quadraticCurveTo(cx + 20, cy - 135, cx + 18, cy - 95);
-    // Right branch
-    ctx.quadraticCurveTo(cx + 65, cy - 115, cx + 105, cy - 135);
-    ctx.quadraticCurveTo(cx + 80, cy - 105, cx + 38, cy - 70);
-    // Right trunk down
-    ctx.quadraticCurveTo(cx + 28, cy - 10, cx + 32, cy + 45);
-    ctx.quadraticCurveTo(cx + 55, cy + 95, cx + 60, cy + 125);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Spooky Hollow Knothole with Amber Glow
+    // Half skull / Diseased eye & Cybernetic red sensor
+    // Left eye: sickly cataract yellow
     ctx.fillStyle = '#020617';
     ctx.beginPath();
-    ctx.ellipse(cx - 4, cy + 12, 14, 20, 0.1, 0, Math.PI * 2);
+    ctx.arc(hx - 10, hy - 4, 6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#f59e0b';
+    ctx.fillStyle = '#facc15';
     ctx.beginPath();
-    ctx.arc(cx - 4, cy + 14, 6, 0, Math.PI * 2);
+    ctx.arc(hx - 10, hy - 4, 3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Hanging Spanish Moss / Necrotic Tendrils
-    ctx.fillStyle = '#1e3a5f';
-    for (const [mx, my] of [[cx - 85, cy - 110], [cx + 70, cy - 90], [cx - 25, cy - 120]]) {
-      ctx.beginPath();
-      ctx.roundRect(mx, my, 8, 35, 4);
-      ctx.fill();
-    }
-
-    ctx.restore();
-    return cropToBBox(c);
-  }
-
-  function renderGargoyle() {
-    const c = document.createElement('canvas');
-    c.width = 260; c.height = 320;
-    const ctx = c.getContext('2d');
-    const cx = 130, cy = 160;
-
-    ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.55)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 110, 60, 20, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Carved Gothic Stone Pillar Pedestal
-    ctx.fillStyle = linearGrad(ctx, cx - 50, cy + 50, cx + 50, cy + 105, '#64748b', '#1e293b');
-    ctx.strokeStyle = '#090d16';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(cx - 45, cy + 48, 90, 60, [6, 6, 4, 4]);
-    ctx.fill();
-    ctx.stroke();
-    // Pillar fluting lines
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(cx - 30, cy + 54, 8, 48);
-    ctx.fillRect(cx - 4, cy + 54, 8, 48);
-    ctx.fillRect(cx + 22, cy + 54, 8, 48);
-
-    // Stone Gargoyle Wings
-    for (const s of [-1, 1]) {
-      ctx.fillStyle = linearGrad(ctx, cx, cy - 30, cx + s * 55, cy + 30, '#94a3b8', '#334155');
-      ctx.strokeStyle = '#090d16';
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(cx + s * 14, cy);
-      ctx.lineTo(cx + s * 65, cy - 55);
-      ctx.lineTo(cx + s * 58, cy + 10);
-      ctx.lineTo(cx + s * 38, cy + 35);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Crouching Stone Demon Body
-    const gGrad = ctx.createRadialGradient(cx - 8, cy - 6, 8, cx, cy + 10, 36);
-    gGrad.addColorStop(0, '#cbd5e1');
-    gGrad.addColorStop(0.5, '#64748b');
-    gGrad.addColorStop(1, '#0f172a');
-    ctx.fillStyle = gGrad;
-    ctx.strokeStyle = '#090d16';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 16, 26, 32, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Claws gripping the pedestal ledge
-    ctx.fillStyle = '#e2e8f0';
-    for (const s of [-1, 1]) {
-      for (let f = -8; f <= 8; f += 8) {
-        ctx.fillRect(cx + s * 24 + f, cy + 44, 5, 12);
-      }
-    }
-
-    // Gargoyle Head & Horns
-    const hx = cx, hy = cy - 28;
-    for (const s of [-1, 1]) {
-      ctx.fillStyle = '#475569';
-      ctx.strokeStyle = '#090d16';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(hx + s * 10, hy - 8);
-      ctx.lineTo(hx + s * 34, hy - 36);
-      ctx.lineTo(hx + s * 18, hy + 2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = gGrad;
-    ctx.strokeStyle = '#090d16';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.roundRect(hx - 22, hy - 18, 44, 40, 10);
-    ctx.fill();
-    ctx.stroke();
-
-    // Glowing Ruby-Red Demonic Eyes
-    for (const s of [-1, 1]) {
-      const ex = hx + s * 10;
-      const ey = hy - 4;
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      ctx.arc(ex, ey, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(ex - 1, ey - 2, 2, 2);
-    }
-
-    ctx.restore();
-    return cropToBBox(c);
-  }
-
-  function renderSkullUrn() {
-    const c = document.createElement('canvas');
-    c.width = 240; c.height = 280;
-    const ctx = c.getContext('2d');
-    const cx = 120, cy = 150;
-
-    ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.55)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 85, 55, 18, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Iron Brazier Pedestal
-    ctx.fillStyle = linearGrad(ctx, cx - 40, cy + 50, cx + 40, cy + 85, '#475569', '#090d16');
+    // Right eye: grafted bionic sensor
+    ctx.fillStyle = '#334155';
     ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(cx - 35, cy + 60, 70, 24, [4, 4, 8, 8]);
+    ctx.roundRect(hx + 4, hy - 9, 12, 10, 2);
     ctx.fill();
     ctx.stroke();
-
-    // Large Cauldron / Urn Bowl
-    const uGrad = ctx.createLinearGradient(cx - 45, cy - 20, cx + 45, cy + 60);
-    uGrad.addColorStop(0, '#64748b');
-    uGrad.addColorStop(0.5, '#334155');
-    uGrad.addColorStop(1, '#090d16');
-    ctx.fillStyle = uGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 4.5;
+    ctx.fillStyle = '#ef4444';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 20, 48, 42, 0, 0, Math.PI * 2);
+    ctx.arc(hx + 10, hy - 4, 3, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
 
-    // Carved Relic Skull on Urn Face
-    ctx.fillStyle = '#cbd5e1';
-    ctx.beginPath();
-    ctx.arc(cx, cy + 22, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillRect(cx - 8, cy + 30, 16, 8);
+    // Gaping rotten mouth with crooked teeth
     ctx.fillStyle = '#020617';
-    ctx.beginPath();
-    ctx.arc(cx - 5, cy + 21, 3.5, 0, Math.PI * 2);
-    ctx.arc(cx + 5, cy + 21, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Dancing Spirit Flame (Purple & Cyan Hellfire)
-    const fGrad = ctx.createLinearGradient(cx, cy - 75, cx, cy - 10);
-    fGrad.addColorStop(0, '#67e8f9');
-    fGrad.addColorStop(0.3, '#a855f7');
-    fGrad.addColorStop(0.7, '#7c3aed');
-    fGrad.addColorStop(1, '#4c1d95');
-    ctx.fillStyle = fGrad;
-    ctx.beginPath();
-    ctx.moveTo(cx - 34, cy - 15);
-    ctx.quadraticCurveTo(cx - 45, cy - 50, cx - 18, cy - 75);
-    ctx.quadraticCurveTo(cx, cy - 45, cx + 8, cy - 85);
-    ctx.quadraticCurveTo(cx + 38, cy - 55, cx + 34, cy - 15);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.restore();
-    return cropToBBox(c);
-  }
-
-  // ==========================================
-  // 4. STAGE BOSSES
-  // ==========================================
-  function renderUnicornBoss() {
-    const c = document.createElement('canvas');
-    c.width = 512; c.height = 512;
-    const ctx = c.getContext('2d');
-    const cx = 256, cy = 260;
-
-    ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.65)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 180, 130, 38, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Heavy Gothic Iron Greaves & Sabatons
-    for (const s of [-1, 1]) {
-      const bx = cx + s * 65;
-      const by = cy + 130;
-      ctx.fillStyle = linearGrad(ctx, bx - 35, by, bx + 35, by + 50, '#94a3b8', '#1e293b');
-      ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.roundRect(bx - 30, by - 30, 60, 55, 8);
-      ctx.fill();
-      ctx.stroke();
-
-      // Massive iron foot
-      ctx.fillStyle = linearGrad(ctx, bx - 38, by + 25, bx + 38, by + 55, '#cbd5e1', '#334155');
-      ctx.beginPath();
-      ctx.roundRect(bx - 35, by + 25, 70, 30, [6, 6, 10, 10]);
-      ctx.fill();
-      ctx.stroke();
-
-      // Gold Trim
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(bx - 26, by + 28, 52, 6);
-    }
-
-    // Heavy Gothic Iron Breastplate & Spiked Faulds
-    const bGrad = ctx.createLinearGradient(cx - 85, cy - 50, cx + 85, cy + 100);
-    bGrad.addColorStop(0, '#f1f5f9');
-    bGrad.addColorStop(0.35, '#94a3b8');
-    bGrad.addColorStop(0.75, '#475569');
-    bGrad.addColorStop(1, '#0f172a');
-    ctx.fillStyle = bGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.roundRect(cx - 80, cy - 45, 160, 150, [24, 24, 16, 16]);
-    ctx.fill();
-    ctx.stroke();
-
-    // Massive Ornate Gold Medallion with Horn Skull Insignia
-    ctx.fillStyle = '#f59e0b';
-    ctx.beginPath();
-    ctx.arc(cx, cy + 20, 36, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#78350f';
-    ctx.lineWidth = 3.5;
-    ctx.stroke();
-    // Inner gem
-    ctx.fillStyle = '#dc2626';
-    ctx.beginPath();
-    ctx.arc(cx, cy + 20, 18, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Colossal Spiked Iron Pauldrons (Shoulder Armor)
-    for (const s of [-1, 1]) {
-      const px = cx + s * 115;
-      const py = cy - 35;
-      ctx.fillStyle = linearGrad(ctx, px - 45, py - 45, px + 45, py + 45, '#f8fafc', '#1e293b');
-      ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 5.5;
-      ctx.beginPath();
-      ctx.roundRect(px - 45, py - 35, 90, 75, 16);
-      ctx.fill();
-      ctx.stroke();
-
-      // Gold Trim & Heavy Spikes
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(px - 38, py - 30, 76, 8);
-      // Spike
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.moveTo(px, py - 65);
-      ctx.lineTo(px + 18, py - 35);
-      ctx.lineTo(px - 18, py - 35);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Right Hand Wielding Enormous Spiked Mace / Flail
-    ctx.save();
-    ctx.translate(cx + 145, cy + 30);
-    // Arm
-    ctx.fillStyle = '#475569';
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.roundRect(-22, -30, 44, 75, 12);
-    ctx.fill();
-    ctx.stroke();
-    // Heavy Spiked Mace Ball
-    ctx.fillStyle = linearGrad(ctx, 35, -55, 105, 15, '#e2e8f0', '#090d16');
-    ctx.beginPath();
-    ctx.arc(70, -20, 48, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // Mace Spikes
-    ctx.fillStyle = '#f59e0b';
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
-      const sx = 70 + Math.cos(a) * 48;
-      const sy = -20 + Math.sin(a) * 48;
-      const ex = 70 + Math.cos(a) * 72;
-      const ey = -20 + Math.sin(a) * 72;
-      ctx.beginPath();
-      ctx.moveTo(sx - Math.sin(a) * 10, sy + Math.cos(a) * 10);
-      ctx.lineTo(ex, ey);
-      ctx.lineTo(sx + Math.sin(a) * 10, sy - Math.cos(a) * 10);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Colossal Helmet with Single Piercing Cyclopean Eye
-    const hx = cx, hy = cy - 110;
-    const hGrad = ctx.createRadialGradient(hx - 15, hy - 25, 15, hx, hy, 75);
-    hGrad.addColorStop(0, '#f8fafc');
-    hGrad.addColorStop(0.4, '#94a3b8');
-    hGrad.addColorStop(0.8, '#334155');
-    hGrad.addColorStop(1, '#020617');
-    ctx.fillStyle = hGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.roundRect(hx - 65, hy - 55, 130, 110, [32, 32, 20, 20]);
-    ctx.fill();
-    ctx.stroke();
-
-    // The Legendary UNICORN Horn (Colossal Gold Blade Horn)
-    const hornGrad = ctx.createLinearGradient(hx, hy - 170, hx, hy - 50);
-    hornGrad.addColorStop(0, '#fef08a');
-    hornGrad.addColorStop(0.5, '#f59e0b');
-    hornGrad.addColorStop(1, '#78350f');
-    ctx.fillStyle = hornGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(hx - 18, hy - 55);
-    ctx.lineTo(hx, hy - 175);
-    ctx.lineTo(hx + 18, hy - 55);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Visor Slit
-    ctx.fillStyle = '#020617';
-    ctx.fillRect(hx - 50, hy - 10, 100, 28);
-
-    // Glowing Red/Amber Cyclopean Eye
-    ctx.fillStyle = '#dc2626';
-    ctx.beginPath();
-    ctx.arc(hx, hy + 4, 16, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(hx - 12, hy + 10, 24, 7);
     ctx.fillStyle = '#fef08a';
-    ctx.beginPath();
-    ctx.arc(hx, hy + 4, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(hx - 2, hy + 1, 5, 5);
+    ctx.fillRect(hx - 10, hy + 9, 3, 4);
+    ctx.fillRect(hx + 4, hy + 9, 3, 4);
 
     ctx.restore();
     return cropToBBox(c);
   }
 
-  function renderArremerKingBoss() {
+  function renderRedArremerWarhammer() {
+    // Khorne Bloodletter Daemon / Warp Gargoyle
     const c = document.createElement('canvas');
-    c.width = 512; c.height = 512;
+    c.width = 280; c.height = 280;
     const ctx = c.getContext('2d');
-    const cx = 256, cy = 250;
+    const cx = 140, cy = 140;
 
     ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.65)';
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.55)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 185, 140, 40, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 96, 52, 18, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Colossal Majestic Bat Wings
+    // Large Bat-Daemon Wings with Chaos Brass Runes
     for (const s of [-1, 1]) {
-      const wx = cx + s * 70;
-      const wy = cy - 45;
+      const wx = cx + s * 36;
+      const wy = cy - 25;
       ctx.save();
       ctx.translate(wx, wy);
       ctx.scale(s, 1);
 
-      const wGrad = ctx.createLinearGradient(0, -120, 170, 90);
-      wGrad.addColorStop(0, '#f87171');
-      wGrad.addColorStop(0.3, '#dc2626');
-      wGrad.addColorStop(0.7, '#7f1d1d');
-      wGrad.addColorStop(1, '#0f0204');
+      const wGrad = ctx.createLinearGradient(0, -65, 85, 55);
+      wGrad.addColorStop(0, '#dc2626');
+      wGrad.addColorStop(0.4, '#991b1b');
+      wGrad.addColorStop(0.8, '#450a0a');
+      wGrad.addColorStop(1, '#090102');
       ctx.fillStyle = wGrad;
       ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(45, -135);
-      ctx.lineTo(165, -85);
-      ctx.quadraticCurveTo(125, -20, 145, 35);
-      ctx.quadraticCurveTo(95, 55, 90, 95);
-      ctx.quadraticCurveTo(45, 65, 0, 68);
+      ctx.lineTo(28, -70);
+      ctx.lineTo(88, -40);
+      ctx.quadraticCurveTo(68, -10, 78, 18);
+      ctx.quadraticCurveTo(50, 30, 46, 52);
+      ctx.quadraticCurveTo(22, 35, 0, 38);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
-      // Wing Struts
-      ctx.strokeStyle = '#fca5a5';
-      ctx.lineWidth = 3.5;
+      // Burning Brass Khorne Rune on Wing
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(0, 0); ctx.lineTo(165, -85);
-      ctx.moveTo(45, -135); ctx.lineTo(145, 35);
-      ctx.moveTo(70, -40); ctx.lineTo(90, 95);
+      ctx.moveTo(35, -25); ctx.lineTo(55, -25);
+      ctx.moveTo(45, -35); ctx.lineTo(45, -5);
+      ctx.moveTo(35, -5); ctx.lineTo(55, -5);
       ctx.stroke();
-
       ctx.restore();
     }
 
-    // Muscular Demonic Body & Obsidian Chest Carapace
-    const tGrad = ctx.createLinearGradient(cx - 65, cy - 40, cx + 65, cy + 110);
+    // Barbed Daemon Tail
+    ctx.strokeStyle = '#991b1b';
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + 45);
+    ctx.quadraticCurveTo(cx - 45, cy + 70, cx - 35, cy + 96);
+    ctx.stroke();
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.moveTo(cx - 35, cy + 96);
+    ctx.lineTo(cx - 48, cy + 85);
+    ctx.lineTo(cx - 24, cy + 88);
+    ctx.closePath();
+    ctx.fill();
+
+    // Muscular Khorne Red Torso & Spiked Brass Collar
+    const tGrad = ctx.createLinearGradient(cx - 25, cy - 15, cx + 25, cy + 45);
     tGrad.addColorStop(0, '#ef4444');
     tGrad.addColorStop(0.4, '#b91c1c');
-    tGrad.addColorStop(0.8, '#450a0a');
-    tGrad.addColorStop(1, '#0f0204');
+    tGrad.addColorStop(0.8, '#7f1d1d');
+    tGrad.addColorStop(1, '#2d0606');
     ctx.fillStyle = tGrad;
     ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.roundRect(cx - 55, cy - 35, 110, 135, 20);
+    ctx.roundRect(cx - 24, cy - 12, 48, 56, 12);
     ctx.fill();
     ctx.stroke();
 
-    // Glowing Magma Veins on Chest
-    ctx.strokeStyle = '#fef08a';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 20); ctx.lineTo(cx - 28, cy + 25); ctx.lineTo(cx - 15, cy + 70);
-    ctx.moveTo(cx, cy - 20); ctx.lineTo(cx + 28, cy + 25); ctx.lineTo(cx + 15, cy + 70);
-    ctx.stroke();
+    // Spiked Brass Collar of Khorne
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(cx - 18, cy - 14, 36, 6);
+    for (let sp = -14; sp <= 14; sp += 7) {
+      ctx.beginPath();
+      ctx.moveTo(cx + sp - 2, cy - 14);
+      ctx.lineTo(cx + sp, cy - 20);
+      ctx.lineTo(cx + sp + 2, cy - 14);
+      ctx.fill();
+    }
 
     // Clawed Talon Feet
     for (const s of [-1, 1]) {
-      const lx = cx + s * 48;
-      const ly = cy + 105;
+      const lx = cx + s * 22;
+      const ly = cy + 48;
       ctx.fillStyle = '#991b1b';
       ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 3.5;
       ctx.beginPath();
-      ctx.roundRect(lx - 22, ly, 44, 70, 8);
+      ctx.roundRect(lx - 10, ly, 20, 32, 4);
       ctx.fill();
       ctx.stroke();
-
-      // Talons
-      ctx.fillStyle = '#f8fafc';
-      for (let t = -12; t <= 12; t += 12) {
-        ctx.beginPath();
-        ctx.moveTo(lx + t, ly + 65);
-        ctx.lineTo(lx + t + s * 4, ly + 88);
-        ctx.lineTo(lx + t - 4, ly + 65);
-        ctx.fill();
-        ctx.stroke();
+      // Black razor talons
+      ctx.fillStyle = '#020617';
+      for (let t = -6; t <= 6; t += 6) {
+        ctx.fillRect(lx + t - 1.5, ly + 30, 3.5, 8);
       }
     }
 
-    // Demonic King Head & Crown of Horns
-    const hx = cx, hy = cy - 95;
+    // Head: Elongated Bloodletter Skull with Jagged Obsidian Horns
+    const hx = cx, hy = cy - 40;
+    // Sweeping Black Obsidian Horns
     for (const s of [-1, 1]) {
-      ctx.fillStyle = linearGrad(ctx, hx, hy - 90, hx + s * 95, hy - 20, '#ef4444', '#020617');
+      ctx.fillStyle = linearGrad(ctx, hx, hy - 45, hx + s * 55, hy - 10, '#0f172a', '#7f1d1d');
       ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 5.5;
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(hx + s * 24, hy - 20);
-      ctx.quadraticCurveTo(hx + s * 88, hy - 75, hx + s * 75, hy - 120);
-      ctx.quadraticCurveTo(hx + s * 45, hy - 65, hx + s * 14, hy - 32);
+      ctx.moveTo(hx + s * 14, hy - 14);
+      ctx.quadraticCurveTo(hx + s * 52, hy - 48, hx + s * 42, hy - 68);
+      ctx.quadraticCurveTo(hx + s * 26, hy - 40, hx + s * 8, hy - 22);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
     }
 
     // Head
-    const headGrad = ctx.createRadialGradient(hx - 12, hy - 12, 12, hx, hy, 55);
-    headGrad.addColorStop(0, '#f87171');
-    headGrad.addColorStop(0.4, '#dc2626');
-    headGrad.addColorStop(0.8, '#7f1d1d');
-    headGrad.addColorStop(1, '#0f0204');
-    ctx.fillStyle = headGrad;
+    ctx.fillStyle = tGrad;
     ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 5.5;
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.roundRect(hx - 48, hy - 48, 96, 96, 24);
+    ctx.roundRect(hx - 22, hy - 22, 44, 44, 12);
     ctx.fill();
     ctx.stroke();
 
-    // Piercing Glowing Amber Eyes
+    // Blazing Hellfire Coal Eyes
     for (const s of [-1, 1]) {
-      const ex = hx + s * 22;
-      const ey = hy - 10;
+      const ex = hx + s * 11;
+      const ey = hy - 4;
       ctx.fillStyle = '#fde047';
       ctx.beginPath();
-      ctx.ellipse(ex, ey, 12, 8, s * 0.25, 0, Math.PI * 2);
+      ctx.ellipse(ex, ey, 6, 4, s * 0.25, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(ex - 2.5, ey - 8, 5, 16);
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(ex - 1.2, ey - 4, 2.4, 8);
     }
 
-    // Snarl with sharp fangs
+    // Fanged Snarl
     ctx.fillStyle = '#020617';
-    ctx.beginPath();
-    ctx.roundRect(hx - 26, hy + 20, 52, 18, 6);
-    ctx.fill();
+    ctx.fillRect(hx - 14, hy + 10, 28, 7);
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(hx - 20, hy + 18, 7, 10);
-    ctx.fillRect(hx + 13, hy + 18, 7, 10);
+    ctx.fillRect(hx - 10, hy + 9, 3.5, 5);
+    ctx.fillRect(hx + 6.5, hy + 9, 3.5, 5);
 
     ctx.restore();
     return cropToBBox(c);
   }
 
-  function renderAstarothBoss() {
+  function renderWoodyWarhammer() {
+    // Chaos Nurgling Imp / Flying Warp Gremlin
+    const c = document.createElement('canvas');
+    c.width = 240; c.height = 240;
+    const ctx = c.getContext('2d');
+    const cx = 120, cy = 125;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.5)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 86, 42, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Leathery Chaos Bat Wings
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = linearGrad(ctx, cx, cy - 25, cx + s * 65, cy + 20, '#581c87', '#1e0538');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 18, cy - 10);
+      ctx.quadraticCurveTo(cx + s * 62, cy - 48, cx + s * 65, cy - 8);
+      ctx.quadraticCurveTo(cx + s * 48, cy + 28, cx + s * 16, cy + 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Chubby Grotesque Nurgling Torso (Toxic Purple-Green)
+    const nGrad = ctx.createRadialGradient(cx - 8, cy - 8, 8, cx, cy, 38);
+    nGrad.addColorStop(0, '#c084fc');
+    nGrad.addColorStop(0.4, '#7e22ce');
+    nGrad.addColorStop(0.8, '#4c1d95');
+    nGrad.addColorStop(1, '#1e0538');
+    ctx.fillStyle = nGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 10, 32, 38, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Rotting Belly with Green Pustules
+    ctx.fillStyle = '#84cc16';
+    ctx.beginPath();
+    ctx.arc(cx - 8, cy + 15, 5, 0, Math.PI * 2);
+    ctx.arc(cx + 6, cy + 20, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Barbed Chaos Pitchfork
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(cx + 36, cy - 50, 5, 95);
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx + 36, cy - 50, 5, 95);
+    // Rusted Prongs with Chaos Star Icon
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(cx + 26, cy - 62, 25, 6);
+    ctx.fillRect(cx + 26, cy - 76, 4, 16);
+    ctx.fillRect(cx + 36.5, cy - 82, 4, 22);
+    ctx.fillRect(cx + 47, cy - 76, 4, 16);
+
+    // Mischievous Horned Nurgling Head
+    const hx = cx, hy = cy - 28;
+    // Twisted Horns
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = '#ca8a04';
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(hx + s * 14, hy - 10);
+      ctx.lineTo(hx + s * 34, hy - 32);
+      ctx.lineTo(hx + s * 20, hy - 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = nGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(hx, hy, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Wild Asymmetrical Yellow Eyes
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(hx - 9, hy - 4, 7, 0, Math.PI * 2);
+    ctx.arc(hx + 9, hy - 6, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#020617';
+    ctx.beginPath();
+    ctx.arc(hx - 8, hy - 4, 3, 0, Math.PI * 2);
+    ctx.arc(hx + 10, hy - 6, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Wide Cackling Grin with Rotten Teeth
+    ctx.fillStyle = '#020617';
+    ctx.beginPath();
+    ctx.arc(hx, hy + 12, 14, 0, Math.PI);
+    ctx.fill();
+    ctx.fillStyle = '#fde047';
+    ctx.fillRect(hx - 10, hy + 12, 4, 5);
+    ctx.fillRect(hx + 5, hy + 12, 4, 5);
+
+    ctx.restore();
+    return cropToBBox(c);
+  }
+
+  // ==========================================
+  // 3. TERRAIN DECOR (IMPERIAL / CHAOS GRIMDARK)
+  // ==========================================
+  function renderTombstoneWarhammer() {
+    // Imperial Shrine World Gothic Reliquary Stele
+    const c = document.createElement('canvas');
+    c.width = 260; c.height = 300;
+    const ctx = c.getContext('2d');
+    const cx = 130, cy = 160;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.6)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 95, 68, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Heavy Plinth Base with Skull reliefs
+    ctx.fillStyle = linearGrad(ctx, cx - 65, cy + 55, cx + 65, cy + 95, '#475569', '#0f172a');
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(cx - 60, cy + 60, 120, 32, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // Gothic Stele with Arched Top
+    const sGrad = ctx.createLinearGradient(cx - 45, cy - 70, cx + 45, cy + 60);
+    sGrad.addColorStop(0, '#94a3b8');
+    sGrad.addColorStop(0.4, '#475569');
+    sGrad.addColorStop(0.8, '#1e293b');
+    sGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = sGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - 42, cy + 60);
+    ctx.lineTo(cx - 42, cy - 25);
+    ctx.arc(cx, cy - 25, 42, Math.PI, 0);
+    ctx.lineTo(cx + 42, cy + 60);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Carved Imperial Aquila Wings & Skull
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(cx - 6, cy - 65, 12, 45);
+    ctx.fillRect(cx - 25, cy - 50, 50, 10);
+    drawImperialSkull(ctx, cx, cy - 10, 12);
+
+    // Purity Seals on Stele
+    drawPuritySeal(ctx, cx - 25, cy + 15, 1.2);
+    drawPuritySeal(ctx, cx + 24, cy + 25, 1.0);
+
+    // Dripping Red Votive Candles atop Stele
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(cx - 32, cy - 35, 6, 12);
+    ctx.fillRect(cx + 26, cy - 35, 6, 12);
+    // Candle flames
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.arc(cx - 29, cy - 39, 3, 0, Math.PI * 2);
+    ctx.arc(cx + 29, cy - 39, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+    return cropToBBox(c);
+  }
+
+  function renderDeadTreeWarhammer() {
+    // Warp-corrupted Blight Tree with Barbed Wire & Skulls
+    const c = document.createElement('canvas');
+    c.width = 300; c.height = 360;
+    const ctx = c.getContext('2d');
+    const cx = 150, cy = 190;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.6)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 125, 78, 25, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Gnarled Blackened Trunk
+    const tGrad = ctx.createLinearGradient(cx - 40, cy - 80, cx + 40, cy + 120);
+    tGrad.addColorStop(0, '#334155');
+    tGrad.addColorStop(0.4, '#1e293b');
+    tGrad.addColorStop(0.8, '#0f172a');
+    tGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = tGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 5;
+
+    ctx.beginPath();
+    ctx.moveTo(cx - 45, cy + 125);
+    ctx.quadraticCurveTo(cx - 30, cy + 85, cx - 22, cy + 20);
+    ctx.quadraticCurveTo(cx - 40, cy - 30, cx - 18, cy - 80);
+    ctx.quadraticCurveTo(cx - 75, cy - 120, cx - 110, cy - 145);
+    ctx.quadraticCurveTo(cx - 85, cy - 135, cx - 60, cy - 100);
+    ctx.quadraticCurveTo(cx - 35, cy - 135, cx - 45, cy - 165);
+    ctx.quadraticCurveTo(cx - 25, cy - 135, cx - 5, cy - 105);
+    ctx.quadraticCurveTo(cx, cy - 145, cx + 15, cy - 175);
+    ctx.quadraticCurveTo(cx + 20, cy - 135, cx + 18, cy - 95);
+    ctx.quadraticCurveTo(cx + 65, cy - 115, cx + 105, cy - 135);
+    ctx.quadraticCurveTo(cx + 80, cy - 105, cx + 38, cy - 70);
+    ctx.quadraticCurveTo(cx + 28, cy - 10, cx + 32, cy + 45);
+    ctx.quadraticCurveTo(cx + 55, cy + 95, cx + 60, cy + 125);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Coiled Barbed Wire wrapping the trunk
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 2;
+    for (let wy = cy - 20; wy <= cy + 80; wy += 25) {
+      ctx.beginPath();
+      ctx.ellipse(cx, wy, 24, 8, -0.2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Hanging Skull Reliquaries on chains
+    drawImperialSkull(ctx, cx - 65, cy - 75, 7);
+    drawImperialSkull(ctx, cx + 45, cy - 45, 6);
+
+    // Glowing Toxic Warp Eye Knothole
+    ctx.fillStyle = '#020617';
+    ctx.beginPath();
+    ctx.ellipse(cx - 4, cy + 10, 14, 20, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#84cc16';
+    ctx.beginPath();
+    ctx.arc(cx - 4, cy + 12, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+    return cropToBBox(c);
+  }
+
+  function renderGargoyleWarhammer() {
+    // Imperial Cathedral Servitor Gargoyle with Bionic Eye
+    const c = document.createElement('canvas');
+    c.width = 260; c.height = 320;
+    const ctx = c.getContext('2d');
+    const cx = 130, cy = 160;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.6)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 110, 64, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Gothic Column Pedestal with Imperial Skull Medallion
+    ctx.fillStyle = linearGrad(ctx, cx - 50, cy + 50, cx + 50, cy + 105, '#475569', '#0f172a');
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.roundRect(cx - 48, cy + 46, 96, 62, 6);
+    ctx.fill();
+    ctx.stroke();
+    drawImperialSkull(ctx, cx, cy + 76, 8);
+
+    // Gargoyle Stone Wings
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = linearGrad(ctx, cx, cy - 30, cx + s * 55, cy + 30, '#64748b', '#1e293b');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 14, cy);
+      ctx.lineTo(cx + s * 68, cy - 58);
+      ctx.lineTo(cx + s * 60, cy + 12);
+      ctx.lineTo(cx + s * 38, cy + 36);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Crouched Stone Body
+    const gGrad = ctx.createRadialGradient(cx - 8, cy - 6, 8, cx, cy + 10, 36);
+    gGrad.addColorStop(0, '#94a3b8');
+    gGrad.addColorStop(0.5, '#475569');
+    gGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = gGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 16, 26, 32, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Head with Bionic Sensor Eye
+    const hx = cx, hy = cy - 28;
+    ctx.fillStyle = gGrad;
+    ctx.beginPath();
+    ctx.roundRect(hx - 22, hy - 18, 44, 40, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    // Bionic Red Sensor Eye (Mechanicus style)
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(hx + 3, hy - 9, 12, 10);
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(hx + 9, hy - 4, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Normal stone eye on left
+    ctx.fillStyle = '#020617';
+    ctx.beginPath();
+    ctx.arc(hx - 9, hy - 4, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+    return cropToBBox(c);
+  }
+
+  function renderSkullUrnWarhammer() {
+    // Mechanicus Incense Skull Brazier
+    const c = document.createElement('canvas');
+    c.width = 240; c.height = 280;
+    const ctx = c.getContext('2d');
+    const cx = 120, cy = 150;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.6)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 85, 58, 20, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Industrial Blackstone & Brass Base
+    ctx.fillStyle = linearGrad(ctx, cx - 40, cy + 50, cx + 40, cy + 85, '#d97706', '#0f172a');
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(cx - 36, cy + 60, 72, 24, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // Cauldron Bowl with Cogwheel Crest
+    const uGrad = ctx.createLinearGradient(cx - 45, cy - 20, cx + 45, cy + 60);
+    uGrad.addColorStop(0, '#64748b');
+    uGrad.addColorStop(0.5, '#1e293b');
+    uGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = uGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 20, 50, 42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Center Mechanicus Skull
+    drawImperialSkull(ctx, cx, cy + 22, 10);
+
+    // Blue-Cyan Promethium Warp Fire
+    const fGrad = ctx.createLinearGradient(cx, cy - 75, cx, cy - 10);
+    fGrad.addColorStop(0, '#67e8f9');
+    fGrad.addColorStop(0.3, '#3b82f6');
+    fGrad.addColorStop(0.7, '#8b5cf6');
+    fGrad.addColorStop(1, '#1e1b4b');
+    ctx.fillStyle = fGrad;
+    ctx.beginPath();
+    ctx.moveTo(cx - 35, cy - 15);
+    ctx.quadraticCurveTo(cx - 45, cy - 50, cx - 18, cy - 75);
+    ctx.quadraticCurveTo(cx, cy - 45, cx + 8, cy - 85);
+    ctx.quadraticCurveTo(cx + 38, cy - 55, cx + 35, cy - 15);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+    return cropToBBox(c);
+  }
+
+  // ==========================================
+  // 4. STAGE BOSSES (WARHAMMER CHAOS DREADNOUGHTS & DAEMON LORDS)
+  // ==========================================
+  function renderUnicornWarhammer() {
+    // Chaos Hellbrute Titan "Unicorn" (Heavy Corrupted Power Warplate)
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const ctx = c.getContext('2d');
+    const cx = 256, cy = 260;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.7)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 180, 135, 40, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Heavy Industrial Exhaust Smokestacks (Spewing soot and flame)
+    for (const s of [-1, 1]) {
+      const sx = cx + s * 95;
+      const sy = cy - 85;
+      ctx.fillStyle = linearGrad(ctx, sx - 16, sy, sx + 16, sy, '#64748b', '#0f172a');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(sx - 14, sy - 50, 28, 70, 6);
+      ctx.fill();
+      ctx.stroke();
+      // Orange exhaust flame
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath();
+      ctx.ellipse(sx, sy - 52, 10, 16, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Heavy Spiked Chaos Greaves
+    for (const s of [-1, 1]) {
+      const bx = cx + s * 65;
+      const by = cy + 130;
+      ctx.fillStyle = linearGrad(ctx, bx - 35, by, bx + 35, by + 50, '#334155', '#020617');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.roundRect(bx - 32, by - 30, 64, 55, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      // Foot Sabaton
+      ctx.fillStyle = linearGrad(ctx, bx - 38, by + 25, bx + 38, by + 55, '#475569', '#090d16');
+      ctx.beginPath();
+      ctx.roundRect(bx - 36, by + 25, 72, 32, [6, 6, 12, 12]);
+      ctx.fill();
+      ctx.stroke();
+
+      // Corrupted Brass Trim & Spikes
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(bx - 26, by + 28, 52, 6);
+    }
+
+    // Massive Corrupted Iron Dreadnought Torso
+    const bGrad = ctx.createLinearGradient(cx - 90, cy - 50, cx + 90, cy + 100);
+    bGrad.addColorStop(0, '#64748b');
+    bGrad.addColorStop(0.35, '#334155');
+    bGrad.addColorStop(0.75, '#0f172a');
+    bGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = bGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.roundRect(cx - 85, cy - 45, 170, 155, 24);
+    ctx.fill();
+    ctx.stroke();
+
+    // Spiked Brass Chaos Star Trim on Torso
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(cx - 75, cy - 35, 150, 135);
+    // Chaos Star Arrows
+    ctx.fillStyle = '#f59e0b';
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+      const ax = cx + Math.cos(a) * 45;
+      const ay = cy + 25 + Math.sin(a) * 45;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + 25);
+      ctx.lineTo(ax, ay);
+      ctx.stroke();
+    }
+
+    // Gigantic Spiked Pauldrons with Skulls
+    for (const s of [-1, 1]) {
+      const px = cx + s * 120;
+      const py = cy - 35;
+      ctx.fillStyle = linearGrad(ctx, px - 45, py - 45, px + 45, py + 45, '#475569', '#020617');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.roundRect(px - 48, py - 35, 96, 78, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      // Brass Trim & Huge Spikes
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(px - 40, py - 30, 80, 8);
+      // Spike
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.moveTo(px, py - 70);
+      ctx.lineTo(px + 20, py - 35);
+      ctx.lineTo(px - 20, py - 35);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Right Arm: Colossal Spiked Chaos Meteor Hammer
+    ctx.save();
+    ctx.translate(cx + 155, cy + 30);
+    // Industrial Chains
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(40, -10); ctx.lineTo(75, -25);
+    ctx.stroke();
+    // Spiked Meteor Ball
+    ctx.fillStyle = linearGrad(ctx, 40, -60, 110, 10, '#475569', '#020617');
+    ctx.beginPath();
+    ctx.arc(75, -25, 52, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Giant spikes
+    ctx.fillStyle = '#f59e0b';
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+      const sx = 75 + Math.cos(a) * 52;
+      const sy = -25 + Math.sin(a) * 52;
+      const ex = 75 + Math.cos(a) * 78;
+      const ey = -25 + Math.sin(a) * 78;
+      ctx.beginPath();
+      ctx.moveTo(sx - Math.sin(a) * 12, sy + Math.cos(a) * 12);
+      ctx.lineTo(ex, ey);
+      ctx.lineTo(sx + Math.sin(a) * 12, sy - Math.cos(a) * 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Horned War-Helm with Single Baleful Warp Cyclops Eye
+    const hx = cx, hy = cy - 110;
+    const hGrad = ctx.createRadialGradient(hx - 15, hy - 25, 15, hx, hy, 75);
+    hGrad.addColorStop(0, '#cbd5e1');
+    hGrad.addColorStop(0.4, '#475569');
+    hGrad.addColorStop(0.8, '#1e293b');
+    hGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = hGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.roundRect(hx - 68, hy - 55, 136, 112, 24);
+    ctx.fill();
+    ctx.stroke();
+
+    // The Colossal Brass UNICORN Horn (Jagged Chaos Horn)
+    const hornGrad = ctx.createLinearGradient(hx, hy - 180, hx, hy - 50);
+    hornGrad.addColorStop(0, '#fde047');
+    hornGrad.addColorStop(0.5, '#d97706');
+    hornGrad.addColorStop(1, '#451a03');
+    ctx.fillStyle = hornGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 5.5;
+    ctx.beginPath();
+    ctx.moveTo(hx - 20, hy - 55);
+    ctx.lineTo(hx - 6, hy - 130);
+    ctx.lineTo(hx, hy - 185);
+    ctx.lineTo(hx + 6, hy - 130);
+    ctx.lineTo(hx + 20, hy - 55);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Visor Aperture
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(hx - 55, hy - 12, 110, 30);
+
+    // Baleful Orange-Red Warp Eye
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(hx, hy + 3, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath();
+    ctx.arc(hx, hy + 3, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(hx - 3, hy - 1, 6, 6);
+
+    ctx.restore();
+    return cropToBBox(c);
+  }
+
+  function renderArremerKingWarhammer() {
+    // Greater Daemon of Khorne / Bloodthirster "Arremer King"
     const c = document.createElement('canvas');
     c.width = 512; c.height = 512;
     const ctx = c.getContext('2d');
     const cx = 256, cy = 250;
 
     ctx.save();
-    // Shadow
-    ctx.fillStyle = 'rgba(5, 2, 15, 0.65)';
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.7)';
     ctx.beginPath();
     ctx.ellipse(cx, cy + 185, 145, 42, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Colossal Purple & Indigo Demon Body
-    const aGrad = ctx.createLinearGradient(cx - 85, cy - 40, cx + 85, cy + 120);
-    aGrad.addColorStop(0, '#c084fc');
-    aGrad.addColorStop(0.35, '#7e22ce');
-    aGrad.addColorStop(0.75, '#581c87');
-    aGrad.addColorStop(1, '#1e0538');
-    ctx.fillStyle = aGrad;
-    ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.roundRect(cx - 75, cy - 40, 150, 165, 24);
-    ctx.fill();
-    ctx.stroke();
-
-    // Golden Armored Belt
-    ctx.fillStyle = '#f59e0b';
-    ctx.strokeStyle = '#78350f';
-    ctx.lineWidth = 4;
-    ctx.fillRect(cx - 72, cy + 115, 144, 18);
-    ctx.strokeRect(cx - 72, cy + 115, 144, 18);
-
-    // ==========================================
-    // THE SECOND FACE ON STOMACH (Iconic Astaroth)
-    // ==========================================
-    const fx = cx, fy = cy + 45;
-    // Stomach face socket
-    ctx.fillStyle = '#020617';
-    ctx.beginPath();
-    ctx.roundRect(fx - 45, fy - 25, 90, 65, 14);
-    ctx.fill();
-    ctx.strokeStyle = '#f59e0b';
-    ctx.lineWidth = 3.5;
-    ctx.stroke();
-
-    // Stomach Eyes
+    // Colossal Wings of Khorne with Burning Hellfire
     for (const s of [-1, 1]) {
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      ctx.arc(fx + s * 22, fy - 6, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(fx + s * 22, fy - 6, 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
+      const wx = cx + s * 72;
+      const wy = cy - 45;
+      ctx.save();
+      ctx.translate(wx, wy);
+      ctx.scale(s, 1);
 
-    // Incandescent Hellfire spitting from stomach mouth
-    const fireGrad = ctx.createLinearGradient(fx, fy + 8, fx, fy + 35);
-    fireGrad.addColorStop(0, '#ffffff');
-    fireGrad.addColorStop(0.3, '#fde047');
-    fireGrad.addColorStop(0.7, '#ea580c');
-    fireGrad.addColorStop(1, '#991b1b');
-    ctx.fillStyle = fireGrad;
-    ctx.fillRect(fx - 34, fy + 8, 68, 22);
-
-    // Sharp fangs
-    ctx.fillStyle = '#f8fafc';
-    for (let t = -28; t <= 28; t += 11) {
-      ctx.fillRect(fx + t, fy + 6, 6, 10);
-      ctx.fillRect(fx + t, fy + 20, 6, 10);
-    }
-
-    // Massive Muscular Arms & Heavy Gold Bracers
-    for (const s of [-1, 1]) {
-      const ax = cx + s * 105;
-      const ay = cy + 25;
-      ctx.fillStyle = aGrad;
+      const wGrad = ctx.createLinearGradient(0, -125, 175, 95);
+      wGrad.addColorStop(0, '#ef4444');
+      wGrad.addColorStop(0.35, '#b91c1c');
+      wGrad.addColorStop(0.75, '#450a0a');
+      wGrad.addColorStop(1, '#090102');
+      ctx.fillStyle = wGrad;
       ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 5.5;
+      ctx.lineWidth = 6;
       ctx.beginPath();
-      ctx.roundRect(ax - 28, ay - 45, 56, 105, 16);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(48, -140);
+      ctx.lineTo(172, -90);
+      ctx.quadraticCurveTo(130, -20, 150, 38);
+      ctx.quadraticCurveTo(100, 60, 95, 100);
+      ctx.quadraticCurveTo(48, 70, 0, 72);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
-      // Gold Bracer
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(ax - 26, ay + 20, 52, 24);
-      ctx.strokeStyle = '#78350f';
-      ctx.strokeRect(ax - 26, ay + 20, 52, 24);
+      // Khorne Skull Runes
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(70, -50); ctx.lineTo(110, -50);
+      ctx.moveTo(90, -70); ctx.lineTo(90, -15);
+      ctx.stroke();
+      ctx.restore();
     }
 
-    // Giant Cursed Trident in Right Hand
-    ctx.save();
-    ctx.translate(cx + 145, cy - 25);
-    // Gold shaft
-    ctx.fillStyle = '#f59e0b';
-    ctx.strokeStyle = '#78350f';
-    ctx.lineWidth = 3.5;
-    ctx.fillRect(0, -140, 10, 290);
-    ctx.strokeRect(0, -140, 10, 290);
-    // Trident prongs
-    const pGrad = ctx.createLinearGradient(-35, -190, 45, -130);
-    pGrad.addColorStop(0, '#67e8f9');
-    pGrad.addColorStop(1, '#3b82f6');
-    ctx.fillStyle = pGrad;
-    ctx.fillRect(-35, -145, 80, 12);
+    // Daemon Prince Torso & Blackened Brass Armor
+    const tGrad = ctx.createLinearGradient(cx - 65, cy - 40, cx + 65, cy + 110);
+    tGrad.addColorStop(0, '#dc2626');
+    tGrad.addColorStop(0.4, '#991b1b');
+    tGrad.addColorStop(0.8, '#450a0a');
+    tGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = tGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 6;
     ctx.beginPath();
-    ctx.moveTo(-35, -145); ctx.lineTo(-35, -185); ctx.lineTo(-25, -145);
-    ctx.moveTo(5, -145); ctx.lineTo(5, -210); ctx.lineTo(15, -145);
-    ctx.moveTo(45, -145); ctx.lineTo(45, -185); ctx.lineTo(35, -145);
+    ctx.roundRect(cx - 58, cy - 35, 116, 140, 22);
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
 
-    // Primary Head & Magnificent Golden Crown Horns
-    const hx = cx, hy = cy - 115;
+    // Belt of Skulls (Khorne signature)
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(cx - 52, cy + 95, 104, 12);
+    for (let sk = -36; sk <= 36; sk += 24) {
+      drawImperialSkull(ctx, cx + sk, cy + 101, 7);
+    }
+
+    // Heavy Talons of Damnation
     for (const s of [-1, 1]) {
-      ctx.fillStyle = linearGrad(ctx, hx, hy - 85, hx + s * 95, hy - 15, '#fbbf24', '#78350f');
+      const lx = cx + s * 48;
+      const ly = cy + 110;
+      ctx.fillStyle = '#7f1d1d';
       ctx.strokeStyle = '#020617';
-      ctx.lineWidth = 5.5;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.roundRect(lx - 24, ly, 48, 72, 8);
+      ctx.fill();
+      ctx.stroke();
+      // Black razor talons
+      ctx.fillStyle = '#020617';
+      for (let t = -12; t <= 12; t += 12) {
+        ctx.fillRect(lx + t - 3, ly + 65, 6, 20);
+      }
+    }
+
+    // Demonic King Head & Sweeping Horns of Khorne
+    const hx = cx, hy = cy - 95;
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = linearGrad(ctx, hx, hy - 95, hx + s * 100, hy - 20, '#0f172a', '#7f1d1d');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 6;
       ctx.beginPath();
       ctx.moveTo(hx + s * 24, hy - 20);
-      ctx.quadraticCurveTo(hx + s * 90, hy - 75, hx + s * 80, hy - 115);
-      ctx.quadraticCurveTo(hx + s * 45, hy - 65, hx + s * 14, hy - 35);
+      ctx.quadraticCurveTo(hx + s * 95, hy - 80, hx + s * 80, hy - 125);
+      ctx.quadraticCurveTo(hx + s * 48, hy - 70, hx + s * 14, hy - 35);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
     }
 
     // Head base
-    const headGrad = ctx.createRadialGradient(hx - 14, hy - 14, 14, hx, hy, 55);
-    headGrad.addColorStop(0, '#c084fc');
-    headGrad.addColorStop(0.4, '#7e22ce');
-    headGrad.addColorStop(0.8, '#581c87');
-    headGrad.addColorStop(1, '#1e0538');
-    ctx.fillStyle = headGrad;
+    ctx.fillStyle = tGrad;
     ctx.strokeStyle = '#020617';
-    ctx.lineWidth = 5.5;
+    ctx.lineWidth = 6;
     ctx.beginPath();
-    ctx.roundRect(hx - 50, hy - 48, 100, 96, 22);
+    ctx.roundRect(hx - 50, hy - 50, 100, 100, 24);
     ctx.fill();
     ctx.stroke();
 
-    // Regal Golden Diadem Crown
-    ctx.fillStyle = '#f59e0b';
-    ctx.fillRect(hx - 44, hy - 44, 88, 14);
-    for (let c = -30; c <= 30; c += 20) {
+    // Blazing Molten Eyes
+    for (const s of [-1, 1]) {
+      const ex = hx + s * 24;
+      const ey = hy - 10;
+      ctx.fillStyle = '#fde047';
       ctx.beginPath();
-      ctx.moveTo(hx + c - 7, hy - 44);
-      ctx.lineTo(hx + c, hy - 60);
-      ctx.lineTo(hx + c + 7, hy - 44);
+      ctx.ellipse(ex, ey, 14, 9, s * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(ex - 2.5, ey - 9, 5, 18);
+    }
+
+    // Gaping Maw of Fangs
+    ctx.fillStyle = '#020617';
+    ctx.beginPath();
+    ctx.roundRect(hx - 28, hy + 20, 56, 20, 6);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(hx - 22, hy + 18, 8, 12);
+    ctx.fillRect(hx + 14, hy + 18, 8, 12);
+
+    ctx.restore();
+    return cropToBBox(c);
+  }
+
+  function renderAstarothWarhammer() {
+    // Chaos Undivided Daemon Sovereign Astaroth (Two-Faced Greater Daemon)
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const ctx = c.getContext('2d');
+    const cx = 256, cy = 250;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(5, 2, 15, 0.7)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 185, 148, 44, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Colossal Purple & Gold Chaos Sovereign Body
+    const aGrad = ctx.createLinearGradient(cx - 85, cy - 40, cx + 85, cy + 120);
+    aGrad.addColorStop(0, '#9333ea');
+    aGrad.addColorStop(0.35, '#6b21a8');
+    aGrad.addColorStop(0.75, '#3b0764');
+    aGrad.addColorStop(1, '#0f0217');
+    ctx.fillStyle = aGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.roundRect(cx - 78, cy - 40, 156, 170, 24);
+    ctx.fill();
+    ctx.stroke();
+
+    // Golden Chaos Belt
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(cx - 75, cy + 115, 150, 18);
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(cx - 75, cy + 115, 150, 18);
+
+    // ==========================================
+    // THE SECOND FACE ON STOMACH (Warhammer Warp Maw)
+    // ==========================================
+    const fx = cx, fy = cy + 45;
+    ctx.fillStyle = '#020617';
+    ctx.beginPath();
+    ctx.roundRect(fx - 48, fy - 26, 96, 68, 14);
+    ctx.fill();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Eyes on stomach maw
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(fx + s * 24, fy - 6, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(fx + s * 24, fy - 6, 4, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Piercing Glowing Eyes
+    // Incandescent Cyan-Purple Warpfire roaring from stomach maw
+    const fireGrad = ctx.createLinearGradient(fx, fy + 8, fx, fy + 38);
+    fireGrad.addColorStop(0, '#ffffff');
+    fireGrad.addColorStop(0.3, '#38bdf8');
+    fireGrad.addColorStop(0.7, '#8b5cf6');
+    fireGrad.addColorStop(1, '#4c1d95');
+    ctx.fillStyle = fireGrad;
+    ctx.fillRect(fx - 36, fy + 8, 72, 24);
+
+    // Sharp fangs
+    ctx.fillStyle = '#f8fafc';
+    for (let t = -30; t <= 30; t += 12) {
+      ctx.fillRect(fx + t, fy + 6, 6, 11);
+      ctx.fillRect(fx + t, fy + 21, 6, 11);
+    }
+
+    // Heavy Muscular Arms & Brass Bracers
     for (const s of [-1, 1]) {
-      const ex = hx + s * 22;
+      const ax = cx + s * 110;
+      const ay = cy + 25;
+      ctx.fillStyle = aGrad;
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.roundRect(ax - 28, ay - 45, 56, 110, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      // Brass Bracer with spikes
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(ax - 26, ay + 20, 52, 24);
+    }
+
+    // Giant Daemon Halberd / Trident in Right Hand
+    ctx.save();
+    ctx.translate(cx + 150, cy - 25);
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(0, -145, 10, 300);
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(0, -145, 10, 300);
+
+    // Trident Prongs crackling with Warp Energy
+    const pGrad = ctx.createLinearGradient(-35, -200, 45, -135);
+    pGrad.addColorStop(0, '#38bdf8');
+    pGrad.addColorStop(1, '#6366f1');
+    ctx.fillStyle = pGrad;
+    ctx.fillRect(-35, -150, 80, 14);
+    ctx.beginPath();
+    ctx.moveTo(-35, -150); ctx.lineTo(-35, -195); ctx.lineTo(-25, -150);
+    ctx.moveTo(5, -150); ctx.lineTo(5, -220); ctx.lineTo(15, -150);
+    ctx.moveTo(45, -150); ctx.lineTo(45, -195); ctx.lineTo(35, -150);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Primary Head & Crown of Four Chaos Horns
+    const hx = cx, hy = cy - 118;
+    for (const s of [-1, 1]) {
+      // Outer horns
+      ctx.fillStyle = linearGrad(ctx, hx, hy - 90, hx + s * 100, hy - 15, '#fbbf24', '#451a03');
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(hx + s * 24, hy - 20);
+      ctx.quadraticCurveTo(hx + s * 95, hy - 80, hx + s * 84, hy - 125);
+      ctx.quadraticCurveTo(hx + s * 48, hy - 70, hx + s * 14, hy - 35);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Inner horns
+      ctx.beginPath();
+      ctx.moveTo(hx + s * 12, hy - 30);
+      ctx.quadraticCurveTo(hx + s * 45, hy - 75, hx + s * 38, hy - 105);
+      ctx.quadraticCurveTo(hx + s * 22, hy - 65, hx + s * 6, hy - 38);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Head base
+    ctx.fillStyle = aGrad;
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.roundRect(hx - 52, hy - 50, 104, 100, 24);
+    ctx.fill();
+    ctx.stroke();
+
+    // Royal Brass Chaos Diadem
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(hx - 46, hy - 46, 92, 16);
+    drawImperialSkull(ctx, hx, hy - 38, 6);
+
+    // Blazing Golden Daemon Eyes
+    for (const s of [-1, 1]) {
+      const ex = hx + s * 24;
       const ey = hy - 12;
       ctx.fillStyle = '#fde047';
       ctx.beginPath();
-      ctx.ellipse(ex, ey, 10, 6, s * 0.2, 0, Math.PI * 2);
+      ctx.ellipse(ex, ey, 11, 7, s * 0.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#020617';
-      ctx.fillRect(ex - 2, ey - 6, 4, 12);
+      ctx.fillRect(ex - 2, ey - 7, 4, 14);
     }
 
     ctx.restore();
@@ -1567,27 +1612,26 @@ const renderedAssets = await page.evaluate(async () => {
   }
 
   // ==========================================
-  // 5. SEAMLESS MAKAIMURA GROUND (1024x1024)
+  // 5. WAR-TORN BLIGHTED CEMETERY GROUND (1024x1024)
   // ==========================================
-  function renderMakaimuraGround() {
+  function renderWarhammerGround() {
     const T = 1024;
     const c = document.createElement('canvas');
     c.width = T; c.height = T;
     const ctx = c.getContext('2d');
 
-    // Deep haunted midnight graveyard base
-    ctx.fillStyle = '#0d0b1a';
+    // Scorched mud & blackstone flagstone base
+    ctx.fillStyle = '#08090d';
     ctx.fillRect(0, 0, T, T);
 
-    // Subtle dark purple soil gradient
     const sGrad = ctx.createLinearGradient(0, 0, T, T);
-    sGrad.addColorStop(0, '#151128');
-    sGrad.addColorStop(0.5, '#0e0b1d');
-    sGrad.addColorStop(1, '#1b1433');
+    sGrad.addColorStop(0, '#10141d');
+    sGrad.addColorStop(0.5, '#0b0c10');
+    sGrad.addColorStop(1, '#151922');
     ctx.fillStyle = sGrad;
     ctx.fillRect(0, 0, T, T);
 
-    // Voronoi / Cobblestone grid generation with seamless wrapping
+    // Weathered Gothic Flagstones (Seamless 128px grid)
     const step = 128;
     const rows = T / step;
     const cols = T / step;
@@ -1599,61 +1643,55 @@ const renderedAssets = await page.evaluate(async () => {
         const shiftX = ((r % 2) * (step / 2));
         const stoneX = (x + shiftX) % T;
         const stoneY = y;
-
-        // Draw individual weathered gothic cobblestone slab
-        const sw = step - 12;
+        const sw = step - 14;
         const sh = step - 14;
 
-        // Stone gradient with 3D bevel
+        // Dark gothic flagstone with chipped edges
         const stoneGrad = ctx.createLinearGradient(stoneX, stoneY, stoneX + sw, stoneY + sh);
-        stoneGrad.addColorStop(0, '#2d274c');
-        stoneGrad.addColorStop(0.3, '#211c38');
-        stoneGrad.addColorStop(0.7, '#181329');
-        stoneGrad.addColorStop(1, '#090712');
+        stoneGrad.addColorStop(0, '#334155');
+        stoneGrad.addColorStop(0.3, '#1e293b');
+        stoneGrad.addColorStop(0.7, '#0f172a');
+        stoneGrad.addColorStop(1, '#020617');
 
         ctx.fillStyle = stoneGrad;
-        ctx.strokeStyle = '#05030a';
+        ctx.strokeStyle = '#020617';
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.roundRect(stoneX + 4, stoneY + 4, sw, sh, 8);
+        ctx.roundRect(stoneX + 4, stoneY + 4, sw, sh, 6);
         ctx.fill();
         ctx.stroke();
 
-        // Top-left specular moonlight edge highlight
-        ctx.strokeStyle = 'rgba(167, 139, 250, 0.22)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(stoneX + 8, stoneY + sh + 2);
-        ctx.lineTo(stoneX + 8, stoneY + 8);
-        ctx.lineTo(stoneX + sw, stoneY + 8);
-        ctx.stroke();
-
-        // Chiseled surface cracks
-        if ((r + col) % 3 === 0) {
-          ctx.strokeStyle = 'rgba(5, 3, 10, 0.7)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(stoneX + 18, stoneY + 16);
-          ctx.lineTo(stoneX + 38, stoneY + 42);
-          ctx.lineTo(stoneX + 54, stoneY + 36);
-          ctx.stroke();
+        // Chiseled Imperial Skulls or Crushed Bone Dust embedded in cobblestone
+        if ((r + col) % 2 === 0) {
+          drawImperialSkull(ctx, stoneX + sw * 0.5, stoneY + sh * 0.5, 7);
         }
 
-        // Spectral graveyard moss patches
-        if ((r * 7 + col * 13) % 4 === 0) {
-          ctx.fillStyle = 'rgba(13, 148, 136, 0.28)';
+        // Toxic Nurgle Slime / Warp Runoff
+        if ((r * 5 + col * 7) % 3 === 0) {
+          ctx.fillStyle = 'rgba(101, 163, 13, 0.35)';
           ctx.beginPath();
-          ctx.ellipse(stoneX + sw * 0.7, stoneY + sh * 0.75, 18, 10, 0.3, 0, Math.PI * 2);
+          ctx.ellipse(stoneX + sw * 0.3, stoneY + sh * 0.7, 16, 8, 0.4, 0, Math.PI * 2);
           ctx.fill();
+        }
+
+        // Spent Bolter Shell Casings scattered in the mud
+        if ((r * 3 + col * 11) % 4 === 0) {
+          ctx.fillStyle = '#f59e0b';
+          ctx.strokeStyle = '#78350f';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(stoneX + sw * 0.75, stoneY + sh * 0.3, 8, 3.5, 1);
+          ctx.fill();
+          ctx.stroke();
         }
       }
     }
 
-    // Ambient Necrotic Mist (Soft-light blend)
+    // Atmospheric Grimdark Vignette (Soft-light blend)
     ctx.save();
     ctx.globalCompositeOperation = 'soft-light';
-    const mGrad = ctx.createRadialGradient(T / 2, T / 2, T * 0.1, T / 2, T / 2, T * 0.7);
-    mGrad.addColorStop(0, 'rgba(147, 51, 234, 0.45)');
+    const mGrad = ctx.createRadialGradient(T / 2, T / 2, T * 0.1, T / 2, T / 2, T * 0.75);
+    mGrad.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
     mGrad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = mGrad;
     ctx.fillRect(0, 0, T, T);
@@ -1663,18 +1701,18 @@ const renderedAssets = await page.evaluate(async () => {
   }
 
   // Execute all renders
-  results['arthur'] = renderArthur();
-  results['makai_zombie'] = renderZombie();
-  results['makai_red_arremer'] = renderRedArremer();
-  results['makai_woody'] = renderWoody();
-  results['makai_tombstone'] = renderTombstone();
-  results['makai_dead_tree'] = renderDeadTree();
-  results['makai_gargoyle'] = renderGargoyle();
-  results['makai_skull_urn'] = renderSkullUrn();
-  results['boss_unicorn'] = renderUnicornBoss();
-  results['boss_arremer_king'] = renderArremerKingBoss();
-  results['boss_astaroth'] = renderAstarothBoss();
-  results['ground_makaimura'] = renderMakaimuraGround();
+  results['arthur'] = renderArthurWarhammer();
+  results['makai_zombie'] = renderZombieWarhammer();
+  results['makai_red_arremer'] = renderRedArremerWarhammer();
+  results['makai_woody'] = renderWoodyWarhammer();
+  results['makai_tombstone'] = renderTombstoneWarhammer();
+  results['makai_dead_tree'] = renderDeadTreeWarhammer();
+  results['makai_gargoyle'] = renderGargoyleWarhammer();
+  results['makai_skull_urn'] = renderSkullUrnWarhammer();
+  results['boss_unicorn'] = renderUnicornWarhammer();
+  results['boss_arremer_king'] = renderArremerKingWarhammer();
+  results['boss_astaroth'] = renderAstarothWarhammer();
+  results['ground_makaimura'] = renderWarhammerGround();
 
   return results;
 });
@@ -1711,4 +1749,4 @@ for (const [key, destRel] of Object.entries(destinationMap)) {
 }
 
 await task.finish({ keep: "all" });
-console.log("All Makaimura assets rendered and saved successfully!");
+console.log("All Warhammer-style Makaimura assets rendered and saved successfully!");

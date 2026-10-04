@@ -35,11 +35,11 @@ const showcaseData = await page.evaluate(async () => {
   ctx.fillStyle = '#f59e0b';
   ctx.font = 'bold 26px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('魔界村 (Makaimura) 關卡・英雄亞瑟・妖魔・三大魔王・墓園地形展示', W / 2, 40);
+  ctx.fillText('魔界村 (Makaimura) 戰鎚40K Grimdark 哥德風 — 審判聖騎士・混沌異形・三大惡魔・神聖靈廟', W / 2, 40);
 
   ctx.fillStyle = '#94a3b8';
   ctx.font = '14px sans-serif';
-  ctx.fillText('Gaga Survivor x Ghosts \'n Goblins — High Definition Stylized Arcade Art Verification', W / 2, 68);
+  ctx.fillText('Gaga Survivor x Makaimura — Warhammer 40K Grimdark Gothic Full Asset Redraw Verification', W / 2, 68);
 
   // 1. Arthur Walking Sequence (Top Left)
   ctx.fillStyle = '#1e1b4b';
@@ -58,7 +58,7 @@ const showcaseData = await page.evaluate(async () => {
     for (let f = 0; f < 8; f++) {
       const fx = 75 + f * 62;
       const fy = 195;
-      blit(ctx, arthurSpr, fx, fy, f);
+      blit(ctx, arthurSpr, f, fx, fy);
     }
   }
 
@@ -87,7 +87,7 @@ const showcaseData = await page.evaluate(async () => {
     const mx = 655 + i * 72;
     const my = 195;
     if (sp) {
-      blit(ctx, sp, mx, my, 0);
+      blit(ctx, sp, 0, mx, my);
     }
     ctx.fillStyle = '#cbd5e1';
     ctx.font = '11px sans-serif';
@@ -107,15 +107,15 @@ const showcaseData = await page.evaluate(async () => {
   ctx.fillText('魔界村三大首領 (Bosses) — 一角魔將‧獨角巨靈 / 猩紅魔王‧阿雷默 / 雙面魔王‧阿斯塔羅特', 55, 305);
 
   const bosses = [
-    { key: 'boss_unicorn', name: '一角魔將‧獨角巨靈', code: 'UNICORN COLOSSUS // 2:00 首領', cx: 220 },
-    { key: 'boss_arremer_king', name: '猩紅魔王‧阿雷默', code: 'RED ARREMER KING // 4:00 首領', cx: 600 },
-    { key: 'boss_astaroth', name: '雙面魔王‧阿斯塔羅特', code: 'GREAT DEMON ASTAROTH // 6:00 關底魔王', cx: 980 },
+    { key: 'boss_unicorn', name: '一角魔將‧獨角巨靈', code: 'CHAOS HELLBRUTE // 2:00 首領', cx: 220 },
+    { key: 'boss_arremer_king', name: '猩紅魔王‧阿雷默', code: 'BLOODTHIRSTER // 4:00 首領', cx: 600 },
+    { key: 'boss_astaroth', name: '雙面魔王‧阿斯塔羅特', code: 'WARP DAEMON LORD // 6:00 關底魔王', cx: 980 },
   ];
 
   for (const b of bosses) {
     const sp = getSprite(b.key);
     if (sp) {
-      blit(ctx, sp, b.cx, 420, 0);
+      blit(ctx, sp, 0, b.cx, 400);
     }
     ctx.fillStyle = '#fde047';
     ctx.font = 'bold 15px sans-serif';
@@ -144,19 +144,25 @@ const showcaseData = await page.evaluate(async () => {
   ctx.rect(viewX, viewY, viewW, viewH);
   ctx.clip();
 
-  const gr = new GroundRenderer();
-  const groundTex = gr.getGroundTexture(LEVELS.makaimura);
-  if (groundTex) {
-    const tileW = groundTex.width;
+  // Load ground image directly
+  const groundImg = new Image();
+  groundImg.src = 'assets/ground/ground_makaimura.png?t=' + ts;
+  await new Promise(r => {
+    groundImg.onload = r;
+    groundImg.onerror = r;
+  });
+
+  if (groundImg.naturalWidth > 0) {
+    const tileW = 512;
     for (let gy = viewY; gy < viewY + viewH + tileW; gy += tileW) {
       for (let gx = viewX; gx < viewX + viewW + tileW; gx += tileW) {
-        ctx.drawImage(groundTex, gx, gy);
+        ctx.drawImage(groundImg, gx, gy, tileW, tileW);
       }
     }
   }
 
   // Draw tactical grid
-  ctx.strokeStyle = 'rgba(167, 139, 250, 0.12)';
+  ctx.strokeStyle = 'rgba(167, 139, 250, 0.15)';
   ctx.lineWidth = 1;
   for (let x = viewX; x < viewX + viewW; x += 64) {
     ctx.beginPath(); ctx.moveTo(x, viewY); ctx.lineTo(x, viewY + viewH); ctx.stroke();
@@ -171,12 +177,12 @@ const showcaseData = await page.evaluate(async () => {
   const decorGarg = getSprite('makai_gargoyle');
   const decorUrn = getSprite('makai_skull_urn');
 
-  if (decorTree) blit(ctx, decorTree, viewX + 100, viewY + 140, 0);
-  if (decorTomb) blit(ctx, decorTomb, viewX + 220, viewY + 200, 0);
-  if (decorTomb) blit(ctx, decorTomb, viewX + 320, viewY + 110, 0);
-  if (decorGarg) blit(ctx, decorGarg, viewX + 850, viewY + 120, 0);
-  if (decorUrn) blit(ctx, decorUrn, viewX + 750, viewY + 210, 0);
-  if (decorTree) blit(ctx, decorTree, viewX + 1000, viewY + 150, 0);
+  if (decorTree) blit(ctx, decorTree, 0, viewX + 100, viewY + 140);
+  if (decorTomb) blit(ctx, decorTomb, 0, viewX + 220, viewY + 200);
+  if (decorTomb) blit(ctx, decorTomb, 0, viewX + 320, viewY + 110);
+  if (decorGarg) blit(ctx, decorGarg, 0, viewX + 850, viewY + 120);
+  if (decorUrn) blit(ctx, decorUrn, 0, viewX + 750, viewY + 210);
+  if (decorTree) blit(ctx, decorTree, 0, viewX + 1000, viewY + 150);
 
   // Place mobs swarm
   const zombSpr = getSprite('makai_zombie');
@@ -184,25 +190,25 @@ const showcaseData = await page.evaluate(async () => {
   const woodySpr = getSprite('makai_woody');
 
   if (zombSpr) {
-    blit(ctx, zombSpr, viewX + 400, viewY + 180, 2);
-    blit(ctx, zombSpr, viewX + 430, viewY + 220, 5);
+    blit(ctx, zombSpr, 2, viewX + 400, viewY + 180);
+    blit(ctx, zombSpr, 5, viewX + 430, viewY + 220);
   }
   if (arremerSpr) {
-    blit(ctx, arremerSpr, viewX + 540, viewY + 110, 3);
+    blit(ctx, arremerSpr, 3, viewX + 540, viewY + 110);
   }
   if (woodySpr) {
-    blit(ctx, woodySpr, viewX + 590, viewY + 210, 1);
+    blit(ctx, woodySpr, 1, viewX + 590, viewY + 210);
   }
 
   // Place Arthur hero
   if (arthurSpr) {
-    blit(ctx, arthurSpr, viewX + 480, viewY + 175, 4);
+    blit(ctx, arthurSpr, 4, viewX + 480, viewY + 175);
   }
 
   // Place Boss Astaroth descending
   const astarothSpr = getSprite('boss_astaroth');
   if (astarothSpr) {
-    blit(ctx, astarothSpr, viewX + 680, viewY + 160, 2);
+    blit(ctx, astarothSpr, 2, viewX + 680, viewY + 160);
   }
 
   // HUD crosshair

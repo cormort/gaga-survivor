@@ -21,6 +21,7 @@
 
 import { LEVELS } from './levels.js';
 import { SOCKET_BONUSES } from './tdsockets.js';
+import { initTDLevelBaselines, randomizeTDLevel } from './tdprocedural.js';
 
 // 手寫波次：wave(血量倍率, [群組…], 首領?, 詞綴?)；群組 = [怪種, 數量, 出怪間隔秒, 入口?]
 // 入口省略＝輪流走所有路線；寫數字＝固定走 paths[入口]。
@@ -467,16 +468,21 @@ export const TD_LEVELS = {
 // 讀取端（Turret.js 蓋塔、Facilities.js 護甲相剋與光環、UI.js 徽章、TowerDefense.draw 的六角底座）
 // 一律只看 socket.bonus，不需要知道 plan 的存在；寫完就刪，避免同一份資料有兩個來源。
 for (const level of Object.values(TD_LEVELS)) {
-  if (!level.socketPlan) continue;
-  level.sockets.forEach((s, i) => {
-    const key = level.socketPlan[i];
-    const def = Object.prototype.hasOwnProperty.call(SOCKET_BONUSES, key) ? SOCKET_BONUSES[key] : null;
-    if (!def) return;   // plan 比 sockets 短（或打錯字）＝這一格維持普通建塔點
-    s.bonus = key;
-    s.label = def.label;
-  });
-  delete level.socketPlan;
+  if (level.socketPlan) {
+    level.sockets.forEach((s, i) => {
+      const key = level.socketPlan[i];
+      const def = Object.prototype.hasOwnProperty.call(SOCKET_BONUSES, key) ? SOCKET_BONUSES[key] : null;
+      if (!def) return;   // plan 比 sockets 短（或打錯字）＝這一格維持普通建塔點
+      s.bonus = key;
+      s.label = def.label;
+    });
+    delete level.socketPlan;
+  }
+  // 初始化程序化生成基準（預設備份路線、固定建塔數量、加成池）
+  initTDLevelBaselines(level);
 }
+
+export { randomizeTDLevel };
 
 export const TD_ORDER = ['td_canyon', 'td_fork', 'td_fortress', 'td_forgeworld', 'td_redalert', 'td_starcraft', 'td_warcraft'];
 

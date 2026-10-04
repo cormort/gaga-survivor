@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v84';
+const FALLBACK_VERSION = 'gaga-v86';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -252,6 +252,13 @@ const PRECACHE = [
   './assets/td/lair_starcraft.png',
   './assets/td/lair_warcraft.png',
   './assets/td/base_starcraft.png',
+  './assets/td/path_canyon.png',
+  './assets/td/path_swamp.png',
+  './assets/td/path_fortress.png',
+  './assets/td/path_forgeworld.png',
+  './assets/td/path_redalert.png',
+  './assets/td/path_starcraft.png',
+  './assets/td/path_warcraft.png',
   // 道具／補給箱／金幣／磁鐵／炸彈 (DropItem.js)
   './assets/items/battery.png',
   './assets/items/chest_boss.png',
@@ -350,6 +357,7 @@ const PRECACHE = [
   './js/codex.js',
   './js/levels.js',
   './js/tdlevels.js',
+  './js/tdprocedural.js',
   './js/tdtowers.js',
   './js/tdsockets.js',
   './js/tdwaves.js',

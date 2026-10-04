@@ -46,6 +46,42 @@ body, html {
   height: 100dvh;
   overflow: hidden;
   background: radial-gradient(circle at 50% 50%, #151b29 0%, #070a10 100%);
+  margin: 0 auto;
+  transition: width 0.25s ease, height 0.25s ease;
+}
+
+/* 螢幕視野方向模式 (橫屏 16:9 / 竪屏 9:16 / 自動) */
+body.orient-portrait {
+  background-color: #03060a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#game-container.orient-portrait {
+  width: min(100vw, calc(100dvh * 9 / 16));
+  height: 100dvh;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(0, 229, 255, 0.25);
+}
+
+body.orient-landscape {
+  background-color: #03060a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#game-container.orient-landscape {
+  width: 100vw;
+  height: min(100dvh, calc(100vw * 9 / 16));
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(0, 229, 255, 0.25);
+}
+
+body.orient-auto,
+#game-container.orient-auto {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  box-shadow: none;
 }
 
 #gameCanvas {
@@ -3171,7 +3207,8 @@ body, html {
 
 /* 原生 select 在深色底上是「白底黑字」的突兀控制項，這裡改成一致的主題樣式 */
 #difficulty-select,
-#runcard-select {
+#runcard-select,
+#orientation-select {
   appearance: none;
   -webkit-appearance: none;
   min-height: 40px;
@@ -3192,9 +3229,11 @@ body, html {
 }
 
 #difficulty-select:hover,
-#runcard-select:hover { border-color: rgba(0, 229, 255, 0.6); }
+#runcard-select:hover,
+#orientation-select:hover { border-color: rgba(0, 229, 255, 0.6); }
 #difficulty-select:focus-visible,
-#runcard-select:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.35); }
+#runcard-select:focus-visible,
+#orientation-select:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.35); }
 
 .difficulty-desc {
   flex-basis: 100%;
@@ -3376,7 +3415,8 @@ body, html {
   .start-actions .difficulty-row { margin: 0; display: block; }
   .start-actions .difficulty-label,
   .start-actions .difficulty-desc { display: none; }
-  #difficulty-select, #runcard-select { width: 100%; min-height: 44px; font-size: 13px; padding: 6px 28px 6px 10px; background-position: right 9px center; }
+  #difficulty-select, #runcard-select, #orientation-select { width: 100%; min-height: 44px; font-size: 13px; padding: 6px 28px 6px 10px; background-position: right 9px center; }
+  .start-actions .orientation-row { grid-column: 1 / -1; margin: 0; }
   .start-actions #start-status { grid-column: 1 / -1; margin: 0; }
   .start-actions #start-status:empty { display: none; }
   .start-actions #btn-start-game { grid-column: 1 / -1; margin: 0; padding: 12px; font-size: 17px; }

@@ -13,6 +13,7 @@
 import { Enemy } from '../entities/Enemy.js';
 import { enemyScale } from '../levels.js';
 import { projectToSegment } from '../tdlevels.js';
+import { randomizeTDLevel } from '../tdprocedural.js';
 import { sound } from '../audio.js';
 import { heroLevelUp, drawHeroTarget } from './TDHero.js';
 import { WAVE_MODS, waveModMul, AIR_FILLER } from '../tdwaves.js';
@@ -51,6 +52,234 @@ if (typeof Image !== 'undefined') {
     TD_STRUCTURE_IMAGES[k] = img;
   }
 }
+
+// 守塔專屬無縫路面貼圖（assets/td/path_<主題>.png）
+export const TD_PATH_KEYS = [
+  'path_canyon', 'path_swamp', 'path_fortress', 'path_forgeworld',
+  'path_redalert', 'path_starcraft', 'path_warcraft'
+];
+export const TD_PATH_IMAGES = {};
+if (typeof Image !== 'undefined') {
+  for (const k of TD_PATH_KEYS) {
+    const img = new Image();
+    img.src = `assets/td/${k}.png`;
+    TD_PATH_IMAGES[k] = img;
+  }
+}
+
+// 守塔關卡主題路線風格配置：峽谷道溝壑高差 ＋ 實體兩側圍籬／護欄／木樁防護（凸顯怪物行進走廊）
+export const TD_PATH_STYLES = {
+  td_canyon: {
+    texture: 'path_canyon',
+    gorgeShadow: 'rgba(12, 6, 2, 0.85)',
+    gorgeShadowWidth: 36,
+    cliffBase: '#4a250e',
+    cliffBaseWidth: 24,
+    cliffRim: '#783d18',
+    cliffRimWidth: 16,
+    sunkenBed: '#261306',
+    sunkenBedWidth: 4,
+    road: '#85461e',
+    roadInner: '#9c5425',
+    flow: 'rgba(254, 240, 138, 0.55)',
+    flowDash: [14, 26],
+    flowSpeed: 32,
+    fence: {
+      offset: 5,
+      railColors: ['#b45309', '#78350f'],
+      railOffsets: [-11, -5],
+      railWidths: [3, 2.5],
+      postStep: 38,
+      postH: 16,
+      postW: 6,
+      postGrad: ['#d97706', '#78350f', '#451a03'],
+      postBorder: '#291004',
+      postCap: '#fde68a',
+      postDetail: 'rope',
+      detailColor: '#fef08a',
+    },
+  },
+  td_fork: {
+    texture: 'path_swamp',
+    gorgeShadow: 'rgba(5, 15, 8, 0.85)',
+    gorgeShadowWidth: 36,
+    cliffBase: '#142818',
+    cliffBaseWidth: 24,
+    cliffRim: '#1e3f24',
+    cliffRimWidth: 16,
+    sunkenBed: '#0d1a10',
+    sunkenBedWidth: 4,
+    road: '#1e241c',
+    roadInner: '#2c3529',
+    flow: 'rgba(74, 222, 128, 0.5)',
+    flowDash: [12, 30],
+    flowSpeed: 28,
+    fence: {
+      offset: 5,
+      railColors: ['#365314', '#1c1917'],
+      railOffsets: [-10, -4],
+      railWidths: [3, 2.2],
+      postStep: 40,
+      postH: 15,
+      postW: 7,
+      postGrad: ['#44403c', '#292524', '#142818'],
+      postBorder: '#0c0a09',
+      postCap: '#4ade80',
+      postDetail: 'moss',
+      detailColor: 'rgba(74, 222, 128, 0.7)',
+    },
+  },
+  td_fortress: {
+    texture: 'path_fortress',
+    gorgeShadow: 'rgba(4, 9, 18, 0.9)',
+    gorgeShadowWidth: 38,
+    cliffBase: '#08172e',
+    cliffBaseWidth: 26,
+    cliffRim: '#0f2b48',
+    cliffRimWidth: 16,
+    sunkenBed: '#030712',
+    sunkenBedWidth: 4,
+    road: '#0f172a',
+    roadInner: '#1e293b',
+    flow: 'rgba(186, 230, 253, 0.65)',
+    flowDash: [16, 24],
+    flowSpeed: 38,
+    fence: {
+      offset: 6,
+      railColors: ['#0284c7', '#38bdf8'],
+      railOffsets: [-11, -5],
+      railWidths: [3.5, 2],
+      postStep: 44,
+      postH: 16,
+      postW: 7,
+      postGrad: ['#38bdf8', '#1e293b', '#0f172a'],
+      postBorder: '#020617',
+      postCap: '#e0f2fe',
+      postDetail: 'rune',
+      detailColor: '#7dd3fc',
+    },
+  },
+  td_forgeworld: {
+    texture: 'path_forgeworld',
+    gorgeShadow: 'rgba(0, 0, 0, 0.92)',
+    gorgeShadowWidth: 40,
+    cliffBase: '#1c1917',
+    cliffBaseWidth: 26,
+    cliffRim: '#292524',
+    cliffRimWidth: 16,
+    sunkenBed: '#0a0a0a',
+    sunkenBedWidth: 4,
+    road: '#1c1917',
+    roadInner: '#292524',
+    flow: 'rgba(239, 68, 68, 0.75)',
+    flowDash: [24, 18],
+    flowSpeed: 45,
+    fence: {
+      offset: 6,
+      railColors: ['#f59e0b', '#78350f'],
+      railOffsets: [-11, -5],
+      railWidths: [3.8, 2.2],
+      postStep: 42,
+      postH: 16,
+      postW: 6,
+      postGrad: ['#f59e0b', '#78350f', '#1c1917'],
+      postBorder: '#000000',
+      postCap: '#ef4444',
+      postDetail: 'hazard',
+      detailColor: '#000000',
+    },
+  },
+  td_redalert: {
+    texture: 'path_redalert',
+    gorgeShadow: 'rgba(10, 15, 26, 0.85)',
+    gorgeShadowWidth: 38,
+    cliffBase: '#1e293b',
+    cliffBaseWidth: 26,
+    cliffRim: '#334155',
+    cliffRimWidth: 16,
+    sunkenBed: '#0f172a',
+    sunkenBedWidth: 4,
+    road: '#1e293b',
+    roadInner: '#334155',
+    flow: 'rgba(239, 68, 68, 0.65)',
+    flowDash: [14, 24],
+    flowSpeed: 40,
+    fence: {
+      offset: 5,
+      railColors: ['#cbd5e1', '#64748b'],
+      railOffsets: [-11, -5],
+      railWidths: [3.2, 2],
+      postStep: 42,
+      postH: 15,
+      postW: 5,
+      postGrad: ['#cbd5e1', '#475569', '#1e293b'],
+      postBorder: '#0f172a',
+      postCap: '#ffffff',
+      postDetail: 'soviet',
+      detailColor: '#ef4444',
+    },
+  },
+  td_starcraft: {
+    texture: 'path_starcraft',
+    gorgeShadow: 'rgba(30, 4, 50, 0.88)',
+    gorgeShadowWidth: 40,
+    cliffBase: '#2e1065',
+    cliffBaseWidth: 26,
+    cliffRim: '#3b0764',
+    cliffRimWidth: 16,
+    sunkenBed: '#0a030f',
+    sunkenBedWidth: 4,
+    road: '#18042b',
+    roadInner: '#2e1065',
+    flow: 'rgba(244, 114, 182, 0.7)',
+    flowDash: [18, 22],
+    flowSpeed: 45,
+    fence: {
+      offset: 6,
+      railColors: ['#a855f7', '#d946ef'],
+      railOffsets: [-12, -6],
+      railWidths: [3.5, 2],
+      postStep: 38,
+      postH: 17,
+      postW: 6,
+      postGrad: ['#f472b6', '#9333ea', '#3b0764'],
+      postBorder: '#18042b',
+      postCap: '#e879f9',
+      postDetail: 'chitin',
+      detailColor: '#f43f5e',
+    },
+  },
+  td_warcraft: {
+    texture: 'path_warcraft',
+    gorgeShadow: 'rgba(2, 6, 23, 0.92)',
+    gorgeShadowWidth: 38,
+    cliffBase: '#0f172a',
+    cliffBaseWidth: 26,
+    cliffRim: '#1e293b',
+    cliffRimWidth: 16,
+    sunkenBed: '#020617',
+    sunkenBedWidth: 4,
+    road: '#090d16',
+    roadInner: '#1e293b',
+    flow: 'rgba(52, 211, 153, 0.6)',
+    flowDash: [18, 26],
+    flowSpeed: 36,
+    fence: {
+      offset: 5,
+      railColors: ['#475569', '#334155'],
+      railOffsets: [-11, -5],
+      railWidths: [3.2, 1.8],
+      postStep: 40,
+      postH: 16,
+      postW: 5,
+      postGrad: ['#64748b', '#334155', '#0f172a'],
+      postBorder: '#020617',
+      postCap: '#94a3b8',
+      postDetail: 'spear',
+      detailColor: '#10b981',
+    },
+  },
+};
 const LAIR = { w: 256, h: 224, foot: 214, scale: 0.62 };   // 畫出來約 140 寬（路寬 85~95）
 export const TD_LIVES = 20;              // 關卡沒寫 lives 時的預設命數
 export const TD_START_GOLD = 250;        // 關卡沒寫 startGold 時的開局金幣（約 4 座基礎砲台）
@@ -61,6 +290,8 @@ export class TowerDefense {
   constructor(game) {
     this.game = game;
     this.level = game.level;
+    // 配合玩家的視野選擇（橫屏 / 竪屏 / 自動）動態隨機化生成道路走勢與砲塔地基點（維持每關固定建塔總數）
+    randomizeTDLevel(this.level, this.game.orientation || 'auto');
     this.waves = this.level.waves;
     this.waveIdx = 0;                 // 下一個要出的波（0-based）
     this.phase = 'break';
@@ -454,36 +685,256 @@ export class TowerDefense {
     return { x: x + ix * insetX, y: y + iy * insetY, ix, iy };
   }
 
-  // 路線：地面上的淺色帶狀路面 + 深色路肩，入口畫一個紅色門標
+  // 路線：峽谷道深凹溝壑 + 主題路面 + 兩側實體立體圍籬／樁柱／護欄（凸顯敵軍走廊）
   draw(ctx, cam) {
     const w = this.level.pathWidth;
+    const style = TD_PATH_STYLES[this.level.id] || TD_PATH_STYLES.td_canyon;
+    const f = style.fence;
+
     ctx.save();
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
+
+    // A. 峽谷道深坑與崖壁高差 (Gorge Depth & Cliff Embankments)
     for (const path of this.paths) {
+      if (path.length < 2) continue;
+
       const trace = () => {
         ctx.beginPath();
         path.forEach(([x, y], i) => (i ? ctx.lineTo(x - cam.x, y - cam.y) : ctx.moveTo(x - cam.x, y - cam.y)));
       };
+
+      // 1. 峽谷深層外緣落影 (Gorge Ambient Drop Shadow)
       trace();
-      ctx.strokeStyle = 'rgba(255,170,60,0.75)';   // 亮橘路肩：一眼分得出「這是怪物的路」
-      ctx.lineWidth = w + 14;
+      ctx.strokeStyle = style.gorgeShadow;
+      ctx.lineWidth = w + (style.gorgeShadowWidth || 36);
       ctx.stroke();
+
+      // 2. 懸崖護坡岩層基礎 (Cliff Embankment Base)
       trace();
-      ctx.strokeStyle = 'rgba(20,16,12,0.85)';
+      ctx.strokeStyle = style.cliffBase;
+      ctx.lineWidth = w + (style.cliffBaseWidth || 24);
+      ctx.stroke();
+
+      // 3. 護坡崖壁頂緣 (Cliff Rim)
+      trace();
+      ctx.strokeStyle = style.cliffRim;
+      ctx.lineWidth = w + (style.cliffRimWidth || 16);
+      ctx.stroke();
+
+      // 4. 下凹谷底接縫 (Sunken Bed Seam)
+      trace();
+      ctx.strokeStyle = style.sunkenBed;
       ctx.lineWidth = w + 4;
       ctx.stroke();
+
+      // 5. 峽谷底層基路 (Packed Canyon Roadbed)
       trace();
-      ctx.strokeStyle = 'rgba(120,95,60,0.9)';
+      ctx.strokeStyle = style.road;
       ctx.lineWidth = w;
       ctx.stroke();
+
       trace();
-      ctx.setLineDash([22, 26]);
-      ctx.lineDashOffset = -this.game.gameTime * 40;   // 流動的中線：看得出行進方向
-      ctx.strokeStyle = 'rgba(255,225,160,0.7)';
-      ctx.lineWidth = 5;
+      ctx.strokeStyle = style.roadInner;
+      ctx.lineWidth = Math.max(12, w - 16);
+      ctx.stroke();
+
+      // 折線外擴計算器 (平滑角點斜接，左右分開，永不交叉貫穿道路)
+      const computePolylineOffsets = (dist) => {
+        const pts = [];
+        const n = path.length;
+        const segNorms = [];
+        for (let i = 0; i < n - 1; i++) {
+          const dx = path[i + 1][0] - path[i][0];
+          const dy = path[i + 1][1] - path[i][1];
+          const len = Math.hypot(dx, dy) || 1;
+          segNorms.push({ nx: -dy / len, ny: dx / len });
+        }
+
+        pts.push({
+          x: path[0][0] + segNorms[0].nx * dist,
+          y: path[0][1] + segNorms[0].ny * dist,
+        });
+
+        for (let i = 1; i < n - 1; i++) {
+          const n1 = segNorms[i - 1];
+          const n2 = segNorms[i];
+          const mx = n1.nx + n2.nx;
+          const my = n1.ny + n2.ny;
+          const mLen = Math.hypot(mx, my);
+          if (mLen < 0.001) {
+            pts.push({ x: path[i][0] + n1.nx * dist, y: path[i][1] + n1.ny * dist });
+          } else {
+            const bx = mx / mLen;
+            const by = my / mLen;
+            const cosHalf = bx * n1.nx + by * n1.ny;
+            const miter = Math.min(1.7, 1 / Math.max(0.25, cosHalf));
+            pts.push({
+              x: path[i][0] + bx * dist * miter,
+              y: path[i][1] + by * dist * miter,
+            });
+          }
+        }
+
+        pts.push({
+          x: path[n - 1][0] + segNorms[n - 2].nx * dist,
+          y: path[n - 1][1] + segNorms[n - 2].ny * dist,
+        });
+
+        return pts;
+      };
+
+      // 6. 峽谷北壁下凹落影 (Sunken Cliff Inner Drop Shadow)
+      ctx.save();
+      ctx.translate(0, 5);
+      trace();
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.lineWidth = Math.max(8, w - 10);
+      ctx.stroke();
+      ctx.restore();
+
+      // 7. 谷底行軍車痕／足印細溝痕
+      const rutLeft = computePolylineOffsets(-w * 0.22);
+      const rutRight = computePolylineOffsets(w * 0.22);
+      [rutLeft, rutRight].forEach((rPts) => {
+        ctx.beginPath();
+        rPts.forEach((p, idx) => (idx ? ctx.lineTo(p.x - cam.x, p.y - cam.y) : ctx.moveTo(p.x - cam.x, p.y - cam.y)));
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      });
+
+      // 8. 主題流向引導線 (Thematic Directional Trail)
+      trace();
+      ctx.setLineDash(style.flowDash || [14, 26]);
+      ctx.lineDashOffset = -this.game.gameTime * (style.flowSpeed || 32);
+      ctx.strokeStyle = style.flow;
+      ctx.lineWidth = 3;
       ctx.stroke();
       ctx.setLineDash([]);
+
+      // B. 兩側實體立體圍籬／樁柱／護欄 (Physical Guardrails & Palisade Posts)
+      if (f) {
+        const leftFence = computePolylineOffsets(-(w / 2 + (f.offset || 5)));
+        const rightFence = computePolylineOffsets(w / 2 + (f.offset || 5));
+
+        const renderFenceLine = (fencePts) => {
+          // 1. 先畫所有 3D 立體圍籬木樁／鋼柱／拒馬（讓橫向護欄能穿過柱身）
+          const step = f.postStep || 38;
+          const pH = f.postH || 16;
+          const pW = f.postW || 6;
+          const halfW = pW / 2;
+
+          const drawPostAt = (px, py) => {
+            // 底部地面落影
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+            ctx.beginPath();
+            ctx.ellipse(px + 2, py + 3, halfW + 3, 2.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 立體立柱漸層
+            const pGrad = ctx.createLinearGradient(px - halfW, py - pH, px + halfW, py);
+            pGrad.addColorStop(0, f.postGrad[0]);
+            pGrad.addColorStop(0.5, f.postGrad[1]);
+            pGrad.addColorStop(1, f.postGrad[2]);
+
+            ctx.fillStyle = pGrad;
+            ctx.strokeStyle = f.postBorder || '#000000';
+            ctx.lineWidth = 1.2;
+            ctx.fillRect(px - halfW, py - pH, pW, pH);
+            ctx.strokeRect(px - halfW, py - pH, pW, pH);
+
+            // 柱頂高光 / 雪帽 / 倒角 / 寶石
+            ctx.fillStyle = f.postCap;
+            ctx.fillRect(px - halfW, py - pH, pW, 2.5);
+
+            // 主題特徵裝飾
+            if (f.postDetail === 'rope') {
+              ctx.strokeStyle = f.detailColor;
+              ctx.lineWidth = 1.2;
+              ctx.beginPath();
+              ctx.moveTo(px - halfW, py - 11); ctx.lineTo(px + halfW, py - 11);
+              ctx.moveTo(px - halfW, py - 5); ctx.lineTo(px + halfW, py - 5);
+              ctx.stroke();
+            } else if (f.postDetail === 'hazard') {
+              ctx.fillStyle = f.detailColor;
+              ctx.fillRect(px - halfW, py - pH * 0.55, pW, 3);
+            } else if (f.postDetail === 'soviet') {
+              ctx.fillStyle = f.detailColor;
+              ctx.beginPath();
+              ctx.arc(px, py - pH - 2, 2, 0, Math.PI * 2);
+              ctx.fill();
+            } else if (f.postDetail === 'spear') {
+              ctx.fillStyle = f.detailColor;
+              ctx.beginPath();
+              ctx.moveTo(px, py - pH - 4);
+              ctx.lineTo(px - halfW, py - pH);
+              ctx.lineTo(px + halfW, py - pH);
+              ctx.closePath();
+              ctx.fill();
+            } else if (f.postDetail === 'chitin') {
+              ctx.fillStyle = f.detailColor;
+              ctx.beginPath();
+              ctx.moveTo(px, py - pH - 5);
+              ctx.lineTo(px - halfW - 1, py - pH);
+              ctx.lineTo(px, py - pH + 2);
+              ctx.closePath();
+              ctx.fill();
+            } else if (f.postDetail === 'rune') {
+              ctx.fillStyle = f.detailColor;
+              ctx.fillRect(px - 1.5, py - pH * 0.65, 3, 3);
+            }
+          };
+
+          for (let i = 0; i < fencePts.length - 1; i++) {
+            const p0 = fencePts[i];
+            const p1 = fencePts[i + 1];
+            const dx = p1.x - p0.x;
+            const dy = p1.y - p0.y;
+            const segLen = Math.hypot(dx, dy);
+
+            // 角點固定放一根樁柱
+            drawPostAt(p0.x - cam.x, p0.y - cam.y);
+
+            // 線段中間均勻分佈樁柱
+            const count = Math.max(0, Math.floor(segLen / step) - 1);
+            if (count > 0) {
+              const actualStep = segLen / (count + 1);
+              const ux = dx / segLen;
+              const uy = dy / segLen;
+              for (let k = 1; k <= count; k++) {
+                const d = k * actualStep;
+                drawPostAt(p0.x + ux * d - cam.x, p0.y + uy * d - cam.y);
+              }
+            }
+
+            // 最後一段的末端樁柱
+            if (i === fencePts.length - 2) {
+              drawPostAt(p1.x - cam.x, p1.y - cam.y);
+            }
+          }
+
+          // 2. 繪製橫向連續護欄／雙層原木／鋼纜／能量束
+          for (let rIdx = 0; rIdx < f.railColors.length; rIdx++) {
+            const rColor = f.railColors[rIdx];
+            const rOffY = f.railOffsets[rIdx] || 0;
+            const rWidth = f.railWidths[rIdx] || 2;
+
+            ctx.beginPath();
+            fencePts.forEach((p, idx) => {
+              const rx = p.x - cam.x;
+              const ry = p.y - cam.y + rOffY;
+              idx === 0 ? ctx.moveTo(rx, ry) : ctx.lineTo(rx, ry);
+            });
+            ctx.strokeStyle = rColor;
+            ctx.lineWidth = rWidth;
+            ctx.stroke();
+          }
+        };
+
+        renderFenceLine(leftFence);
+        renderFenceLine(rightFence);
+      }
     }
     // 巢穴（或門牌）在所有路面之後畫，別條路不會蓋到它
     for (const path of this.level.paths) {

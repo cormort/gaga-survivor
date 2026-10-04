@@ -107,6 +107,7 @@ for (const [, line, list] of tdBody.matchAll(/([a-z_]+):\s*\[([^\]]*)\]/g)) {
 }
 for (const k of arrStrings(read('js/entities/AlliedUnit.js'), 'UNIT_IMAGE_KEYS')) add(`assets/td/${k}.png`, 'AlliedUnit.js UNIT_IMAGE_KEYS');
 for (const k of arrStrings(read('js/systems/TowerDefense.js'), 'TD_STRUCTURE_KEYS')) add(`assets/td/${k}.png`, 'TowerDefense.js TD_STRUCTURE_KEYS');
+for (const k of arrStrings(read('js/systems/TowerDefense.js'), 'TD_PATH_KEYS')) add(`assets/td/${k}.png`, 'TowerDefense.js TD_PATH_KEYS');
 
 const dropSrc = read('js/entities/DropItem.js');
 for (const k of arrStrings(dropSrc, 'DROP_ITEM_KEYS')) {

@@ -66,8 +66,8 @@ function blank() {
     best: { survivor: {}, defense: {} }, // { modeId: { levelId: { time, kills, cleared } } }
     character: 'duck',
     mode: 'survivor',       // 上次選的模式
-    // 音量 (主選單滑桿)、口袋道具自動使用、顯示設定（傷害數字 all/crit/off、畫面震動、減少閃光、首領過場）
-    settings: { sfx: 1, bgm: 0.8, autoPocket: true, damageNumbers: 'all', screenShake: true, reduceFlash: false, bossCutscene: true },
+    // 音量 (主選單滑桿)、口袋道具自動使用、顯示設定（傷害數字 all/crit/off、畫面震動、減少閃光、首領過場、螢幕視野）
+    settings: { sfx: 1, bgm: 0.8, autoPocket: true, damageNumbers: 'all', screenShake: true, reduceFlash: false, bossCutscene: true, orientation: 'auto' },
     daily: { date: '', bestTime: 0, completed: false },
     evolvedEver: [],            // 歷史上合成過的超武 id (合成圖鑑打勾用)
     weaponAspects: {            // Hades 武器型態配置

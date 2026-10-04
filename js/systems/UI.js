@@ -1869,7 +1869,15 @@ export class UIManager {
     if (!container) return;
     const st = settings || {};
     const mode = ['all', 'crit', 'off'].includes(st.damageNumbers) ? st.damageNumbers : 'all';
+    const orient = ['landscape', 'portrait', 'auto'].includes(st.orientation) ? st.orientation : 'auto';
     container.innerHTML = `
+      <label class="ds-item">🖥️ 螢幕視野
+        <select data-ds="orientation">
+          <option value="auto"${orient === 'auto' ? ' selected' : ''}>🔄 自動跟隨</option>
+          <option value="landscape"${orient === 'landscape' ? ' selected' : ''}>🖥️ 橫屏 16:9</option>
+          <option value="portrait"${orient === 'portrait' ? ' selected' : ''}>📱 竪屏 9:16</option>
+        </select>
+      </label>
       <label class="ds-item">🔢 傷害數字
         <select data-ds="damageNumbers">
           <option value="all"${mode === 'all' ? ' selected' : ''}>全部顯示</option>
@@ -1881,6 +1889,7 @@ export class UIManager {
       <label class="ds-item"><input type="checkbox" data-ds="reduceFlash"${st.reduceFlash ? ' checked' : ''}> 🕶️ 減少閃光</label>
       <label class="ds-item"><input type="checkbox" data-ds="bossCutscene"${st.bossCutscene !== false ? ' checked' : ''}> 🎬 首領特寫過場</label>
     `;
+    container.querySelector('[data-ds="orientation"]')?.addEventListener('change', (e) => onChange({ orientation: e.target.value }));
     container.querySelector('[data-ds="damageNumbers"]').addEventListener('change', (e) => onChange({ damageNumbers: e.target.value }));
     container.querySelector('[data-ds="screenShake"]').addEventListener('change', (e) => onChange({ screenShake: e.target.checked }));
     container.querySelector('[data-ds="reduceFlash"]').addEventListener('change', (e) => onChange({ reduceFlash: e.target.checked }));

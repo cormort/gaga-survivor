@@ -424,11 +424,13 @@ class Game {
 
   initWindow() {
     const resize = () => {
-      this.sw = window.innerWidth;   // 螢幕邏輯像素
-      this.sh = window.innerHeight;
+      const container = document.getElementById('game-container');
+      this.sw = container ? container.clientWidth : window.innerWidth;
+      this.sh = container ? container.clientHeight : window.innerHeight;
       this.fitView();
     };
     window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', resize);
 
     // 可用階梯 = 裝置 dpr 與 DPR_MAX 之間的所有階（例：dpr 3 → [1, 1.25, 1.5, 2]）。
     // ?dpr=N 可強制指定並鎖定（測試與效能對照用，不會被自動調整）。
@@ -442,7 +444,37 @@ class Game {
       if (this._dprSteps.length === 0) this._dprSteps = [1];
     }
     this._dprIdx = this._dprSteps.length - 1;   // 起始取最高階
+    this.setOrientation(save.data.settings?.orientation || 'auto');
     resize();
+  }
+
+  // 螢幕視野方向設定 (橫屏 / 竪屏 / 自動)
+  setOrientation(orient = 'auto') {
+    this.orientation = orient;
+    const container = document.getElementById('game-container');
+    const body = document.body;
+
+    body.classList.remove('orient-landscape', 'orient-portrait', 'orient-auto');
+    container?.classList.remove('orient-landscape', 'orient-portrait', 'orient-auto');
+
+    body.classList.add(`orient-${orient}`);
+    container?.classList.add(`orient-${orient}`);
+
+    // 行動全螢幕 / PWA 螢幕方向鎖定 API
+    if (window.screen?.orientation?.lock) {
+      if (orient === 'landscape') {
+        window.screen.orientation.lock('landscape').catch(() => {});
+      } else if (orient === 'portrait') {
+        window.screen.orientation.lock('portrait').catch(() => {});
+      } else {
+        window.screen.orientation.unlock?.();
+      }
+    }
+
+    const c = container || document.body;
+    this.sw = c.clientWidth || window.innerWidth;
+    this.sh = c.clientHeight || window.innerHeight;
+    this.fitView();
   }
 
   // 主堡倒塌：4 格動畫（每格 COLLAPSE_FRAME 秒），每倒一格再炸一次，最後停在廢墟一下才結算
@@ -492,21 +524,25 @@ class Game {
     this.camera.y = fit(b.minY - TD_HUD_PAD / this.zoom, b.maxY, this.vh, this.camera.y);   // 上緣多讓出 HUD 的高度
   }
 
-  // 螢幕座標（clientX/Y）→ 世界座標
+  // 螢幕座標（clientX/Y）→ 世界座標（考量畫布可能在寬螢幕/直屏下置中偏移）
   screenToWorld(sx, sy) {
-    return { x: sx / this.zoom + this.camera.x, y: sy / this.zoom + this.camera.y };
+    const rect = this.canvas.getBoundingClientRect();
+    const cx = sx - rect.left;
+    const cy = sy - rect.top;
+    return { x: cx / this.zoom + this.camera.x, y: cy / this.zoom + this.camera.y };
   }
 
   // 依目前階梯套用畫布解析度（sw/sh 是螢幕邏輯像素，畫布乘上 dpr；再乘鏡頭縮放）
   _applyCanvasSize() {
-    const dpr = this._dprSteps[this._dprIdx];
+    if (!this.canvas || !this.ctx) return;
+    const dpr = (this._dprSteps && this._dprSteps[this._dprIdx]) || 1;
     this.dpr = dpr;
-    this.canvas.width = Math.round(this.sw * dpr);
-    this.canvas.height = Math.round(this.sh * dpr);
+    this.canvas.width = Math.round((this.sw || window.innerWidth) * dpr);
+    this.canvas.height = Math.round((this.sh || window.innerHeight) * dpr);
     const z = dpr * (this.zoom || 1);
     this.ctx.setTransform(z, 0, 0, z, 0, 0);
     // 暫停/結算中改變解析度時補畫一幀，避免畫布留白
-    if (this.player && this.state !== 'PLAYING') this.render();
+    if (this.player && this.camera && this.state !== 'PLAYING') this.render();
   }
 
   // 累積每幀的 update+render 耗時，每 DPR_SAMPLE 幀結算一次
@@ -991,6 +1027,7 @@ class Game {
     this.player.game = this;
     this.td = this.level.td && this.core ? new TowerDefense(this) : null;   // 守塔：路線＋分波
     if (this.td) {
+      setWorldBounded(!!this.mode.boundedMap, this.level.bounds);   // 配合橫屏/竪屏動態 bounds 重新綁定世界邊界
       this.core.isLives = true;   // HUD 改顯示成命數膠囊（UI.updateCoreHUD）
       this.core.spriteKey = this.level.base || 'base_keep';   // 主堡貼圖（Core.drawSprite）
     }
@@ -3487,6 +3524,7 @@ class Game {
     this.particles.reduceFlash = !!st.reduceFlash;
     this._shakeOn = st.screenShake !== false;
     this._flashMul = st.reduceFlash ? 0.35 : 1;
+    if (this.camera) this.setOrientation(st.orientation || 'auto');
   }
 
   render() {
