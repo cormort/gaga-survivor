@@ -84,6 +84,34 @@ body.orient-auto,
   box-shadow: none;
 }
 
+/* 設定的視野方向與裝置實際方向不符時的提示（此時改用自動版面，避免 UI 擠在幾百像素寬的直條裡） */
+#orient-hint {
+  position: fixed;
+  left: 50%;
+  /* 貼在 HUD 下方：底部中間被 Q／R 技能鍵與波次提示占滿，放下面會互相蓋住 */
+  top: max(100px, calc(env(safe-area-inset-top, 0px) + 100px));
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(92vw, 460px);
+  padding: 8px 13px;
+  border-radius: 10px;
+  background: rgba(9, 14, 24, 0.92);
+  border: 1px solid rgba(110, 231, 255, 0.35);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  color: #cfe6f5;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#orient-hint.show { opacity: 1; transform: translate(-50%, 0); }
+#orient-hint .oi-icon { font-size: 15px; line-height: 1; }
+
 #gameCanvas {
   display: block;
   width: 100%;

@@ -423,14 +423,21 @@ class Game {
   }
 
   initWindow() {
-    const resize = () => {
-      const container = document.getElementById('game-container');
-      this.sw = container ? container.clientWidth : window.innerWidth;
-      this.sh = container ? container.clientHeight : window.innerHeight;
-      this.fitView();
-    };
+    const resize = () => this.syncViewportSize();
     window.addEventListener('resize', resize);
     window.addEventListener('orientationchange', resize);
+
+    // #game-container 有 0.25s 的 width/height 轉場，而且切 orient-* 時**不會**觸發 window.resize。
+    // 只讀一次 clientWidth/Height 會拿到「轉場剛開始」的舊尺寸（量到的是上一個狀態），
+    // 之後畫面被 CSS 拉成新比例、畫布卻還是舊比例 → 整個畫面拉伸變形。
+    // ResizeObserver 會在轉場的每一格回報，最後一定落在真正的尺寸上（裝置轉向、iOS 網址列收合同理）。
+    if (typeof ResizeObserver !== 'undefined') {
+      const el = document.getElementById('game-container');
+      if (el) {
+        this._resizeObserver = new ResizeObserver(() => this.syncViewportSize());
+        this._resizeObserver.observe(el);
+      }
+    }
 
     // 可用階梯 = 裝置 dpr 與 DPR_MAX 之間的所有階（例：dpr 3 → [1, 1.25, 1.5, 2]）。
     // ?dpr=N 可強制指定並鎖定（測試與效能對照用，不會被自動調整）。
@@ -448,19 +455,100 @@ class Game {
     resize();
   }
 
+  // 用容器「當下」的實際大小重新同步視野（ResizeObserver 與 resize/orientationchange 都走這裡）。
+  // 尺寸沒變就直接離開，避免轉場期間每一格都重算 zoom／重配畫布。
+  syncViewportSize() {
+    // 裝置實際方向變了、或「窄框擠不擠得下」翻面了（手機轉向、桌面拉視窗、iOS 網址列收合都會），
+    // 就重套一次設定：套不套 9:16 窄框與要不要顯示提示，兩件事都得跟著改。
+    const physical = this.physicalOrientation();
+    if (physical !== this._appliedPhysical
+      || this._orientApplied !== this.appliedOrientation(this.orientation, physical)) {
+      this.setOrientation(this.orientation || 'auto');
+      return true;
+    }
+    const container = document.getElementById('game-container');
+    const sw = container ? container.clientWidth : window.innerWidth;
+    const sh = container ? container.clientHeight : window.innerHeight;
+    if (sw === this.sw && sh === this.sh) return false;
+    this.sw = sw;
+    this.sh = sh;
+    this.fitView();
+    return true;
+  }
+
+  // 裝置「實際」的方向，用來判斷設定值有沒有被遵守。優先用 media query：
+  // 它看的是 viewport 比例，桌面上把視窗拉成直向也會正確回報。
+  physicalOrientation() {
+    if (typeof window.matchMedia === 'function') {
+      const mq = window.matchMedia('(orientation: portrait)');
+      if (mq) return mq.matches ? 'portrait' : 'landscape';
+    }
+    return window.innerHeight > window.innerWidth ? 'portrait' : 'landscape';
+  }
+
+  // 真正要套在容器上的方向。設定 16:9 / 9:16 但裝置是另一個方向時，窄框會退化成幾百像素寬的直條
+  // （HUD 與右側按鈕全部擠在一起）—— 只有**真的擠不下**（寬度 < 320px）才退回 'auto'（整張畫面）。
+  // 桌面上把視窗拉成直向、想看 9:16 版面（寬度仍有 450px 左右）的行為維持不變。
+  appliedOrientation(orient, physical = this.physicalOrientation()) {
+    if (!orient || orient === 'auto') return 'auto';
+    const vw = window.innerWidth || this.sw || 0;
+    const vh = window.innerHeight || this.sh || 0;
+    const boxW = orient === 'portrait' ? Math.min(vw, (vh * 9) / 16) : vw;
+    return orient !== physical && boxW < 320 ? 'auto' : orient;
+  }
+
+  // 設定方向與裝置實際方向不符時的提示。文字傳空字串＝隱藏。
+  showOrientationHint(text) {
+    let el = document.getElementById('orient-hint');
+    if (!text) {
+      if (el) el.classList.remove('show');
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'orient-hint';
+      const icon = document.createElement('span');
+      icon.className = 'oi-icon';
+      icon.textContent = '📱';
+      const msg = document.createElement('span');
+      msg.className = 'oi-text';
+      el.append(icon, msg);
+      document.body.appendChild(el);
+    }
+    const msg = el.querySelector('.oi-text');
+    if (msg) msg.textContent = text;
+    el.classList.add('show');
+    // 講一次就夠了，別一直擋在畫面下方
+    clearTimeout(this._orientHintTimer);
+    this._orientHintTimer = setTimeout(() => this.showOrientationHint(''), 10000);
+  }
+
   // 螢幕視野方向設定 (橫屏 / 竪屏 / 自動)
   setOrientation(orient = 'auto') {
     this.orientation = orient;
     const container = document.getElementById('game-container');
     const body = document.body;
 
+    // 設定 16:9 / 9:16 但裝置是另一個方向時，窄框會退化成幾百像素寬的直條（HUD 與右側按鈕全部擠在一起）。
+    // 真的擠不下就改用整張畫面（＝自動版面）並顯示提示；裝置轉回設定方向、或視窗變大就自動恢復。
+    const physical = this.physicalOrientation();
+    const applied = this.appliedOrientation(orient, physical);
+    const cramped = orient !== 'auto' && applied !== orient;
+    this._appliedPhysical = physical;
+    this._orientApplied = applied;
+
     body.classList.remove('orient-landscape', 'orient-portrait', 'orient-auto');
     container?.classList.remove('orient-landscape', 'orient-portrait', 'orient-auto');
 
-    body.classList.add(`orient-${orient}`);
-    container?.classList.add(`orient-${orient}`);
+    body.classList.add(`orient-${applied}`);
+    container?.classList.add(`orient-${applied}`);
 
-    // 行動全螢幕 / PWA 螢幕方向鎖定 API
+    const label = { landscape: '橫屏', portrait: '竪屏' };
+    this.showOrientationHint(cramped
+      ? `螢幕現在是${label[physical]}，與設定的「${label[orient]}」不符 —— 先用自動版面，轉回${label[orient]}就恢復`
+      : '');
+
+    // 行動全螢幕 / PWA 螢幕方向鎖定 API（鎖成功時裝置會真的轉過去，上面的不符狀態也隨之解除）
     if (window.screen?.orientation?.lock) {
       if (orient === 'landscape') {
         window.screen.orientation.lock('landscape').catch(() => {});
@@ -537,8 +625,13 @@ class Game {
     if (!this.canvas || !this.ctx) return;
     const dpr = (this._dprSteps && this._dprSteps[this._dprIdx]) || 1;
     this.dpr = dpr;
-    this.canvas.width = Math.round((this.sw || window.innerWidth) * dpr);
-    this.canvas.height = Math.round((this.sh || window.innerHeight) * dpr);
+    // 尺寸以畫布自己的 CSS 方框為準：#gameCanvas 是 width/height:100%，它「永遠」等於容器當下的實際大小。
+    // 若改用先前記下的 sw/sh，只要曾經量到轉場中途的尺寸，畫布比例就和 CSS 比例不一致 = 畫面被拉伸。
+    const rect = this.canvas.getBoundingClientRect();
+    const w = Math.round((rect.width || this.sw || window.innerWidth) * dpr);
+    const h = Math.round((rect.height || this.sh || window.innerHeight) * dpr);
+    if (this.canvas.width !== w) this.canvas.width = w;
+    if (this.canvas.height !== h) this.canvas.height = h;
     const z = dpr * (this.zoom || 1);
     this.ctx.setTransform(z, 0, 0, z, 0, 0);
     // 暫停/結算中改變解析度時補畫一幀，避免畫布留白

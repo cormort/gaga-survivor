@@ -464,8 +464,117 @@ const out = await page.evaluate(async () => {
     orientSel.value = 'landscape';
     orientSel.dispatchEvent(new Event('change', { bubbles: true }));
   }
+
+  // ── B10. 切換視野方向不會讓畫面拉伸（v88）──
+  // 教訓：#game-container 有 `transition: width .25s, height .25s`，而且切 orient-* 時
+  // **不會**觸發 window.resize；只讀一次 clientWidth/Height 拿到的是「轉場剛開始」的舊尺寸，
+  // 之後 CSS 把畫面拉成新比例、畫布卻還停在舊比例 → 整個畫面被拉伸變形（實測縱向被壓 11%，
+  // 竪屏↔橫屏互切時可到 2 倍以上）。修法：ResizeObserver 跟著容器走 + 畫布尺寸以自身 CSS 方框為準。
+  const stretchOf = () => {
+    const rect = g.canvas.getBoundingClientRect();
+    const dpr = g.dpr || 1;
+    return {
+      sx: g.canvas.width / (rect.width * dpr),
+      sy: g.canvas.height / (rect.height * dpr),
+      css: `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      backing: `${g.canvas.width}x${g.canvas.height}`,
+      swsh: `${g.sw}x${g.sh}`,
+    };
+  };
+  let worstStretch = 0;
+  const stretchLog = [], sizeMismatch = [];
+  for (const v of ['landscape', 'portrait', 'auto']) {
+    const sel2 = document.getElementById('orientation-select');
+    if (sel2) { sel2.value = v; sel2.dispatchEvent(new Event('change', { bubbles: true })); }
+    await new Promise((res) => setTimeout(res, 600));       // 等 0.25s 的容器轉場跑完
+    const s = stretchOf();
+    worstStretch = Math.max(worstStretch, Math.abs(s.sx - 1), Math.abs(s.sy - 1));
+    stretchLog.push(`${v}: css ${s.css} → 畫布 ${s.backing} sx=${s.sx.toFixed(3)} sy=${s.sy.toFixed(3)}`);
+    if (s.swsh !== s.css) sizeMismatch.push(`${v}: sw/sh ${s.swsh} ≠ css ${s.css}`);
+  }
+  ok('切換視野方向後畫布比例與 CSS 方框一致（畫面不會被拉伸變形）',
+    worstStretch <= 0.02, `最大偏差 ${(worstStretch * 100).toFixed(2)}%｜${stretchLog.join('  ')}`);
+  ok('切換視野方向後遊戲記下的視窗大小等於實際大小（守塔的縮放與相機才不會算錯）',
+    sizeMismatch.length === 0, sizeMismatch.join('、') || stretchLog.map((l) => l.split(' →')[0]).join('  '));
   return r;
 });
+
+// ── B11. 裝置轉向（viewport 真的改變）也不會拉伸 ──
+// B10 驗的是 CSS 類別切換（不觸發 window.resize），這裡驗真的轉向：容器 100vw/100dvh 跟著 viewport 變，
+// 但 0.25s 的 width/height 轉場會讓「resize 事件當下量到的尺寸」不等於最終尺寸。
+{
+  const measure = () => page.evaluate(() => {
+    const g = window.game;
+    const rect = g.canvas.getBoundingClientRect();
+    const dpr = g.dpr || 1;
+    return {
+      sx: g.canvas.width / (rect.width * dpr),
+      sy: g.canvas.height / (rect.height * dpr),
+      css: `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      swsh: `${g.sw}x${g.sh}`,
+    };
+  });
+  let worst = 0;
+  const log = [];
+  for (const [w, h] of [[844, 390], [390, 844], [1280, 800]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(700);
+    const s = await measure();
+    worst = Math.max(worst, Math.abs(s.sx - 1), Math.abs(s.sy - 1));
+    log.push(`${w}x${h}: css ${s.css} sw/sh ${s.swsh} sx=${s.sx.toFixed(3)} sy=${s.sy.toFixed(3)}`);
+  }
+  ok('裝置轉向（橫→直→橫）後畫布與遊戲視窗都跟著更新，畫面不失真',
+    worst <= 0.02, `最大偏差 ${(worst * 100).toFixed(2)}%｜${log.join('  ')}`);
+}
+
+// ── B12. 設定方向與裝置方向不符、窄框又擠不下時，改用自動版面並提示（v88）──
+// 9:16 窄框在橫向裝置上只有兩百多像素寬，HUD 與右側按鈕會全部疊在一起。
+// 但桌面上把視窗拉成直向預覽 9:16（寬度仍有 450px）是**合理用法**，不能被一起改掉 ——
+// 所以條件是「方向不符 **且** 窄框寬度 < 320px」，這裡兩種情況都要驗。
+{
+  const snap = () => page.evaluate(() => {
+    const el = document.getElementById('game-container');
+    const hint = document.getElementById('orient-hint');
+    const g = window.game;
+    return {
+      cls: el.className,
+      w: Math.round(el.getBoundingClientRect().width),
+      hint: !!hint && hint.classList.contains('show'),
+      hintText: hint ? hint.textContent : '',
+      swsh: `${g.sw}x${g.sh}`,
+    };
+  });
+  const setOrient = (v) => page.evaluate((val) => {
+    const sel = document.getElementById('orientation-select');
+    sel.value = val;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }, v);
+
+  await page.setViewportSize({ width: 1280, height: 800 });   // 橫向裝置
+  await page.waitForTimeout(400);
+  await setOrient('portrait');
+  await page.waitForTimeout(700);
+  const desk = await snap();
+  ok('桌面橫視窗選竪屏（窄框仍有 450px）照設定顯示，不提示',
+    desk.cls.includes('orient-portrait') && !desk.hint, `class=${desk.cls} 寬=${desk.w} 提示=${desk.hint}`);
+
+  await page.setViewportSize({ width: 844, height: 390 });    // 手機橫放
+  await page.waitForTimeout(900);
+  const phone = await snap();
+  ok('手機橫放卻設定竪屏（窄框只剩 219px）改用自動版面並顯示提示',
+    phone.cls.includes('orient-auto') && phone.hint && phone.hintText.includes('不符'),
+    `class=${phone.cls} 寬=${phone.w} 提示=${phone.hint ? `「${phone.hintText.trim()}」` : '無'}`);
+
+  await page.setViewportSize({ width: 390, height: 844 });    // 裝置轉回直向
+  await page.waitForTimeout(900);
+  const back = await snap();
+  ok('裝置轉回直向後恢復竪屏版面、提示消失',
+    back.cls.includes('orient-portrait') && !back.hint, `class=${back.cls} 寬=${back.w} 提示=${back.hint}`);
+
+  await setOrient('auto');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForTimeout(500);
+}
 
 for (const t of out) {
   if (t.pass) { passed++; console.log(`PASS  ${t.name}  [${t.detail}]`); }
