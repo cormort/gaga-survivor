@@ -1122,7 +1122,8 @@ export class UIManager {
     el.querySelector('.kp-close')?.addEventListener('click', () => this.showKingdomPanel(false));
   }
 
-  // 守塔建造選單：pos 是建塔點的螢幕座標，選單浮在它上方（太靠上就改放下方）
+  // 守塔建造選單：pos 是建塔點的螢幕座標（相對 #game-container）。
+  // 擺位交給 placeBuildMenu()，它一律用「實測尺寸 + 容器的實際方框」算，不寫死門檻。
   // socket＝選填，帶地基加成時在選單頂端顯示「這一格會給什麼」
   showBuildMenu(show, pos = null, items = [], onPick = null, socket = null) {
     const el = this.buildMenu;
@@ -1156,10 +1157,41 @@ export class UIManager {
     });
 
     el.replaceChildren(banner, ...rows);
-    const half = 158;   // 選單寬 306 的一半再留邊
-    el.style.left = `${Math.max(half, Math.min(window.innerWidth - half, pos.x))}px`;
-    el.style.top = `${pos.y}px`;
-    el.classList.toggle('below', pos.y < 320);   // 條列式選單比舊的 2×2 高，判定門檻跟著提高
+    this.placeBuildMenu(el, pos);
+  }
+
+  // 把建造選單擺進「玩家真的看得到的遊戲區域」裡。
+  // 三條規矩：
+  //   1. 水平置中——貼著建塔點只會讓選單卡在螢幕邊緣（玩家回報「有時會被卡到」）。
+  //   2. 垂直優先在建塔點上方、塞不下翻到下方、上下都塞不下才置中（至少整份選單都在畫面內）。
+  //   3. 一切以實測尺寸為準（選單高度隨塔種數與兩行說明變動，寫死門檻一定會漏一格）。
+  // 注意 pos.x 刻意不用：選單一律在容器內置中（玩家要的），只有垂直方向跟著建塔點。
+  // 邊界一律用容器的 clientWidth/Height，不是 window.innerWidth：竪屏模式會把 #game-container
+  // 縮成置中的 9:16 窄框（例：1280 視窗裡只有 450px），用視窗寬度算會把選單推出容器，
+  // 而容器是 overflow:hidden——玩家只看到半個選單，沒有任何錯誤訊息。
+  placeBuildMenu(el, pos) {
+    const host = el.offsetParent || el.parentElement || document.body;
+    const availW = host.clientWidth || window.innerWidth;
+    const availH = host.clientHeight || window.innerHeight;
+    const pad = 10;    // 離容器邊緣至少留這麼多
+    const gap = 28;    // 與建塔點之間的距離，免得蓋住剛點的那一格
+    el.style.maxHeight = '';                 // 先還原，才量得到內容真正要多高（CSS 另有 64vh 上限）
+    let h = el.offsetHeight;
+    if (h > availH - pad * 2) {              // 比畫面還高：縮高度讓內容自己捲，而不是被切掉
+      el.style.maxHeight = `${Math.max(140, availH - pad * 2)}px`;
+      h = el.offsetHeight;
+    }
+    const w = el.offsetWidth;
+    el.style.left = `${Math.round(Math.max(pad, (availW - w) / 2))}px`;
+    const cy = pos ? pos.y : availH / 2;
+    const aboveTop = cy - gap - h;
+    if (aboveTop >= pad) {
+      el.style.top = `${Math.round(aboveTop)}px`;
+    } else if (cy + gap + h <= availH - pad) {
+      el.style.top = `${Math.round(cy + gap)}px`;
+    } else {
+      el.style.top = `${Math.round(Math.min(Math.max(cy - h / 2, pad), Math.max(pad, availH - h - pad)))}px`;
+    }
   }
 
   showFacilityInspector(show, turret = null, callbacks = {}) {

@@ -306,6 +306,45 @@ const out = await page.evaluate(async () => {
   ok('蓋完選單自動關閉', !g.buildMenuSocket && !g.buildMenuKeys,
     `socket=${g.buildMenuSocket} keys=${g.buildMenuKeys}`);
 
+  // ── B4b. 建造選單擺位（v89）：容器是 overflow:hidden，切掉就是「看不到」而不是報錯 ──
+  // 舊版兩個毛病都會被這裡釘住：用 window.innerWidth 夾邊界（竪屏的置中窄框只有 450px，
+  // 貼邊的建塔點會把 306px 寬的選單推出容器），以及寫死 `pos.y < 320` 決定上下
+  // （選單高 480px，建塔點在 320~500 之間時放上方一定爆出頂端）。
+  const bmHost = document.getElementById('game-container');
+  const bmEl = document.getElementById('td-build-menu');
+  // 把點擊位置直接餵給 UI.showBuildMenu：驗的是擺位，不是相機→螢幕的換算
+  // （相機每幀會被 clamp 回地圖邊界，硬推相機反推座標會很不可靠）。
+  const bmPlace = (tx, ty) => {
+    const sock0 = g.level.sockets[0];
+    const ui = g.ui, orig = ui.showBuildMenu;
+    ui.showBuildMenu = function (show, pos, items, onPick, socket) {
+      return orig.call(this, show, show ? { x: tx, y: ty } : pos, items, onPick, socket);
+    };
+    try { fac.openBuildMenu(g, sock0); } finally { ui.showBuildMenu = orig; }
+    const hr = bmHost.getBoundingClientRect();
+    const r = bmEl.getBoundingClientRect();
+    return {
+      l: r.left - hr.left, t: r.top - hr.top, rr: r.right - hr.left, bb: r.bottom - hr.top,
+      w: r.width, h: r.height, hostW: hr.width, hostH: hr.height,
+    };
+  };
+  const bmInside = (m) => m.l >= -0.5 && m.t >= -0.5 && m.rr <= m.hostW + 0.5 && m.bb <= m.hostH + 0.5;
+  const bmBox = (m) => `${Math.round(m.l)},${Math.round(m.t)} ${Math.round(m.w)}x${Math.round(m.h)}（容器 ${Math.round(m.hostW)}x${Math.round(m.hostH)}）`;
+  const bmBad = [], bmLog = [];
+  let bmGap = 0;
+  for (const [tx, ty] of [[4, 4], [g.sw - 4, 6], [g.sw / 2, 4], [4, g.sh - 4],
+    [g.sw - 4, g.sh - 4], [g.sw / 2, 340], [g.sw / 2, g.sh / 2]]) {
+    const m = bmPlace(tx, ty);
+    bmGap = Math.max(bmGap, Math.abs(m.l - (m.hostW - m.w) / 2));
+    bmLog.push(`${Math.round(tx)},${Math.round(ty)}→${bmBox(m)}`);
+    if (!bmInside(m)) bmBad.push(`${Math.round(tx)},${Math.round(ty)}:${bmBox(m)}`);
+  }
+  ok('建造選單在四角、正中央與畫面中段都不會被容器切掉',
+    bmBad.length === 0, bmBad.join('｜') || bmLog.join(' '));
+  ok('建造選單一律水平置中（不再貼著建塔點卡在螢幕邊緣）',
+    bmGap <= 1.5, `最大置中偏差 ${bmGap.toFixed(1)}px`);
+  fac.closeBuildMenu(g);
+
   // ── B5. 王國升級：買了要立刻推到「已經在場上」的塔 ──
   td = await boot('td_fork');
   g.gold = 999999;
@@ -460,6 +499,23 @@ const out = await page.evaluate(async () => {
   ok('竪屏關卡的路線全在地圖內、建塔點補滿、跑 60 帧不拋例外',
     !porErr && !pOut && g.level.sockets.length === g.level._initialSocketCount,
     porErr || `路線出界=${pOut} 地基=${g.level.sockets.length}/${g.level._initialSocketCount}`);
+  // 竪屏的容器是「置中的 9:16 窄框」——這一條就是舊版真正的破口：
+  // 用 window.innerWidth（整個視窗）夾邊界時，貼右邊的建塔點會把選單推出容器，右側被切掉上百像素。
+  {
+    await new Promise((res) => setTimeout(res, 600));   // #game-container 有 0.25s 寬度轉場，立刻量會量到舊寬度
+    const hrP = bmHost.getBoundingClientRect();
+    const sockP = g.level.sockets[0];
+    const uiP = g.ui, origP = uiP.showBuildMenu;
+    uiP.showBuildMenu = function (show, pos, items, onPick, socket) {
+      return origP.call(this, show, show ? { x: hrP.width - 4, y: 6 } : pos, items, onPick, socket);
+    };
+    try { fac.openBuildMenu(g, sockP); } finally { uiP.showBuildMenu = origP; }
+    const rP = bmEl.getBoundingClientRect();
+    const mP = { l: rP.left - hrP.left, t: rP.top - hrP.top, rr: rP.right - hrP.left, bb: rP.bottom - hrP.top, w: rP.width, h: rP.height, hostW: hrP.width, hostH: hrP.height };
+    ok('竪屏窄框裡點最右邊的建塔點，選單仍完整在畫面內（用容器而不是視窗寬度算邊界）',
+      bmInside(mP) && hrP.width < 900, `容器 ${Math.round(hrP.width)}x${Math.round(hrP.height)}｜選單 ${bmBox(mP)}`);
+    fac.closeBuildMenu(g);
+  }
   if (orientSel) {
     orientSel.value = 'landscape';
     orientSel.dispatchEvent(new Event('change', { bubbles: true }));
