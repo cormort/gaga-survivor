@@ -3,7 +3,7 @@
 
 import { getSprite } from '../sprites.js';
 import { sound } from '../audio.js';
-import { VIEW } from '../config.js';
+import { VIEW, TD_CHAR_SCALE } from '../config.js';
 import { Projectile } from './Projectile.js';
 import { nearestOnPaths, projectToSegment } from '../tdlevels.js';
 
@@ -13,7 +13,7 @@ export const UNIT_IMAGES = {};
 const UNIT_CELL_W = 160;
 const UNIT_CELL_H = 128;
 const UNIT_FOOT_Y = 120;
-const UNIT_SCALE = 0.5;        // 待機高 96px → 世界 48px
+const UNIT_SCALE = 0.5 * TD_CHAR_SCALE;   // 待機高 96px → 世界 48px；守塔鏡頭拉遠，再乘上人物放大倍率
 const MELEE_ENGAGE = 130;      // 離集結點這麼遠以內的怪才去打
 const MELEE_CD = 0.8;
 const MELEE_MUL = 2.4;         // 一刀 = 基礎傷害 × 這個倍率。近戰只能打到身邊，比原本 250 射程的雷射槍接敵時間短，單發要重一點
@@ -214,7 +214,7 @@ export class GuardsmanUnit {
       ctx.shadowColor = '#ff5400';
       ctx.shadowBlur = 8;
       ctx.beginPath();
-      ctx.moveTo(sx + this.facing * 10, sy - 2);
+      ctx.moveTo(sx + this.facing * 10 * TD_CHAR_SCALE, sy - 2 * TD_CHAR_SCALE);
       ctx.lineTo(this.laserFx.tx - camera.x, this.laserFx.ty - camera.y);
       ctx.stroke();
 
@@ -222,7 +222,7 @@ export class GuardsmanUnit {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(sx + this.facing * 10, sy - 2);
+      ctx.moveTo(sx + this.facing * 10 * TD_CHAR_SCALE, sy - 2 * TD_CHAR_SCALE);
       ctx.lineTo(this.laserFx.tx - camera.x, this.laserFx.ty - camera.y);
       ctx.stroke();
       ctx.restore();
@@ -253,26 +253,28 @@ export class GuardsmanUnit {
         -w / 2, -UNIT_FOOT_Y * UNIT_SCALE, w, h);
       ctx.restore();
     } else {
-      // 繪製士兵本體
+      // 繪製士兵本體（沒有逐格動畫貼圖時的備用路徑：同樣要吃到人物放大倍率）
       const sp = getSprite('guardsman');
       if (sp) {
         ctx.save();
         ctx.translate(sx, sy);
         if (this.facing < 0) ctx.scale(-1, 1);
+        ctx.scale(TD_CHAR_SCALE, TD_CHAR_SCALE);
         const frameIdx = Math.floor(this.animTimer * 6) % sp.frames.length;
         ctx.drawImage(sp.frames[frameIdx], -sp.w / 2, -sp.h / 2, sp.w, sp.h);
         ctx.restore();
       }
     }
 
-    // 血條
+    // 血條（同樣跟著放大倍率往上移，才不會蓋在頭上）
     if (this.hp < this.maxHp && !this.isDead) {
       const w = 28;
+      const barY = sy - 24 * TD_CHAR_SCALE;
       ctx.fillStyle = 'rgba(5,8,15,0.85)';
-      ctx.fillRect(sx - w / 2 - 1, sy - 24, w + 2, 5);
+      ctx.fillRect(sx - w / 2 - 1, barY, w + 2, 5);
       const pct = Math.max(0, this.hp / this.maxHp);
       ctx.fillStyle = pct > 0.35 ? '#2ecc71' : '#e74c3c';
-      ctx.fillRect(sx - w / 2, sy - 23, w * pct, 3);
+      ctx.fillRect(sx - w / 2, barY + 1, w * pct, 3);
     }
   }
 }

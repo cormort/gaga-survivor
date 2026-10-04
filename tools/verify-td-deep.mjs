@@ -345,6 +345,30 @@ const out = await page.evaluate(async () => {
     bmGap <= 1.5, `最大置中偏差 ${bmGap.toFixed(1)}px`);
   fac.closeBuildMenu(g);
 
+  // ── B4c. 守塔人物放大（v90）：只放大「畫出來的」尺寸，碰撞半徑與戰鬥數值一律不動 ──
+  // 守塔鏡頭拉遠後英雄只有 ~53px、怪物 ~48px，比塔（52px）還小。使用者要求放大，
+  // 但這種改動最怕「順手把 radius 也放大」—— 那會同時改掉碰撞、擊退與卡位，
+  // 所以三件事都要釘住：倍率有套上、drawRadius 有跟著、radius 沒有變。
+  {
+    const { TD_CHAR_SCALE } = await imp('js/config.js');
+    const { getSprite } = await imp('js/sprites.js');
+    const heroSprite = getSprite(g.player.character.sprite);
+    ok('守塔英雄套用了人物放大倍率（drawScale === TD_CHAR_SCALE）',
+      g.player.drawScale === TD_CHAR_SCALE,
+      `drawScale=${g.player.drawScale} TD_CHAR_SCALE=${TD_CHAR_SCALE} 原圖 ${heroSprite.w}x${heroSprite.h}`);
+    g.td.phase = 'break';
+    g.td.timer = 0.05;
+    g.td.startWave(true);
+    await new Promise((res) => setTimeout(res, 700));
+    const en = g.enemies.find((x) => !x.isDead);
+    ok('怪物也吃到同一個倍率（tdDrawScale 由 TowerDefense.spawn 寫入）',
+      !!en && en.tdDrawScale === TD_CHAR_SCALE,
+      en ? `${en.spriteKey} tdDrawScale=${en.tdDrawScale}` : '沒有生怪');
+    ok('放大的只有畫出來的半徑：碰撞 radius 不變、drawRadius 才是倍率後的',
+      !!en && en.drawRadius > en.radius && Math.abs(en.drawRadius / en.radius - TD_CHAR_SCALE) < 1e-6,
+      en ? `radius=${en.radius} drawRadius=${en.drawRadius.toFixed(1)} 倍率=${(en.drawRadius / en.radius).toFixed(3)}` : '沒有生怪');
+  }
+
   // ── B5. 王國升級：買了要立刻推到「已經在場上」的塔 ──
   td = await boot('td_fork');
   g.gold = 999999;
@@ -552,6 +576,20 @@ const out = await page.evaluate(async () => {
     worstStretch <= 0.02, `最大偏差 ${(worstStretch * 100).toFixed(2)}%｜${stretchLog.join('  ')}`);
   ok('切換視野方向後遊戲記下的視窗大小等於實際大小（守塔的縮放與相機才不會算錯）',
     sizeMismatch.length === 0, sizeMismatch.join('、') || stretchLog.map((l) => l.split(' →')[0]).join('  '));
+
+  // ── B13. 生存者模式不能被這套放大連帶影響（反面案例）──
+  // drawScale 是在每次 start() 一起歸零的，如果哪天只有守塔那條路會設它，
+  // 玩完守塔再回去玩生存者就會沿用 1.3。
+  {
+    const { LEVEL_ORDER } = await imp('js/levels.js');
+    g.modeId = 'survivor';
+    g.td = null;
+    g.levelId = LEVEL_ORDER[0];
+    g.start(false);
+    await new Promise((res) => setTimeout(res, 300));
+    ok('生存者模式的英雄維持原尺寸（drawScale === 1，只有守塔放大）',
+      g.player.drawScale === 1, `modeId=${g.modeId} levelId=${g.levelId} drawScale=${g.player.drawScale}`);
+  }
   return r;
 });
 

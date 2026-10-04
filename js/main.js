@@ -14,6 +14,7 @@ import {
   isWorldBounded,
   setWorldBounded,
   VIEW,
+  TD_CHAR_SCALE,
 } from './config.js';
 import { Player, MP_PER_KILL } from './entities/Player.js';
 import { updateSkills } from './systems/Skills.js';
@@ -1230,6 +1231,8 @@ class Game {
     this._coreCollapse = null;
     this.player.heroLevel = 1;
     this.player.heroHpMul = 1;
+    // 守塔鏡頭拉得遠，英雄只有 40px 高 —— 純視覺放大（碰撞半徑仍是 18，見 config.js）
+    this.player.drawScale = this.td ? TD_CHAR_SCALE : 1;
     // 注意：modeDmgMul 這裡不能歸 1 —— 上面 1003/1065 才剛把 mode.weaponMul 與 rules.playerDmgMul
     // 乘進去。王國升級「英雄訓練」是用「倍率差」乘上去的（TowerDefense.applyKingdom），
     // 每次新建 TowerDefense 時 _heroKingdomMul 就是 1，所以不需要在這裡歸零。

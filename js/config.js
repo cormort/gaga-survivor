@@ -41,6 +41,12 @@ export function setWorldBounded(bounded, rect = GAME_CONFIG.WORLD_BOUNDS) { acti
 // 由 Game 在調整縮放時更新。
 export const VIEW = { w: 1280, h: 720 };
 
+// 守塔的人物放大倍率。守塔為了看整張圖把鏡頭拉遠（1280×800 時 zoom 0.7），
+// 英雄／兵營小兵／怪物在畫面上只有 34~48px 高，比一座塔（約 52px）還小，
+// 跟道路（95px 寬）擺在一起就像螞蟻。這裡只放大「畫出來」的尺寸 ——
+// 碰撞半徑、傷害、射程、擊退、波次血量全部不動，所以平衡與存檔都不受影響。
+export const TD_CHAR_SCALE = 1.3;
+
 // 武器定義
 export const WEAPONS = {
   kunai: {

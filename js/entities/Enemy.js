@@ -181,6 +181,9 @@ export class Enemy {
     this.eliteColor = null;
     this.damageTakenMul = config.damageTakenMul || 1; // 盾衛自帶減傷，裝甲詞綴再疊乘
     this.spriteScale = 1;    // 巨獸詞綴放大繪製用
+    // 守塔模式的純視覺放大倍率（TowerDefense.spawn 設定；生存者模式維持 1）。
+    // 只影響畫出來的大小，碰撞半徑、傷害、擊退都不動 —— 血條位置才需要跟著它走。
+    this.tdDrawScale = 1;
 
     this.x = x;
     this.y = y;
@@ -750,6 +753,12 @@ export class Enemy {
     return this.baseSpriteKey;
   }
 
+  // 畫面上的實際半徑：守塔把怪物放大（tdDrawScale）之後，血條與詞綴文字要跟著往上搬，
+  // 否則會壓在放大的頭上。戰鬥判定一律仍用 this.radius。
+  get drawRadius() {
+    return this.radius * (this.tdDrawScale || 1);
+  }
+
   // 灼燒／中毒光暈：整批一次畫完。原本每隻怪各自 save/translate/切 'lighter'/restore，
   // 250 隻怪就是 250 次合成模式切換；改成全場只切一次、直接用螢幕座標。
   static drawStatusGlows(ctx, camera, enemies) {
@@ -802,7 +811,7 @@ export class Enemy {
 
     const sprite = getSprite(this.spriteKey);
     const frame = Math.floor(this.animTimer * 1.4) % FRAMES;
-    const scale = this.spriteScale || 1;
+    const scale = (this.spriteScale || 1) * (this.tdDrawScale || 1);
     // 有方向的貼圖（守塔主題敵人，面朝右）：依實際移動方向左右翻轉
     let flip = 1;
     if (sprite.faceRight) {
@@ -860,7 +869,7 @@ export class Enemy {
       ctx.strokeStyle = '#ff0055';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(0, 0, this.radius * (1.3 + (1 - this._enrageFlash) * 1.6), 0, Math.PI * 2);
+      ctx.arc(0, 0, this.drawRadius * (1.3 + (1 - this._enrageFlash) * 1.6), 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
       ctx.globalAlpha = 1;
@@ -872,15 +881,17 @@ export class Enemy {
       ctx.translate(screenX, screenY);
       ctx.fillStyle = 'rgba(140, 220, 255, 0.32)';
       ctx.beginPath();
-      ctx.arc(0, 0, this.radius + 5, 0, Math.PI * 2);
+      // 冰凍／眩暈／減速／精英的圈圈都用 drawRadius：守塔把怪物放大之後，
+      // 這些提示圈如果還用原始 radius 就會縮進身體裡（看起來像破圖）。
+      ctx.arc(0, 0, this.drawRadius + 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = 'rgba(200, 245, 255, 0.9)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2;
-        const r1 = this.radius + 2;
-        const r2 = this.radius + 9;
+        const r1 = this.drawRadius + 2;
+        const r2 = this.drawRadius + 9;
         ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
         ctx.lineTo(Math.cos(a + 0.35) * r2, Math.sin(a + 0.35) * r2);
       }
@@ -899,8 +910,8 @@ export class Enemy {
       ctx.beginPath();
       for (let i = 0; i < 3; i++) {
         const a = t + (i / 3) * Math.PI * 2;
-        const r1 = this.radius * 0.4;
-        const r2 = this.radius + 7;
+        const r1 = this.drawRadius * 0.4;
+        const r2 = this.drawRadius + 7;
         ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
         ctx.lineTo(Math.cos(a + 0.5) * r2 * 0.7, Math.sin(a + 0.5) * r2 * 0.7);
         ctx.lineTo(Math.cos(a + 0.9) * r2, Math.sin(a + 0.9) * r2);
@@ -918,7 +929,7 @@ export class Enemy {
       ctx.lineWidth = 1.5;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
-      ctx.arc(0, 0, this.radius + 4, 0, Math.PI * 2);
+      ctx.arc(0, 0, this.drawRadius + 4, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
@@ -933,7 +944,7 @@ export class Enemy {
       ctx.globalAlpha = Math.max(0.15, pulse);
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 0, Math.max(18, this.radius + 8), 0, Math.PI * 2);
+      ctx.arc(0, 0, Math.max(18, this.drawRadius + 8), 0, Math.PI * 2);
       ctx.stroke();
       // 詞綴名稱：疾風/裝甲/巨獸/劇毒 —— 精英是「哪一種」比「是精英」更重要
       if (this.affixName) {
@@ -941,7 +952,7 @@ export class Enemy {
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        const ty = -this.radius - (this.hp < this.maxHp ? 18 : 10);
+        const ty = -this.drawRadius - (this.hp < this.maxHp ? 18 : 10);
         ctx.fillText(this.affixName, 0, ty + 1);
         ctx.fillStyle = this.eliteColor;
         ctx.fillText(this.affixName, 0, ty);
@@ -1030,13 +1041,15 @@ export class Enemy {
       ctx.lineWidth = 1.5;
       ctx.setLineDash([7, 6]);
       ctx.beginPath();
-      ctx.moveTo(this.facingX * (this.radius + 4), this.facingY * (this.radius + 4));
+      // 槍口要貼在「畫出來的」身體邊緣（射程線本身仍是戰鬥數值，不動）
+      const muzzle = this.drawRadius;
+      ctx.moveTo(this.facingX * (muzzle + 4), this.facingY * (muzzle + 4));
       ctx.lineTo(this.facingX * this.ranged.range, this.facingY * this.ranged.range);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = this.eliteColor || this.ranged.color;
       ctx.beginPath();
-      ctx.arc(this.facingX * (this.radius + 6), this.facingY * (this.radius + 6), 2.5 + prog * 3, 0, Math.PI * 2);
+      ctx.arc(this.facingX * (muzzle + 6), this.facingY * (muzzle + 6), 2.5 + prog * 3, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -1045,11 +1058,11 @@ export class Enemy {
   drawMiniHpBar(ctx) {
     // 見檔頭 hpBarSheet：整條血條（底框＋三種顏色）預烘成一張小圖，
     // 這裡只做兩次 drawImage —— 底框全寬、填色依血量比例取前段。
-    const barW = Math.max(10, this.radius * 1.7);
+    const barW = Math.max(10, this.drawRadius * 1.7);
     const barH = 4;
     const sheet = hpBarSheet(Math.round(barW), barH);
     const sx = -sheet.w / 2 - sheet.pad;
-    const sy = -this.radius - 10 - sheet.pad;
+    const sy = -this.drawRadius - 10 - sheet.pad;
 
     ctx.drawImage(sheet.cv, 0, 0, sheet.sw, sheet.sh, sx, sy, sheet.sw, sheet.sh);
 

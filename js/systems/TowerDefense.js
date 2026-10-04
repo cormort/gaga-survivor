@@ -19,6 +19,7 @@ import { heroLevelUp, drawHeroTarget } from './TDHero.js';
 import { WAVE_MODS, waveModMul, AIR_FILLER } from '../tdwaves.js';
 import { KINGDOM_UPGRADES, kingdomValue, kingdomNextCost, kingdomTrack } from '../tdkingdom.js';
 import { applyTDStats } from '../tdtowers.js';
+import { TD_CHAR_SCALE } from '../config.js';
 
 const WAVE_BONUS = (w) => 60 + w * 15;   // 清完第 w 波的獎金
 const EARLY_GOLD_PER_SEC = 4;            // 提前開戰：每剩 1 秒休息 +4 金幣
@@ -497,6 +498,7 @@ export class TowerDefense {
     scale.hp = this.hpMul() * mm.hp;
     const [x, y] = path[0];
     const e = new Enemy(type, x + (Math.random() - 0.5) * this.half, y + (Math.random() - 0.5) * this.half, scale);
+    e.tdDrawScale = TD_CHAR_SCALE;   // 守塔鏡頭拉遠：怪物只放大繪製，碰撞半徑不動
     const skin = this.level.enemySkins && this.level.enemySkins[type];
     if (skin) e.baseSpriteKey = skin;   // 主題地圖只換外觀（例：紅警的 brute 畫成犀牛坦克），數值與護甲照原怪種
     e.armorClass = ARMOR_CLASS[type] || 'medium';

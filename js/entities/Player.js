@@ -425,6 +425,8 @@ export class Player {
   draw(ctx, camera) {
     const screenX = this.x - camera.x;
     const screenY = this.y - camera.y;
+    // 守塔的純視覺放大倍率（生存者模式是 1，見 config.js TD_CHAR_SCALE）
+    const k = this.drawScale || 1;
 
     // 拾取範圍光圈 + 腳下聚光 (半徑會隨磁力升級變動，維持即時繪製)
     ctx.save();
@@ -436,7 +438,7 @@ export class Player {
     ctx.arc(0, 0, this.pickupRadius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.drawImage(Player.glow(), -56, -50, 112, 112);
+    ctx.drawImage(Player.glow(), -56 * k, -50 * k, 112 * k, 112 * k);
 
     // 戰術藥劑與型態 Buff 視覺環
     const now = Date.now() * 0.003;
@@ -444,28 +446,28 @@ export class Player {
       ctx.strokeStyle = '#4cc9f0';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(0, 0, 28 + Math.sin(now * 3) * 2, 0, Math.PI * 2);
+      ctx.arc(0, 0, (28 + Math.sin(now * 3) * 2) * k, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (this.atkPotionTimer > 0) {
       ctx.strokeStyle = '#ff7b00';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 0, 24 + Math.cos(now * 4) * 2, 0, Math.PI * 2);
+      ctx.arc(0, 0, (24 + Math.cos(now * 4) * 2) * k, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (this.nemesisCritTimer > 0) {
       ctx.strokeStyle = '#ffd60a';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 0, 22, 0, Math.PI * 2);
+      ctx.arc(0, 0, 22 * k, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.restore();
 
     // 無敵時間閃爍
     if (this.invulnerableTimer > 0 && Math.floor(Date.now() / 80) % 2 === 0) {
-      this.drawHpBar(ctx, screenX, screenY);
+      this.drawHpBar(ctx, screenX, screenY, k);
       return;
     }
 
@@ -491,18 +493,19 @@ export class Player {
       ctx.globalAlpha = Math.max(0, Math.min(1, g.alpha));
       ctx.translate(g.x - camera.x, g.y - camera.y);
       if (g.facing < 0) ctx.scale(-1, 1);
+      ctx.scale(k, k);
       blit(ctx, sprite, frame, 0, 0, true);
       ctx.restore();
     }
 
     ctx.save();
-    ctx.translate(screenX, screenY - bob * 1.8);
+    ctx.translate(screenX, screenY - bob * 1.8 * k);
     if (this.facing < 0) ctx.scale(-1, 1);
-    ctx.scale(scaleX, scaleY);
+    ctx.scale(scaleX * k, scaleY * k);
     blit(ctx, sprite, frame, 0, 0);
     ctx.restore();
 
-    this.drawHpBar(ctx, screenX, screenY);
+    this.drawHpBar(ctx, screenX, screenY, k);
   }
 
   // ponytail: 腳下暖光烘焙一次就好
@@ -521,11 +524,12 @@ export class Player {
     return Player._glow;
   }
 
-  drawHpBar(ctx, screenX, screenY) {
+  drawHpBar(ctx, screenX, screenY, k = 1) {
     const barW = 44;
     const barH = 6;
     const barX = screenX - barW / 2;
-    const barY = screenY - 32;
+    // 血條要浮在頭頂：守塔把人物放大 k 倍，偏移量也要跟著放大才不會壓在臉上
+    const barY = screenY - 32 * k;
     const pct = Math.max(0, this.hp / this.maxHp);
 
     ctx.save();
