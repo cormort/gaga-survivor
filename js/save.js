@@ -6,11 +6,18 @@ import { SLOT_ORDER, salvageValue, salvageGold, reforgeCost, rerollAffixes, FUSI
 // 倉庫基礎容量也住在黑市（擴建成本要從它算第幾次擴建），這裡再匯出給既有的讀者
 import { MAX_BOOSTER_STACK, STASH_CAP } from './shop.js';
 // 舊存檔的解鎖鏈修補需要關卡表（levels.js 是純資料、不 import 任何模組，不會循環）
-import { LEVELS, LEVEL_ORDER, DIFFICULTIES } from './levels.js';
+import { LEVELS, DIFFICULTIES } from './levels.js';
+// 各模式的關卡階梯住在模式表裡（modes.js 同樣只 import 純資料檔，不會循環）：
+// 生存者 13 關（無盡沒有通關，不算）、守塔自己的 7 張圖
+import { MODES } from './modes.js';
 
-// 難度逐級開放：前一個難度把所有關卡（無盡除外）各通關一次，才解鎖下一個難度
+// 難度逐級開放：前一個難度把「該模式的關卡」各通關一次，才解鎖下一個難度
 export const DIFF_ORDER = Object.keys(DIFFICULTIES);
-export const DIFF_REQUIRED_LEVELS = LEVEL_ORDER.filter((id) => id !== 'endless');
+// v91 起難度是每個模式各自一份：生存者沿用舊欄位名 difficulty（舊存檔不必搬），守塔用 tdDifficulty
+export const DIFF_KEYS = { survivor: 'difficulty', defense: 'tdDifficulty' };
+export const diffKeyOf = (modeId) => DIFF_KEYS[modeId] || DIFF_KEYS.survivor;
+// 該模式「要全通關才能解鎖下一難度」的關卡清單（＝該模式的關卡階梯）
+export const diffRequiredLevels = (modeId) => (MODES[modeId] || MODES.survivor).difficultyLevels || [];
 // 珠寶是純資料檔（不 import 任何模組），不會循環
 import { JEWELS, jewelValue } from './jewels.js';
 import { CODEX_MILESTONES, codexProgress } from './codex.js';
@@ -61,7 +68,7 @@ function blank() {
     equipped: {},           // 已穿裝備 { slotKey: itemId }
     unlocked: { survivor: ['street', 'inkmount'], defense: ['td_canyon'] }, // 已解鎖關卡 (依模式)；水墨仙山開局即開放
     unlockedChars: ['duck'], // 已解鎖特工
-    // difficulty / diffClears / diffUnlocked 刻意不放在這裡（同 codex）：由 ensureDefaults 建立，
+    // difficulty / tdDifficulty / diffClears / diffUnlocked 刻意不放在這裡（同 codex）：由 ensureDefaults 建立，
     // 才分得出「舊存檔」與「新玩家」—— 舊存檔保留原本能選的難度，新玩家從最簡單開始。
     best: { survivor: {}, defense: {} }, // { modeId: { levelId: { time, kills, cleared } } }
     character: 'duck',
@@ -156,8 +163,21 @@ function ensureDefaults(d) {
     d.diffUnlocked = played ? DIFF_ORDER.slice(0, Math.max(1, cur + 1)) : [];
     if (!played) d.difficulty = 'easy';
   }
+  // v91：難度進度改成「每個模式各自一份」。舊存檔的 diffClears 是扁平的
+  // { 難度: { 關卡: 1 } }、diffUnlocked 是一個陣列 —— 一律搬給生存者（舊進度當然是生存者的），
+  // 再把同樣的開放程度也給守塔：舊玩家本來就能用同一顆下拉在守塔選到那個難度，
+  // 改版不該把人鎖回去（守塔與生存者此後才各自累積）。
+  if (Object.keys(d.diffClears).some((k) => DIFFICULTIES[k])) {
+    d.diffClears = { survivor: d.diffClears, defense: {} };
+  }
+  if (Array.isArray(d.diffUnlocked)) d.diffUnlocked = { survivor: d.diffUnlocked, defense: d.diffUnlocked.slice() };
+  for (const m of MODE_IDS) {
+    if (!d.diffClears[m] || typeof d.diffClears[m] !== 'object') d.diffClears[m] = {};
+    if (!Array.isArray(d.diffUnlocked[m])) d.diffUnlocked[m] = [];
+  }
   if (!DIFFICULTIES[d.difficulty]) d.difficulty = 'easy';
-  if (!Array.isArray(d.diffUnlocked)) d.diffUnlocked = [];
+  // 守塔的另一份難度：舊存檔沿用它原本選的那個（new player 兩邊都從「輕鬆」開始）
+  if (!DIFFICULTIES[d[diffKeyOf('defense')]]) d[diffKeyOf('defense')] = d.difficulty;
   if (!Array.isArray(d.stash)) d.stash = [];
   if (!d.jewels || typeof d.jewels !== 'object') d.jewels = {};
   if (!d.codex || typeof d.codex !== 'object') {
@@ -671,31 +691,48 @@ export const save = {
     return { dna, isRecord: false, unlockedNew: false };
   },
 
-  // 難度是否可選：第一個難度永遠開放；其餘要前一個難度全部關卡通關（或舊存檔保留）
-  difficultyUnlocked(diff) {
+  // 該模式目前選的難度 id（守塔與生存者各記一份）
+  difficultyOf(modeId = this.data.mode) {
+    const v = this.data[diffKeyOf(modeId)];
+    return DIFFICULTIES[v] ? v : 'easy';
+  },
+
+  // 換該模式的難度（只動那一份，另一模式不受影響）
+  setDifficulty(modeId, diff) {
+    if (!DIFFICULTIES[diff]) return;
+    this.set({ [diffKeyOf(modeId)]: diff });
+  },
+
+  // 難度是否可選：第一個難度永遠開放；其餘要前一個難度把「該模式的關卡」全部通關（或舊存檔保留）
+  difficultyUnlocked(diff, modeId = 'survivor') {
     const i = DIFF_ORDER.indexOf(diff);
     if (i <= 0) return i === 0;
-    if (this.data.diffUnlocked.includes(diff)) return true;
-    const prev = this.data.diffClears[DIFF_ORDER[i - 1]] || {};
-    return DIFF_REQUIRED_LEVELS.every((id) => prev[id]);
+    if ((this.data.diffUnlocked[modeId] || []).includes(diff)) return true;
+    const prev = (this.data.diffClears[modeId] || {})[DIFF_ORDER[i - 1]] || {};
+    const need = diffRequiredLevels(modeId);
+    return need.length > 0 && need.every((id) => prev[id]);
   },
 
   // 前一難度還差幾關 (選單提示用)
-  difficultyProgress(diff) {
+  difficultyProgress(diff, modeId = 'survivor') {
     const i = DIFF_ORDER.indexOf(diff);
-    const prev = i > 0 ? (this.data.diffClears[DIFF_ORDER[i - 1]] || {}) : {};
-    return { done: DIFF_REQUIRED_LEVELS.filter((id) => prev[id]).length, total: DIFF_REQUIRED_LEVELS.length };
+    const prev = i > 0 ? ((this.data.diffClears[modeId] || {})[DIFF_ORDER[i - 1]] || {}) : {};
+    const need = diffRequiredLevels(modeId);
+    return { done: need.filter((id) => prev[id]).length, total: need.length };
   },
 
-  // 通關後記錄；回傳因此新解鎖的難度 id（沒有則 null）
-  recordDifficultyClear(diff, levelId) {
-    if (!DIFF_REQUIRED_LEVELS.includes(levelId) || !DIFFICULTIES[diff]) return null;
+  // 通關後記錄；回傳因此新解鎖的難度 id（沒有則 null）。難度進度是分模式的，所以要帶 modeId
+  recordDifficultyClear(diff, levelId, modeId = 'survivor') {
+    const need = diffRequiredLevels(modeId);
+    if (!need.includes(levelId) || !DIFFICULTIES[diff]) return null;
     const next = DIFF_ORDER[DIFF_ORDER.indexOf(diff) + 1];
-    const before = next ? this.difficultyUnlocked(next) : true;
-    if (!this.data.diffClears[diff]) this.data.diffClears[diff] = {};
-    this.data.diffClears[diff][levelId] = 1;
+    const before = next ? this.difficultyUnlocked(next, modeId) : true;
+    if (!this.data.diffClears[modeId]) this.data.diffClears[modeId] = {};
+    const clears = this.data.diffClears[modeId];
+    if (!clears[diff]) clears[diff] = {};
+    clears[diff][levelId] = 1;
     this.flush();
-    return next && !before && this.difficultyUnlocked(next) ? next : null;
+    return next && !before && this.difficultyUnlocked(next, modeId) ? next : null;
   },
 
   recordDailyRun({ date, time, cleared }) {

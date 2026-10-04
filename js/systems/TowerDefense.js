@@ -8,7 +8,10 @@
 // 與生存者刻意不同的規則（經典守塔）：
 //   - 命數制：怪走到核心＝漏怪，扣 LEAK 條命後消失（main.js 核心區塊），不再貼著核心啃血
 //   - 擊殺直接入帳 bounty()，不掉經驗寶石／金幣，所以也沒有升級卡
-//   - 怪的血量只看波數（TD_HP / TD_HP_GROWTH），不吃生存者時間曲線與動態難度、不擲精英
+//   - 怪的血量只看波數（TD_HP / TD_HP_GROWTH），不吃生存者時間曲線與動態難度
+//   - 難度（js/levels.js DIFFICULTIES）是「守塔自己那一份」（v91，見 save.js DIFF_KEYS）：
+//     血量／首領血量／玩家受傷／移速／金幣沿用原本的套用點，密度與菁英機率由這裡接上
+//     （密度＝壓縮波次間隔、每波總數不變；菁英＝逐怪擲 js/config.js 的 ELITE_AFFIXES 詞綴）
 
 import { Enemy } from '../entities/Enemy.js';
 import { enemyScale } from '../levels.js';
@@ -19,7 +22,7 @@ import { heroLevelUp, drawHeroTarget } from './TDHero.js';
 import { WAVE_MODS, waveModMul, AIR_FILLER } from '../tdwaves.js';
 import { KINGDOM_UPGRADES, kingdomValue, kingdomNextCost, kingdomTrack } from '../tdkingdom.js';
 import { applyTDStats } from '../tdtowers.js';
-import { TD_CHAR_SCALE } from '../config.js';
+import { TD_CHAR_SCALE, rollEliteAffix } from '../config.js';
 
 const WAVE_BONUS = (w) => 60 + w * 15;   // 清完第 w 波的獎金
 const EARLY_GOLD_PER_SEC = 4;            // 提前開戰：每剩 1 秒休息 +4 金幣
@@ -416,10 +419,15 @@ export class TowerDefense {
     if (mods.includes('aerial')) groups.push({ type: AIR_FILLER, count: Math.round(6 + this.waveIdx * 1.5), gap: 0.4 });
 
     this.queue = [];
+    // 生成密度（難度軸）：只壓縮佇列的時間軸，每波總數不變 ——
+    // 困難的 1.8 = 同一波在 1/1.8 的時間內到齊。用意與生存者 Spawner.js 的
+    // `interval /= rules.spawnMul` 相同，壓力來自「來得及打嗎」而不是「怪變多」，
+    // 所以不會讓場上怪物數爆掉（守塔沒有 MAX_ENEMIES 上限）。
+    const density = Math.max(0.25, g.rules.spawnMul || 1);
     groups.forEach((grp, gi) => {
       for (let k = 0; k < grp.count; k++) {
         const path = grp.path != null ? paths[grp.path % paths.length] : paths[(k + gi) % paths.length];
-        this.queue.push({ t: gi * GROUP_STAGGER + k * grp.gap, type: grp.type, path, mods });
+        this.queue.push({ t: (gi * GROUP_STAGGER + k * grp.gap) / density, type: grp.type, path, mods });
       }
     });
     this.queue.sort((a, b) => a.t - b.t);
@@ -490,6 +498,17 @@ export class TowerDefense {
     return TD_HP * (this.level.hpScale || 1) * this.game.rules.enemyHpMul * waveHp;
   }
 
+  // 難度的「菁英機率」軸：生存者由 Spawner.rollElite 依開局時間擲，守塔改用波次進度擲
+  // （TD 不吃生存者的時間曲線與動態難度）。第 3 波起才可能出現、越後面越高；
+  // 基礎曲線上限 30%，再乘難度的 eliteChanceMul（地獄 3.0 → 最高 45%）。
+  // 詞綴與數值跟生存者共用同一個池子（js/config.js ELITE_AFFIXES）。
+  eliteChance() {
+    const w = this.waveIdx;
+    if (w < 3) return 0;
+    const base = Math.min(0.30, 0.04 + (w - 3) * 0.015);
+    return Math.min(0.45, base * (this.game.rules.eliteChanceMul || 1));
+  }
+
   spawn({ type, path, mods = [] }) {
     const g = this.game;
     const mm = waveModMul(mods);
@@ -511,6 +530,10 @@ export class TowerDefense {
     e.pathIdx = 1;
     e.spawnTime = g.gameTime;
     e._wp = { x: path[1][0], y: path[1][1], radius: 0 };
+    // 詞綴精英：makeElite 會乘上血量／移速／傷害／體型與經驗（賞金 bounty() 用 exp 計算，
+    // 所以精英的賞金會自動跟著提高，算是給玩家的部分補償）。首領不走這裡，不會被擲中。
+    const eliteChance = this.eliteChance();
+    if (eliteChance > 0 && Math.random() < eliteChance) e.makeElite(rollEliteAffix());
     g.enemies.push(e);
   }
 

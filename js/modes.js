@@ -23,6 +23,8 @@ export const MODES = {
     enemyTarget: 'player',
     boundedMap: false,     // 無限地圖（守塔的核心在原點，才需要邊界）
     levelOrder: LEVEL_ORDER,
+    // 難度逐級開放要「前一個難度全通關」的關卡（無盡沒有通關，不列入）
+    difficultyLevels: LEVEL_ORDER.filter((id) => id !== 'endless'),
 
     weaponMul: 1,
     goldMul: 1,
@@ -54,6 +56,10 @@ export const MODES = {
     core: { hp: 14000, radius: 46, x: 0, y: 0 },
     boundedMap: true,      // 核心在世界原點：維持 4000×4000 的有邊界地圖
     levelOrder: TD_ORDER,  // 守塔專屬關卡：固定路線＋分波（js/tdlevels.js）
+    // 守塔的難度是獨立的一條階梯：要解鎖下一難度，得先把這 7 張圖在前一難度全通關。
+    // 與生存者共用進度時，「生存者選地獄、守塔第一關就被地獄倍率打爛」是沒有出路的錯配
+    // （守塔的關卡階梯是自己的 1~7 星，玩家進度也完全不同）。
+    difficultyLevels: TD_ORDER,
     enemyTarget: 'core',
 
     weaponMul: 0.6,      // 自身武器變弱 → 砲塔才是主力

@@ -132,6 +132,100 @@ await probe(1280, 720, false, '桌機 1280×720');
 await probe(1280, 800, false, '筆電 1280×800');
 await probe(390, 844, true, '行動版 390×844');
 
+// ── 難度分模式（v91）───────────────────────────────────────────────────────
+// 情境：生存者已全解鎖並選了地獄、守塔只解鎖到「輕鬆」。同一顆下拉要在兩個模式
+// 顯示各自的選取與解鎖進度，而且切換模式不會把另一邊的選擇洗掉。
+async function probeModes() {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  page.on('pageerror', (e) => pageErrors.push(`分模式: ${e.message.split('\n')[0].slice(0, 100)}`));
+  await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForFunction(() => window.game, undefined, { timeout: 30000 });
+  await page.evaluate(() => localStorage.setItem('gaga_save', JSON.stringify({
+    mode: 'survivor', level: 'street', lastLevel: 'street',
+    difficulty: 'hell',                     // 生存者：地獄
+    tdDifficulty: 'easy',                   // 守塔：輕鬆
+    diffClears: { survivor: {}, defense: {} },
+    diffUnlocked: { survivor: ['easy', 'normal', 'hard', 'nightmare', 'hell'], defense: ['easy'] },
+  })));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.game, undefined, { timeout: 30000 });
+  await page.waitForTimeout(600);
+
+  const readDiff = () => page.evaluate(() => {
+    const sel = document.getElementById('difficulty-select');
+    return {
+      value: sel.value,
+      open: [...sel.options].filter((o) => !o.disabled).map((o) => o.value),
+      lockedText: [...sel.options].filter((o) => o.disabled).map((o) => o.textContent.trim()),
+      desc: document.getElementById('difficulty-desc').textContent.trim(),
+      mode: window.game.modeId,
+    };
+  });
+
+  const sv = await readDiff();
+  ok('分模式：生存者讀自己那一份（地獄）', sv.value === 'hell' && sv.open.length === 5,
+    `value=${sv.value} open=${sv.open.join(',')}`);
+
+  // 切到守塔：同一顆下拉要變成守塔的進度
+  await page.click('#mode-select .mode-card[data-mode="defense"]');
+  await page.waitForTimeout(400);
+  const df = await readDiff();
+  ok('分模式：切到守塔後下拉換成守塔的選擇（輕鬆），不被生存者的地獄帶走',
+    df.mode === 'defense' && df.value === 'easy' && df.open.join(',') === 'easy',
+    `mode=${df.mode} value=${df.value} open=${df.open.join(',')}`);
+  ok('分模式：守塔的鎖定選項顯示「守塔」與 /7 的進度（不是生存者的 /12）',
+    df.lockedText.length === 4 && df.lockedText.every((t) => /（守塔）/.test(t) && /\/7$/.test(t)),
+    df.lockedText.join(' | '));
+  ok('分模式：守塔的說明多了密度註解（總數不變）',
+    /密度＝同一波的怪更密/.test(df.desc), df.desc);
+
+  // 守塔解鎖到地獄後，在守塔模式改選苦難：只寫 tdDifficulty，生存者仍是地獄
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('gaga_save'));
+    s.diffUnlocked.defense = ['easy', 'normal', 'hard', 'nightmare', 'hell'];
+    localStorage.setItem('gaga_save', JSON.stringify(s));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.game, undefined, { timeout: 30000 });
+  await page.waitForTimeout(500);
+  await page.click('#mode-select .mode-card[data-mode="defense"]');
+  await page.waitForTimeout(300);
+  await page.selectOption('#difficulty-select', 'nightmare');
+  await page.waitForTimeout(300);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('gaga_save')));
+  ok('分模式：在守塔選難度只寫入 tdDifficulty（生存者的 difficulty 不變）',
+    saved.tdDifficulty === 'nightmare' && saved.difficulty === 'hell',
+    `tdDifficulty=${saved.tdDifficulty} difficulty=${saved.difficulty}`);
+
+  // 切回生存者：自己那一份還在
+  await page.click('#mode-select .mode-card[data-mode="survivor"]');
+  await page.waitForTimeout(400);
+  const back = await readDiff();
+  ok('分模式：切回生存者時仍是地獄（兩份互不干擾）',
+    back.value === 'hell' && back.mode === 'survivor', `value=${back.value}`);
+
+  // 開局時真的吃到守塔那一份：切到守塔（nightmare）後出擊
+  await page.click('#mode-select .mode-card[data-mode="defense"]');
+  await page.waitForTimeout(400);
+  await page.click('#btn-start-game');
+  await page.waitForFunction(() => window.game && window.game.rules && window.game.state !== 'menu', undefined, { timeout: 20000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  const tdRun = await page.evaluate(() => ({
+    mode: window.game.modeId,
+    diffKey: window.game.diffKey,
+    hp: window.game.rules.enemyHpMul,
+    fromConfig: window.game.difficulty?.enemyHpMul,
+  }));
+  ok('分模式：守塔開局吃的是守塔自己那一份難度（nightmare，不是生存者的 hell）',
+    tdRun.mode === 'defense' && tdRun.diffKey === 'nightmare'
+    && Math.abs((tdRun.hp || 0) - (tdRun.fromConfig || 0)) < 1e-6,
+    JSON.stringify(tdRun));
+
+  await page.close();
+}
+
+await probeModes();
+
 ok('過程中没有未捕捉的例外', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | ') || '0 筆');
 
 await browser.close();

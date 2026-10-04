@@ -577,25 +577,30 @@ export function refreshLevelSelect(game) {
     save.set({ lastLevel: id });
   }, game.levelId);
   // 難度下拉 (原生 select)：選項標出 DNA 倍率，下方即時說明實際影響的規則倍率。
+  // 難度是分模式的（v91）：這裡列的是「這個模式」的難度與它自己的解鎖進度 ——
+  // 生存者的 12 關（扣掉無盡）與守塔的 7 張圖是兩條不同的階梯，不該共用進度。
+  const modeId = getMode(game.modeId).id;
   const sel = document.getElementById('difficulty-select');
   if (sel) {
     // 每次回到選單都重建：通關後可能剛解鎖新難度
     sel.innerHTML = Object.entries(DIFFICULTIES).map(([k, d], i, all) => {
-      if (save.difficultyUnlocked(k)) return `<option value="${k}">${d.name} (DNA ×${d.dnaMult || 1})</option>`;
-      const pr = save.difficultyProgress(k);
-      return `<option value="${k}" disabled>🔒 ${d.name} (DNA ×${d.dnaMult || 1})｜${all[i - 1][1].name}全通關 ${pr.done}/${pr.total}</option>`;
+      if (save.difficultyUnlocked(k, modeId)) return `<option value="${k}">${d.name} (DNA ×${d.dnaMult || 1})</option>`;
+      const pr = save.difficultyProgress(k, modeId);
+      const tag = modeId === 'defense' ? '守塔' : '生存者';
+      return `<option value="${k}" disabled>🔒 ${d.name} (DNA ×${d.dnaMult || 1})｜${all[i - 1][1].name}（${tag}）全通關 ${pr.done}/${pr.total}</option>`;
     }).join('');
-    const want = DIFFICULTIES[save.data.difficulty] && save.difficultyUnlocked(save.data.difficulty) ? save.data.difficulty : 'easy';
-    sel.value = want;
+    sel.value = save.difficultyOf(modeId);
     if (!sel.dataset.bound) {
       sel.dataset.bound = '1';
       sel.addEventListener('change', () => {
-        save.set({ difficulty: sel.value });
+        // 只在「當下這個模式」的那一份難度上寫入
+        const m = getMode(game.modeId).id;
+        save.setDifficulty(m, sel.value);
         sound.playGem();
-        renderDifficultyDesc(sel.value);
+        renderDifficultyDesc(sel.value, m);
       });
     }
-    renderDifficultyDesc(sel.value);
+    renderDifficultyDesc(sel.value, modeId);
   }
   // 出擊規則卡：整局生效的取捨（每日挑戰不套用）
   const card = document.getElementById('runcard-select');
@@ -652,20 +657,39 @@ function renderRunCardDesc(key) {
 
 // 難度選單下方的效果說明：只寫「DNA ×1.4」看不出敵人變多強，
 // 這裡把該難度實際乘上的規則列出來（資料直接取自 DIFFICULTIES，不會與平衡脫節）。
-export function renderDifficultyDesc(key) {
-  const el = document.getElementById('difficulty-desc');
-  const d = DIFFICULTIES[key];
-  if (!el || !d) return;
-  const LABELS = [
+// 分模式列軸：生存者與守塔的套用點不同，說明只寫「這個模式真的會吃到」的倍率。
+// 守塔的六軸套用點：雜兵/首領血量（TowerDefense.hpMul / startWave）、玩家受傷（main.js
+// baseDamageTaken）、移速（enemyScale）、金幣（Facilities.js）、以及 v91 才接上的
+// 生成密度（波次間隔）與詞綴精英機率（TowerDefense.spawn）—— 現在六軸全中。
+const DIFF_AXES = {
+  survivor: [
     ['enemyHpMul', '敵人血量'],
     ['damageTakenMul', '玩家受傷'],
     ['spawnMul', '生成密度'],
     ['eliteChanceMul', '菁英機率'],
     ['enemySpeedMul', '敵人速度'],
     ['goldMul', '金幣收益'],
-  ];
+  ],
+  defense: [
+    ['enemyHpMul', '敵人血量'],
+    ['damageTakenMul', '玩家受傷'],
+    ['spawnMul', '生成密度'],
+    ['eliteChanceMul', '菁英機率'],
+    ['enemySpeedMul', '敵人速度'],
+    ['goldMul', '金幣收益'],
+  ],
+};
+
+export function renderDifficultyDesc(key, modeId = 'survivor') {
+  const el = document.getElementById('difficulty-desc');
+  const d = DIFFICULTIES[key];
+  if (!el || !d) return;
+  const LABELS = DIFF_AXES[modeId] || DIFF_AXES.survivor;
   const parts = LABELS.filter(([k]) => d[k]).map(([k, label]) => `${label} ×${d[k]}`);
   parts.push(`DNA ×${d.dnaMult || 1}`);
+  // 守塔的「生成密度」只改波次間隔（同一波的怪更密），每波總數不變 —— 這句話不寫，
+  // 玩家會以為波數也跟著變多
+  if (modeId === 'defense') parts.push('密度＝同一波的怪更密（總數不變）');
   el.textContent = key === 'normal'
     ? `基準難度：${parts.join(' ‧ ')}`
     : `${parts.join(' ‧ ')}`;

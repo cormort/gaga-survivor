@@ -1429,6 +1429,13 @@ export const ELITE_AFFIXES = {
   sealer:  { name: '封印', color: '#9d4edd', hpMul: 1.8, expMul: 3, seal: { range: 360 } },
 };
 
+// 詞綴抽選：生存者（Spawner.rollElite）與守塔（TowerDefense.spawn）共用同一個池子，
+// 兩邊的精英才會是同一批詞綴、同一組數值。
+export const ELITE_KEYS = Object.keys(ELITE_AFFIXES);
+export function rollEliteAffix() {
+  return ELITE_KEYS[Math.floor(Math.random() * ELITE_KEYS.length)];
+}
+
 // 掉落道具類型
 export const DROP_TYPES = {
   EXP_GREEN: { value: 1, color: '#00f59b', radius: 4 },

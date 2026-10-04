@@ -4,7 +4,7 @@
 import { Enemy } from '../entities/Enemy.js';
 import { LEVELS, OPENING, openingFactor, currentWave, pickEnemy, enemyScale, RULE_DEFAULTS, ENDLESS_BOSS_CYCLE, ENDLESS_BOSS_INTERVAL, endlessBossInterval, spawnRate } from '../levels.js';
 import { worldBounds } from '../config.js';
-import { ELITE_AFFIXES, elementOf } from '../config.js';
+import { elementOf, rollEliteAffix } from '../config.js';
 import { hasSprite } from '../sprites.js';
 
 // 場上敵人硬上限（main.js 的孵化／裂解上限由 spawner.maxEnemies 推導）。
@@ -13,9 +13,6 @@ import { hasSprite } from '../sprites.js';
 // 裝置真的跟不上時，自適應效能的最後一階會把上限降到 LOW_END_MAX_ENEMIES（main.js _adaptDpr）。
 export const MAX_ENEMIES = 450;
 export const LOW_END_MAX_ENEMIES = 300;
-
-// 精英詞綴清單只算一次 (原本每生成一隻怪就 Object.keys 一次)
-const ELITE_KEYS = Object.keys(ELITE_AFFIXES);
 
 // 動態難度：固定的時間曲線追不上玩家輸出（實測 2→20 分鐘成長數百倍，而且因人而異），
 // 一旦火力過門檻，雜兵全部死在半路 —— 難度是「階梯」而不是曲線。
@@ -171,8 +168,7 @@ export class Spawner {
     // 精英，ELITE_AFFIXES 的四種詞綴等於閒置。改成 90 秒到 8%、約 5 分半到頂。
     const chance = Math.min(0.12, 0.035 + gameTime / 2000) * (this.rules || RULE_DEFAULTS).eliteChanceMul;
     if (Math.random() >= chance) return;
-    const keys = ELITE_KEYS;
-    enemy.makeElite(keys[Math.floor(Math.random() * keys.length)]);
+    enemy.makeElite(rollEliteAffix());
   }
 
   spawnBoss(def, player, enemies, onBossSpawnCallback, scale = null) {

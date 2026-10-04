@@ -191,6 +191,8 @@ const out = await page.evaluate(async () => {
   const { TD_ORDER } = await imp('js/tdlevels.js');
   const { save } = await imp('js/save.js');
   const fac = await imp('js/systems/Facilities.js');
+  const { bounty } = await imp('js/systems/TowerDefense.js');
+  const { ELITE_AFFIXES } = await imp('js/config.js');
 
   // 七關要全部玩得到，否則後面的煙霧測試會卡在解鎖而不是卡在程式碼。
   for (const id of TD_ORDER) save.unlock(id, 'defense');
@@ -422,6 +424,92 @@ const out = await page.evaluate(async () => {
     !wantMods.includes('aerial') || td.queue.some((q) => q.type === 'bat'),
     `含 bat=${td.queue.some((q) => q.type === 'bat')}`);
   ok('hpMul 隨波次成長（詞綴的血量倍率再乘在它上面）', td.hpMul() > 0, `hpMul=${td.hpMul().toFixed(3)}`);
+
+  // ── B6b. 難度分模式、密度、詞綴精英（v91）──
+  // 三條契約：
+  //   ① 守塔吃的是「守塔自己那一份」難度 —— 生存者選地獄不會讓守塔也吃地獄倍率
+  //   ② 生成密度只壓縮波次間隔，每波總數不變（壓力來自「來得及打嗎」而不是「怪變多」）
+  //   ③ 難度的菁英機率軸真的會生出詞綴精英，且賞金跟著經驗倍率提高（部分補償）
+  const allDiff = ['easy', 'normal', 'hard', 'nightmare', 'hell'];
+  save.set({ diffUnlocked: { survivor: allDiff.slice(), defense: allDiff.slice() } });
+  save.setDifficulty('survivor', 'hell');
+  save.setDifficulty('defense', 'normal');
+  const spanOf = (t, w) => {
+    t.waveIdx = w;
+    t.phase = 'break';
+    t.timer = 1;
+    t.startWave(false);
+    return { n: t.queue.length, span: Math.max(...t.queue.map((q) => q.t)) };
+  };
+  td = await boot('td_canyon');
+  ok('守塔讀的是自己那一份難度（生存者設成地獄不會滲進守塔）',
+    g.diffKey === 'normal' && g.rules.enemyHpMul === 1, `diffKey=${g.diffKey} hp=${g.rules.enemyHpMul}`);
+  const qNormal = spanOf(td, 3);
+  save.setDifficulty('defense', 'hell');
+  td = await boot('td_canyon');
+  ok('守塔改成地獄後，開局真的吃地獄倍率（血量、密度都有值）',
+    g.diffKey === 'hell' && g.rules.enemyHpMul > 3 && g.rules.spawnMul > 2,
+    `diffKey=${g.diffKey} hp=${g.rules.enemyHpMul} spawn=${g.rules.spawnMul}`);
+  const qHell = spanOf(td, 3);
+  ok('生成密度只壓縮到達間隔、不動每波總數（地獄 3.0 → 同一波時間軸 1/3）',
+    qHell.n === qNormal.n && Math.abs(qHell.span * g.rules.spawnMul - qNormal.span) < 0.02,
+    `怪數 ${qNormal.n}→${qHell.n}｜到達窗 ${qNormal.span.toFixed(2)}s→${qHell.span.toFixed(2)}s（×${g.rules.spawnMul}）`);
+  ok('密度也壓縮了群與群之間的間隔（不只是同一群的 gap）',
+    qNormal.n > 1 && qHell.span < qNormal.span, `${qNormal.span.toFixed(2)} → ${qHell.span.toFixed(2)}`);
+
+  // 菁英：Math.random 固定 0 → 必定擲中第一個詞綴（同時固定出生抖動）
+  const rnd = Math.random;
+  Math.random = () => 0;
+  td.waveIdx = 6;
+  td.spawn({ type: 'walker', path: g.level.paths[0], mods: [] });
+  Math.random = rnd;
+  const el = g.enemies[g.enemies.length - 1];
+  Math.random = () => 0.99;
+  td.waveIdx = 6;
+  td.spawn({ type: 'walker', path: g.level.paths[0], mods: [] });
+  Math.random = rnd;
+  const plain = g.enemies[g.enemies.length - 1];
+  const af = ELITE_AFFIXES[el.affixKey] || {};
+  ok('難度的菁英機率軸在守塔真的會生出詞綴精英（不是只寫在說明文字裡）',
+    el.isElite === true && !!el.affixName && plain.isElite === false,
+    `精英=${el.isElite}「${el.affixName}」｜對照組=${plain.isElite}`);
+  ok('精英的數值真的照 ELITE_AFFIXES 乘上去（血量／移速／經驗）',
+    el.maxHp === Math.round(plain.maxHp * (af.hpMul || 1))
+    && Math.abs(el.speed - plain.speed * (af.speedMul || 1)) < 1e-6
+    && el.exp === Math.round(plain.exp * (af.expMul || 1)),
+    `${el.affixKey}: hp ${plain.maxHp}→${el.maxHp}（×${af.hpMul || 1}）速度 ${plain.speed.toFixed(1)}→${el.speed.toFixed(1)}（×${af.speedMul || 1}）`);
+  ok('精英的賞金跟著經驗倍率提高（給玩家的部分補償）', bounty(el) > bounty(plain),
+    `賞金 ${bounty(plain)} → ${bounty(el)}`);
+  // 第一個詞綴「疾風」不動血量，所以再對「守塔生出來的怪」套一次巨獸，確認體型／血量也照表走。
+  // （不能靠 stub 骰到巨獸：骰子同時決定「中不中精英」與「哪個詞綴」，0.4 以上就超過菁英機率上限）
+  const baseHp = plain.maxHp;
+  const baseR = plain.radius;
+  plain.makeElite('giant');
+  const gaf = ELITE_AFFIXES.giant;
+  ok('會動到體型的詞綴也照資料放大（血量／半徑／spriteScale 同步，否則圖與碰撞圈會脫鉤）',
+    plain.isElite && plain.affixKey === 'giant'
+    && plain.maxHp === Math.round(baseHp * gaf.hpMul)
+    && plain.radius === Math.round(baseR * gaf.radiusMul)
+    && plain.spriteScale === gaf.radiusMul,
+    `hp ${baseHp}→${plain.maxHp} r ${baseR}→${plain.radius} spriteScale=${plain.spriteScale}`);
+  td.waveIdx = 2;
+  const chanceEarly = td.eliteChance();
+  td.waveIdx = 6;
+  const chanceHell6 = td.eliteChance();
+  td.waveIdx = 8;
+  const chanceHell8 = td.eliteChance();
+  ok('菁英機率不從第一波就出現（前期不勸退），且隨波次上升',
+    chanceEarly === 0 && chanceHell6 > 0 && chanceHell8 > chanceHell6,
+    `w2=${chanceEarly} w6=${chanceHell6.toFixed(3)} w8=${chanceHell8.toFixed(3)}`);
+  const hellEliteMul = g.rules.eliteChanceMul;
+  save.setDifficulty('defense', 'normal');
+  td = await boot('td_canyon');
+  td.waveIdx = 6;
+  ok('菁英機率吃難度倍率（同樣第 6 波：地獄明顯高於標準）',
+    chanceHell6 > td.eliteChance() * 2.5,
+    `地獄 ${chanceHell6.toFixed(3)}（基礎×${hellEliteMul}） vs 標準 ${td.eliteChance().toFixed(3)}（×${g.rules.eliteChanceMul}）`);
+  save.setDifficulty('survivor', 'easy');
+  save.setDifficulty('defense', 'normal');
 
   // ── B7. 選中塔的射程圈與星等：必須是「這一局 g.turrets 裡」的塔才測得到繪製路徑 ──
   const t7 = fac.buildTDTower(g, g.level.sockets.find((s) => !s.occupied), 'guard');

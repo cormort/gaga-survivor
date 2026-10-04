@@ -1473,6 +1473,7 @@ export class UIManager {
       const m = modes[id];
       const card = document.createElement('button');
       card.className = 'mode-card' + (id === currentId ? ' selected' : '');
+      card.dataset.mode = id;   // 供測試與「現在是哪個模式」的查詢使用（兩個模式各有自己的難度與解鎖進度）
       card.title = m.desc;   // 手機版隱藏說明文字，長按/滑過仍看得到
       card.style.setProperty('--mode-accent', m.accent);
       card.innerHTML = `

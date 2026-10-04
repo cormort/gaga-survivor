@@ -1099,9 +1099,14 @@ class Game {
     this.level = LEVELS[activeLevelId] || LEVELS.street;
     // 關卡常駐規則 × 每日挑戰詞綴 → 合併成單一份係數，Spawner 與各注入點共用
     // 全域難度疊在關卡規則上；每日挑戰固定標準難度，成績才可比
+    // 難度是「每個模式各自一份」（v91，見 save.js 的 DIFF_KEYS）：守塔有自己的難度與解鎖進度，
+    // 不會被生存者的選擇左右 —— 生存者選地獄不該讓守塔第一關也吃地獄倍率。
     // 選到尚未解鎖的難度（例如舊設定）時退回最簡單的難度
-    const diffKey = save.difficultyUnlocked(save.data.difficulty) ? save.data.difficulty : 'easy';
-    this.diffKey = this.isDaily ? 'normal' : diffKey;
+    const diffMode = this.modeId;
+    const wantDiff = save.difficultyOf(diffMode);
+    const diffKey = this.isDaily ? 'normal'
+      : (save.difficultyUnlocked(wantDiff, diffMode) ? wantDiff : 'easy');
+    this.diffKey = diffKey;
     this.difficulty = (!this.isDaily && DIFFICULTIES[diffKey]) || DIFFICULTIES.normal;
     this.rules = mergeRules(this.level.rules, this.difficulty, ...(this.isDaily ? this.dailyConfig.modifiers : []),
       this.runCard && this.runCard.rules);   // 規則卡的生成密度／雜兵血量（屍潮）
@@ -3524,9 +3529,10 @@ class Game {
       modeId: this.modeId,
       gold: this.gold,
     });
-    // 難度逐級開放：非每日挑戰的通關記到該難度；全部關卡通關即解鎖下一難度
+    // 難度逐級開放：非每日挑戰的通關記到該難度；該模式的關卡全部通關即解鎖下一難度
+    // （守塔記守塔的、生存者記生存者的，見 save.js 的 recordDifficultyClear）
     if (isVictory && !this.isDaily) {
-      const newDiff = save.recordDifficultyClear(this.diffKey, this.level.id);
+      const newDiff = save.recordDifficultyClear(this.diffKey, this.level.id, this.modeId);
       if (newDiff) this.ui.say(`🔓 新難度解鎖：${DIFFICULTIES[newDiff].name}！`, '#ffd166', 4);
     }
 
