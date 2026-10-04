@@ -190,8 +190,20 @@ const afterUpgradeCheck = await page.evaluate((target) => {
 console.log("After upgrade check:", afterUpgradeCheck);
 
 // Step 6: Test Recycle / Sell (70% gold refund)
-console.log("Testing Recycle / Demolish for 70% refund...");
+// 拆除自 v93 起要點兩次（第一次只上膛），所以這裡先按一次確認「還沒拆」，再按第二次真的拆。
+console.log("Testing Recycle / Demolish for 70% refund (two-step confirm)...");
 const beforeGold = await page.evaluate(() => window.game.gold);
+const afterFirstClick = await page.evaluate((target) => {
+  document.getElementById('btn-inspect-recycle')?.click();
+  const btn = document.getElementById('btn-inspect-recycle');
+  return {
+    armed: !!btn?.classList.contains('armed'),
+    label: document.getElementById('inspect-recycle-label')?.textContent,
+    turretStillExists: window.game.turrets.some(t => t.socket && t.socket.id === target.id),
+  };
+}, targetSocket);
+console.log("After first (arming) click:", afterFirstClick);
+
 await page.evaluate(() => {
   const recBtn = document.getElementById('btn-inspect-recycle');
   recBtn?.click();

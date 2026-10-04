@@ -318,11 +318,18 @@ python3 -m http.server 8791
 > 點過那一列**，而選單關閉時只把 `hidden` 加上去、DOM 與 `:focus` 都留著，看起來就像還選著同一種塔。
 > 現在 `:hover` 樣式包進 `@media (hover: hover)`（`:focus-visible` 另留給鍵盤），關閉時會
 > `blur()` 掉選單內的焦點並 `replaceChildren()` 清空。
+>
+> **v93 讓「拆除回收」要點兩次**：檢查面板裡 `⚙️ 強化升級` 與 `♻️ 拆除回收 (70%)` 是**並排的兩顆
+> 同尺寸按鈕**（`gap: 12px`），而拆除是**一次點擊就生效**、直接退 70% 金幣蓋不回原樣 ——
+> 手機上手滑一格就整座塔沒了。現在第一次點只會「上膛」：按鈕換成
+> `⚠️ 再點一次確認拆除`、加上 `armed` 外框與呼吸動畫，**3 秒沒確認會自己解除**，
+> 關閉面板或換看另一座塔也一律回到沒上膛的狀態。560px 以下的窄畫面另外把兩顆按鈕改成上下排。
+> 拆除本身的行為（返還比例、兵營撤兵、釋放地基）完全沒動。
 
 ### ✅ 回歸測試（`tools/verify-td-deep.mjs`）
 
 ```bash
-node tools/verify-td-deep.mjs        # 120 項：關卡資料／道路生成器（純 Node）+ 實機（Playwright）
+node tools/verify-td-deep.mjs        # 127 項：關卡資料／道路生成器（純 Node）+ 實機（Playwright）
 ```
 
 **為什麼要單獨一支**：既有的 `verify-levels.mjs` / `verify-balance.mjs` 看不到 `td_*` 關卡 ——
@@ -381,6 +388,9 @@ node tools/verify-td-deep.mjs        # 120 項：關卡資料／道路生成器�
   之後選單必須 `hidden`、`.td-build-opt` 數量 0、`document.activeElement` 不在選單內
 - **首領貼圖不再變成雜兵**（v92）：`boss_carnifex_final` 要退回 `boss_carnifex`，
   且該 sprite 的寬度 > 2× `walker`（只驗 key 名字會漏掉「名字對、圖還是殭屍」）
+- **拆除回收要點兩次**（v93）：第一次點下去塔必須還在、地基還佔著、金幣不變，而且按鈕要有
+  `armed` 與「再點一次」字樣；關掉面板再打開必須回到沒上膛（否則等於回到一鍵拆除）、
+  **上膛 3 秒後要自己解除**；第二次點下去才真的拆，並且照樣退錢、釋放地基、收掉面板
 
 ---
 

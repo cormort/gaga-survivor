@@ -3766,6 +3766,25 @@ body.orient-auto,
   box-shadow: 0 6px 20px rgba(231, 76, 60, 0.55);
 }
 
+/* 拆除鈕已「上膛」（第一次點擊後、等第二次確認）：加外框與呼吸動畫，跟一般狀態明顯不同 */
+.danger-btn.armed {
+  background: linear-gradient(90deg, #ff3b30, #ff7043);
+  border: 2px solid #ffd60a !important;
+  box-shadow: 0 0 18px rgba(255, 59, 48, 0.8);
+  animation: danger-armed 0.9s ease-in-out infinite;
+}
+
+@keyframes danger-armed {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 59, 48, 0.6); }
+  50% { box-shadow: 0 0 24px rgba(255, 214, 10, 0.9); }
+}
+
+/* 手機（面板會被壓到 440px 以下）改成上下排：並排時手指差一格就會點到拆除。
+   拆除本來就要點兩次，這裡只是把兩顆按鈕的距離再拉開一點。 */
+@media (max-width: 560px) {
+  .inspect-actions { flex-direction: column; }
+}
+
 .btn-cost-tag {
   background: rgba(0, 0, 0, 0.28);
   border-radius: 6px;

@@ -800,6 +800,51 @@ const out = await page.evaluate(async () => {
     ok('導覽可以立即跳過（點畫面或按 Esc 就回到遊玩視角）',
       hadTour && !td3.tour && Math.abs(g.zoom - playZoom) < 0.001, `hadTour=${hadTour} tour=${!!td3.tour} zoom=${g.zoom.toFixed(3)}`);
     g.tourEnabled = false;
+
+    // ── B15. 拆除回收要點兩次（v93）：升級與拆除是並排的同尺寸按鈕，手滑一格就整座塔沒了 ──
+    await boot('td_canyon');
+    g.gold = 999999;
+    const recSocket = g.level.sockets.find((s) => !s.occupied);
+    const recTower = fac.buildTDTower(g, recSocket, 'guard');
+    fac.inspectFacility(g, recTower);
+    const recModal = document.getElementById('facility-inspect-modal');
+    const recBtn = document.getElementById('btn-inspect-recycle');
+    const recLabel = document.getElementById('inspect-recycle-label');
+    ok('點塔會打開檢查面板（拆除鈕就在升級鈕旁邊）',
+      !!recTower && !recModal.classList.contains('hidden') && !!recBtn,
+      `tower=${!!recTower} modal=${recModal ? !recModal.classList.contains('hidden') : false}`);
+
+    const goldBefore = g.gold;
+    recBtn.click();   // 第一次：只上膛，不可以真的拆
+    ok('第一次點拆除只是「上膛」，塔還在、地基還佔著',
+      g.turrets.includes(recTower) && recSocket.occupied === true && g.gold === goldBefore,
+      `turrets=${g.turrets.length} occupied=${recSocket.occupied} gold=${g.gold}/${goldBefore}`);
+    ok('上膛後按鈕會變臉（文字改成再點一次確認）',
+      recBtn.classList.contains('armed') && /再點一次/.test(recLabel?.textContent || ''),
+      `armed=${recBtn.classList.contains('armed')} label=${recLabel?.textContent}`);
+
+    // 關掉面板再打開：上膛狀態不可以留到下一次（否則等於回到一鍵拆除）
+    fac.closeFacilityInspector(g);
+    ok('關掉面板會解除上膛', !recBtn.classList.contains('armed') && !/再點一次/.test(recLabel?.textContent || ''),
+      `armed=${recBtn.classList.contains('armed')} label=${recLabel?.textContent}`);
+    fac.inspectFacility(g, recTower);
+    recBtn.click();
+    ok('重新打開面板時是「沒上膛」的狀態', recBtn.classList.contains('armed'), `armed=${recBtn.classList.contains('armed')}`);
+
+    // 上膛後 3 秒沒確認要自己收回
+    await new Promise((res) => setTimeout(res, 3200));
+    ok('上膛 3 秒沒確認會自己解除（不會一直停在待確認）',
+      !recBtn.classList.contains('armed') && /拆除回收/.test(recLabel?.textContent || ''),
+      `armed=${recBtn.classList.contains('armed')} label=${recLabel?.textContent}`);
+
+    // 第二次點下去才真的拆，而且照樣退錢、釋放地基
+    recBtn.click();                       // 上膛
+    const goldArmed = g.gold;
+    recBtn.click();                       // 確認
+    ok('第二次點下去才真的拆除，並返還金幣、釋放地基',
+      !g.turrets.includes(recTower) && recSocket.occupied === false && g.gold > goldArmed
+        && recModal.classList.contains('hidden'),
+      `turrets=${g.turrets.length} occupied=${recSocket.occupied} gold=${goldArmed}→${g.gold} modalHidden=${recModal.classList.contains('hidden')}`);
   }
   return r;
 });

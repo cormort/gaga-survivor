@@ -259,6 +259,7 @@ export class UIManager {
     this.btnInspectUpgrade = document.getElementById('btn-inspect-upgrade');
     this.inspectUpgradeCost = document.getElementById('inspect-upgrade-cost');
     this.btnInspectRecycle = document.getElementById('btn-inspect-recycle');
+    this.inspectRecycleLabel = document.getElementById('inspect-recycle-label');
     this.inspectRecycleVal = document.getElementById('inspect-recycle-val');
     this.btnInspectPriority = document.getElementById('btn-inspect-priority');
     this.inspectPriorityVal = document.getElementById('inspect-priority-val');
@@ -275,7 +276,17 @@ export class UIManager {
     this.btnInspectUpgrade?.addEventListener('click', () => {
       if (typeof this._onInspectUpgrade === 'function') this._onInspectUpgrade();
     });
+    // 拆除回收要點兩次才生效（v93）：升級與拆除是並排的兩顆同尺寸按鈕，
+    // 手機上手滑一格就把整座塔拆了。第一次點只是「上膛」，第二次才真的拆。
+    this._recycleArmed = false;
+    this._recycleArmTimer = null;
+    this._recycleLabel = this.inspectRecycleLabel?.textContent || '';
     this.btnInspectRecycle?.addEventListener('click', () => {
+      if (!this._recycleArmed) {
+        this.armInspectRecycle();
+        return;
+      }
+      this.disarmInspectRecycle();
       if (typeof this._onInspectRecycle === 'function') this._onInspectRecycle();
     });
 
@@ -1203,7 +1214,28 @@ export class UIManager {
     }
   }
 
+  // 拆除鈕「上膛」：改寫按鈕文字並在 3 秒後自動解除，避免上膛狀態一直留著
+  armInspectRecycle() {
+    if (!this.btnInspectRecycle) return;
+    this._recycleArmed = true;
+    this.btnInspectRecycle.classList.add('armed');
+    if (this.inspectRecycleLabel) this.inspectRecycleLabel.textContent = '⚠️ 再點一次確認拆除';
+    clearTimeout(this._recycleArmTimer);
+    this._recycleArmTimer = setTimeout(() => this.disarmInspectRecycle(), 3000);
+  }
+
+  // 解除上膛（關面板、換一座塔、逾時都會走這裡）
+  disarmInspectRecycle() {
+    clearTimeout(this._recycleArmTimer);
+    this._recycleArmTimer = null;
+    if (!this._recycleArmed) return;
+    this._recycleArmed = false;
+    this.btnInspectRecycle?.classList.remove('armed');
+    if (this.inspectRecycleLabel) this.inspectRecycleLabel.textContent = this._recycleLabel;
+  }
+
   showFacilityInspector(show, turret = null, callbacks = {}) {
+    this.disarmInspectRecycle();   // 每次開／關／換塔都從「沒上膛」開始
     if (!this.facilityInspectModal) return;
     if (show && turret) {
       this.facilityInspectModal.classList.remove('hidden');
