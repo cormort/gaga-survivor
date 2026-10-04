@@ -1,4 +1,7 @@
 // Test script using ego-browser to verify weapon attack animations & FX
+// 測試產物輸出目錄：不再寫死原作者機器上的絕對路徑（可用 EGO_OUT_DIR 覆寫）
+const EGO_OUT_DIR = process.env.EGO_OUT_DIR || `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/gaga-ego-artifacts`;
+(await import('fs')).default.mkdirSync(EGO_OUT_DIR, { recursive: true });
 const task = await taskSpace("verify-attack-animations-" + Date.now());
 const page = task.page("p1");
 
@@ -83,6 +86,6 @@ const result = await page.evaluate(async () => {
 
 const base64Data = result.replace(/^data:image\/png;base64,/, "");
 const fs = await import('fs');
-fs.writeFileSync('/Users/hsiehminchieh/.gemini/antigravity-ide/brain/406adb68-8e4f-4295-9c5e-16fbb7daccac/attack_animations_showcase.png', Buffer.from(base64Data, 'base64'));
+fs.writeFileSync(`${EGO_OUT_DIR}/attack_animations_showcase.png`, Buffer.from(base64Data, 'base64'));
 
 await task.finish({ keep: "all" });

@@ -66,6 +66,8 @@ if (typeof Image !== 'undefined') {
     TD_PATH_IMAGES[k] = img;
   }
 }
+// 烘靜態路面圖層時用的「零相機」：paintRoadStatic 沿用正式繪製的 x - cam.x 寫法
+const ROAD_LAYER_ORIGIN = { x: 0, y: 0 };
 
 // 守塔關卡主題路線風格配置：峽谷道溝壑高差 ＋ 實體兩側圍籬／護欄／木樁防護（凸顯怪物行進走廊）
 export const TD_PATH_STYLES = {
@@ -685,8 +687,159 @@ export class TowerDefense {
     return { x: x + ix * insetX, y: y + iy * insetY, ix, iy };
   }
 
-  // 路線：峽谷道深凹溝壑 + 主題路面 + 兩側實體立體圍籬／樁柱／護欄（凸顯敵軍走廊）
+  // 路線：先鋪靜態圖層（離屏烘一次），再畫會動的流向引導線，最後才是巢穴／門牌／主堡指示
   draw(ctx, cam) {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    const layer = this.staticRoadLayer(this.screenScale(ctx));
+    if (layer && this._roadLayerOrigin) {
+      ctx.drawImage(layer, this._roadLayerOrigin.x - cam.x, this._roadLayerOrigin.y - cam.y,
+        this._roadLayerW, this._roadLayerH);
+    } else {
+      // 沒有 DOM（例如無頭資料檢查）時的退路：直接照舊畫
+      this.paintRoadStatic(ctx, cam);
+    }
+    this.paintFlow(ctx, cam);
+    this.paintDynamicOverlay(ctx, cam);
+    ctx.restore();
+  }
+
+  // 靜態路面圖層的快取鍵：關卡、視野邊界、路線、路寬只要有一項變了就得重烘
+  roadLayerKey() {
+    const b = this.level.bounds;
+    return [
+      this.level.id, b.minX, b.minY, b.maxX, b.maxY, this.level.pathWidth,
+      this.paths.map((p) => p.map((q) => `${q[0]},${q[1]}`).join(';')).join('|'),
+    ].join('#');
+  }
+
+  // 畫布目前的實際縮放（dpr × 鏡頭縮放）：烘圖層時要對齊它，否則每幀都在做代價更高的重取樣
+  screenScale(ctx) {
+    if (ctx && typeof ctx.getTransform === 'function') {
+      const m = ctx.getTransform();
+      const s = Math.hypot(m.a, m.b);
+      if (isFinite(s) && s > 0) return s;
+    }
+    const z = this.game && this.game.zoom ? this.game.zoom : 1;
+    const dpr = this.game && this.game.dpr ? this.game.dpr : 1;
+    return z * dpr;
+  }
+
+  // 靜態路面只跟關卡資料有關（唯一會動的流向線在 paintFlow），所以整層烘到離屏 canvas，
+  // 每幀只付一次 drawImage。這是 v86 檢討裡「每幀重建約 190 個 createLinearGradient 樁柱、
+  // 比 v84 慢 20%」的解法；也因為只烘一次，7 張路面貼圖才負擔得起逐線段旋轉鋪設。
+  staticRoadLayer(scaleHint) {
+    if (typeof document === 'undefined' || !document.createElement) return null;
+    const style = TD_PATH_STYLES[this.level.id] || TD_PATH_STYLES.td_canyon;
+    const tex = TD_PATH_IMAGES[style.texture];
+    const texReady = !!(tex && tex.naturalWidth);
+    // 烘的解析度取「剛好不低於畫面縮放」的階梯值：與畫面 1:1 的圖層貼起來最便宜，
+    // 階梯化則讓縮放/自適應解析度微調時不會一直重烘。
+    const s = Math.max(0.2, Math.min(1, scaleHint || 1));
+    const k = [0.35, 0.5, 0.65, 0.8, 1].find((v) => v >= s - 1e-6) || 1;
+    const key = `${this.roadLayerKey()}#${texReady ? 'tex' : 'notex'}#${k}`;
+    // 貼圖還沒解碼完就先不進快取，下一幀補烘（否則這一局就永遠是沒有貼圖的路面）
+    if (this._roadLayerCanvas && this._roadLayerKey === key) return this._roadLayerCanvas;
+
+    const b = this.level.bounds;
+    const pad = 160;
+    const needW = Math.max(1, Math.ceil(b.maxX - b.minX + pad * 2));
+    const needH = Math.max(1, Math.ceil(b.maxY - b.minY + pad * 2));
+    // 超大視野的保險：超過約 600 萬像素就再降一級
+    const MAX_PX = 6.0e6;
+    const kk = needW * needH * k * k > MAX_PX ? k * Math.sqrt(MAX_PX / (needW * needH * k * k)) : k;
+
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(needW * kk));
+    cv.height = Math.max(1, Math.round(needH * kk));
+    const c = cv.getContext('2d');
+    if (!c) return null;
+    c.scale(kk, kk);
+    c.translate(pad - b.minX, pad - b.minY);
+    this.paintRoadStatic(c, ROAD_LAYER_ORIGIN);
+
+    this._roadLayerCanvas = cv;
+    this._roadLayerKey = key;
+    this._roadLayerOrigin = { x: b.minX - pad, y: b.minY - pad };
+    this._roadLayerW = needW;
+    this._roadLayerH = needH;
+    return cv;
+  }
+
+  // 主題無縫貼圖：512×512 可以縮放，縮放版另存一張小 canvas，pattern 只建一次
+  pathPattern(img, scale) {
+    if (typeof document === 'undefined' || !document.createElement) return null;
+    if (!img || !img.naturalWidth) return null;
+    const s = Math.max(0.25, Math.min(2, scale || 1));
+    const key = `${img.src}@${s}`;
+    if (!this._patternCache) this._patternCache = new Map();
+    const hit = this._patternCache.get(key);
+    if (hit) return hit;
+
+    let src = img;
+    if (Math.abs(s - 1) > 0.001) {
+      const nw = Math.max(1, Math.round(img.naturalWidth * s));
+      const nh = Math.max(1, Math.round(img.naturalHeight * s));
+      const tmp = document.createElement('canvas');
+      tmp.width = nw;
+      tmp.height = nh;
+      const tc = tmp.getContext('2d');
+      if (!tc) return null;
+      tc.drawImage(img, 0, 0, nw, nh);
+      src = tmp;
+    }
+    if (!this._patternHost) this._patternHost = document.createElement('canvas');
+    const host = this._patternHost.getContext('2d');
+    if (!host) return null;
+    const pat = host.createPattern(src, 'repeat');
+    if (pat) this._patternCache.set(key, pat);
+    return pat;
+  }
+
+  // 把主題貼圖沿著路線鋪上去：整條路先圍成一個裁切多邊形，再逐線段旋轉填滿，
+  // 貼圖才會順著路走（固定朝北的 pattern 在轉彎處會像貼歪的壁紙）。
+  paintRoadTexture(ctx, path, w, style, offsets, cam) {
+    if (!style || !style.texture || path.length < 2 || !offsets) return;
+    const img = TD_PATH_IMAGES[style.texture];
+    if (!img || !img.naturalWidth) return;
+    const pattern = this.pathPattern(img, style.textureScale || 1);
+    if (!pattern) return;
+
+    const left = offsets(-w / 2);
+    const right = offsets(w / 2);
+    ctx.save();
+    // 世界座標 → 畫面座標（烘圖層時 cam 是 0，逐幀退路時要跟著鏡頭）
+    ctx.translate(-(cam ? cam.x : 0), -(cam ? cam.y : 0));
+    ctx.beginPath();
+    ctx.moveTo(left[0].x, left[0].y);
+    for (let i = 1; i < left.length; i++) ctx.lineTo(left[i].x, left[i].y);
+    for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.globalAlpha = style.textureAlpha != null ? style.textureAlpha : 0.85;
+    ctx.fillStyle = pattern;
+    for (let i = 0; i < path.length - 1; i++) {
+      const ax = path[i][0];
+      const ay = path[i][1];
+      const bx = path[i + 1][0];
+      const by = path[i + 1][1];
+      const segLen = Math.hypot(bx - ax, by - ay);
+      if (segLen < 1) continue;
+      ctx.save();
+      ctx.translate(ax, ay);
+      ctx.rotate(Math.atan2(by - ay, bx - ax));
+      // 兩端各外擴半個路寬補轉角的楔形缺口（超出的部分由上面的裁切處理掉）
+      ctx.fillRect(-w / 2, -w / 2, segLen + w, w);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // 路線靜態層：峽谷道深凹溝壑 + 主題路面（含無縫貼圖）+ 車痕 + 兩側立體圍籬／樁柱／護欄
+  paintRoadStatic(ctx, cam) {
     const w = this.level.pathWidth;
     const style = TD_PATH_STYLES[this.level.id] || TD_PATH_STYLES.td_canyon;
     const f = style.fence;
@@ -703,41 +856,6 @@ export class TowerDefense {
         ctx.beginPath();
         path.forEach(([x, y], i) => (i ? ctx.lineTo(x - cam.x, y - cam.y) : ctx.moveTo(x - cam.x, y - cam.y)));
       };
-
-      // 1. 峽谷深層外緣落影 (Gorge Ambient Drop Shadow)
-      trace();
-      ctx.strokeStyle = style.gorgeShadow;
-      ctx.lineWidth = w + (style.gorgeShadowWidth || 36);
-      ctx.stroke();
-
-      // 2. 懸崖護坡岩層基礎 (Cliff Embankment Base)
-      trace();
-      ctx.strokeStyle = style.cliffBase;
-      ctx.lineWidth = w + (style.cliffBaseWidth || 24);
-      ctx.stroke();
-
-      // 3. 護坡崖壁頂緣 (Cliff Rim)
-      trace();
-      ctx.strokeStyle = style.cliffRim;
-      ctx.lineWidth = w + (style.cliffRimWidth || 16);
-      ctx.stroke();
-
-      // 4. 下凹谷底接縫 (Sunken Bed Seam)
-      trace();
-      ctx.strokeStyle = style.sunkenBed;
-      ctx.lineWidth = w + 4;
-      ctx.stroke();
-
-      // 5. 峽谷底層基路 (Packed Canyon Roadbed)
-      trace();
-      ctx.strokeStyle = style.road;
-      ctx.lineWidth = w;
-      ctx.stroke();
-
-      trace();
-      ctx.strokeStyle = style.roadInner;
-      ctx.lineWidth = Math.max(12, w - 16);
-      ctx.stroke();
 
       // 折線外擴計算器 (平滑角點斜接，左右分開，永不交叉貫穿道路)
       const computePolylineOffsets = (dist) => {
@@ -784,6 +902,45 @@ export class TowerDefense {
         return pts;
       };
 
+      // 1. 峽谷深層外緣落影 (Gorge Ambient Drop Shadow)
+      trace();
+      ctx.strokeStyle = style.gorgeShadow;
+      ctx.lineWidth = w + (style.gorgeShadowWidth || 36);
+      ctx.stroke();
+
+      // 2. 懸崖護坡岩層基礎 (Cliff Embankment Base)
+      trace();
+      ctx.strokeStyle = style.cliffBase;
+      ctx.lineWidth = w + (style.cliffBaseWidth || 24);
+      ctx.stroke();
+
+      // 3. 護坡崖壁頂緣 (Cliff Rim)
+      trace();
+      ctx.strokeStyle = style.cliffRim;
+      ctx.lineWidth = w + (style.cliffRimWidth || 16);
+      ctx.stroke();
+
+      // 4. 下凹谷底接縫 (Sunken Bed Seam)
+      trace();
+      ctx.strokeStyle = style.sunkenBed;
+      ctx.lineWidth = w + 4;
+      ctx.stroke();
+
+      // 5. 峽谷底層基路 (Packed Canyon Roadbed)
+      trace();
+      ctx.strokeStyle = style.road;
+      ctx.lineWidth = w;
+      ctx.stroke();
+
+      trace();
+      ctx.strokeStyle = style.roadInner;
+      ctx.lineWidth = Math.max(12, w - 16);
+      ctx.stroke();
+
+      // 5b. 主題無縫路面貼圖（assets/td/path_<主題>.png，512×512）
+      //     貼圖只跟關卡資料有關，所以只在這層烘一次；每個線段各自旋轉，貼圖才會順著路走。
+      this.paintRoadTexture(ctx, path, w, style, computePolylineOffsets, cam);
+
       // 6. 峽谷北壁下凹落影 (Sunken Cliff Inner Drop Shadow)
       ctx.save();
       ctx.translate(0, 5);
@@ -804,14 +961,7 @@ export class TowerDefense {
         ctx.stroke();
       });
 
-      // 8. 主題流向引導線 (Thematic Directional Trail)
-      trace();
-      ctx.setLineDash(style.flowDash || [14, 26]);
-      ctx.lineDashOffset = -this.game.gameTime * (style.flowSpeed || 32);
-      ctx.strokeStyle = style.flow;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // 8. 主題流向引導線見 paintFlow（每幀都會動，不進這層烘焙）
 
       // B. 兩側實體立體圍籬／樁柱／護欄 (Physical Guardrails & Palisade Posts)
       if (f) {
@@ -936,6 +1086,32 @@ export class TowerDefense {
         renderFenceLine(rightFence);
       }
     }
+    ctx.restore();
+  }
+
+  // 主題流向引導線：唯一每幀都要重畫的路面元素（虛線位移 = 怪物行進方向）
+  paintFlow(ctx, cam) {
+    const style = TD_PATH_STYLES[this.level.id] || TD_PATH_STYLES.td_canyon;
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    for (const path of this.paths) {
+      if (path.length < 2) continue;
+      ctx.beginPath();
+      path.forEach(([x, y], i) => (i ? ctx.lineTo(x - cam.x, y - cam.y) : ctx.moveTo(x - cam.x, y - cam.y)));
+      ctx.setLineDash(style.flowDash || [14, 26]);
+      ctx.lineDashOffset = -this.game.gameTime * (style.flowSpeed || 32);
+      ctx.strokeStyle = style.flow;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  // 動態疊加層：巢穴貼圖（會隨出怪換格）／門牌、主堡方向指示、下一波入口預告
+  paintDynamicOverlay(ctx, cam) {
+    const w = this.level.pathWidth;
     // 巢穴（或門牌）在所有路面之後畫，別條路不會蓋到它
     for (const path of this.level.paths) {
       const { x: gx, y: gy } = this.entranceMark(path);
@@ -978,6 +1154,5 @@ export class TowerDefense {
         ctx.fillText(label, lx, ly);
       });
     }
-    ctx.restore();
   }
 }

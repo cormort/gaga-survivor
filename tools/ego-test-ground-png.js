@@ -1,4 +1,7 @@
 // Verification of Ground PNG Textures and Terrain Rendering with ego-browser
+// 測試產物輸出目錄：不再寫死原作者機器上的絕對路徑（可用 EGO_OUT_DIR 覆寫）
+const EGO_OUT_DIR = process.env.EGO_OUT_DIR || `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/gaga-ego-artifacts`;
+(await import('fs')).default.mkdirSync(EGO_OUT_DIR, { recursive: true });
 const task = await taskSpace("verify-ground-png-" + Date.now());
 const page = task.page("p1");
 
@@ -95,7 +98,7 @@ console.log("Loaded Report:", JSON.stringify(testResult.loadedReport, null, 2));
 // Save montage to artifact directory and tmp
 const fs = await import('node:fs');
 const base64Data = testResult.dataUrl.replace(/^data:image\/png;base64,/, "");
-const artifactPath = "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/406adb68-8e4f-4295-9c5e-16fbb7daccac/ground_png_montage.png";
+const artifactPath = `${EGO_OUT_DIR}/ground_png_montage.png`;
 fs.writeFileSync(artifactPath, Buffer.from(base64Data, 'base64'));
 fs.writeFileSync("/tmp/ground_png_montage.png", Buffer.from(base64Data, 'base64'));
 console.log("Saved showcase montage to", artifactPath);

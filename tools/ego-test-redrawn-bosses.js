@@ -1,4 +1,7 @@
 // Test script using ego-browser to verify newly redrawn bosses in game and in cutscene
+// 測試產物輸出目錄：不再寫死原作者機器上的絕對路徑（可用 EGO_OUT_DIR 覆寫）
+const EGO_OUT_DIR = process.env.EGO_OUT_DIR || `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/gaga-ego-artifacts`;
+(await import('fs')).default.mkdirSync(EGO_OUT_DIR, { recursive: true });
 const task = await taskSpace("redrawn-bosses-verification-" + Date.now());
 const page = task.page("p1");
 
@@ -96,7 +99,7 @@ async function testBossCutscene(bossName, screenshotPath) {
   await page.waitForTimeout(300);
 }
 
-const artifactDir = "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/16e5ff95-0b76-4e3b-905e-13c78dabc5a0";
+const artifactDir = EGO_OUT_DIR;
 
 // Test 1: Ork Warboss (formerly blurry monkey)
 await testBossCutscene("歐克戰爭頭目", `${artifactDir}/boss_redrawn_ork_nob.png`);

@@ -1,4 +1,7 @@
 // Test script using ego-browser to verify unified character sprites
+// 測試產物輸出目錄：不再寫死原作者機器上的絕對路徑（可用 EGO_OUT_DIR 覆寫）
+const EGO_OUT_DIR = process.env.EGO_OUT_DIR || `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/gaga-ego-artifacts`;
+(await import('fs')).default.mkdirSync(EGO_OUT_DIR, { recursive: true });
 const task = await taskSpace("unified-sprites-" + Date.now());
 const page = task.page("p1");
 
@@ -78,7 +81,7 @@ const compositeDataUrl = await page.evaluate(async () => {
 if (compositeDataUrl) {
   const fs = await import('fs');
   const base64Data = compositeDataUrl.replace(/^data:image\/png;base64,/, "");
-  fs.writeFileSync("/Users/hsiehminchieh/.gemini/antigravity-ide/brain/136389fb-abf3-4ac5-9b03-dc3a1d2c3a60/character_sprites_grid.png", base64Data, 'base64');
+  fs.writeFileSync(`${EGO_OUT_DIR}/character_sprites_grid.png`, base64Data, 'base64');
   console.log("Composite character sprites grid saved to character_sprites_grid.png");
 }
 

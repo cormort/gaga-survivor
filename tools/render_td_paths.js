@@ -4,6 +4,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const task = await taskSpace("render-td-paths-" + Date.now());
 const page = task.page("p1");
@@ -535,7 +536,7 @@ const renderedTextures = await page.evaluate(async () => {
   return results;
 });
 
-const outDir = '/Users/hsiehminchieh/Dev/Personal/gaga-survivor/assets/td';
+const outDir = path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), 'assets', 'td');
 if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
 }

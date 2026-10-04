@@ -48,19 +48,37 @@ function segmentDistance(p1, p2, p3, p4) {
   return Math.min(d1, d2, d3, d4);
 }
 
-// 檢查路線各段之間是否有過近重疊（防止道路貼死穿模）
-function validatePathClearance(paths, minClearance) {
+// 核心主堡永遠在座標原點，所有路線的最後一段都是「通往核心的共用引道」。
+// 這些引道兩兩必然在核心交會（距離 0），若不排除，任何多線關卡都不可能通過
+// 下面的貼死檢查 —— 連關卡手寫的原始路線都會被判不合格。
+const CORE_EPS = 1;
+
+function isCoreApproach(p1, p2) {
+  return (
+    Math.hypot(p1[0], p1[1]) <= CORE_EPS || Math.hypot(p2[0], p2[1]) <= CORE_EPS
+  );
+}
+
+// 檢查「不同路線」之間是否有過近重疊（防止兩條不同進軍道路貼死穿模）
+//
+// 兩條刻意的例外，否則連關卡手寫的原始路線都會被判不合格：
+//  1. 兩段都是通往核心的共用引道 → 交會是設計。
+//  2. 同一條路線自己的非相鄰路段 → 那是同一條路的髮夾彎，車流不會互相穿模。
+export function validatePathClearance(paths, minClearance) {
   for (let a = 0; a < paths.length; a++) {
     const pa = paths[a];
-    for (let i = 1; i < pa.length; i++) {
-      const segA1 = pa[i - 1];
-      const segA2 = pa[i];
-      for (let b = a; b < paths.length; b++) {
-        const pb = paths[b];
-        const startJ = a === b ? i + 2 : 1;
-        for (let j = startJ; j < pb.length; j++) {
+    for (let b = a + 1; b < paths.length; b++) {
+      const pb = paths[b];
+      for (let i = 1; i < pa.length; i++) {
+        const segA1 = pa[i - 1];
+        const segA2 = pa[i];
+        for (let j = 1; j < pb.length; j++) {
           const segB1 = pb[j - 1];
           const segB2 = pb[j];
+          // 兩段都是通往核心的共用引道 → 交會是設計，不算貼死
+          if (isCoreApproach(segA1, segA2) && isCoreApproach(segB1, segB2)) {
+            continue;
+          }
           if (segmentDistance(segA1, segA2, segB1, segB2) < minClearance) {
             return false;
           }
@@ -69,6 +87,12 @@ function validatePathClearance(paths, minClearance) {
     }
   }
   return true;
+}
+
+// 兩條不同路線中心線之間的最小允許距離。門檻必須是「關卡手寫路線也過得了」的值，
+// 否則生成器永遠失敗、只能默默回退成手寫路線（tools/verify-td-deep.mjs 會把關）。
+export function minPathClearance(pathWidth) {
+  return (pathWidth || 90) + 18;
 }
 
 // 記錄關卡原始基準資料（路線備份、邊界備份、固定建塔數量、加成池）
@@ -114,8 +138,69 @@ export function getOrientationBounds(level, isPortrait) {
   return { minX, maxX, minY, maxY };
 }
 
-// ── 關卡專屬程序化道路生成器 ──
+// 路線的所有點是否都落在 bounds 內（可留 margin 邊距）
+export function pathsWithinBounds(paths, bounds, margin = 0) {
+  if (!paths || !bounds) return false;
+  for (const path of paths) {
+    for (const [x, y] of path) {
+      if (
+        x < bounds.minX + margin || x > bounds.maxX - margin ||
+        y < bounds.minY + margin || y > bounds.maxY - margin
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
 
+// 把路線整體縮放平移進 bounds（保留拓撲、填滿視野）。
+// 核心主堡必須留在 (0,0)，所以最後一點單獨釘回原點 —— 整條路線一起平移會讓
+// 怪物走不到主堡。這是「路線超出當前視野」時的保險，例如直屏沿用了橫幅的原始路線。
+export function fitPathsToBounds(paths, bounds, pathWidth = 90) {
+  if (!paths || !paths.length || !bounds) return paths;
+  const margin = pathWidth / 2 + 56;
+  const tMinX = bounds.minX + margin;
+  const tMaxX = bounds.maxX - margin;
+  const tMinY = bounds.minY + margin;
+  const tMaxY = bounds.maxY - margin;
+  if (tMaxX <= tMinX || tMaxY <= tMinY) return paths;
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const path of paths) {
+    for (const [x, y] of path) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  const sx = (tMaxX - tMinX) / Math.max(1, maxX - minX);
+  const sy = (tMaxY - tMinY) / Math.max(1, maxY - minY);
+
+  return paths.map((p) =>
+    p.map(([x, y], idx) => {
+      if (idx === p.length - 1) return [0, 0]; // 終點永遠是核心主堡
+      return [
+        Math.round(tMinX + (x - minX) * sx),
+        Math.round(tMinY + (y - minY) * sy),
+      ];
+    })
+  );
+}
+
+// 直屏地圖（9:16）比橫屏高得多：把「核心上方的固定絕對 y」按縱深比例放大，
+// 折返點才會散布在整張長條地圖上，而不是全擠在核心附近、上半張圖空著。
+// 橫屏時 bounds 與參考 bounds 同高 → 原值回傳，橫屏外觀不受影響。
+function spreadY(y, bounds, refBounds) {
+  if (!refBounds || y >= 0) return y;
+  const refDepth = -refBounds.minY;
+  const depth = -bounds.minY;
+  if (!(refDepth > 0) || !(depth > 0) || depth <= refDepth) return y;
+  return Math.round(y * (depth / refDepth));
+}
+
+// ── 關卡專屬程序化道路生成器 ──
 // 1. 峽谷隘口（td_canyon）：單線蛇形峽谷
 function generateCanyonPaths(bounds, pathWidth, isPortrait) {
   const minX = bounds.minX + (isPortrait ? 55 : 90);
@@ -217,38 +302,61 @@ function generateForkPaths(bounds, pathWidth, isPortrait) {
 }
 
 // 3. 三門要塞（td_fortress）：北、西南、東南三線
-function generateFortressPaths(bounds, pathWidth, isPortrait) {
+function generateFortressPaths(bounds, pathWidth, isPortrait, refBounds) {
+  if (isPortrait) {
+    // 直屏（920 寬、1400+ 深）：北線階梯獨佔北半部，兩翼改由左右地圖緣的「中段」切入，
+    // 一路往內跑、下降之後才斜向核心。關鍵是兩翼的橫向跑道必須落在北線下折返點之下 170px 以上，
+    // 且翼的內側轉角（230~300）要與北線垂直段（|nX| ≤ 210）拉開——舊版 wingY 與 nY1 範圍重疊、
+    // innerX 又和 nX 只差 20~70px，導致 10/10 候選全被 validatePathClearance 否決而永遠回退原始路線。
+    const dir = Math.random() > 0.5 ? -1 : 1;
+    const nX = dir * rand(150, 210);
+    const nY1 = bounds.minY + rand(200, 300);
+    const nY2 = bounds.minY + rand(820, 950);
+    const pathNorth = [[0, bounds.minY], [0, nY1], [nX, nY1], [nX, nY2], [0, nY2], [0, 0]];
+
+    // 兩翼橫向跑道：北線下折返點之下 170~240px（再往上會被北線擋住，往下則離核心太近）
+    const wingY = Math.min(nY2 + rand(170, 240), -240);
+    const wingX = rand(230, 300);
+    const wingDownY = rand(-170, -120);
+    const pathSW = [[bounds.minX, wingY], [-wingX, wingY], [-wingX, wingDownY], [0, 0]];
+    const pathSE = [[bounds.maxX, wingY], [wingX, wingY], [wingX, wingDownY], [0, 0]];
+
+    return [pathNorth, pathSW, pathSE];
+  }
+
+  // 橫屏：北線階梯 + 西南／東南兩翼由地圖下緣往上推進
   const northBendDir = Math.random() > 0.5 ? -1 : 1;
   const nX = northBendDir < 0 ? rand(-260, -160) : rand(160, 260);
   const nY1 = bounds.minY + rand(220, 320);
-  const nY2 = rand(-220, -150);
+  const nY2 = spreadY(rand(-220, -150), bounds, refBounds);
   const pathNorth = [[0, bounds.minY], [0, nY1], [nX, nY1], [nX, nY2], [0, nY2], [0, 0]];
 
-  const swY1 = isPortrait ? bounds.minY * 0.45 : rand(420, 490);
-  const swX1 = rand(-460, -360);
-  const swY2 = rand(160, 240);
-  const pathSW = [[bounds.minX, swY1], [swX1, swY1], [swX1, swY2], [-200, swY2], [-200, 75], [0, 0]];
+  const wingY = rand(420, 490);
+  const wingX1 = rand(-460, -360);
+  const wingX2 = rand(360, 460);
+  const midY = rand(160, 240);
+  const nearY = 75;
+  const innerX = -200;
+  const innerX2 = 200;
 
-  const seY1 = isPortrait ? bounds.minY * 0.45 : rand(420, 490);
-  const seX1 = rand(360, 460);
-  const seY2 = rand(180, 260);
-  const pathSE = [[bounds.maxX, seY1], [seX1, seY1], [seX1, seY2], [200, seY2], [200, 75], [0, 0]];
+  const pathSW = [[bounds.minX, wingY], [wingX1, wingY], [wingX1, midY], [innerX, midY], [innerX, nearY], [0, 0]];
+  const pathSE = [[bounds.maxX, wingY], [wingX2, wingY], [wingX2, midY], [innerX2, midY], [innerX2, nearY], [0, 0]];
 
   return [pathNorth, pathSW, pathSE];
 }
 
 // 4. 鑄造世界（td_forgeworld）：西北與東北雙路工廠戰壕
-function generateForgeworldPaths(bounds, pathWidth, isPortrait) {
+function generateForgeworldPaths(bounds, pathWidth, isPortrait, refBounds) {
   const minY = bounds.minY;
   const nwY1 = minY + rand(160, 240);
   const nwX1 = rand(-420, -320);
-  const nwY2 = rand(-450, -320);
+  const nwY2 = spreadY(rand(-450, -320), bounds, refBounds);
   const nwX2 = rand(-200, -130);
   const pathNW = [[bounds.minX, nwY1], [nwX1, nwY1], [nwX1, nwY2], [nwX2, nwY2], [nwX2, -85], [0, 0]];
 
   const neY1 = minY + rand(160, 240);
   const neX1 = rand(320, 420);
-  const neY2 = rand(-450, -320);
+  const neY2 = spreadY(rand(-450, -320), bounds, refBounds);
   const neX2 = rand(130, 200);
   const pathNE = [[bounds.maxX, neY1], [neX1, neY1], [neX1, neY2], [neX2, neY2], [neX2, -85], [0, 0]];
 
@@ -256,19 +364,19 @@ function generateForgeworldPaths(bounds, pathWidth, isPortrait) {
 }
 
 // 5. 紅色警戒（td_redalert）：西線長蛇與東北推進
-function generateRedAlertPaths(bounds, pathWidth, isPortrait) {
+function generateRedAlertPaths(bounds, pathWidth, isPortrait, refBounds) {
   const wY1 = bounds.minY + rand(180, 260);
   const wX1 = rand(-420, -340);
-  const wY2 = rand(-380, -260);
+  const wY2 = spreadY(rand(-380, -260), bounds, refBounds);
   const wX2 = rand(-240, -170);
-  const wY3 = rand(-160, -90);
+  const wY3 = spreadY(rand(-160, -90), bounds, refBounds);
   const wX3 = rand(-140, -80);
   const pathW = [[bounds.minX, wY1], [wX1, wY1], [wX1, wY2], [wX2, wY2], [wX2, wY3], [wX3, wY3], [wX3, -30], [0, 0]];
 
   const eX0 = rand(180, 320);
   const eY1 = bounds.minY + rand(220, 300);
   const eX1 = rand(360, 440);
-  const eY2 = rand(-220, -140);
+  const eY2 = spreadY(rand(-220, -140), bounds, refBounds);
   const eX2 = rand(160, 230);
   const pathE = [[eX0, bounds.minY], [eX0, eY1], [eX1, eY1], [eX1, eY2], [eX2, eY2], [eX2, -20], [0, 0]];
 
@@ -276,15 +384,17 @@ function generateRedAlertPaths(bounds, pathWidth, isPortrait) {
 }
 
 // 6. 星海爭霸（td_starcraft）：長 S 路線與右側突襲
-function generateStarcraftPaths(bounds, pathWidth, isPortrait) {
+function generateStarcraftPaths(bounds, pathWidth, isPortrait, refBounds) {
   const nX0 = rand(120, 240);
   const nY1 = bounds.minY + rand(220, 300);
   const nX1 = rand(-380, -280);
-  const nY2 = rand(-480, -360);
+  const nY2 = spreadY(rand(-480, -360), bounds, refBounds);
   const nX2 = rand(240, 340);
   const pathMain = [[nX0, bounds.minY], [nX0, nY1], [nX1, nY1], [nX1, nY2], [nX2, nY2], [nX2, -120], [0, -120], [0, 0]];
 
-  const eY0 = rand(-120, 40);
+  // 右側突襲：入口 y 必須離主線最後那段 y = -120 的橫向路至少 minClearance，
+  // 否則兩段會共線重疊（實測約 34% 的候選因此被 clearance 否決，1/60 的局數整場回退原始路線）。
+  const eY0 = rand(0, 70);
   const eX1 = rand(180, 250);
   const pathFlank = [[bounds.maxX, eY0], [eX1, eY0], [eX1, 0], [0, 0]];
 
@@ -292,7 +402,7 @@ function generateStarcraftPaths(bounds, pathWidth, isPortrait) {
 }
 
 // 7. 魔獸爭霸（td_warcraft）：西、北、東三路天譴進攻
-function generateWarcraftPaths(bounds, pathWidth, isPortrait) {
+function generateWarcraftPaths(bounds, pathWidth, isPortrait, refBounds) {
   const wY1 = bounds.minY * 0.45;
   const wX1 = rand(-380, -280);
   const wY2 = rand(-120, -40);
@@ -302,7 +412,7 @@ function generateWarcraftPaths(bounds, pathWidth, isPortrait) {
   const nX0 = rand(-120, 40);
   const nY1 = bounds.minY + rand(220, 320);
   const nX1 = rand(140, 220);
-  const nY2 = rand(-280, -200);
+  const nY2 = spreadY(rand(-280, -200), bounds, refBounds);
   const pathN = [[nX0, bounds.minY], [nX0, nY1], [nX1, nY1], [nX1, nY2], [0, nY2], [0, 0]];
 
   const eY1 = bounds.minY * 0.45;
@@ -319,10 +429,11 @@ export function generateProceduralPaths(level, isPortrait = false) {
   const id = level.id;
   const bounds = level.bounds;
   const pathWidth = level.pathWidth || 90;
-  const minClearance = pathWidth + 38;
+  const minClearance = minPathClearance(pathWidth);
 
   for (let attempt = 0; attempt < 10; attempt++) {
     let candidate;
+    const ref = level._defaultBounds;
     switch (id) {
       case 'td_canyon':
         candidate = generateCanyonPaths(bounds, pathWidth, isPortrait);
@@ -331,19 +442,19 @@ export function generateProceduralPaths(level, isPortrait = false) {
         candidate = generateForkPaths(bounds, pathWidth, isPortrait);
         break;
       case 'td_fortress':
-        candidate = generateFortressPaths(bounds, pathWidth, isPortrait);
+        candidate = generateFortressPaths(bounds, pathWidth, isPortrait, ref);
         break;
       case 'td_forgeworld':
-        candidate = generateForgeworldPaths(bounds, pathWidth, isPortrait);
+        candidate = generateForgeworldPaths(bounds, pathWidth, isPortrait, ref);
         break;
       case 'td_redalert':
-        candidate = generateRedAlertPaths(bounds, pathWidth, isPortrait);
+        candidate = generateRedAlertPaths(bounds, pathWidth, isPortrait, ref);
         break;
       case 'td_starcraft':
-        candidate = generateStarcraftPaths(bounds, pathWidth, isPortrait);
+        candidate = generateStarcraftPaths(bounds, pathWidth, isPortrait, ref);
         break;
       case 'td_warcraft':
-        candidate = generateWarcraftPaths(bounds, pathWidth, isPortrait);
+        candidate = generateWarcraftPaths(bounds, pathWidth, isPortrait, ref);
         break;
       default:
         candidate = (level._defaultPaths || level.paths).map((p) => {
@@ -384,8 +495,8 @@ export function generateProceduralSockets(level, targetCount) {
       const nx = -(y2 - y1) / segLen;
       const ny = (x2 - x1) / segLen;
 
-      // 沿線段每 60px 切一個取樣點
-      const steps = Math.max(1, Math.floor(segLen / 60));
+      // 沿線段每 48px 切一個取樣點
+      const steps = Math.max(1, Math.floor(segLen / 48));
       for (let s = 1; s <= steps; s++) {
         const t = s / (steps + 1);
         const px = x1 + (x2 - x1) * t;
@@ -398,7 +509,7 @@ export function generateProceduralSockets(level, targetCount) {
           const sy = Math.round(py + ny * side * offset);
 
           // 邊界安全過濾
-          if (sx < bounds.minX + 42 || sx > bounds.maxX - 42 || sy < bounds.minY + 42 || sy > bounds.maxY - 42) {
+          if (sx < bounds.minX + 34 || sx > bounds.maxX - 34 || sy < bounds.minY + 34 || sy > bounds.maxY - 34) {
             continue;
           }
           // 不得靠近核心主堡
@@ -428,7 +539,9 @@ export function generateProceduralSockets(level, targetCount) {
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
 
-  // 3. 泊松盤（Poisson-disc）距離篩選：優先用 92px，若格子不夠則降至 78px / 65px 確保填滿目標數量
+  // 3. 泊松盤（Poisson-disc）距離篩選：從寬到窄逐級放寬，直到填滿目標數量。
+  //    「每張地圖建塔點總數不變」是這套系統的硬性承諾，所以最後一定要達標，
+  //    最後幾級只剩「不要把兩座地基疊在同一格」的作用。
   function filterWithMinDist(dist) {
     const selected = [];
     for (const cand of candidates) {
@@ -441,9 +554,11 @@ export function generateProceduralSockets(level, targetCount) {
     return selected;
   }
 
-  let selected = filterWithMinDist(92);
-  if (selected.length < targetCount) selected = filterWithMinDist(78);
-  if (selected.length < targetCount) selected = filterWithMinDist(65);
+  const POISSON_TIERS = [92, 78, 65, 56, 48, 40, 32, 24];
+  let selected = filterWithMinDist(POISSON_TIERS[0]);
+  for (let ti = 1; ti < POISSON_TIERS.length && selected.length < targetCount; ti++) {
+    selected = filterWithMinDist(POISSON_TIERS[ti]);
+  }
 
   // 4. 洗牌分配戰術地基加成
   const bonusPool = [...(level._bonusPool || Object.keys(SOCKET_BONUSES))];
@@ -495,6 +610,14 @@ export function randomizeTDLevel(level, orientation = 'auto') {
 
   // 2. 配合邊界生成適配該視野比例的程序化道路
   level.paths = generateProceduralPaths(level, isPortrait);
+
+  // 2b. 保險：回退的原始路線（橫幅）或極端生成結果可能超出當前視野，
+  //     此時把整組路線縮放平移進 bounds，否則路線與巢穴會跑到地圖外、地基也補不滿。
+  //     注意：生成器是「貼著地圖邊緣」設計的（例如入口點就落在 bounds.minY），
+  //     所以這裡只能用 margin 0 判定，否則每一局都會被重新拉伸，把剛好過關的路線間距壓爛。
+  if (!pathsWithinBounds(level.paths, level.bounds, 0)) {
+    level.paths = fitPathsToBounds(level.paths, level.bounds, level.pathWidth || 90);
+  }
 
   // 3. 沿新道路的路肩隨機採樣生成固定數量的戰術地基
   level.sockets = generateProceduralSockets(level, level._initialSocketCount);

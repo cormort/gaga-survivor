@@ -3,6 +3,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const task = await taskSpace("verify-makaimura-showcase-" + Date.now());
 const page = task.page("p1");
@@ -221,7 +222,7 @@ const showcaseData = await page.evaluate(async () => {
   return canvas.toDataURL('image/png');
 });
 
-const outPath = '/Users/hsiehminchieh/Dev/Personal/gaga-survivor/tools/makaimura_showcase_verification.png';
+const outPath = path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), 'tools', 'makaimura_showcase_verification.png');
 const base64Data = showcaseData.replace(/^data:image\/png;base64,/, "");
 fs.writeFileSync(outPath, Buffer.from(base64Data, 'base64'));
 console.log("Showcase verification image saved to:", outPath);

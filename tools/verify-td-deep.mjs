@@ -8,6 +8,8 @@
 //   * 王國升級買了卻只有「之後蓋的塔」受益，已經在場上的塔沒動
 //   * 詞綴只出現在預告文字裡，佇列裡其實沒帶（開打才發現怪沒變強）
 //   * 選中塔時的射程圈／星等只在「這一局的 g.turrets 裡」才畫得出來
+//   * 程序化道路的間距驗證永遠回 false，於是六張圖「每局隨機」其實是每局都退回原始路線（v86）
+//   * 路面貼圖有下載、有預快取、有解碼，但從來沒有人讀取，畫面上永遠看不到（v86）
 // 所以每一條都驗「資料層 → 塔身上的實際數值 → 畫面／DOM」三段，而不是只驗資料存在。
 //
 // 需要已起好的靜態伺服器（no-store 才不會被 PWA cache 干擾）：
@@ -20,6 +22,9 @@ import { TD_LEVELS, TD_ORDER } from '../js/tdlevels.js';
 import { SOCKET_BONUSES } from '../js/tdsockets.js';
 import { WAVE_MODS, waveModMul } from '../js/tdwaves.js';
 import { KINGDOM_UPGRADES, KINGDOM_MAX, kingdomNextCost } from '../js/tdkingdom.js';
+import {
+  randomizeTDLevel, validatePathClearance, minPathClearance, pathsWithinBounds,
+} from '../js/tdprocedural.js';
 
 let passed = 0, failed = 0;
 const ok = (name, cond, detail = '') => {
@@ -110,6 +115,57 @@ console.log('=== A. 資料層：地基／詞綴／王國三張表與關卡資料
   }
   ok('王國六條線各三級、成本逐級遞增、滿級回 null',
     badCurve.length === 0 && badMax.length === 0, badCurve.concat(badMax).join('、') || '六條線全部合格');
+}
+
+console.log('\n=== A2. 程序化隨機地圖（v86）：原始資料要過驗證，隨機結果要真的換路且不出界 ===');
+{
+  // 教訓：v86 的 validatePathClearance 會把所有共用核心終點 [0,0] 的路線判成「穿模」，
+  // 於是 6/7 張圖的隨機道路從來沒生效、每局都退回手寫路線，而且完全沒有錯誤訊息。
+  // 所以「原始關卡資料本身必須驗得過」是第一條契約，第二條才是「真的會換」。
+  const failDefault = [];
+  for (const id of TD_ORDER) {
+    const lv = TD_LEVELS[id];
+    const mc = minPathClearance(lv.pathWidth);
+    if (!validatePathClearance(lv._defaultPaths, mc)) failDefault.push(`${id}(${mc})`);
+  }
+  ok('七張地圖的手寫原始路線全部通過 validatePathClearance（驗證器不能用連原始資料都過不了的門檻）',
+    failDefault.length === 0, failDefault.join('、') || `${TD_ORDER.length} 張全部通過`);
+
+  for (const orientation of ['landscape', 'portrait']) {
+    const unchanged = [], outOfBounds = [], badCount = [], innerFail = [];
+    const ROUNDS = 25;
+    for (const id of TD_ORDER) {
+      const lv = TD_LEVELS[id];
+      if (!lv.td) lv.td = true;                     // randomizeTDLevel 只處理 td 關卡
+      const target = lv._initialSocketCount;
+      let changed = 0;
+      for (let i = 0; i < ROUNDS; i++) {
+        randomizeTDLevel(lv, orientation);
+        if (JSON.stringify(lv.paths) !== JSON.stringify(lv._defaultPaths)) changed++;
+        if (!pathsWithinBounds(lv.paths, lv.bounds, 0)) outOfBounds.push(id);
+        if (lv.sockets.length !== target) badCount.push(`${id}:${lv.sockets.length}/${target}`);
+        const mc = minPathClearance(lv.pathWidth);
+        if (!validatePathClearance(lv.paths, mc)) innerFail.push(id);   // 生成的候選自己也必須過
+      }
+      if (changed !== ROUNDS) unchanged.push(`${id}:${changed}/${ROUNDS}`);
+    }
+    ok(`[${orientation}] 七張地圖每局都換得出新的進軍路線（不是靜靜退回手寫路線）`,
+      unchanged.length === 0, unchanged.join('、') || `7 關 × ${ROUNDS} 局全部與原始路線不同`);
+    ok(`[${orientation}] 七張地圖每一局的路線都在地圖邊界內（竪屏不再跑出畫面）`,
+      outOfBounds.length === 0, outOfBounds.join('、') || `${7 * ROUNDS} 局全部在 bounds 內`);
+    ok(`[${orientation}] 七張地圖每一局的建塔點數量都等於原始數量（不多不少）`,
+      badCount.length === 0, badCount.slice(0, 6).join('、') || `全部等於目標數`);
+    ok(`[${orientation}] 生成出來的路線自己也過得了 validatePathClearance`,
+      innerFail.length === 0, innerFail.slice(0, 6).join('、') || '全部通過');
+  }
+
+  // 驗證器本身的有效性：三線關卡的原始路線該通過，同一條路複製一份（真正重疊）該被否決。
+  const ff = TD_LEVELS.td_fortress;
+  const ffOk = validatePathClearance(ff._defaultPaths, minPathClearance(ff.pathWidth));
+  const dup = [ff._defaultPaths[0], ff._defaultPaths[0].map((p) => [p[0], p[1]])];
+  const dupOk = validatePathClearance(dup, 400);
+  ok('驗證器對「共用核心引道」放行、但對真正重疊的區段仍然否決',
+    ffOk && !dupOk, `三線關卡原始路線通過=${ffOk}；同一條路複製一份被否決=${!dupOk}`);
 }
 
 console.log('\n=== B. 瀏覽器：改動真的進到塔的數值與畫面 ===');
@@ -333,6 +389,81 @@ const out = await page.evaluate(async () => {
     } catch (e) { smoke.push(`${id}:FAIL ${e.message.split('\n')[0]}`); }
   }
   ok('七張守塔地圖都能開局並跑 600 帧不拋例外', smoke.every((s) => s.endsWith('ok')), smoke.join(' '));
+
+  // ── B9. 主題路面貼圖與靜態圖層（v86 的貼圖＋v87 的烘焙）──
+  // 教訓：v86 把 7 張 path_*.png 下載、預快取、解碼，卻一個讀取端都沒有
+  // （TD_PATH_IMAGES 只有寫入端、TD_PATH_STYLES[*].texture 從來沒被讀），
+  // 而且稽核腳本把 TD_PATH_KEYS 整份登記成「已使用」，所以死檔檢查也看不到。
+  const { TD_PATH_IMAGES, TD_PATH_KEYS, TD_PATH_STYLES } = await imp('js/systems/TowerDefense.js');
+  const notLoaded = TD_PATH_KEYS.filter((k) => !(TD_PATH_IMAGES[k] && TD_PATH_IMAGES[k].naturalWidth));
+  ok('七張主題路面貼圖都真的載入完成', notLoaded.length === 0,
+    notLoaded.join('、') || `${TD_PATH_KEYS.length} 張 ${TD_PATH_IMAGES[TD_PATH_KEYS[0]].naturalWidth}px`);
+  const noStyle = TD_ORDER.filter((id) => !TD_PATH_KEYS.includes((TD_PATH_STYLES[id] || {}).texture));
+  ok('每張守塔地圖都指到一張存在的貼圖（沒有地圖漏掉 texture）', noStyle.length === 0,
+    noStyle.join('、') || TD_ORDER.map((id) => `${id.replace('td_', '')}:${TD_PATH_STYLES[id].texture.replace('path_', '')}`).join(' '));
+
+  await boot('td_canyon');
+  const tkey = (TD_PATH_STYLES[g.levelId] || {}).texture;
+  const trn = g.ctx.getTransform();
+  const midPt = g.td.paths[0][Math.floor(g.td.paths[0].length / 2)];
+  const roadPx = [Math.round((midPt[0] - g.camera.x) * trn.a), Math.round((midPt[1] - g.camera.y) * trn.d)];
+  const sampleRoad = () => {
+    const d = g.ctx.getImageData(roadPx[0], roadPx[1], 1, 1).data;
+    return [d[0], d[1], d[2]];
+  };
+  const dist3 = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+  g.render();
+  const withTex = sampleRoad();
+  const keepImg = TD_PATH_IMAGES[tkey];
+  TD_PATH_IMAGES[tkey] = null;          // 拔掉貼圖 → 圖層換 key（#notex）會重烘
+  g.render();
+  const noTex = sampleRoad();
+  TD_PATH_IMAGES[tkey] = keepImg;
+  ok('路面貼圖真的畫在路面上（拔掉貼圖，同一點的顏色會變）', dist3(withTex, noTex) >= 6,
+    `有貼圖=${withTex.join(',')} 沒貼圖=${noTex.join(',')} 差異=${dist3(withTex, noTex)}`);
+
+  g.render();
+  const c1 = g.td._roadLayerCanvas, k1 = g.td._roadLayerKey;
+  g.render();
+  ok('靜態路面圖層會快取（同一個縮放連畫兩帧不重烘）',
+    !!c1 && c1 === g.td._roadLayerCanvas && k1 === g.td._roadLayerKey, `${k1 ? k1.slice(0, 70) : '(無)'}`);
+  ok('圖層快取鍵帶關卡 id 與縮放（換關／改視野不會沿用上一張路面）',
+    !!k1 && k1.includes('td_canyon') && k1.includes('tex'), k1 ? k1.slice(0, 70) : '(無)');
+  ok('圖層尺寸受像素上限保護（不會把整張地圖烘成幾百 MB）',
+    !!c1 && c1.width * c1.height <= 6.0e6, c1 ? `${c1.width}x${c1.height} = ${((c1.width * c1.height) / 1e6).toFixed(2)}MP` : '(無)');
+
+  const origLayer = g.td.staticRoadLayer.bind(g.td);
+  g.td.staticRoadLayer = () => null;
+  let fallbackErr = null;
+  try { g.render(); } catch (e) { fallbackErr = e.message.split('\n')[0]; }
+  const fallback = sampleRoad();
+  g.td.staticRoadLayer = origLayer;
+  ok('沒有離屏圖層時退回逐幀繪製不拋例外', !fallbackErr, fallbackErr || 'ok');
+  ok('退路畫法與烘焙圖層落在同一個位置（相機位移有正確扣除）', dist3(withTex, fallback) <= 40,
+    `圖層=${withTex.join(',')} 逐幀=${fallback.join(',')} 差異=${dist3(withTex, fallback)}`);
+
+  // 竪屏出擊：設定改成 portrait 之後開一局新的，地圖該變成長條、路線全在裡面、地基補滿。
+  const orientSel = document.getElementById('orientation-select');
+  if (orientSel) {
+    orientSel.value = 'portrait';
+    orientSel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  await boot('td_fortress');
+  const pb = g.level.bounds;
+  ok('選了竪屏再出擊，地圖邊界真的變成長條（高 > 寬）',
+    pb.maxY - pb.minY > pb.maxX - pb.minX,
+    `${Math.round(pb.maxX - pb.minX)}x${Math.round(pb.maxY - pb.minY)} orientation=${g.orientation}`);
+  let porErr = null;
+  try { for (let i = 0; i < 60; i++) g.update(1 / 60); g.render(); } catch (e) { porErr = e.message.split('\n')[0]; }
+  const pOut = g.level.paths.some((p) => p.some((q) => q[0] < pb.minX - 1 || q[0] > pb.maxX + 1
+    || q[1] < pb.minY - 1 || q[1] > pb.maxY + 1));
+  ok('竪屏關卡的路線全在地圖內、建塔點補滿、跑 60 帧不拋例外',
+    !porErr && !pOut && g.level.sockets.length === g.level._initialSocketCount,
+    porErr || `路線出界=${pOut} 地基=${g.level.sockets.length}/${g.level._initialSocketCount}`);
+  if (orientSel) {
+    orientSel.value = 'landscape';
+    orientSel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
   return r;
 });
 

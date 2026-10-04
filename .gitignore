@@ -13,3 +13,8 @@ assets/td/lair_*.jpeg
 assets/td/base_*.jpeg
 assets/td/barracks_*.jpeg
 assets/td/Gemini_Generated_Image_*.jpeg
+
+# 驗證腳本跑出來的大張測試輸出圖（幾百 KB，每次跑都會重寫）：不進版控
+tools/makaimura_showcase_verification.png
+tools/**/*_showcase.png
+# 註：ego-test-*.js 的截圖改成寫到系統暫存區（可用 EGO_OUT_DIR 覆寫），不會落進 repo

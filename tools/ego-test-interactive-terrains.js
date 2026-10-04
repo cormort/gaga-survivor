@@ -1,4 +1,7 @@
 // 互動式機制地形（熔岩裂隙、流沙陷阱、雷暴電場、聖域靈氣陣）自動化驗證腳本
+// 測試產物輸出目錄：不再寫死原作者機器上的絕對路徑（可用 EGO_OUT_DIR 覆寫）
+const EGO_OUT_DIR = process.env.EGO_OUT_DIR || `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/gaga-ego-artifacts`;
+(await import('fs')).default.mkdirSync(EGO_OUT_DIR, { recursive: true });
 import fs from 'fs';
 
 const task = await taskSpace("interactive-terrains-" + Date.now());
@@ -170,7 +173,7 @@ const canvasData = await page.evaluate(() => {
 
 if (canvasData) {
   const base64Data = canvasData.replace(/^data:image\/png;base64,/, "");
-  const outPath = "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/e26f4ac3-7fd9-4c28-beeb-5b631661209f/interactive_terrains_showcase.png";
+  const outPath = `${EGO_OUT_DIR}/interactive_terrains_showcase.png`;
   fs.writeFileSync(outPath, base64Data, 'base64');
   console.log("📸 四種互動地形遊戲畫面已截圖至:", outPath);
 }

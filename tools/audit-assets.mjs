@@ -107,7 +107,13 @@ for (const [, line, list] of tdBody.matchAll(/([a-z_]+):\s*\[([^\]]*)\]/g)) {
 }
 for (const k of arrStrings(read('js/entities/AlliedUnit.js'), 'UNIT_IMAGE_KEYS')) add(`assets/td/${k}.png`, 'AlliedUnit.js UNIT_IMAGE_KEYS');
 for (const k of arrStrings(read('js/systems/TowerDefense.js'), 'TD_STRUCTURE_KEYS')) add(`assets/td/${k}.png`, 'TowerDefense.js TD_STRUCTURE_KEYS');
-for (const k of arrStrings(read('js/systems/TowerDefense.js'), 'TD_PATH_KEYS')) add(`assets/td/${k}.png`, 'TowerDefense.js TD_PATH_KEYS');
+// 守塔路面貼圖：只有真的被 TD_PATH_STYLES 的 texture 欄位指到的才算「已使用」。
+// （舊寫法把 TD_PATH_KEYS 整份登記成已使用，於是「解碼了卻從來沒畫」的貼圖永遠不會被這支稽核抓到。）
+const tdRenderSrc = read('js/systems/TowerDefense.js');
+const tdPathKeys = new Set(arrStrings(tdRenderSrc, 'TD_PATH_KEYS'));
+for (const m of tdRenderSrc.matchAll(/texture:\s*'([^']+)'/g)) {
+  if (tdPathKeys.has(m[1])) add(`assets/td/${m[1]}.png`, 'TowerDefense.js TD_PATH_STYLES.texture');
+}
 
 const dropSrc = read('js/entities/DropItem.js');
 for (const k of arrStrings(dropSrc, 'DROP_ITEM_KEYS')) {

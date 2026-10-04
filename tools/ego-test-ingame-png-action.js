@@ -1,4 +1,7 @@
 // Test actual in-game gameplay with PNG ground backgrounds & character action
+// 測試產物輸出目錄：不再寫死原作者機器上的絕對路徑（可用 EGO_OUT_DIR 覆寫）
+const EGO_OUT_DIR = process.env.EGO_OUT_DIR || `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/gaga-ego-artifacts`;
+(await import('fs')).default.mkdirSync(EGO_OUT_DIR, { recursive: true });
 const task = await taskSpace("ground-ingame-action-" + Date.now());
 const page = task.page("p1");
 
@@ -98,7 +101,7 @@ const testResult = await page.evaluate(async () => {
 
 const fs = await import('node:fs');
 const base64Data = testResult.replace(/^data:image\/png;base64,/, "");
-const artifactPath = "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/406adb68-8e4f-4295-9c5e-16fbb7daccac/ground_ingame_action.png";
+const artifactPath = `${EGO_OUT_DIR}/ground_ingame_action.png`;
 fs.writeFileSync(artifactPath, Buffer.from(base64Data, 'base64'));
 console.log("Saved ingame action showcase to", artifactPath);
 

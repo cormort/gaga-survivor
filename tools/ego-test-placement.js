@@ -1,4 +1,7 @@
 // E2E test script using ego-browser to verify Tactical Sockets & Placement System
+// 測試產物輸出目錄：不再寫死原作者機器上的絕對路徑（可用 EGO_OUT_DIR 覆寫）
+const EGO_OUT_DIR = process.env.EGO_OUT_DIR || `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/gaga-ego-artifacts`;
+(await import('fs')).default.mkdirSync(EGO_OUT_DIR, { recursive: true });
 const task = await taskSpace("td-placement-verification");
 const page = task.page("p1");
 
@@ -94,7 +97,7 @@ const snapCheck = await page.evaluate((target) => {
 console.log("Snapping check:", snapCheck);
 
 // Take screenshot of ghost placement preview
-await page.screenshot({ path: "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/136389fb-abf3-4ac5-9b03-dc3a1d2c3a60/ego_td_placement_ghost.png" });
+await page.screenshot({ path: `${EGO_OUT_DIR}/ego_td_placement_ghost.png` });
 
 // Step 3: Confirm placement on socket
 console.log("Confirming placement by left clicking canvas...");
@@ -162,7 +165,7 @@ const inspectModalCheck = await page.evaluate(() => {
 console.log("Inspector modal check:", inspectModalCheck);
 
 // Take screenshot of Facility Inspector
-await page.screenshot({ path: "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/136389fb-abf3-4ac5-9b03-dc3a1d2c3a60/ego_td_inspector_view.png" });
+await page.screenshot({ path: `${EGO_OUT_DIR}/ego_td_inspector_view.png` });
 
 // Step 5: Test Upgrade in Inspector
 console.log("Clicking Upgrade in Inspector...");
@@ -212,7 +215,7 @@ const afterRecycleCheck = await page.evaluate((target, initialGold) => {
 console.log("After recycle check:", afterRecycleCheck);
 
 // Final game view screenshot
-await page.screenshot({ path: "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/136389fb-abf3-4ac5-9b03-dc3a1d2c3a60/ego_td_after_recycle.png" });
+await page.screenshot({ path: `${EGO_OUT_DIR}/ego_td_after_recycle.png` });
 
 await task.finish({ keep: "all" });
 console.log("TD Placement & Inspector E2E test finished cleanly!");

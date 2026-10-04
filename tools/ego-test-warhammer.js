@@ -1,4 +1,7 @@
 // E2E test script using ego-browser to verify Warhammer 40K features
+// 測試產物輸出目錄：不再寫死原作者機器上的絕對路徑（可用 EGO_OUT_DIR 覆寫）
+const EGO_OUT_DIR = process.env.EGO_OUT_DIR || `${process.env.TEMP || process.env.TMPDIR || '/tmp'}/gaga-ego-artifacts`;
+(await import('fs')).default.mkdirSync(EGO_OUT_DIR, { recursive: true });
 // Usage: ego-browser nodejs < tools/ego-test-warhammer.js
 
 const task = await taskSpace("warhammer-40k-verification");
@@ -61,7 +64,7 @@ const recipeCheck = await page.evaluate(() => {
 console.log("Codex recipes check:", recipeCheck);
 
 // Screenshot recipe modal
-await page.screenshot({ path: "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/136389fb-abf3-4ac5-9b03-dc3a1d2c3a60/ego_recipe_40k.png" });
+await page.screenshot({ path: `${EGO_OUT_DIR}/ego_recipe_40k.png` });
 
 // Close recipe modal
 await page.evaluate(() => {
@@ -98,7 +101,7 @@ console.log("Level selection check:", levelCheck);
 await page.waitForTimeout(600);
 
 // Screenshot character & level select
-await page.screenshot({ path: "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/136389fb-abf3-4ac5-9b03-dc3a1d2c3a60/ego_select_40k.png" });
+await page.screenshot({ path: `${EGO_OUT_DIR}/ego_select_40k.png` });
 
 // 5. Start Game
 console.log("Clicking start game button...");
@@ -167,7 +170,7 @@ const unitTest = await page.evaluate(() => {
 console.log("Military units & enemy state:", unitTest);
 
 // Capture in-game screenshot
-await page.screenshot({ path: "/Users/hsiehminchieh/.gemini/antigravity-ide/brain/136389fb-abf3-4ac5-9b03-dc3a1d2c3a60/ego_ingame_40k.png" });
+await page.screenshot({ path: `${EGO_OUT_DIR}/ego_ingame_40k.png` });
 
 console.log("All verifications completed cleanly.");
 await task.finish({ keep: "all" });

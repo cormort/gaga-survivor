@@ -4,6 +4,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const task = await taskSpace("render-warhammer-makaimura-" + Date.now());
 const page = task.page("p1");
@@ -1733,7 +1734,7 @@ const destinationMap = {
   'ground_makaimura': 'assets/ground/ground_makaimura.png',
 };
 
-const PROJECT_ROOT = '/Users/hsiehminchieh/Dev/Personal/gaga-survivor';
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 for (const [key, destRel] of Object.entries(destinationMap)) {
   const dataUrl = renderedAssets[key];
   if (!dataUrl) {
