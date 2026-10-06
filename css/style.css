@@ -3435,6 +3435,17 @@ body.orient-auto,
 .slot-info span { opacity: 0.75; font-size: 12px; }
 .slot-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
+/* 傭兵選單：每列的「僱傭」鈕用的是 .game-btn（width:100% 是給整條彈窗用的），
+   放進 .slot-row 會撐到整列寬度，把姓名與師承擠成兩行（師承改成「〇〇門下」後更明顯）。
+   這裡只讓它依內容寬度，剩下的寬度給資訊欄。 */
+#merc-list .slot-row .game-btn {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 10px 20px;
+  font-size: 15px;
+}
+#merc-list .slot-info { flex: 1 1 auto; min-width: 0; }
+
 /* 修仙裝備典故與比較卡 */
 .gear-row-lore { font-size: 11px; opacity: 0.6; font-style: italic; margin-top: 2px; }
 .gear-row { cursor: pointer; }
