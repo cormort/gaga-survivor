@@ -36,6 +36,13 @@ const SCENARIOS = [
   // 碰撞成本最壞：滿場敵人 × 大量「玩家的」投射物。舊情境完全沒有這一項，
   // 所以先前 O(投射物 × 敵人) 的最佳化完全量不到。
   { id: 'bullets',  敵人: 250, burn: false, poison: 0, 額外: '玩家彈幕', 說明: '250 敵人 × 120 玩家投射物（碰撞成本最壞）' },
+  // 新特效成本（青霜劍尊的萬劍歸宗劍陣）：12 把飛劍環繞 + 劍氣甩出掃場。
+  // 量「穩態峰值」：把掃斬間隔設成 0.25 秒（實際技能是 1.6/6 ≈ 0.267 秒）且永不結束，
+  // 這樣劍陣會一直存在、劍氣一直補，跟實戰中按下去之後的那 2.4 秒同一個負載量級。
+  // 成本歸因（實測，250 敵人）：mobs 704 → 只畫特效不結算傷害 925（+221 就是劍與劍氣本身，
+  // 加色混合仍是 0）→ 連傷害一起結算 1610~1650。也就是說劍陣的繪圖很便宜，
+  // 大頭是「250 隻敵人每秒被掃 4 次」的結算，這是任何持續型全場 AoE 都一樣的帳。
+  { id: 'sword',    敵人: 250, burn: false, poison: 0, 額外: '劍陣', 說明: '滿場敵人 + 萬劍歸宗劍陣（穩態峰值）' },
 ];
 
 async function probe(page, sc) {
@@ -119,6 +126,16 @@ async function probe(page, sc) {
         g.particles.createDeathParticles(px, py, '#ff0055', 6);
       }
       g.player.invulnerableTimer = 1e9;
+    }
+
+    if (sc.額外 === '劍陣') {
+      const F = await import('/js/systems/SwordFormation.js');
+      // 停在旋轉階段、掃斬永不停止（間隔 0.25 秒 ≈ 實際的 0.267 秒），劍氣就會一直補
+      F.FORMATION.ticks = 1e9;
+      F.FORMATION.spinFor = 0.25 * 1e9;
+      // 用玩家自己的技能路徑建立劍陣（不要繞過 spawnSwordFormation 手動塞物件）
+      F.spawnSwordFormation(g);
+      g.player.invulnerableTimer = 1e9;   // 250 隻貼著打時玩家會秒死，與 barrage 同一個處理
     }
 
     // ── 預熱：把「一次性」成本排除在量測之外 ────────────────

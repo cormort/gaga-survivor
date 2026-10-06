@@ -4,6 +4,7 @@
 import { enemyScale } from '../levels.js';
 import { sound } from '../audio.js';
 import { TD_SKILLS } from './TDHero.js';
+import { spawnSwordFormation } from './SwordFormation.js';
 
 const KEYS = ['Q', 'R'];
 
@@ -54,15 +55,11 @@ export const SKILLS = {
         p.invulnerableTimer = Math.max(p.invulnerableTimer, 0.3);
         game.particles.createShockwave(p.x, p.y, 90, '#6ea8ff');
       } },
-    { name: '萬劍歸宗', icon: '⚔️', mp: 80, cd: 20, desc: '萬劍自天而降，重創周身 300 範圍敵人',
+    { name: '萬劍歸宗', icon: '⚔️', mp: 80, cd: 20, desc: '萬劍插地成陣、旋轉掃斬周身 300 範圍敵人，收招時歸宗再收一劍',
       cast(game) {
-        const p = game.player;
-        for (let i = 0; i < 12; i++) {
-          const a = (i / 12) * Math.PI * 2;
-          game.particles.createShockwave(p.x + Math.cos(a) * 180, p.y + Math.sin(a) * 180, 50, '#6ea8ff');
-        }
-        game.particles.createShockwave(p.x, p.y, 300, '#e8f0ff');
-        aoe(game, p.x, p.y, 300, 3, { knock: 14 });
+        // 傷害契約：落地一擊 1.2× ＋ 劍陣掃斬 6×0.3× = 3.0×（＝舊版 aoe(...,3) 的總量）
+        // 其餘（落劍、劍氣、歸宗）都在 js/systems/SwordFormation.js
+        spawnSwordFormation(game);
       } },
   ],
   xian_talisman: [
