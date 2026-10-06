@@ -31,6 +31,12 @@ const out = await page.evaluate(async () => {
 
   // ── 開局：選青霜劍尊，站著不動也不會被打死 ─────────────
   const g = window.game;
+  // 關掉遊戲自己的 rAF 迴圈：它會在我們兩張截圖之間偷偷 update／render
+  // （實測「同狀態連拍兩張」會差到 3500 px，畫面量測會變成隨機）。之後全部手動推進。
+  g.loop = () => {};
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+
   g.characterId = 'xian_sword';
   g.ui.startScreen.classList.add('hidden');
   g.start();

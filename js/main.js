@@ -19,6 +19,7 @@ import {
 import { Player, MP_PER_KILL } from './entities/Player.js';
 import { updateSkills } from './systems/Skills.js';
 import { updateSwordFormation, drawSwordFormation, clearSwordFormation } from './systems/SwordFormation.js';
+import { updateSignatureFX, drawSignatureFX, clearSignatureFX } from './systems/SignatureFX.js';
 import { Enemy } from './entities/Enemy.js';
 import { EnemyProjectile } from './entities/EnemyProjectile.js';
 import { DropItem } from './entities/DropItem.js';
@@ -233,6 +234,7 @@ class Game {
     this.decals = []; // 地面殘跡 (血漬/焦痕)
     this.destructibles = []; // 街頭可破壞物件 (木箱/補給油桶)
     this.swordFormation = null; // 青霜劍尊的劍陣（萬劍歸宗），Skills.js 施放時建立
+    this.signatureFX = [];      // 其餘五脈的技能演出（符火陣/雷劫/丹爐/佛光/血蓮），SignatureFX.js
 
     // 遊戲性增強系統狀態
     this.hitstopTimer = 0;
@@ -1281,6 +1283,7 @@ class Game {
     this.alliedUnits = [];
     this.decals = [];
     clearSwordFormation(this);   // 上一局的劍陣不能帶進新局
+    clearSignatureFX(this);      // 五脈的技能演出同理
     if (this.td) this.explodableProps = [];   // 守塔關：小地圖上的可引爆物只會壓到建塔點與路線
     else initExplodableProps(this);
     this.destructibles = [];
@@ -1896,6 +1899,7 @@ class Game {
     if (this.td && !this.player.isDead) keepHeroOnRoad(this);   // 守塔：英雄只能走在路上
     updateSkills(this, dt);
     updateSwordFormation(this, dt);
+    updateSignatureFX(this, dt);
     tickBlessingEffects(this, dt);
     updateMerchant(this, dt);
 
@@ -3708,6 +3712,9 @@ class Game {
     // 繪製地形機制 (毒霧圈 / 地雷警示)
     drawHazards(this, renderCam);
 
+    // 技能演出的地面層（符火陣、血霧、蓮花、音波、丹爐）：畫在敵人與角色「之下」
+    drawSignatureFX(this.ctx, renderCam, this, 'ground');
+
     // 繪製武器投射物 (地面積火最底層)
     this.weaponManager.draw(this.ctx, renderCam);
 
@@ -3777,6 +3784,7 @@ class Game {
     // 繪製粒子、衝擊波與傷害飄字
     // 劍陣（萬劍歸宗）畫在粒子之前：劍氣壓在傷害飄字與衝擊波之下，數字才讀得清楚
     drawSwordFormation(this.ctx, renderCam, this);
+    drawSignatureFX(this.ctx, renderCam, this, 'upper');
     this.particles.draw(this.ctx, renderCam);
 
     // 畫面後製：暗角 + 玩家聚光，讓視覺焦點集中在主角身上

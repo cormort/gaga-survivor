@@ -5,6 +5,7 @@ import { enemyScale } from '../levels.js';
 import { sound } from '../audio.js';
 import { TD_SKILLS } from './TDHero.js';
 import { spawnSwordFormation } from './SwordFormation.js';
+import { spawnSignatureFX } from './SignatureFX.js';
 
 const KEYS = ['Q', 'R'];
 
@@ -71,18 +72,21 @@ export const SKILLS = {
         game.particles.createExplosion(x, y, 130);
         aoe(game, x, y, 130, 1.4);
       } },
-    { name: '天火燎原', icon: '🔥', mp: 80, cd: 20, desc: '五道天火符連環引爆周圍敵群',
+    { name: '天火燎原', icon: '🔥', mp: 80, cd: 20, desc: '五道天火符連環引爆周圍敵群，留下一圈燃燒的符火陣',
       cast(game) {
         const targets = nearest(game, 5, 520);
         const p = game.player;
+        const sites = [];
         for (let i = 0; i < 5; i++) {
           const e = targets[i];
           const a = (i / 5) * Math.PI * 2;
           const x = e ? e.x : p.x + Math.cos(a) * 160;
           const y = e ? e.y : p.y + Math.sin(a) * 160;
           game.particles.createExplosion(x, y, 150, true);
-          aoe(game, x, y, 150, 1.6);
+          aoe(game, x, y, 150, 1.6);      // 傷害與舊版一字不差（5 × 150 半徑 × 1.6×）
+          sites.push({ x, y, a });
         }
+        spawnSignatureFX(game, 'fire', { sites });
       } },
   ],
   xian_mage: [
@@ -90,9 +94,11 @@ export const SKILLS = {
       cast(game) {
         for (const e of nearest(game, 3, 480)) strike(game, e, 1.5, '#e8f0ff');
       } },
-    { name: '九天雷劫', icon: '🌩️', mp: 80, cd: 20, desc: '召下九天神雷，劈擊 12 名敵人並麻痺 1.5 秒',
+    { name: '九天雷劫', icon: '🌩️', mp: 80, cd: 20, desc: '雷雲聚頂、召下九天神雷，雷霆依序劈擊 12 名敵人並麻痺 1.5 秒',
       cast(game) {
-        for (const e of nearest(game, 12, 560)) strike(game, e, 2.2, '#e8f0ff', 1.5);
+        // 目標在施放當下鎖定（12 名最近的敵人），雷柱依序打下。
+        // 傷害總量與舊版相同：12 道 × aoe(50, 2.2×, 麻痺 1.5s)，只是從瞬發變成 0.04 秒一道。
+        spawnSignatureFX(game, 'thunder', { targets: nearest(game, 12, 560) });
         game.camera.shake = Math.max(game.camera.shake, 10);
       } },
   ],
@@ -105,28 +111,30 @@ export const SKILLS = {
         game.particles.createShockwave(p.x, p.y, 100, '#3ddc84');
         game.particles.createDamageText(p.x, p.y, `+${amt} HP`, false);
       } },
-    { name: '九轉金丹', icon: '🟡', mp: 80, cd: 20, desc: '生命全滿，10 秒內攻擊力 +40%',
+    { name: '九轉金丹', icon: '🟡', mp: 80, cd: 20, desc: '丹爐現形煉出金丹：生命全滿，10 秒內攻擊力 +40%',
       cast(game) {
         const p = game.player;
         p.heal(p.maxHp);
         p.atkPotionTimer = Math.max(p.atkPotionTimer, 10);
         game.particles.createShockwave(p.x, p.y, 160, '#ffd166');
+        spawnSignatureFX(game, 'pill');
       } },
   ],
   xian_zen: [
-    { name: '金剛罩', icon: '🔔', mp: 30, cd: 6, desc: '獲得 40% 生命的護盾，5 秒內受傷減半',
+    { name: '金剛罩', icon: '🔔', mp: 30, cd: 6, desc: '鐘形金罩護體：獲得 40% 生命的護盾，5 秒內受傷減半',
       cast(game) {
         const p = game.player;
         p.shield = Math.max(p.shield, Math.round(p.maxHp * 0.4));
         p.shieldPotionTimer = Math.max(p.shieldPotionTimer, 5);
         game.particles.createShockwave(p.x, p.y, 110, '#ffd166');
       } },
-    { name: '獅子吼', icon: '🦁', mp: 80, cd: 20, desc: '佛門獅吼震退 280 範圍敵人並使其暈眩 2 秒',
+    { name: '獅子吼', icon: '🦁', mp: 80, cd: 20, desc: '身後現出佛光輪，獅吼震退 280 範圍敵人並使其暈眩 2 秒',
       cast(game) {
         const p = game.player;
         game.particles.createShockwave(p.x, p.y, 280, '#ffd166');
         game.camera.shake = Math.max(game.camera.shake, 12);
         aoe(game, p.x, p.y, 280, 1.2, { knock: 40, stun: 2 });
+        spawnSignatureFX(game, 'lion');
       } },
   ],
   xian_demon: [
@@ -137,13 +145,15 @@ export const SKILLS = {
         const hits = aoe(game, p.x, p.y, 180, 1.3);
         if (hits) p.heal(Math.round(p.maxHp * 0.02 * Math.min(hits, 15)));
       } },
-    { name: '血魔化身', icon: '👹', mp: 80, cd: 20, desc: '化身血魔：無敵 1.5 秒、8 秒攻擊力 +40%，並爆發 240 範圍傷害',
+    { name: '血魔化身', icon: '👹', mp: 80, cd: 20, desc: '血霧爆開、血蓮綻放：無敵 1.5 秒、8 秒攻擊力 +40%，並爆發 240 範圍傷害',
       cast(game) {
         const p = game.player;
         p.invulnerableTimer = Math.max(p.invulnerableTimer, 1.5);
         p.atkPotionTimer = Math.max(p.atkPotionTimer, 8);
         game.particles.createExplosion(p.x, p.y, 240, true);
         aoe(game, p.x, p.y, 240, 2);
+        // 演出活 8 秒＝化身期間（血氣纏身就是「我還在化身」的視覺依據）
+        spawnSignatureFX(game, 'blood');
       } },
   ],
 };
