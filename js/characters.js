@@ -353,7 +353,7 @@ export const CHARACTERS = {
   // ── 修仙六脈 (貼圖來自 assets/xian/，攻擊沿用對應武器) ────────────────
   xian_sword: {
     id: 'xian_sword', sprite: 'xian_sword',
-    codename: '劍修', title: '御劍劍修',
+    codename: '青霜劍尊', title: '御劍凌霄',
     role: '飛劍穿梭 / 移動暴擊',
     heroClass: '劍修', classColor: '#6ea8ff', classTitle: '人劍合一 / 快劍點殺',
     traitName: '劍心通明',
@@ -377,7 +377,7 @@ export const CHARACTERS = {
 
   xian_talisman: {
     id: 'xian_talisman', sprite: 'xian_talisman',
-    codename: '符修', title: '符籙真人',
+    codename: '赤符天師', title: '敕令天火',
     role: '飛符連發 / 爆發傷害',
     heroClass: '符修', classColor: '#ff6b5e', classTitle: '符火連環 / 爆發輸出',
     traitName: '符火燎原',
@@ -409,7 +409,7 @@ export const CHARACTERS = {
 
   xian_mage: {
     id: 'xian_mage', sprite: 'xian_mage',
-    codename: '法修', title: '雷法天師',
+    codename: '紫霄雷君', title: '五雷正法',
     role: '天雷法陣 / 範圍連鎖',
     heroClass: '法修', classColor: '#e8e8e8', classTitle: '五雷正法 / 群體控場',
     traitName: '法力無邊',
@@ -442,7 +442,7 @@ export const CHARACTERS = {
 
   xian_alchemy: {
     id: 'xian_alchemy', sprite: 'xian_alchemy',
-    codename: '丹修', title: '青囊丹師',
+    codename: '九轉丹君', title: '青囊濟世',
     role: '丹火灼燒 / 持續回復',
     heroClass: '丹修', classColor: '#3ddc84', classTitle: '丹火煉妖 / 以戰養戰',
     traitName: '九轉還丹',
@@ -470,7 +470,7 @@ export const CHARACTERS = {
 
   xian_zen: {
     id: 'xian_zen', sprite: 'xian_zen',
-    codename: '禪修', title: '金剛禪師',
+    codename: '金剛尊者', title: '佛光普照',
     role: '佛光護體 / 近身肉盾',
     heroClass: '禪修', classColor: '#ffd166', classTitle: '金剛不壞 / 佛光普照',
     traitName: '金剛不壞',
@@ -490,7 +490,7 @@ export const CHARACTERS = {
 
   xian_demon: {
     id: 'xian_demon', sprite: 'xian_demon',
-    codename: '魔修', title: '血魔妖姬',
+    codename: '血蓮魔姬', title: '血河噬魂',
     role: '魔氣射線 / 越殘越強',
     heroClass: '魔修', classColor: '#b388ff', classTitle: '以血換力 / 殘血爆發',
     traitName: '血魔大法',
