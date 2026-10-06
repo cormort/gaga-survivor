@@ -757,7 +757,7 @@ export function hireMercenary(game) {
   for (const c of rollMercCandidates(3)) {
     const row = document.createElement('div');
     row.className = 'slot-row';
-    row.innerHTML = `<div class="slot-info"><b style="color:${c.sect.qi}">${c.name}</b><span>${c.sect.label}弟子</span></div>`;
+    row.innerHTML = `<div class="slot-info"><b style="color:${c.sect.qi}">${c.name}</b><span>${c.sect.label}門下</span></div>`;
     const btn = document.createElement('button');
     btn.className = 'game-btn primary-btn';
     btn.textContent = '僱傭';
@@ -781,7 +781,7 @@ function spawnMercenary(game, cost, cand) {
   game.mercenaries.push(m);
   game.particles.createShockwave(game.player.x, game.player.y, 90, '#3ddc84');
   sound.playEvoFanfare();
-  game.ui.say(`🗡️ ${REALM[m.level - 1]}${m.sect.label}${m.name}報到！(${cost} 🪙) 斬妖累積經驗、突破境界`, '#3ddc84', 2.4);
+  game.ui.say(`🗡️ ${REALM[m.level - 1]}${m.sect.label}門下・${m.name}報到！(${cost} 🪙) 斬妖累積經驗、突破境界`, '#3ddc84', 2.4);
   game.ui.updateHUD(game.player, game.gameTime, game.kills, game.gold);
   game.ui.updateBuildBtn(game.gold, game.turretCost);
   // 四種設施按鈕一起刷新 (內部有值快取，每幀呼叫不會產生多餘的 DOM 寫入)

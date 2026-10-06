@@ -32,13 +32,14 @@ export const REALM = ['煉氣期', '築基期', '金丹期', '元嬰期', '化�
 const REALM_COLOR = ['#ff6b5e', '#6ea8ff', '#e8e8e8', '#ffe45e', '#e8e8e8', '#c77dff', '#ffd166', '#e8e8e8', '#3ddc84', '#ff6b5e'];
 
 // 六脈弟子 (貼圖 = 修仙角色)，雇用時隨機抽一脈；qi = 劍氣顏色
+// label 用該脈掌門（＝可選特工）的道號：弟子是「青霜劍尊門下」而不是憑空多一個掌門
 export const SECTS = [
-  { sprite: 'xian_sword', qi: '#6ea8ff', label: '劍修' },
-  { sprite: 'xian_talisman', qi: '#ff6b5e', label: '符修' },
-  { sprite: 'xian_mage', qi: '#e8f0ff', label: '法修' },
-  { sprite: 'xian_alchemy', qi: '#3ddc84', label: '丹修' },
-  { sprite: 'xian_zen', qi: '#ffd166', label: '禪修' },
-  { sprite: 'xian_demon', qi: '#b388ff', label: '魔修' },
+  { sprite: 'xian_sword', qi: '#6ea8ff', label: '青霜劍尊' },
+  { sprite: 'xian_talisman', qi: '#ff6b5e', label: '赤符天師' },
+  { sprite: 'xian_mage', qi: '#e8f0ff', label: '紫霄雷君' },
+  { sprite: 'xian_alchemy', qi: '#3ddc84', label: '九轉丹君' },
+  { sprite: 'xian_zen', qi: '#ffd166', label: '金剛尊者' },
+  { sprite: 'xian_demon', qi: '#b388ff', label: '血蓮魔姬' },
 ];
 
 // 小說風人名：姓 + 名，雇用時隨機組合
