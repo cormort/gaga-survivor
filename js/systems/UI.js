@@ -295,6 +295,23 @@ export class UIManager {
     this.bubble = document.getElementById('dialogue-bubble');
     this.bubbleTimer = null;
 
+    // 特工照片放大檢視 (點選角卡上的照片就彈出)：整個遮罩都可點關閉，Esc 也可以。
+    this.charZoom = document.getElementById('char-zoom');
+    this.charZoomCanvas = document.getElementById('char-zoom-canvas');
+    this._zoomCharId = null;
+    this.charZoom?.addEventListener('click', () => this.closeCharZoom());
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.charZoom && !this.charZoom.classList.contains('hidden')) {
+        this.closeCharZoom();
+      }
+    });
+    document.getElementById('char-zoom-unlock')?.addEventListener('click', (e) => {
+      e.stopPropagation();          // 買了就別順手把放大視窗關掉又立刻被下面的遮罩吃掉點擊
+      const id = this._zoomCharId;
+      this.closeCharZoom();
+      if (id && typeof this._onCharUnlock === 'function') this._onCharUnlock(id);
+    });
+
     // 裝備三合一合成模式狀態
     this._fuseMode = false;
     this._selectedFuseIds = new Set();
@@ -403,6 +420,8 @@ export class UIManager {
   // 開始畫面的特工選擇卡 (未解鎖的特工要花 DNA 解鎖，點卡即購買)
   buildCharacterSelect(characters, order, save, onPick, onUnlock, initialId = order[0], onAspectChange = null) {
     this.charSelect.innerHTML = '';
+    // 放大檢視裡的「解鎖」鈕要能自己買，所以把回呼留在實例上
+    this._onCharUnlock = typeof onUnlock === 'function' ? onUnlock : null;
 
     order.forEach((id, i) => {
       const c = characters[id];
@@ -439,6 +458,14 @@ export class UIManager {
 
       this.charSelect.appendChild(card);
 
+      // 點照片＝把特工放大看清楚。鎖定卡這裡要 stopPropagation：卡片自己的 click 是
+      // 「點卡即購買」，只想看大圖卻被扣掉 DNA 很悶 —— 要買就按放大視窗裡的解鎖鈕。
+      card.querySelector('.char-portrait').addEventListener('click', (e) => {
+        if (!unlocked) e.stopPropagation();
+        sound.playSelect();
+        this.openCharZoom(id, c, unlocked, cost);
+      });
+
       // 直接把遊戲內同一組 sprite 畫成頭像，選角看到的就是實際長相。
       // 只等「自己這一張」：137 張貼圖 / 17.8MB 在手機 4G 上要十幾秒，
       // 原本 await imageSpritesReady（＝等全部到齊）會讓 25 張卡整片空白，
@@ -461,6 +488,66 @@ export class UIManager {
         whenSpriteReady(c.sprite, paint);
       });
     });
+  }
+
+  // 點選角卡上的照片 → 把這位特工放大檢視 (整張遮罩可點關閉，Esc 亦可)。
+  // 放大圖不是把 128×120 的頭像拉大（那只是把 96 px 的圖糊掉），而是請
+  // sprites.renderSpriteHires 用更大的超取樣倍率重畫一次，筆畫與 PNG 細節都還在。
+  openCharZoom(id, c, unlocked = true, cost = 0) {
+    if (!this.charZoom || !c) return;
+    this._zoomCharId = id;
+    const accent = c.accent || '#00e5ff';
+
+    const box = this.charZoom.querySelector('.char-zoom-box');
+    if (box) box.style.setProperty('--accent', accent);
+
+    const nameEl = document.getElementById('char-zoom-name');
+    if (nameEl) nameEl.textContent = c.codename || '';
+    const titleEl = document.getElementById('char-zoom-title');
+    if (titleEl) titleEl.textContent = `${c.title || ''}（${c.heroClass || '特工'}）`;
+    const traitEl = document.getElementById('char-zoom-trait');
+    if (traitEl) {
+      traitEl.innerHTML = c.traitName
+        ? `<strong>${c.traitName}</strong>${c.traitDesc || ''}`
+        : '';
+    }
+
+    // 未解鎖的特工：把「買」放在放大視窗裡，看圖就不會誤觸購買
+    const ubtn = document.getElementById('char-zoom-unlock');
+    if (ubtn) {
+      const canBuy = !unlocked && cost > 0 && typeof this._onCharUnlock === 'function';
+      ubtn.classList.toggle('hidden', !canBuy);
+      ubtn.textContent = canBuy ? `解鎖「${c.codename}」 ${cost} 🧬` : '';
+    }
+
+    // 先清空：貼圖還要等（選角只等自己那一張），留著上一位的圖會讓人以為點錯人
+    const cv = this.charZoomCanvas;
+    if (cv) cv.getContext('2d')?.clearRect(0, 0, cv.width, cv.height);
+
+    this.charZoom.classList.remove('hidden');
+
+    import('../sprites.js').then(({ renderSpriteHires, hasSprite, whenSpriteReady }) => {
+      if (this._zoomCharId !== id || !hasSprite(c.sprite)) return;
+      const paint = () => {
+        if (this._zoomCharId !== id || !this.charZoomCanvas) return;   // 已經換人或關掉了
+        const big = renderSpriteHires(c.sprite, 0, 4);
+        const canvas = this.charZoomCanvas;
+        canvas.width = big.width;
+        canvas.height = big.height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(big, 0, 0);
+      };
+      whenSpriteReady(c.sprite, paint);
+    }).catch(() => {});
+  }
+
+  closeCharZoom() {
+    this._zoomCharId = null;
+    this.charZoom?.classList.add('hidden');
+    // 自製的貼圖不吃快取，圖留著也沒差；只是換人時一定要清，否則會顯示錯的角色
+    const cv = this.charZoomCanvas;
+    if (cv) cv.getContext('2d')?.clearRect(0, 0, cv.width, cv.height);
   }
 
   // 特工等級彈窗：每位已解鎖特工一列，「升 1 級」與「全部升」(花到資源不夠或滿級)

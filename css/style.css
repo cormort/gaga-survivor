@@ -823,6 +823,73 @@ body.orient-auto,
   margin-bottom: 2px;
 }
 
+/* ==================== 特工照片放大檢視 ==================== */
+/* 點選角卡上的照片就彈出。z-index 要蓋過開始畫面 (100) 與各養成彈窗 (200)：
+   它是從選角卡直接長出來的暫時檢視，被壓在下面等於「點了沒反應」。 */
+.char-zoom {
+  z-index: 300;
+  cursor: zoom-out;
+}
+
+.char-zoom-box {
+  --accent: #00e5ff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 88vw;
+  padding: 18px 24px 12px;
+  background: rgba(8, 13, 24, 0.95);
+  border: 2px solid var(--accent);
+  border-radius: 18px;
+  box-shadow: 0 0 36px -8px var(--accent);
+}
+
+.char-zoom-canvas {
+  /* 手機與桌機都吃得下：寬度跟著視窗走，高瘦的修仙角色再由 max-height 夾住 */
+  width: auto;
+  height: auto;
+  max-width: min(72vw, 320px);
+  max-height: 46vh;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.65));
+}
+
+.char-zoom-name {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 900;
+  color: var(--accent);
+}
+
+.char-zoom-title {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.char-zoom-trait {
+  max-width: 44ch;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.char-zoom-trait strong {
+  color: #ffffff;
+  margin-right: 4px;
+}
+
+.char-zoom-hint {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.char-zoom .game-btn {
+  cursor: pointer;
+}
+
 /* ==================== 關卡選擇 ==================== */
 .level-select {
   display: grid;

@@ -216,6 +216,7 @@ export function bindEvents(game) {
   // 開始遊戲按鈕：先確定「這一場會用到的貼圖」到手再開場
   document.getElementById('btn-start-game').addEventListener('click', async () => {
     await prepareRunSprites(game);
+    game.ui.closeCharZoom();          // 站著放大圖時若用鍵盤/其他路徑出擊，別讓它蓋住戰場
     game.ui.startScreen.classList.add('hidden');
     game.start();
   });
@@ -223,6 +224,7 @@ export function bindEvents(game) {
   // 重新開始按鈕（貼圖通常已經在了，走同一條路以免有例外狀況）
   document.getElementById('btn-restart').addEventListener('click', async () => {
     await prepareRunSprites(game);
+    game.ui.closeCharZoom();
     game.ui.gameOverModal.classList.add('hidden');
     game.start();
   });

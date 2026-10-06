@@ -204,8 +204,10 @@ function scratchCanvas(w, h) {
   return c;
 }
 
-// canvas 為 make() 烘好的成品；sil / rim 是同一顆 sprite 內重複使用的暫存畫布
-function materialize(canvas, accent, sil, rim) {
+// canvas 為 make() 烘好的成品；sil / rim 是同一顆 sprite 內重複使用的暫存畫布。
+// mul 是「超取樣再乘幾倍」—— 只有選角放大檢視 (renderSpriteHires) 會給 >1，讓外框與
+// 輪廓光的粗細跟著放大後的角色一起變粗；一般烘焙走預設 1，輸出完全不變。
+function materialize(canvas, accent, sil, rim, mul = 1) {
   const W = canvas.width;
   const H = canvas.height;
   const cx = canvas.getContext('2d');
@@ -224,7 +226,7 @@ function materialize(canvas, accent, sil, rim) {
   cx.setTransform(1, 0, 0, 1, 0, 0);
   cx.globalCompositeOperation = 'source-over';
   cx.shadowColor = `rgba(0,0,0,${OUTLINE_ALPHA})`;
-  cx.shadowBlur = OUTLINE_BLUR * SS;
+  cx.shadowBlur = OUTLINE_BLUR * SS * mul;
   cx.drawImage(canvas, 0, 0);
   cx.restore();
 
@@ -243,7 +245,7 @@ function materialize(canvas, accent, sil, rim) {
     rx.globalCompositeOperation = 'source-over';
     rx.globalAlpha = 1;
     rx.clearRect(0, 0, W, H);
-    rx.drawImage(sil, -off * SS, -off * SS);
+    rx.drawImage(sil, -off * SS * mul, -off * SS * mul);
   };
 
   // 2) 外側輪廓光：偏移剪影 − 本體 = 只有本體外的新月
@@ -253,7 +255,7 @@ function materialize(canvas, accent, sil, rim) {
   for (const layer of RIM_LAYERS) {
     // 模糊讓外圈變成柔光而不是一圈硬邊（瀏覽器不支援 filter 時退回硬邊，不會壞）；
     // 要在把偏移剪影「畫進 rim」之前設，濾鏡才會作用在那一次繪製上
-    rx.filter = `blur(${(layer.blur * SS).toFixed(2)}px)`;
+    rx.filter = `blur(${(layer.blur * SS * mul).toFixed(2)}px)`;
     offsetSil(layer.off);
     rx.filter = 'none';
     rx.globalCompositeOperation = 'destination-out';
@@ -7869,6 +7871,33 @@ export function getSprite(key) {
   s = { frames, flash: b.static ? frames : frames.map(whiten), w, h, faceRight: !!b.faceRight };   // faceRight：Enemy.draw 依移動方向翻轉
   cache.set(key, s);
   return s;
+}
+
+// 把某一顆 sprite 的單一 frame 用「更大的超取樣倍率」重新描繪一次，回傳獨立的畫布。
+// 為什麼不直接把烘好的 frame 放大：那裡只有 w×SS 的像素（鴨子 128×120、修仙角色
+// 也只有 ~120 px 高），拉到 3~4 倍就是糊的。重跑一次 builder 才拿得回原生筆畫與
+// 原始 PNG 的細節 —— 這是選角畫面「點照片放大」用的那張圖。
+// 沒有 materialize 的材質層會少一圈輪廓光，放大後與卡片上的頭像不一致，所以一起補上。
+export function renderSpriteHires(key, frameIndex = 0, mul = 4) {
+  const m = String(key).match(/^(.+):v([0-2])$/);
+  const b = BUILDERS[key] || (m && BUILDERS[m[1]]) || BUILDERS.walker;
+  const scale = m ? ({ 0: 1, 1: 0.95, 2: 1.07 })[m[2]] : 1;
+  const w = b.w * scale;
+  const h = b.h * scale;
+  const ss = SS * mul;
+  const c = document.createElement('canvas');
+  c.width = Math.round(w * ss);
+  c.height = Math.round(h * ss);
+  const x = c.getContext('2d');
+  x.scale(ss, ss);
+  x.translate(w / 2, h / 2);
+  x.lineJoin = 'round';
+  x.lineCap = 'round';
+  if (scale !== 1) x.scale(scale, scale);
+  b.fn(x, (frameIndex % FRAMES) / FRAMES);
+  const accent = accentFor(key, b);
+  if (accent) materialize(c, accent, scratchCanvas(c.width, c.height), scratchCanvas(c.width, c.height), mul);
+  return c;
 }
 
 // 把 sprite 畫到畫布中心點 (sx, sy)

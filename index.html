@@ -563,6 +563,19 @@
       </div>
     </div>
 
+    <!-- 特工照片放大檢視：點選角卡上的照片就彈出 (UI.openCharZoom)。放大圖是把 sprite
+         用更大的超取樣倍率重畫一張，不是把 96×90 的頭像拉大 —— 後者只會糊掉。 -->
+    <div id="char-zoom" class="overlay char-zoom hidden">
+      <div class="char-zoom-box">
+        <canvas id="char-zoom-canvas" class="char-zoom-canvas" width="384" height="360"></canvas>
+        <div id="char-zoom-name" class="char-zoom-name"></div>
+        <div id="char-zoom-title" class="char-zoom-title"></div>
+        <div id="char-zoom-trait" class="char-zoom-trait"></div>
+        <button id="char-zoom-unlock" class="game-btn primary-btn hidden"></button>
+        <div class="char-zoom-hint">點畫面任一處關閉</div>
+      </div>
+    </div>
+
     <!-- 開局/開始介面 -->
     <div id="start-screen" class="overlay">
       <div class="start-box">
