@@ -1,6 +1,6 @@
 {
-  "version": "105",
+  "version": "106",
   "releasedAt": "2026-10-07",
-  "note": "v105 自爆蟲爆炸特效全面升級與戰鬥實體碰撞優化：修復自爆蟲被武器擊殺、撞擊特工與引信期滿時的劇毒爆炸表現（雙層劇毒衝擊波、32顆酸液濺射微粒、地面劇毒腐蝕印漬、殘留毒池與友軍連鎖殉爆傷害）；實作特工與怪物的軟碰撞分離（Soft Separation），阻止怪物穿心穿模並支援衝刺撞散；擴充 Boss 移動模式至 5 大風格（靈蛇游移 serpentine、虛空折躍 blink、飛撲躍擊 leap、盤旋突襲 orbit、二段折衝 rush），並為全關卡與守塔 Boss 全面配置。",
-  "assetsKB": 32250
+  "note": "v106 全素材壓色：assets/ 的 PNG 全面轉成 256 色調色盤（地表貼圖 v103 已做）。258 張改動、31.8MB → 7.8MB（-75%）；assets/ 從 38MB 降到 14.4MB（若從壓色前的原始素材算起是 61.6MB → 14.4MB），玩家第一次開啟 PWA 的下載量降到 8.3MB（version.json 的 assetsKB → 8273）。規則在 docs/PNG_PALETTE_RULES.md：只碰 assets/（不碰 icons/ 與 tools/ 來源圖）、品質守門用『預乘 alpha 的可見差 ≤ 4/255』、每次壓色都要發版。工具 tools/optimize_pngs.py（--dry-run / --compare 棋盤底對照圖 / --apply / --only / --csv）。守門擋下 3 張（boss_swamp 4.5、td/arcane_storm 4.3、weapons/guardian 4.1），保留原檔。驗證：258 張尺寸與原檔一致且瀏覽器全數解碼；開遊戲 0 則 [sprites] 警告、0 pageerror；進關 frameErrorCount=0；audit-assets 預快取無缺口、assetsKB 已同步。另修：main 的 v105 只改了 version.json 沒同步 sw.js 的 FALLBACK_VERSION（停在 gaga-v104），本版一併同步為 gaga-v106。",
+  "assetsKB": 8273
 }
