@@ -1,6 +1,6 @@
 {
-  "version": "103",
+  "version": "104",
   "releasedAt": "2026-10-07",
-  "note": "v103 地表貼圖全面瘦身：assets/ground/*.png 共 16 張（1024×1024 RGBA）從 31.4MB 轉成 6.3MB（-80%、省 24.0MB），玩家進關時要下載的地表貼圖大幅減少。做法是 256 色調色盤（Pillow FASTOCTREE），新增 tools/optimize_ground_pngs.py（--dry-run / --apply / --compare 產 1:1 對照圖）；無損重壓實測省 0%，所以只能走調色盤這條。這是**有損**轉換：16 張平均單通道差 2.5–3.5/255、最大 25–32，1:1 目視對照（ground_core、ground_frostvoid）看不出差異。16 張尺寸維持 1024×1024、全部可解碼；node tools/audit-assets.mjs 回報資產無死檔、預快取無缺口。地表貼圖不在 PWA 預快取名單（進關才抓，屬 on-demand），所以 version.json 的 assetsKB 不變。",
-  "assetsKB": 32180
+  "note": "v104 美術風格全面統一升級（Nano Banana 重繪）：以精緻手繪與水墨風格全面重構 7 大守塔主題專屬無縫路徑貼圖（峽谷、毒沼、要塞、鍛造、寒冬、異形、詛咒石道），徹底移除原先扁平幾何色塊感；同步重繪仙山地表 4 款像素風裝飾（青翠草叢、藍白花簇、黃粉花叢、苔石），無縫契合水墨宣紙地表質感。（承接 v103 地表貼圖 256 色瘦身）",
+  "assetsKB": 32250
 }
