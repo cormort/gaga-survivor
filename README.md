@@ -51,6 +51,20 @@ python3 -m http.server 8791
 
 ---
 
+## 🎨 美術資產與壓色規則
+
+`assets/` 的 PNG 是整個 repo 的體積主體，也是 PWA 第一次開啟時的下載量（實測 294 檔 / 37.7 MB，其中 31.6 MB 進預快取）。
+**無損重壓沒有用**（實測只省 0.2%），有效手段是降到 256 色調色盤 —— 但那是**有損**轉換，所以有明確的守門規則：
+
+- 只碰 `assets/**/*.png`；**不碰 `icons/`**（PWA 圖示必須完全不透明，`verify-pwa.mjs` 把關）與 `tools/`（切割來源圖）
+- **平均單通道差 ≤ 4/255 才肯轉**，超過就保留原檔（發光／加色混合類素材量化後會爆到 30–80，那是可見的破壞）
+- **每次壓色都要發版**（`version.json` + `sw.js` 的 `FALLBACK_VERSION` 同步），否則已安裝的 PWA 會繼續吃舊快取圖
+
+工具與完整流程：`tools/optimize_pngs.py`（`--dry-run` / `--compare` 產 1:1 對照圖 / `--apply`），
+規則、實測數據、被守門擋下的例外清單與驗收清單見 **[docs/PNG_PALETTE_RULES.md](docs/PNG_PALETTE_RULES.md)**。
+
+---
+
 ## 🎮 操作方式
 
 - **電腦操作**：
