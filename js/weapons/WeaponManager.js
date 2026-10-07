@@ -358,6 +358,34 @@ export class WeaponManager {
 
       // 被封印精英鎖住的武器不攻擊（擊殺封印者才解封，見 main.js updateSeals）
       if (item.sealedBy) continue;
+    }
+
+    // ── 角色身軀與武器揮動聯動 ────────────────────────────────────
+    // 追蹤主手/正處於開火/揮刀狀態的武器後座與動作強度，驅動角色身軀前傾與揮臂
+    let maxRecoil = 0;
+    let mainAim = null;
+    let mainWeaponId = null;
+    let slotIdx = 0;
+    for (const [id, item] of this.weapons.entries()) {
+      if (slotIdx === 0 || item.aim != null) {
+        if (item.recoil > maxRecoil) {
+          maxRecoil = item.recoil;
+          mainAim = item.aim;
+          mainWeaponId = id;
+        }
+      }
+      slotIdx++;
+    }
+    if (this.player) {
+      this.player.attackRecoil = maxRecoil;
+      this.player.attackAim = mainAim;
+      this.player.attackWeaponId = mainWeaponId;
+    }
+
+    // 檢查冷卻與自動攻擊
+    for (const [id, item] of this.weapons.entries()) {
+      const def = WEAPONS[id];
+      if (!def || item.sealedBy) continue;
 
       // 檢查冷卻完畢
       if (item.cooldownTimer <= 0) {

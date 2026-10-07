@@ -498,9 +498,16 @@ export class Player {
       ctx.restore();
     }
 
+    // 攻擊動作反饋：揮刀或開火時身軀微前傾與小步前探，配合步伐增加打擊力量感
+    const atkRecoil = this.attackRecoil || 0;
+    const atkIntensity = Math.sin(atkRecoil * Math.PI);
+    const atkLean = atkIntensity * 0.13; // ~7.5度身體前傾
+    const atkLunge = atkIntensity * 3.6 * k; // 前探 3.6px
+
     ctx.save();
-    ctx.translate(screenX, screenY - bob * 1.8 * k);
+    ctx.translate(screenX + (this.facing > 0 ? atkLunge : -atkLunge), screenY - bob * 1.8 * k);
     if (this.facing < 0) ctx.scale(-1, 1);
+    ctx.rotate(atkLean);
     ctx.scale(scaleX * k, scaleY * k);
     blit(ctx, sprite, frame, 0, 0);
     ctx.restore();

@@ -595,6 +595,100 @@ export function getProfile(bossName, def = {}) {
   };
 }
 
+// ── 漫畫風格網點與筆刷快取 (Comic Halftone & Screentone) ──────────────
+let _comicHalftone = null;
+function getComicHalftone(ctx) {
+  if (!_comicHalftone && typeof document !== 'undefined') {
+    const c = document.createElement('canvas');
+    c.width = 12;
+    c.height = 12;
+    const x = c.getContext('2d');
+    x.fillStyle = 'rgba(0, 0, 0, 0.32)';
+    x.beginPath();
+    x.arc(6, 6, 2.2, 0, Math.PI * 2);
+    x.fill();
+    _comicHalftone = ctx.createPattern(c, 'repeat');
+  }
+  return _comicHalftone;
+}
+
+// 繪製日漫/美漫風格高對比巨大擬聲字 (Manga Onomatopoeia Typography)
+function drawComicSFX(ctx, text, x, y, opts = {}) {
+  const size = opts.size || 48;
+  const angle = opts.angle != null ? opts.angle : -0.16; // 傾斜約 -9度
+  const fill = opts.fill || '#ffd60a';
+  const stroke = opts.stroke || '#020409';
+  const shadow = opts.shadow || '#ff0038';
+  const scale = opts.scale || 1.0;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+
+  ctx.font = `900 ${size}px "Noto Sans TC", "Impact", "Chakra Petch", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'miter';
+  ctx.miterLimit = 3;
+
+  // 1. 3D 漫畫立體厚切投影 (Extrusion)
+  ctx.fillStyle = shadow;
+  for (let d = 5; d >= 2; d--) {
+    ctx.fillText(text, d, d);
+  }
+
+  // 2. 粗墨黑輪廓 (Heavy Inked Contour)
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = Math.max(5, size * 0.14);
+  ctx.strokeText(text, 0, 0);
+
+  // 3. 高彩填色 (Action Fill)
+  ctx.fillStyle = fill;
+  ctx.fillText(text, 0, 0);
+
+  // 4. 頂部高光細字 (White Inner Highlight)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.font = `900 ${size * 0.88}px "Noto Sans TC", "Impact", sans-serif`;
+  ctx.fillText(text, -1, -2);
+
+  ctx.restore();
+}
+
+// 繪製傳統漫畫紅色印章 (Red Manga Seal Stamp)
+function drawComicStamp(ctx, text, x, y, angle = -0.14, color = '#d90429') {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  ctx.font = '900 13px "PingFang SC", "Microsoft YaHei", sans-serif';
+  const padH = 7;
+  const padW = 10;
+  const metrics = ctx.measureText(text);
+  const bw = metrics.width + padW * 2;
+  const bh = 22 + padH;
+
+  // 雙層紅框印章
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3.0;
+  ctx.strokeRect(-bw / 2, -bh / 2, bw, bh);
+
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(-bw / 2 + 3, -bh / 2 + 3, bw - 6, bh - 6);
+
+  // 印章底色極淡紅
+  ctx.fillStyle = 'rgba(217, 4, 41, 0.12)';
+  ctx.fillRect(-bw / 2, -bh / 2, bw, bh);
+
+  // 印章文字
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 0, 0);
+
+  ctx.restore();
+}
+
 export class BossCutscene {
   constructor(game) {
     this.game = game;
@@ -606,32 +700,12 @@ export class BossCutscene {
     this.level = null;
     this.profile = null;
 
-    // 階段動畫時間 (絕對時間)
-    // 0.0 ~ 0.4s: 刀光斬切、電影黑邊急遽閉合 (Slash & Letterbox Close)
-    // 0.4 ~ 1.3s: 遠景剪影壓境、警報條爆閃 (Silhouette & Warning)
-    // 1.3 ~ 2.3s: 招牌極限眼神特寫橫切 (Extreme Eye Slit Close-Up)
-    // 2.3 ~ 3.6s: 霸氣半身像現形、字卡打字機獨白 (Bust & Narrative Typewriter)
     this.phase = 0;
     this.typedChars = 0;
     this.lastBleepChar = 0;
-    this.speedLines = this.initSpeedLines();
     this.flash = 0;
     this.barsOffset = 1;
     this._phase2Stab = false;
-  }
-
-  initSpeedLines() {
-    const lines = [];
-    for (let i = 0; i < 32; i++) {
-      lines.push({
-        y: Math.random(),
-        speed: 1.4 + Math.random() * 2.2,
-        len: 0.15 + Math.random() * 0.4,
-        alpha: 0.2 + Math.random() * 0.7,
-        width: 1 + Math.random() * 2.5,
-      });
-    }
-    return lines;
   }
 
   start(boss, level) {
@@ -644,11 +718,11 @@ export class BossCutscene {
     this.phase = 0;
     this.typedChars = 0;
     this.lastBleepChar = 0;
-    this.flash = 0.4; // 瞬間微閃 (0.06 秒即散)
+    this.flash = 0.4;
     this.barsOffset = 1;
     this._phase2Stab = false;
 
-    // 播放忍者龍劍傳風格過場音效
+    // 播放登場過場音效
     sound.playBossCinematicSting();
   }
 
@@ -746,32 +820,32 @@ export class BossCutscene {
       ctx.rect(0, winTop, vw, winHeight);
       ctx.clip();
 
-      // 2. 觀景窗背景與動態氛圍 (深色實心不透明底，確保不透出遊戲雜色)
+      // 2. 觀景窗背景與動態氛圍 (漫畫風高對比黑底 + 集中線 + 網點)
       this.drawCinemaBackdrop(ctx, 0, winTop, vw, winHeight);
 
       // 3. 依據分鏡階段繪製主視覺
       if (this.phase === 0 || this.phase === 1) {
-        // 第一分鏡：剪影威壓壓境 + 警報橫幅
+        // 第一分鏡：剪影威壓壓境 + 警報橫幅 + 「ゴゴゴゴ…」
         this.drawPhaseOne(ctx, vw, winTop, winHeight);
       } else if (this.phase === 2) {
-        // 第二分鏡：【忍者龍劍傳招牌】極限眼神特寫橫切
+        // 第二分鏡：【漫畫斜切特寫】極限眼神 + 「ズバッ！！」
         this.drawPhaseTwoEyeSlit(ctx, vw, winTop, winHeight);
       } else {
-        // 第三分鏡：首領半身像現形 + 殺意氣場
+        // 第三分鏡：【滿版跨頁】破格半身立繪 + 「ドドンッ！！」
         this.drawPhaseThreeBust(ctx, vw, winTop, winHeight);
       }
 
-      // 復古 CRT 掃描線效果
+      // 復古輕量掃描線效果
       this.drawScanlines(ctx, 0, winTop, vw, winHeight);
 
       ctx.restore();
     }
 
-    // 4. 繪製上下劇院黑條 (覆蓋在最頂層)
+    // 4. 繪製上下純黑邊框 (覆蓋在最頂層)
     this.drawLetterboxBars(ctx, vw, vh, curTopH, curBottomH);
 
-    // 5. 繪製底部文字敘事卡 (Phase 2 與 Phase 3)
-    if (curBottomH > 40 && (this.phase === 2 || this.phase === 3)) {
+    // 5. 繪製底部文字敘事卡 (Phase 3 登場台詞)
+    if (curBottomH > 40 && this.phase === 3) {
       this.drawDialogueBox(ctx, vw, vh, curBottomH);
     }
 
@@ -784,90 +858,61 @@ export class BossCutscene {
     ctx.restore();
   }
 
-  // 繪製動態背景 (深沉實心底 + 隨主題變化的水墨/像素動態遠景)
+  // 繪製動態漫畫背景 (高對比墨黑底 + 半調網點 + 放射集中線)
   drawCinemaBackdrop(ctx, x, y, w, h) {
     const p = this.profile;
     const t = this.timer;
+    const cx = w / 2;
+    const cy = y + h / 2;
 
-    // 底色實心深沉漸層 (高對比深藍黑)
-    const bgGrad = ctx.createLinearGradient(0, y, 0, y + h);
-    bgGrad.addColorStop(0, '#02050e');
-    bgGrad.addColorStop(0.5, '#070e24');
-    bgGrad.addColorStop(1, '#020409');
-    ctx.fillStyle = bgGrad;
+    // 1. 純黑至深灰漫畫底色
+    ctx.fillStyle = '#05070f';
     ctx.fillRect(x, y, w, h);
+
+    // 2. 漫畫半調網點遮罩 (Halftone Screentone Grid)
+    const halftone = getComicHalftone(ctx);
+    if (halftone) {
+      ctx.save();
+      ctx.fillStyle = halftone;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+    }
 
     ctx.save();
 
-    const bgType = p.bgType || 'street';
+    // 3. 漫畫放射集中線 (Radial Action / Speed Lines)
+    const lineCount = 42;
+    const maxR = Math.max(w, h) * 0.85;
+    ctx.save();
+    ctx.translate(cx, cy);
+    // 緩慢旋轉與高頻微震，賦予壓迫窒息感
+    ctx.rotate(t * 0.15 + Math.sin(t * 40) * 0.005);
 
-    if (bgType.startsWith('frost')) {
-      // 極地暴雪
-      ctx.fillStyle = 'rgba(160, 230, 255, 0.4)';
-      for (let i = 0; i < 45; i++) {
-        const sx = ((i * 47 + t * 500) % (w + 100)) - 50;
-        const sy = y + ((i * 31 + t * 90) % h);
-        ctx.beginPath();
-        ctx.arc(sx, sy, (i % 3) + 1.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (bgType.startsWith('core') || bgType.includes('fire')) {
-      // 熔岩火山
-      ctx.fillStyle = 'rgba(255, 100, 20, 0.55)';
-      for (let i = 0; i < 40; i++) {
-        const sx = (i * 39 + Math.sin(t * 3 + i) * 20) % w;
-        const sy = y + h - ((i * 29 + t * 220) % h);
-        ctx.beginPath();
-        ctx.arc(sx, sy, (i % 3) + 1.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (bgType.startsWith('ink')) {
-      // 水墨山巒
-      ctx.fillStyle = '#08111e';
+    for (let i = 0; i < lineCount; i++) {
+      const baseAng = (i / lineCount) * Math.PI * 2;
+      const angSpan = (0.02 + ((i % 3) * 0.015));
+      const rInner = 60 + ((i * 37) % 80);
+      const rOuter = maxR * (0.8 + ((i * 17) % 30) * 0.01);
+
+      ctx.fillStyle = (i % 2 === 0) ? 'rgba(255, 255, 255, 0.14)' : (p.themeColor + '22');
       ctx.beginPath();
-      ctx.moveTo(0, y + h);
-      ctx.lineTo(0, y + h * 0.42);
-      ctx.quadraticCurveTo(w * 0.28, y + h * 0.12, w * 0.58, y + h * 0.48);
-      ctx.quadraticCurveTo(w * 0.82, y + h * 0.18, w, y + h * 0.4);
-      ctx.lineTo(w, y + h);
+      ctx.moveTo(Math.cos(baseAng - angSpan) * rInner, Math.sin(baseAng - angSpan) * rInner);
+      ctx.lineTo(Math.cos(baseAng) * rOuter, Math.sin(baseAng) * rOuter);
+      ctx.lineTo(Math.cos(baseAng + angSpan) * rInner, Math.sin(baseAng + angSpan) * rInner);
+      ctx.closePath();
       ctx.fill();
-
-      if (Math.sin(t * 22) > 0.86) {
-        ctx.fillStyle = 'rgba(180, 230, 255, 0.25)';
-        ctx.fillRect(x, y, w, h);
-      }
-    } else if (bgType.startsWith('void')) {
-      // 虛空次元
-      const rad = ctx.createRadialGradient(w / 2, y + h / 2, 20, w / 2, y + h / 2, w * 0.6);
-      rad.addColorStop(0, 'rgba(157, 78, 221, 0.45)');
-      rad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = rad;
-      ctx.fillRect(x, y, w, h);
-    } else {
-      // 商業街 / 實驗室
-      ctx.strokeStyle = p.themeColor;
-      ctx.globalAlpha = 0.25;
-      ctx.lineWidth = 1.5;
-      for (let i = 0; i < 8; i++) {
-        const lineY = y + ((i * 45 + t * 70) % h);
-        ctx.beginPath();
-        ctx.moveTo(0, lineY);
-        ctx.lineTo(w, lineY);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1.0;
     }
+    ctx.restore();
 
-    // 速度線 (Speed lines - 忍者龍劍傳經典疾風氛圍)
+    // 4. 水平/斜向破空疾速撕裂線
     ctx.strokeStyle = '#ffffff';
-    for (const line of this.speedLines) {
-      const ly = y + line.y * h;
-      const progress = ((t * line.speed) % 1);
-      const lx = w - progress * (w + 200);
-      const len = line.len * w;
-
-      ctx.globalAlpha = line.alpha * (this.phase === 2 ? 0.9 : 0.4);
-      ctx.lineWidth = line.width;
+    for (let i = 0; i < 16; i++) {
+      const ly = y + ((i * 43 + t * 400) % h);
+      const lx = ((i * 197 + t * 900) % (w + 400)) - 200;
+      const len = 120 + (i % 5) * 60;
+      ctx.globalAlpha = 0.25 + (i % 3) * 0.15;
+      ctx.lineWidth = 1.5 + (i % 3);
       ctx.beginPath();
       ctx.moveTo(lx, ly);
       ctx.lineTo(lx + len, ly);
@@ -877,34 +922,33 @@ export class BossCutscene {
     ctx.restore();
   }
 
-  // 第一階段：黑影剪影降臨 + 警報雷光
+  // 第一階段：漫畫警告分鏡 + 「ゴゴゴゴ…」強者氣場
   drawPhaseOne(ctx, vw, winTop, winH) {
     const t = this.timer;
     const cx = vw / 2;
     const cy = winTop + winH / 2;
     const p = this.profile;
 
-    // 警報字卡脈動
-    const pulse = 1 + Math.sin(t * 12) * 0.06;
-    ctx.save();
-    ctx.translate(cx, cy - 35);
-    ctx.scale(pulse, pulse);
+    // 1. 兩側「ゴ ゴ ゴ ゴ…」日漫氣場爬升
+    const gogoTexts = ['ゴ', 'ゴ', 'ゴ', 'ゴ'];
+    for (let side = -1; side <= 1; side += 2) {
+      const baseX = side === -1 ? 52 : vw - 52;
+      for (let i = 0; i < gogoTexts.length; i++) {
+        const charY = winTop + winH * 0.22 + i * (winH * 0.16);
+        const charScale = 1.0 + i * 0.28 + Math.sin(t * 12 + i) * 0.08;
+        const charAngle = side === -1 ? -0.22 : 0.22;
+        drawComicSFX(ctx, gogoTexts[i], baseX + side * Math.sin(t * 15 + i) * 4, charY, {
+          size: Math.round(28 * charScale),
+          angle: charAngle,
+          fill: '#ffd60a',
+          stroke: '#020409',
+          shadow: '#d90429',
+          scale: 1.0,
+        });
+      }
+    }
 
-    ctx.font = '900 25px monospace, "Courier New", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ff0055';
-    ctx.shadowColor = '#ff0055';
-    ctx.shadowBlur = 18;
-    ctx.fillText('⚠ WARNING: BOSS APPROACHING ⚠', 0, 0);
-
-    ctx.font = '700 15px monospace, sans-serif';
-    ctx.fillStyle = '#ffcc00';
-    ctx.shadowBlur = 8;
-    ctx.fillText('⚡ 宿 命 之 敵 ・ 絕 密 攔 截 ⚡', 0, 32);
-    ctx.restore();
-
-    // 遠處剪影浮現
+    // 2. 遠方黑影剪影 (先於橫幅繪製，帶深邃黑霧與狂烈紅芒)
     const bossKey = firstSpriteKey(
       [this.boss && this.boss.skin, this.boss && this.boss.skin && this.boss.skin.replace(/_final$/, ''), 'boss'],
       'boss',
@@ -912,159 +956,289 @@ export class BossCutscene {
     const spr = getSprite(bossKey);
     if (spr) {
       ctx.save();
-      ctx.translate(cx, cy + 32);
-      ctx.scale(1.8, 1.8);
+      ctx.translate(cx, cy + 30);
+      ctx.scale(2.2, 2.2);
       ctx.shadowColor = p.themeColor;
-      ctx.shadowBlur = 24;
-      ctx.globalAlpha = Math.min(1, Math.max(0, (t - 0.2) * 3));
+      ctx.shadowBlur = 32;
+      ctx.globalAlpha = Math.min(0.95, Math.max(0.1, (t - 0.15) * 4));
+
+      // 剪影背後暗紅狂暴光暈
+      const haloGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 60);
+      haloGrad.addColorStop(0, p.themeColor + '88');
+      haloGrad.addColorStop(0.6, p.themeColor + '33');
+      haloGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 60, 0, Math.PI * 2);
+      ctx.fill();
+
       const frame = spr.frames[0];
       if (frame) {
         ctx.drawImage(frame, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
       }
       ctx.restore();
     }
+
+    // 3. 漫畫傾斜警告標題條 (置於最上層，Slanted Caution Comic Banner)
+    ctx.save();
+    ctx.translate(cx, winTop + winH * 0.28);
+    ctx.rotate(-0.05);
+
+    const bannerW = Math.min(vw * 0.88, 560);
+    const bannerH = 64;
+
+    // 黑底粗邊
+    ctx.fillStyle = '#05070d';
+    ctx.fillRect(-bannerW / 2, -bannerH / 2, bannerW, bannerH);
+    ctx.strokeStyle = '#ffd60a';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-bannerW / 2, -bannerH / 2, bannerW, bannerH);
+
+    // 黃黑警示邊界斜紋 (Hazard Stripes)
+    ctx.fillStyle = '#ffd60a';
+    ctx.fillRect(-bannerW / 2, -bannerH / 2, bannerW, 8);
+    ctx.fillRect(-bannerW / 2, bannerH / 2 - 8, bannerW, 8);
+
+    // 警示大字
+    ctx.font = '900 24px "Noto Sans TC", "Chakra Petch", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ff0038';
+    ctx.shadowColor = '#ff0038';
+    ctx.shadowBlur = 14;
+    ctx.fillText('⚠ 警 告：極 惡 首 領 來 襲 ⚠', 0, -4);
+
+    ctx.font = '800 13px monospace, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowBlur = 0;
+    ctx.fillText('// HIGH-LEVEL TARGET INTERCEPTED //', 0, 18);
+    ctx.restore();
   }
 
-  // 第二階段：【核心招牌】忍者龍劍傳式 極限眼神特寫橫切 (Extreme Eye Slit Close-Up)
+  // 第二階段：【漫畫斜切分鏡】殺意眼神橫切 + 「ズバッ！！」斬擊音效
   drawPhaseTwoEyeSlit(ctx, vw, winTop, winH) {
     const t = this.timer;
     const p = this.profile;
-    const slitH = Math.min(145, winH * 0.75);
+    const slitH = Math.min(180, winH * 0.82);
     const slitY = winTop + (winH - slitH) / 2;
 
     ctx.save();
 
-    // 1. 眼神橫切框背景 (高對比黑底)
-    ctx.fillStyle = '#050811';
-    ctx.fillRect(0, slitY, vw, slitH);
+    // 1. 傾斜漫畫眼部橫切分鏡框 (Slanted Comic Panel)
+    ctx.save();
+    ctx.translate(vw / 2, slitY + slitH / 2);
+    ctx.rotate(-0.045); // 傾斜約 -2.6 度，強烈美漫分鏡感
 
-    // 速度線狂嘯 (眼神背後的狂怒疾速線)
+    const panelW = vw + 80;
+    const panelH = slitH;
+
+    // 分鏡背景深黑墨底
+    ctx.fillStyle = '#05070d';
+    ctx.fillRect(-panelW / 2, -panelH / 2, panelW, panelH);
+
+    // 半調網點
+    const halftone = getComicHalftone(ctx);
+    if (halftone) {
+      ctx.fillStyle = halftone;
+      ctx.globalAlpha = 0.45;
+      ctx.fillRect(-panelW / 2, -panelH / 2, panelW, panelH);
+      ctx.globalAlpha = 1.0;
+    }
+
+    // 速度線狂嘯 (濃烈橫向速度線)
     ctx.strokeStyle = p.themeColor;
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 18; i++) {
-      const ly = slitY + (i / 18) * slitH;
-      const lx = ((i * 123 + t * 900) % (vw + 300)) - 150;
-      ctx.globalAlpha = 0.4;
+    ctx.lineWidth = 3.0;
+    for (let i = 0; i < 28; i++) {
+      const ly = -panelH / 2 + (i / 28) * panelH;
+      const lx = ((i * 137 + t * 1300) % (panelW + 300)) - panelW / 2 - 150;
+      ctx.globalAlpha = 0.45;
       ctx.beginPath();
       ctx.moveTo(lx, ly);
-      ctx.lineTo(lx + 200, ly);
+      ctx.lineTo(lx + 280, ly);
       ctx.stroke();
     }
 
-    // 2. 眼神特寫繪製 (左眼與右眼)
-    const eyeY = slitY + slitH * 0.52;
-    const eyeDist = Math.min(115, vw * 0.18);
-    const eyeCol = p.eyeColor || '#ff0033';
+    // 2. 雙目極限特寫 (高對比兇狠日漫怒目)
+    const eyeDist = Math.min(130, vw * 0.20);
+    const eyeCol = p.eyeColor || '#ff0038';
 
-    // 眉宇陰影 (怒目橫眉)
-    ctx.fillStyle = '#0a0f1a';
+    // 眉宇深邃狂氣黑影與青筋 (Angry Furrow)
+    ctx.fillStyle = '#080c16';
     ctx.beginPath();
-    ctx.moveTo(vw / 2 - eyeDist * 2.2, eyeY - 45);
-    ctx.lineTo(vw / 2, eyeY - 20);
-    ctx.lineTo(vw / 2 + eyeDist * 2.2, eyeY - 45);
-    ctx.lineTo(vw / 2 + eyeDist * 2.2, slitY);
-    ctx.lineTo(vw / 2 - eyeDist * 2.2, slitY);
+    ctx.moveTo(-eyeDist * 2.4, -60);
+    ctx.lineTo(0, -22);
+    ctx.lineTo(eyeDist * 2.4, -60);
+    ctx.lineTo(eyeDist * 2.4, -panelH / 2);
+    ctx.lineTo(-eyeDist * 2.4, -panelH / 2);
     ctx.closePath();
     ctx.fill();
 
-    // 繪製雙目
-    for (const side of [-1, 1]) {
-      const ex = vw / 2 + side * eyeDist;
+    // 額頭殺氣符紋/血印
+    ctx.strokeStyle = eyeCol;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = eyeCol;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(0, -50);
+    ctx.lineTo(0, -26);
+    ctx.moveTo(-12, -42);
+    ctx.lineTo(0, -32);
+    ctx.lineTo(12, -42);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
 
+    for (const side of [-1, 1]) {
+      const ex = side * eyeDist;
       ctx.save();
-      ctx.translate(ex, eyeY);
+      ctx.translate(ex, 6);
       if (side === -1) ctx.scale(-1, 1);
 
-      // 上眼瞼厚重黑影
-      ctx.fillStyle = '#010204';
+      // (a) 濃烈怒目劍眉 (Heavy Inked Eyebrow)
+      ctx.fillStyle = '#020409';
       ctx.beginPath();
-      ctx.moveTo(-55, -2);
-      ctx.quadraticCurveTo(-15, -24, 52, -4);
-      ctx.quadraticCurveTo(0, -6, -55, -2);
+      ctx.moveTo(-85, -32);
+      ctx.quadraticCurveTo(-20, -42, 60, -18);
+      ctx.quadraticCurveTo(-10, -22, -85, -32);
       ctx.fill();
 
-      // 眼白/眼眶底色 (暗血色)
-      ctx.fillStyle = '#180a0f';
+      // (b) 兇猛眼眶輪廓 (高亮眼白/眼窩，破除黑底看不清問題)
+      ctx.fillStyle = '#fff9db';
       ctx.beginPath();
-      ctx.moveTo(-48, 0);
-      ctx.quadraticCurveTo(-10, -19, 46, -3);
-      ctx.quadraticCurveTo(0, 16, -48, 0);
+      ctx.moveTo(-65, -8);
+      ctx.quadraticCurveTo(-15, -28, 55, -8);
+      ctx.quadraticCurveTo(0, 24, -65, -8);
+      ctx.closePath();
       ctx.fill();
 
-      // 瞳孔與怒目金芒
-      const pupilGlow = 1 + Math.sin(t * 20) * 0.12;
-      const eyeRad = ctx.createRadialGradient(-5, 0, 2, -5, 0, 24 * pupilGlow);
+      // 眼角血絲/暗影
+      ctx.fillStyle = 'rgba(217, 4, 41, 0.45)';
+      ctx.beginPath();
+      ctx.moveTo(-65, -8);
+      ctx.quadraticCurveTo(-35, -2, -15, 6);
+      ctx.quadraticCurveTo(-45, 12, -65, -8);
+      ctx.fill();
+
+      // (c) 粗重上眼瞼黑框
+      ctx.strokeStyle = '#020409';
+      ctx.lineWidth = 6.5;
+      ctx.beginPath();
+      ctx.moveTo(-70, -8);
+      ctx.quadraticCurveTo(-15, -30, 60, -8);
+      ctx.stroke();
+
+      // (d) 下眼瞼黑框
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(-60, -7);
+      ctx.quadraticCurveTo(0, 26, 52, -7);
+      ctx.stroke();
+
+      // (e) 巨大魔性虹膜與怒目金/紅瞳 (Menacing Iris & Feline Slit Pupil)
+      const pupilGlow = 1 + Math.sin(t * 22) * 0.12;
+      const eyeRad = ctx.createRadialGradient(0, -3, 2, 0, -3, 30 * pupilGlow);
       eyeRad.addColorStop(0, '#ffffff');
-      eyeRad.addColorStop(0.35, eyeCol);
-      eyeRad.addColorStop(0.85, p.themeColor);
-      eyeRad.addColorStop(1, 'rgba(0,0,0,0)');
+      eyeRad.addColorStop(0.25, '#ffd60a');
+      eyeRad.addColorStop(0.65, eyeCol);
+      eyeRad.addColorStop(1, '#05070d');
 
       ctx.fillStyle = eyeRad;
       ctx.beginPath();
-      ctx.arc(-5, 0, 20 * pupilGlow, 0, Math.PI * 2);
+      ctx.arc(0, -3, 24 * pupilGlow, 0, Math.PI * 2);
       ctx.fill();
 
-      // 殺意拉絲 (殺氣流光 / 忍者龍劍傳經典目芒拖尾)
-      ctx.strokeStyle = eyeCol;
-      ctx.lineWidth = 3.5;
-      ctx.shadowColor = eyeCol;
-      ctx.shadowBlur = 14;
+      // 縱向野獸貓瞳 (Feline Slit Pupil)
+      ctx.fillStyle = '#020409';
       ctx.beginPath();
-      ctx.moveTo(-5, 0);
-      ctx.quadraticCurveTo(-38, -4, -130, -15 + Math.sin(t * 25) * 6);
-      ctx.stroke();
+      ctx.ellipse(0, -3, 5, 20 * pupilGlow, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      // 瞳孔高光碎屑
+      // 瞳孔高光 (Anime Glint)
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(-7, -4, 3, 0, Math.PI * 2);
+      ctx.arc(-6, -8, 4, 0, Math.PI * 2);
+      ctx.arc(4, 2, 2, 0, Math.PI * 2);
       ctx.fill();
+
+      // (f) 殺意雷霆目芒拖尾 (Eye Lightning Stream)
+      ctx.strokeStyle = eyeCol;
+      ctx.lineWidth = 4.5;
+      ctx.shadowColor = eyeCol;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.moveTo(-2, -3);
+      ctx.quadraticCurveTo(-40, -8, -160, -26 + Math.sin(t * 30) * 8);
+      ctx.stroke();
+
+      // 狂雷閃電微弧 (Zigzag Sparks)
+      ctx.lineWidth = 2.0;
+      ctx.strokeStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(-10, -3);
+      ctx.lineTo(-35, 12);
+      ctx.lineTo(-65, -10);
+      ctx.lineTo(-110, 8);
+      ctx.stroke();
 
       ctx.restore();
     }
 
-    // 3. 眼神橫切框金屬鑲邊
-    ctx.strokeStyle = p.themeColor;
-    ctx.lineWidth = 3.5;
-    ctx.shadowColor = p.themeColor;
-    ctx.shadowBlur = 12;
-    ctx.strokeRect(0, slitY, vw, slitH);
+    // 分鏡框粗黑墨線與金邊
+    ctx.strokeStyle = '#020409';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(-panelW / 2, -panelH / 2, panelW, panelH);
+    ctx.strokeStyle = '#ffd60a';
+    ctx.lineWidth = 3.0;
+    ctx.strokeRect(-panelW / 2 + 3, -panelH / 2 + 3, panelW - 6, panelH - 6);
 
-    // 金屬光角標
-    ctx.fillStyle = '#ffdd00';
-    ctx.fillRect(20, slitY - 4, 35, 8);
-    ctx.fillRect(vw - 55, slitY - 4, 35, 8);
-    ctx.fillRect(20, slitY + slitH - 4, 35, 8);
-    ctx.fillRect(vw - 55, slitY + slitH - 4, 35, 8);
+    ctx.restore(); // 結束傾斜分鏡
 
-    // 眼神特寫標籤文字
-    ctx.font = '900 13px monospace, sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'right';
-    ctx.shadowBlur = 6;
-    ctx.fillText('▶ KILLING INTENT LOCKON ◀', vw - 25, slitY + 22);
+    // 3. 右上方爆炸擬聲大字「ズバッ！！」(SLASH!!)
+    drawComicSFX(ctx, 'ズバッ！！', vw - 120, slitY + 32, {
+      size: 46,
+      angle: -0.18,
+      fill: '#ffd60a',
+      stroke: '#020409',
+      shadow: '#d90429',
+    });
+
+    // 4. 左上方漫畫標籤印章「【殺意鎖定】」
+    drawComicStamp(ctx, '【殺意鎖定】', 95, slitY + 28, -0.08, '#ffd60a');
 
     ctx.restore();
   }
 
-  // 第三階段：霸氣半身立繪現形 + 殺意氣場
+  // 第三階段：【滿版漫畫跨頁】巨大「ドドンッ！！」擬聲字 + 霸氣破格立繪 + 稱號印章
   drawPhaseThreeBust(ctx, vw, winTop, winH) {
     const t = this.timer;
     const p = this.profile;
     const cx = vw * 0.5;
-    const cy = winTop + winH * 0.56;
+    const cy = winTop + winH * 0.54;
 
-    // 氣場旋渦 (Aura Vortex)
-    const auraRad = ctx.createRadialGradient(cx, cy, 30, cx, cy, winH * 0.65);
-    auraRad.addColorStop(0, p.themeColor + '55');
-    auraRad.addColorStop(0.7, p.accentColor + '20');
-    auraRad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = auraRad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, winH * 0.65, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.save();
 
-    // 首領 Sprite 放大立繪 (2.4x ~ 2.8x 巨大化，並帶有呼吸起伏)
+    // 1. 滿屏漫畫放射集中線 (Radial Action Speed Lines)
+    const lineCount = 54;
+    const maxR = Math.max(vw, winH) * 1.1;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(t * 0.08 + Math.sin(t * 30) * 0.008);
+
+    for (let i = 0; i < lineCount; i++) {
+      const baseAng = (i / lineCount) * Math.PI * 2;
+      const angSpan = 0.025 + (i % 3) * 0.015;
+      const rInner = 80 + (i % 5) * 20;
+
+      ctx.fillStyle = (i % 2 === 0) ? 'rgba(255, 214, 10, 0.22)' : 'rgba(255, 255, 255, 0.16)';
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(baseAng - angSpan) * rInner, Math.sin(baseAng - angSpan) * rInner);
+      ctx.lineTo(Math.cos(baseAng) * maxR, Math.sin(baseAng) * maxR);
+      ctx.lineTo(Math.cos(baseAng + angSpan) * rInner, Math.sin(baseAng + angSpan) * rInner);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 2. 破格立繪 (2.7x 巨大化半身像，帶強烈漫畫描邊與呼吸感)
     const bossKey = firstSpriteKey(
       [
         this.boss && this.boss.skin,
@@ -1077,14 +1251,15 @@ export class BossCutscene {
     const spr = getSprite(bossKey);
     if (spr) {
       const breath = Math.sin(t * 6) * 4;
-      const scale = Math.min(2.5, (winH * 0.78) / (spr.h || 120));
+      const scale = Math.min(2.7, (winH * 0.82) / (spr.h || 120));
 
       ctx.save();
       ctx.translate(cx, cy + breath);
       ctx.scale(scale, scale);
 
+      // 漫畫外發光
       ctx.shadowColor = p.themeColor;
-      ctx.shadowBlur = 24;
+      ctx.shadowBlur = 32;
 
       const frameIdx = Math.floor(t * 8) % (spr.frames ? spr.frames.length : 1);
       const frame = spr.frames ? spr.frames[frameIdx] : null;
@@ -1094,64 +1269,66 @@ export class BossCutscene {
       ctx.restore();
     }
 
-    // 兩側裝飾性科技戰術標尺
-    ctx.strokeStyle = p.themeColor;
-    ctx.globalAlpha = 0.5;
-    ctx.lineWidth = 1.5;
-    for (const sx of [vw * 0.08, vw * 0.92]) {
-      ctx.beginPath();
-      ctx.moveTo(sx, winTop + 20);
-      ctx.lineTo(sx, winTop + winH - 20);
-      ctx.stroke();
+    // 3. 巨型日漫登場擬聲大字「ドドンッ！！」(DODON!!) 震撼砸落！
+    // 登場前 0.3 秒具備彈簧縮放衝擊
+    const sfxAge = Math.max(0, t - 2.3);
+    const popScale = 1.0 + Math.max(0, 0.45 * Math.exp(-sfxAge * 7)) * Math.sin(sfxAge * 24);
 
-      for (let i = 0; i < 7; i++) {
-        const tickY = winTop + 30 + i * (winH / 8);
-        ctx.beginPath();
-        ctx.moveTo(sx - 6, tickY);
-        ctx.lineTo(sx + 6, tickY);
-        ctx.stroke();
-      }
-    }
-    ctx.globalAlpha = 1.0;
+    drawComicSFX(ctx, 'ドドンッ！！', vw * 0.78, winTop + winH * 0.26, {
+      size: Math.min(68, vw * 0.16),
+      angle: -0.18,
+      fill: '#ffd60a',
+      stroke: '#05070d',
+      shadow: '#d90429',
+      scale: popScale,
+    });
+
+    // 4. 左側輔助擬聲小字「バァァァン！！」(BAAAANG!!)
+    drawComicSFX(ctx, 'バァァン！', vw * 0.22, winTop + winH * 0.32, {
+      size: Math.min(38, vw * 0.09),
+      angle: 0.16,
+      fill: '#ffffff',
+      stroke: '#05070d',
+      shadow: '#d90429',
+      scale: popScale * 0.95,
+    });
+
+    ctx.restore();
   }
 
-  // 繪製上下劇院黑邊 (Cinematic Letterbox Bars - 純黑底 + 金色警戒邊框)
+  // 繪製上下純黑漫畫邊框 (Inked Borders + Caution Ribbon)
   drawLetterboxBars(ctx, vw, vh, topH, bottomH) {
     // 頂部純黑條
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#05070d';
     ctx.fillRect(0, 0, vw, topH);
 
-    // 頂部裝飾金邊與科技感標頭
     if (topH > 20) {
-      ctx.strokeStyle = '#ffd166';
-      ctx.lineWidth = 3;
+      // 頂部漫畫黃黑警戒邊線
+      ctx.strokeStyle = '#ffd60a';
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(0, topH);
       ctx.lineTo(vw, topH);
       ctx.stroke();
 
       // 頂部標語
-      ctx.font = '900 13px monospace, "Courier New", sans-serif';
-      ctx.fillStyle = '#ffdd55';
+      ctx.font = '900 13px "Noto Sans TC", monospace, sans-serif';
+      ctx.fillStyle = '#ffd60a';
       ctx.textAlign = 'left';
-      ctx.shadowColor = '#ffbb00';
-      ctx.shadowBlur = 6;
-      ctx.fillText('/// TECMO THEATER // 首領來襲 ///', 24, topH - 15);
+      ctx.fillText('/// MANGA BOSS SHOWDOWN // 極限激戰 ///', 24, topH - 14);
 
-      // 右側危急狀態指示燈
       ctx.textAlign = 'right';
-      ctx.fillStyle = (Math.sin(this.timer * 12) > 0) ? '#ff0055' : '#880022';
-      ctx.fillText('● THREAT LEVEL EXTREME', vw - 24, topH - 15);
+      ctx.fillStyle = (Math.sin(this.timer * 12) > 0) ? '#ff0038' : '#880015';
+      ctx.fillText('● THREAT LEVEL: SSS EXTREME', vw - 24, topH - 14);
     }
 
     // 底部純黑條
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#05070d';
     ctx.fillRect(0, vh - bottomH, vw, bottomH);
 
-    // 底部金邊
     if (bottomH > 20) {
-      ctx.strokeStyle = '#ffd166';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffd60a';
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(0, vh - bottomH);
       ctx.lineTo(vw, vh - bottomH);
@@ -1159,7 +1336,7 @@ export class BossCutscene {
     }
   }
 
-  // 繪製底部文字對話框 (Narrative Dialogue Card - 復古 FC/NES 風格字卡)
+  // 繪製漫畫對白框與名牌 (Manga Comic Speech Panel & Slanted Nameplate)
   drawDialogueBox(ctx, vw, vh, boxH) {
     const p = this.profile;
     const boxY = vh - boxH;
@@ -1167,56 +1344,114 @@ export class BossCutscene {
 
     ctx.save();
 
-    // 1. 稱號徽章與首領大名 (金色街機字體)
-    ctx.font = '900 14px "PingFang SC", "Microsoft YaHei", sans-serif';
-    ctx.fillStyle = '#fca311';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 4;
-    ctx.fillText(`${p.title}  ${p.code}`, pad, boxY + 16);
+    // 1. 傾斜漫畫黑色膠帶標題橫幅 (Slanted Nameplate Ribbon)
+    ctx.save();
+    ctx.translate(pad + 160, boxY + 36);
+    ctx.rotate(-0.035);
 
-    // 首領主名稱 (大字發光)
-    ctx.font = '900 28px "PingFang SC", "Microsoft YaHei", sans-serif';
+    const ribbonW = Math.min(vw - pad * 2, 420);
+    const ribbonH = 46;
+
+    // 黑色墨底
+    ctx.fillStyle = '#05070d';
+    ctx.fillRect(-ribbonW / 2, -ribbonH / 2, ribbonW, ribbonH);
+
+    // 金黃描邊
+    ctx.strokeStyle = '#ffd60a';
+    ctx.lineWidth = 3.0;
+    ctx.strokeRect(-ribbonW / 2, -ribbonH / 2, ribbonW, ribbonH);
+
+    // 首領主名稱 (大字書法 / 粗黑體)
+    ctx.font = '900 28px "Noto Sans TC", "PingFang SC", "Microsoft YaHei", sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = p.themeColor;
-    ctx.shadowBlur = 14;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 6;
     const bossName = this.boss ? this.boss.name : '未知首領';
-    ctx.fillText(`『 ${bossName} 』`, pad - 6, boxY + 38);
+    ctx.fillText(`『 ${bossName} 』`, -ribbonW / 2 + 16, 0);
 
-    // 2. 打字機對白 (Typewriter text)
+    // 稱號副標題
+    ctx.font = '800 11px monospace, sans-serif';
+    ctx.fillStyle = '#ffd60a';
+    ctx.fillText(p.code || 'THREAT SSS', ribbonW / 2 - 130, 0);
+
+    ctx.restore();
+
+    // 2. 漫畫紅色印章 (Red Seal Stamp)
+    const stampText = p.title?.includes('終末') ? '【滅世災厄】' : '【極惡凶煞】';
+    drawComicStamp(ctx, stampText, vw - pad - 60, boxY + 35, -0.12, '#ff0038');
+
+    // 3. 漫畫對白泡泡 (Comic Dialogue Bubble Panel)
+    const bubbleX = pad;
+    const bubbleY = boxY + 68;
+    const bubbleW = vw - pad * 2;
+    const bubbleH = boxH - 96;
+
+    // 漫畫象牙白紙面底色
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(bubbleX, bubbleY, bubbleW, bubbleH);
+
+    // 粗墨黑色邊框 (4px)
+    ctx.strokeStyle = '#05070d';
+    ctx.lineWidth = 4.0;
+    ctx.strokeRect(bubbleX, bubbleY, bubbleW, bubbleH);
+
+    // 漫畫對白角標 (Sharp corner ticks)
+    ctx.fillStyle = '#ffd60a';
+    ctx.fillRect(bubbleX, bubbleY, 12, 12);
+    ctx.fillRect(bubbleX + bubbleW - 12, bubbleY, 12, 12);
+
+    // 對白向上指向首領的尖角尾巴 (Speech Tail)
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + 60, bubbleY);
+    ctx.lineTo(bubbleX + 75, bubbleY - 14);
+    ctx.lineTo(bubbleX + 90, bubbleY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = '#05070d';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + 60, bubbleY);
+    ctx.lineTo(bubbleX + 75, bubbleY - 14);
+    ctx.lineTo(bubbleX + 90, bubbleY);
+    ctx.stroke();
+
+    // 4. 打字機對白 (Typewriter text in crisp ink black)
     const quote = p.quote || '「……」';
     const currentText = quote.slice(0, this.typedChars);
 
-    ctx.font = '600 17px "PingFang SC", "Microsoft YaHei", monospace, sans-serif';
-    ctx.fillStyle = '#f1f5f9';
-    ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 6;
-    ctx.fillText(currentText, pad, boxY + 76);
+    ctx.font = '700 17px "Noto Sans TC", "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.shadowBlur = 0;
+    ctx.fillText(currentText, bubbleX + 22, bubbleY + 16);
 
-    // 光標閃爍 (Cursor)
+    // 漫畫光標閃爍
     if (this.typedChars < quote.length && Math.floor(this.timer * 6) % 2 === 0) {
       const textWidth = ctx.measureText(currentText).width;
-      ctx.fillStyle = p.themeColor;
-      ctx.fillRect(pad + textWidth + 4, boxY + 78, 9, 18);
+      ctx.fillStyle = '#d90429';
+      ctx.fillRect(bubbleX + 22 + textWidth + 4, bubbleY + 16, 9, 20);
     }
 
-    // 3. 跳過操作提示 (Skip Prompt)
-    ctx.font = '700 12px monospace, sans-serif';
+    // 5. 翻頁/跳過提示 (Manga Page Turn / Skip Prompt)
+    ctx.font = '800 12px "Noto Sans TC", sans-serif';
     const blink = Math.sin(this.timer * 8) > 0;
-    ctx.fillStyle = blink ? '#ffdd55' : 'rgba(255, 221, 85, 0.45)';
+    ctx.fillStyle = blink ? '#ffd60a' : 'rgba(255, 214, 10, 0.55)';
     ctx.textAlign = 'right';
-    ctx.shadowBlur = 4;
-    ctx.fillText('▶ 按空白鍵 或 點擊螢幕 跳過 (SPACE / TAP TO SKIP)', vw - pad, vh - 18);
+    ctx.fillText('▶ 按 [SPACE] 或 點擊 翻頁跳過 (SKIP)', vw - pad - 12, vh - 14);
 
     ctx.restore();
   }
 
   // 輕量復古 CRT 掃描線
   drawScanlines(ctx, x, y, w, h) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
     for (let i = 0; i < h; i += 4) {
-      ctx.fillRect(x, y + i, w, 1.5);
+      ctx.fillRect(x, y + i, w, 1.2);
     }
   }
 }

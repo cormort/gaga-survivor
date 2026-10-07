@@ -1796,42 +1796,73 @@ export function drawHeldWeapon(ctx, id, opts) {
 
   if (id === 'kunai' || id === 'drill') {
     // ── 突刺類 (Thrust) ──
-    const thrustDist = id === 'drill' ? 7.0 : 9.5;
+    const thrustDist = id === 'drill' ? 9.0 : 13.5;
     const thrustCycle = Math.sin(kick * Math.PI);
     motionOffsetX = thrustCycle * thrustDist;
+    // 突刺時槍尖/刃尖微幅上挑
+    motionAngle = -thrustCycle * 0.08;
     if (id === 'drill') {
-      const drillJitter = Math.sin(time * 75) * (kick > 0.05 ? 1.6 : 0.6);
+      const drillJitter = Math.sin(time * 75) * (kick > 0.05 ? 2.2 : 0.8);
       motionOffsetY += drillJitter;
     }
   } else if (a.family === 'blade') {
-    // ── 揮砍斬擊類 (Slash Swing) ──
-    const swingProg = Math.sin(kick * Math.PI);
-    motionOffsetX = swingProg * 7.5;
-    motionOffsetY = (kick - 0.5) * 4.5;
-    motionAngle = (kick - 0.3) * 0.52; // 劈砍動作弧度
+    // ── 揮砍斬擊類 (Slash Swing: 蓄力後拉 → 破空暴斬 → 順勢收招) ──
+    // kick 從 1.0 衰減到 0.0 (p 從 0.0 到 1.0)
+    const p = 1 - kick;
+    let swingAngle = 0;
+    let swingFwd = 0;
+    let swingLat = 0;
+
+    if (p < 0.22) {
+      // 1. 蓄力後拉 (Windup / Anticipation): 刃尖往斜上方拉起蓄勁
+      const u = p / 0.22;
+      const ease = Math.sin(u * Math.PI * 0.5);
+      swingAngle = -0.68 * ease; // 約 -39 度起手後揚
+      swingFwd = -4.5 * ease;
+      swingLat = -3.2 * ease;
+    } else if (p < 0.72) {
+      // 2. 破空暴斬 (Explosive Slash Arc): 順劈掠過大角度扇形，並向前大步探刺
+      const u = (p - 0.22) / 0.50;
+      // 角度從 -0.68 迅速掠過 0 抵達 +0.98 (+56 度，合計約 95 度大斬角)
+      swingAngle = -0.68 + u * 1.66;
+      swingFwd = Math.sin(u * Math.PI) * 14.5; // 前探伸展 14.5px
+      swingLat = (u - 0.45) * 8.0;
+    } else {
+      // 3. 順勢收招 (Recovery): 刀勢從下方順滑歸正
+      const u = (p - 0.72) / 0.28;
+      const ease = 1 - Math.cos(u * Math.PI * 0.5);
+      swingAngle = 0.98 * (1 - ease);
+      swingFwd = 2.5 * (1 - ease);
+      swingLat = 3.5 * (1 - ease);
+    }
+
+    motionOffsetX = swingFwd;
+    motionOffsetY = swingLat;
+    motionAngle = swingAngle;
+
     if (id === 'chainsword') {
-      const buzz = Math.sin(time * 85) * (kick > 0.05 ? 2.2 : 0.7);
+      const buzz = Math.sin(time * 85) * (kick > 0.05 ? 3.0 : 0.8);
       motionOffsetY += buzz;
-      motionAngle += Math.sin(time * 60) * (kick > 0.05 ? 0.07 : 0.02);
+      motionAngle += Math.sin(time * 60) * (kick > 0.05 ? 0.12 : 0.02);
     }
   } else if (isSpinner) {
     // ── 旋轉浮空體類 (Spinning Orbs & Saws) ──
-    motionOffsetX = Math.sin(kick * Math.PI) * 4.2;
+    motionOffsetX = Math.sin(kick * Math.PI) * 4.8;
   } else if (id === 'railgun' || id === 'annihilation_beam' || id === 'rocket' || id === 'shark_torpedo' || id === 'dragon_breath' || id === 'napalm_sea') {
-    // ── 重型發射器與粒子炮 (Heavy Recoil) ──
-    motionOffsetX = -kick * 7.5;
-    motionOffsetY = -kick * 2.2;
-    motionAngle = -kick * 0.22;
+    // ── 重型發射器與粒子炮 (Heavy Recoil & Muzzle Rise) ──
+    motionOffsetX = -kick * 9.5;
+    motionOffsetY = -kick * 2.8;
+    motionAngle = -kick * 0.26;
   } else if (a.family === 'coil') {
     // ── 法杖施法能量脈衝 (Magic Surge) ──
-    motionOffsetX = Math.sin(kick * Math.PI) * 4.5 - kick * 2.2;
-    motionOffsetY = Math.sin(time * 30) * kick * 1.5;
-    motionAngle = -kick * 0.08;
+    motionOffsetX = Math.sin(kick * Math.PI) * 5.5 - kick * 2.5;
+    motionOffsetY = Math.sin(time * 30) * kick * 2.0;
+    motionAngle = -kick * 0.10;
   } else {
     // ── 一般標準槍械 (Standard Gun Recoil) ──
-    motionOffsetX = -kick * 4.5;
-    motionOffsetY = -kick * 1.4;
-    motionAngle = -kick * 0.12;
+    motionOffsetX = -kick * 5.5;
+    motionOffsetY = -kick * 1.8;
+    motionAngle = -kick * 0.16;
   }
 
   ctx.save();
@@ -2057,8 +2088,22 @@ export function drawHeldWeapon(ctx, id, opts) {
       ctx.moveTo(tip - 2, 3);
       ctx.lineTo(tip + 3, 11 * flashPower);
       ctx.stroke();
+    } else if (a.family === 'blade') {
+      // 11. 刃系全域斬擊刀光與破空月牙 (Blade Slashing Arc & Crescent Flash)
+      ctx.globalAlpha = flashPower * 0.95;
+      const arcR = tip * 0.95;
+      ctx.strokeStyle = a.color || '#cfe8ff';
+      ctx.lineWidth = 3.8;
+      ctx.beginPath();
+      ctx.arc(tip * 0.3, 0, arcR, -Math.PI * 0.44, Math.PI * 0.44);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(tip * 0.3, 0, arcR, -Math.PI * 0.30, Math.PI * 0.30);
+      ctx.stroke();
     } else {
-      // 11. 標準槍械火光 (Standard Muzzle Flash)
+      // 12. 標準槍械火光 (Standard Muzzle Flash)
       ctx.globalAlpha = flashPower;
       const R = 15 + flashPower * 7;
       ctx.drawImage(glowCanvas(a.color), tip - R * 0.35, -R / 2, R, R);

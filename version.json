@@ -1,6 +1,6 @@
 {
-  "version": "106",
+  "version": "107",
   "releasedAt": "2026-10-07",
-  "note": "v106 全素材壓色：assets/ 的 PNG 全面轉成 256 色調色盤（地表貼圖 v103 已做）。258 張改動、31.8MB → 7.8MB（-75%）；assets/ 從 38MB 降到 14.4MB（若從壓色前的原始素材算起是 61.6MB → 14.4MB），玩家第一次開啟 PWA 的下載量降到 8.3MB（version.json 的 assetsKB → 8273）。規則在 docs/PNG_PALETTE_RULES.md：只碰 assets/（不碰 icons/ 與 tools/ 來源圖）、品質守門用『預乘 alpha 的可見差 ≤ 4/255』、每次壓色都要發版。工具 tools/optimize_pngs.py（--dry-run / --compare 棋盤底對照圖 / --apply / --only / --csv）。守門擋下 3 張（boss_swamp 4.5、td/arcane_storm 4.3、weapons/guardian 4.1），保留原檔。驗證：258 張尺寸與原檔一致且瀏覽器全數解碼；開遊戲 0 則 [sprites] 警告、0 pageerror；進關 frameErrorCount=0；audit-assets 預快取無缺口、assetsKB 已同步。另修：main 的 v105 只改了 version.json 沒同步 sw.js 的 FALLBACK_VERSION（停在 gaga-v104），本版一併同步為 gaga-v106。",
+  "note": "v107 武器揮砍打擊感重構與熱血漫畫風 Boss 登場過場：全面優化特工手持武器運動學曲線（刀劍近戰三階段揮砍：蓄力後拉 -39°、破空順劈 95° 扇面與 14.5px 前探、順勢收招回正，附帶半透明月牙斬擊光幕 Slash Arc 與火花；角色身軀依揮擊節奏動態前傾 7.5° 與小步突刺，徹底告別貼紙平移）；重構 Boss 登場動畫為經典日漫/熱血跨頁分鏡（高對比墨黑底、半調網點 Screentone、高速集中速度線、兩側爬升「ゴゴゴゴ…」強者氣場、傾斜眼神橫切分鏡伴隨「ズバッ！！」斬擊擬聲字、登場震落巨型立體「ドドンッ！！」與「バァァン！」、紅色雙框漫畫印章【極惡凶煞】及尖角漫畫對白泡泡）。",
   "assetsKB": 8273
 }
