@@ -1,6 +1,6 @@
 // 武器投射物與攻擊實體 (苦無、旋轉輪盤、火箭爆破、地面积火、落雷、彈跳足球)
 
-import { GAME_CONFIG, CHARGE, worldBounds, VIEW } from '../config.js';
+import { GAME_CONFIG, CHARGE, WEAPONS, worldBounds, VIEW } from '../config.js';
 import { drawGlow, drawStreak } from '../weapons/ProjectileFX.js';
 import { drawFlyingSword } from './Mercenary.js';
 import { weaponImages } from '../weapons/WeaponArt.js';
@@ -124,6 +124,7 @@ export class Projectile {
   constructor(options) {
     this.type = options.type || 'bullet';
     this.weaponId = options.weaponId || 'kunai';
+    this.element = options.element || (options.weaponId && WEAPONS[options.weaponId]?.element) || 'physical';
     this.x = options.x || 0;
     this.y = options.y || 0;
     this.vx = options.vx || 0;

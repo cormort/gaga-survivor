@@ -21,6 +21,10 @@ export const QUEST_POOL = [
   { id: 'gold',   stat: 'gold',   desc: '累計在局內賺到 {n} 金幣',   targets: [1500, 4000, 8000] },
   { id: 'clears', stat: 'clears', desc: '通關任一關卡 {n} 次',       targets: [1, 2, 3] },
   { id: 'weapon', stat: 'weapon', desc: '用{w}累計造成 {n} 傷害',    targets: [20000, 60000, 150000] },
+  // ── 元素相剋與屬性任務 ──
+  { id: 'elem_counter', stat: 'elementCounterHits', desc: '觸發屬性相剋攻擊 {n} 次', targets: [120, 300, 600] },
+  { id: 'elem_kill',    stat: 'elementKill',        desc: '使用【{el}】屬性武器擊殺 {n} 隻怪物', targets: [200, 500, 1000] },
+  { id: 'elem_foe',     stat: 'elementFoeKill',     desc: '累計消滅 {n} 隻【{el}】屬性怪物',     targets: [60, 150, 350] },
 ];
 
 export const REWARD_TIERS = [
@@ -28,6 +32,14 @@ export const REWARD_TIERS = [
   { gold: 400, dna: 40 },
   { gold: 700, dna: 70 },
 ];
+
+export const ELEMENT_KEYS = ['fire', 'frost', 'shock', 'toxic'];
+export const ELEMENT_NAMES = {
+  fire: '🔥 燃燒',
+  frost: '❄️ 冰凍',
+  shock: '⚡ 電擊',
+  toxic: '☠️ 劇毒',
+};
 
 // 本地日期 YYYYMMDD（每日任務在玩家的午夜換日）
 export function localDateKey(d = new Date()) {
@@ -48,7 +60,11 @@ export function generateDailyQuests(dateKey) {
     const def = pool.splice(Math.floor(rand() * pool.length), 1)[0];
     const tier = Math.floor(rand() * def.targets.length);
     const q = { id: def.id, stat: def.stat, target: def.targets[tier], tier, progress: 0, claimed: false, ...REWARD_TIERS[tier] };
-    if (def.stat === 'weapon') q.weapon = baseWeapons[Math.floor(rand() * baseWeapons.length)];
+    if (def.stat === 'weapon') {
+      q.weapon = baseWeapons[Math.floor(rand() * baseWeapons.length)];
+    } else if (def.stat === 'elementKill' || def.stat === 'elementFoeKill') {
+      q.element = ELEMENT_KEYS[Math.floor(rand() * ELEMENT_KEYS.length)];
+    }
     list.push(q);
   }
   return list;
@@ -60,13 +76,23 @@ export function questText(q) {
   if (!def) return q.id;
   const n = def.time ? `${Math.floor(q.target / 60)} 分 ${String(q.target % 60).padStart(2, '0')} 秒` : q.target.toLocaleString();
   const w = q.weapon && WEAPONS[q.weapon] ? `${WEAPONS[q.weapon].icon}${WEAPONS[q.weapon].name}` : '';
-  return def.desc.replace('{n}', n).replace('{w}', w);
+  const el = q.element ? (ELEMENT_NAMES[q.element] || q.element) : '';
+  return def.desc.replace('{n}', n).replace('{w}', w).replace('{el}', el);
 }
 
 // 本局數據 → 對一個任務的進度增量（survive 取最大值，其餘相加）
 export function applyRunToQuest(q, run) {
-  if (q.stat === 'survive') q.progress = Math.max(q.progress, Math.floor(run.survive || 0));
-  else if (q.stat === 'weapon') q.progress += Math.floor((run.weaponDamage && run.weaponDamage[q.weapon]) || 0);
-  else q.progress += Math.floor(run[q.stat] || 0);
+  const current = Number(q.progress) || 0;
+  if (q.stat === 'survive') {
+    q.progress = Math.max(current, Math.floor(run.survive || 0));
+  } else if (q.stat === 'weapon') {
+    q.progress = current + Math.floor((run.weaponDamage && run.weaponDamage[q.weapon]) || 0);
+  } else if (q.stat === 'elementKill') {
+    q.progress = current + Math.floor((run.elementKills && run.elementKills[q.element]) || 0);
+  } else if (q.stat === 'elementFoeKill') {
+    q.progress = current + Math.floor((run.elementFoeKills && run.elementFoeKills[q.element]) || 0);
+  } else {
+    q.progress = current + Math.floor(run[q.stat] || 0);
+  }
   q.progress = Math.min(q.progress, q.target);
 }

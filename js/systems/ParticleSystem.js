@@ -84,23 +84,48 @@ export class ParticleSystem {
     }
   }
 
-  createDamageText(x, y, text, isCrit = false, isRealCrit = false) {
+  createDamageText(x, y, text, isCrit = false, isRealCrit = false, relation = 'neutral') {
     if (this.damageTextMode !== 'all' && (typeof text === 'number' || /^\d+$/.test(text))) {
       if (this.damageTextMode === 'off' || !isRealCrit) return;
     }
     // 跳字太多時丟掉最舊的 (已淡出大半)，保留最新傷害反饋
     const displayText = typeof text === 'number' ? String(Math.round(text)) : String(text);
+    const isEffective = relation === 'effective';
+    const isResisted = relation === 'resisted';
+
+    let color = '#ffffff';
+    let scale = 1.0;
+    let suffix = '';
+
+    if (isRealCrit) {
+      color = '#ff3860';
+      scale = 1.9;
+      suffix = isEffective ? '!⚡' : '!';
+    } else if (isCrit) {
+      color = isEffective ? '#ffd166' : '#ffb703';
+      scale = isEffective ? 1.55 : 1.4;
+      suffix = isEffective ? '★' : '';
+    } else if (isEffective) {
+      color = '#ffc300';
+      scale = 1.25;
+      suffix = '▲';
+    } else if (isResisted) {
+      color = '#9e9e9e';
+      scale = 0.85;
+      suffix = '▼';
+    }
+
     this._pushDamageText({
       x: x + (Math.random() * 16 - 8),
       y: y - 10 + (Math.random() * 10 - 5),
       text: displayText,
-      isCrit: isCrit,
+      isCrit: isCrit || isEffective,
       life: 0.65,
       maxLife: 0.65,
-      scale: isRealCrit ? 1.9 : isCrit ? 1.4 : 1.0,
-      bucket: isRealCrit ? 2 : isCrit ? 1 : 0,
-      color: isRealCrit ? '#ff3860' : isCrit ? '#ffb703' : '#ffffff',
-      suffix: isRealCrit ? '!' : '',
+      scale,
+      bucket: isRealCrit ? 2 : (isCrit || isEffective) ? 1 : 0,
+      color,
+      suffix,
     });
   }
 

@@ -719,7 +719,7 @@ export class WeaponManager {
       for (const e of enemies) {
         if (e.isDead) continue;
         if (Math.hypot(e.x - px, e.y - py) <= radius * 1.35 + e.radius) {
-          e.takeDamage(dmg, 9, px, py);
+          e.takeDamage(dmg, 9, px, py, def.element || 'physical');
           this.recordDamage(def.id, dmg);
         }
       }
@@ -831,7 +831,7 @@ export class WeaponManager {
       for (const e of enemies) {
         const d = Math.hypot(e.x - targetX, e.y - targetY);
         if (d <= r + 40) {
-          e.takeDamage(Math.round(damage * stats.splashDamageMul), stats.knockback || 18, targetX, targetY);
+          e.takeDamage(Math.round(damage * stats.splashDamageMul), stats.knockback || 18, targetX, targetY, def.element || 'fire');
           e.applySlow(stats.slowDur || 3.0);
         }
       }
@@ -920,7 +920,7 @@ export class WeaponManager {
         const d = Math.hypot(enemy.x - pt.x, enemy.y - pt.y);
         if (d <= R + enemy.radius) {
           if (!anchor) anchor = enemy;
-          enemy.takeDamage(dmg, 2, pt.x, pt.y);
+          enemy.takeDamage(dmg, 2, pt.x, pt.y, def.element || 'shock');
           this.recordDamage(def.id, dmg);
           if (stats.stunDur) enemy.applyStun(stats.stunDur);
           if (particleSystem) particleSystem.createDamageText(enemy.x, enemy.y, dmg, true);
@@ -956,7 +956,7 @@ export class WeaponManager {
         const cx = a.x + vx * t;
         const cy = a.y + vy * t;
         if (Math.hypot(e.x - cx, e.y - cy) <= w + e.radius) {
-          e.takeDamage(linkDmg, 0.5, cx, cy);
+          e.takeDamage(linkDmg, 0.5, cx, cy, def.element || 'shock');
           this.recordDamage(def.id, linkDmg);
         }
       }
@@ -1047,7 +1047,7 @@ export class WeaponManager {
         if (perp > width / 2 + enemy.radius) continue;
 
         hit.add(enemy);
-        enemy.takeDamage(dmg, 3, this.player.x, this.player.y);
+        enemy.takeDamage(dmg, 3, this.player.x, this.player.y, def.element || 'shock');
         this.recordDamage(def.id, dmg);
         if (def.burnOnHit || stats.burnOnHit) {
           enemy.applyBurn(def.burnOnHit || stats.burnOnHit, 2.5, def.id);
@@ -1147,7 +1147,7 @@ export class WeaponManager {
       // 赫爾型態：已被減速／冰凍／眩暈的目標吃碎冰加成（判定在本次減速之前）
       const brittle = enemy.slowTimer > 0 || enemy.freezeTimer > 0 || enemy.stunTimer > 0;
       const hit = stats.shatterMul && brittle ? Math.round(dmg * stats.shatterMul) : dmg;
-      enemy.takeDamage(hit, stats.knockback || 1, px, py);
+      enemy.takeDamage(hit, stats.knockback || 1, px, py, def.element || 'frost');
       this.recordDamage(def.id, hit);
       enemy.applySlow(def.slowDur || 2);
       if (freezeDur) enemy.applyFreeze(freezeDur);
@@ -1223,7 +1223,7 @@ export class WeaponManager {
     for (const enemy of enemies) {
       const dist = Math.hypot(enemy.x - rocketProj.x, enemy.y - rocketProj.y);
       if (dist <= rocketProj.explosionRadius + enemy.radius) {
-        enemy.takeDamage(rocketProj.damage, 5, rocketProj.x, rocketProj.y);
+        enemy.takeDamage(rocketProj.damage, 5, rocketProj.x, rocketProj.y, rocketProj.element || 'toxic');
         this.recordDamage(rocketProj.weaponId, rocketProj.damage);
         // 毒氣彈：爆炸範圍內全員中毒 (火箭的蓄能效果走爆炸，不走直接命中)
         if (rocketProj.charge === 'poison') {
@@ -1557,7 +1557,7 @@ export class WeaponManager {
             if (Math.abs(diff) > arc / 2) continue;
           }
 
-          const died = e.takeDamage(hitDmg, isPower ? 16 : 10, px, py);
+          const died = e.takeDamage(hitDmg, isPower ? 16 : 10, px, py, def.element || 'physical');
           this.recordDamage(def.id, hitDmg);
           if (particleSystem) {
             particleSystem.createDamageText(e.x, e.y, hitDmg, crit || isPower, crit);

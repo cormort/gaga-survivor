@@ -53,6 +53,7 @@ export const WEAPONS = {
     id: 'kunai',
     name: '特工苦無',
     icon: '🗡️',
+    element: 'physical',
     description: '自動朝最近敵人疾速發射穿透苦無。每 5 發蓄能射出燃燒彈。',
     isEvo: false,
     evoTarget: 'ghost_shuriken',
@@ -71,6 +72,7 @@ export const WEAPONS = {
     id: 'guardian',
     name: '守護輪盤',
     icon: '🥏',
+    element: 'physical',
     description: '旋轉護盾環繞周身，擊退並割裂靠近的敵人。',
     isEvo: false,
     evoTarget: 'eternal_domain',
@@ -88,12 +90,13 @@ export const WEAPONS = {
     id: 'rocket',
     name: '高爆火箭',
     icon: '🚀',
+    element: 'toxic',
     description: '發射會轉彎追蹤的鎖定飛彈，撞上目標引發範圍破片爆炸。每 3 發蓄能射出毒氣彈。',
     isEvo: false,
     evoTarget: 'shark_torpedo',
     pairPassive: 'magnet',        // 爆炸清場 → 自動吸寶 (原 range_fuel)
     maxLevel: 5,
-    baseDamage: 44,  // 射程定位校準（原 44）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 35）                // 鎖定追蹤後幾乎發發命中，單發傷害比直線版低
+    baseDamage: 44,  // 射程定位校準（原 44）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準到位
     baseCooldown: 2.5,
     cooldownGrowth: -0.3,
     speed: 380,
@@ -108,6 +111,7 @@ export const WEAPONS = {
     id: 'molotov',
     name: '特工燃燒瓶',
     icon: '🍾',
+    element: 'fire',
     description: '拋出燃燒瓶，瓶子落地摔碎後鋪開持續灼燒的烈火之海。',
     isEvo: false,
     evoTarget: 'napalm_sea',
@@ -125,6 +129,7 @@ export const WEAPONS = {
     id: 'lightning',
     name: '雷電矩陣',
     icon: '⚡',
+    element: 'shock',
     description: '落雷依序劈中不同敵人，落點之間拉起電網，被電網掃過的敵人一併受創。',
     isEvo: false,
     evoTarget: 'plasma_storm',
@@ -143,6 +148,7 @@ export const WEAPONS = {
     id: 'soccer',
     name: '量子足球',
     icon: '⚽',
+    element: 'frost',
     description: '朝敵人踢出高彈力足球，命中後彈向下一個敵人、撞到畫面邊緣也會反彈。每 3 顆蓄能射出冰凍球。',
     isEvo: false,
     evoTarget: 'quantum_sphere',
@@ -164,6 +170,7 @@ export const WEAPONS = {
     id: 'ghost_shuriken',
     name: '幽靈手裏劍 (超武)',
     icon: '✨🗡️',
+    element: 'physical',
     description: '半透明的幽靈手裏劍高速旋轉連發，會轉彎追蹤目標、穿透敵群，每 6 發挾帶燃燒彈。',
     isEvo: true,
     maxLevel: 5,
@@ -183,6 +190,7 @@ export const WEAPONS = {
     id: 'eternal_domain',
     name: '永恆守護力場 (超武)',
     icon: '🌌🛡️',
+    element: 'physical',
     description: '輪盤化為常駐的金色力場，範圍內的敵人持續受創，並定時放出擊退風暴。',
     isEvo: true,
     maxLevel: 5,
@@ -202,6 +210,7 @@ export const WEAPONS = {
     id: 'shark_torpedo',
     name: '鯊魚核彈 (超武)',
     icon: '🦈💣',
+    element: 'toxic',
     description: '放出擺尾獵殺的鯊魚魚雷，一路追咬目標，撞上即核爆震動全畫面，每 2 發挾帶劇毒。',
     isEvo: true,
     maxLevel: 5,
@@ -222,6 +231,7 @@ export const WEAPONS = {
     id: 'napalm_sea',
     name: '燃油煉獄 (超武)',
     icon: '🔥🌊',
+    element: 'fire',
     description: '拋出藍焰燃油彈，落地後火海沿地面持續擴散，迅速融化怪群。',
     isEvo: true,
     maxLevel: 5,
@@ -241,6 +251,7 @@ export const WEAPONS = {
     id: 'plasma_storm',
     name: '狂雷星暴 (超武)',
     icon: '🌩️💥',
+    element: 'shock',
     description: '中心一記巨雷，外圈落雷呈星形爆開，並以電光射線連回中心。',
     isEvo: true,
     maxLevel: 5,
@@ -260,6 +271,7 @@ export const WEAPONS = {
     id: 'quantum_sphere',
     name: '量子星雲球 (超武)',
     icon: '⚛️⚽',
+    element: 'frost',
     description: '量子球在敵群間彈射，每次命中裂變出一顆子球，拖著能量殘影，每 4 顆挾帶冰凍。',
     isEvo: true,
     maxLevel: 5,
@@ -286,6 +298,7 @@ export const WEAPONS = {
     id: 'boomerang',
     name: '特工迴力鏢',
     icon: '🪃',
+    element: 'physical',
     description: '擲出會折返的鋒利迴力鏢，去程與回程各切開一次路徑上的敵人。',
     isEvo: false,
     evoTarget: 'twin_storm',
@@ -307,6 +320,7 @@ export const WEAPONS = {
     id: 'railgun',
     name: '電磁軌道炮',
     icon: '🔫',
+    element: 'shock',
     description: '充能後掃出貫穿全場的電磁射線，直線上的敵人一次全部命中。',
     isEvo: false,
     evoTarget: 'annihilation_beam',
@@ -326,6 +340,7 @@ export const WEAPONS = {
     id: 'twin_storm',
     name: '雙刃風暴',
     icon: '🌪️',
+    element: 'fire',
     description: '兩道反向旋轉的巨型迴力鏢持續颳掃，去回都追擊並附帶燃燒。',
     isEvo: true,
     evoTarget: null,
@@ -346,6 +361,7 @@ export const WEAPONS = {
     id: 'annihilation_beam',
     name: '湮滅射線',
     icon: '☄️',
+    element: 'fire',
     description: '三道加寬的湮滅射線掃過全場，命中即點燃，冷卻大幅縮短。',
     isEvo: true,
     evoTarget: null,
@@ -365,6 +381,7 @@ export const WEAPONS = {
     id: 'phase_blade',
     name: '相位飛刃',
     icon: '💠',
+    element: 'shock',
     description: '相位刃命中後會相位跳躍到附近下一個敵人面前繼續切割。每 4 發蓄能射出電弧刃。與苦無可合體為超武。',
     isEvo: false,
     evoTarget: 'phase_storm',
@@ -387,6 +404,7 @@ export const WEAPONS = {
     id: 'orbit_saw',
     name: '重力環鋸',
     icon: '🪚',
+    element: 'physical',
     description: '環鋸繞體旋轉並產生重力場，把附近的敵人吸向鋸環切割。',
     isEvo: false,
     evoTarget: 'singularity_ring',
@@ -410,6 +428,7 @@ export const WEAPONS = {
     id: 'phase_storm',
     name: '相位風暴 (超武)',
     icon: '🌀💠',
+    element: 'shock',
     description: '雙武合體！飛刃從特工周圍的相位裂隙不斷射出，命中後連續相位跳躍，每 8 發挾帶電弧刃。',
     isEvo: true,
     maxLevel: 5,
@@ -432,6 +451,7 @@ export const WEAPONS = {
     id: 'singularity_ring',
     name: '重力奇點環 (超武)',
     icon: '🌌🪚',
+    element: 'physical',
     description: '特工身邊生成黑洞奇點，強大引力把大範圍的敵人吸進永續運轉的鋸環。',
     isEvo: true,
     maxLevel: 5,
@@ -457,6 +477,7 @@ export const WEAPONS = {
     id: 'frost_nova',
     name: '冰霜新星',
     icon: '❄️',
+    element: 'frost',
     description: '以特工為中心爆發冰霜脈衝，範圍內的敵人全部受創並減速。',
     isEvo: false,
     evoTarget: 'absolute_zero',
@@ -473,6 +494,7 @@ export const WEAPONS = {
     id: 'shotgun',
     name: '特工霰彈槍',
     icon: '💥',
+    element: 'physical',
     description: '朝最近敵人轟出扇形霰彈，射程短但彈丸多、擊退強。單發射擊後強制換彈（幫浦行程）；升級縮短換彈時間。射程越短，每顆彈丸越痛。',
     isEvo: false,
     evoTarget: 'dragon_breath',
@@ -499,6 +521,7 @@ export const WEAPONS = {
     id: 'absolute_zero',
     name: '絕對零度 (超武)',
     icon: '🧊',
+    element: 'frost',
     description: '冰霜脈衝擴張成絕對零度領域，範圍翻倍，命中的雜兵直接凍結。',
     isEvo: true,
     maxLevel: 5,
@@ -515,6 +538,7 @@ export const WEAPONS = {
     id: 'dragon_breath',
     name: '龍息霰彈 (超武)',
     icon: '🐲',
+    element: 'fire',
     description: '霰彈化為龍息烈焰，一次噴出 12 顆燃燒彈丸，貫穿並點燃整片怪群。攻擊力大幅提升，仍需換彈（單發）。',
     isEvo: true,
     maxLevel: 5,
@@ -540,6 +564,7 @@ export const WEAPONS = {
     id: 'bolter',
     name: '帝國爆彈槍',
     icon: '🦅🔫',
+    element: 'physical',
     description: '發射超音速高爆火箭彈丸，在目標體內延遲起爆，造成強烈穿甲破片與範圍擊退。',
     isEvo: false,
     evoTarget: 'storm_bolter',
@@ -559,6 +584,7 @@ export const WEAPONS = {
     id: 'chainsword',
     name: '咆哮鏈鋸劍',
     icon: '⚙️🗡️',
+    element: 'physical',
     description: '向前橫向弧形揮砍，高轉速鋸齒在短時間內造成多次割裂並附加持續流血。',
     isEvo: false,
     evoTarget: 'power_sword',
@@ -580,6 +606,7 @@ export const WEAPONS = {
     id: 'storm_bolter',
     name: '神聖風暴爆彈槍 (超武)',
     icon: '⚡🦅',
+    element: 'shock',
     description: '雙聯裝全自動傾瀉高爆彈幕！具備 2 次穿透與神聖火花二次空爆，橫掃異形群。',
     isEvo: true,
     maxLevel: 5,
@@ -598,6 +625,7 @@ export const WEAPONS = {
     id: 'power_sword',
     name: '帝皇動力神劍 (超武)',
     icon: '⚔️⚡',
+    element: 'shock',
     description: '360 度激發神聖解離力場橫掃近身敵人，並向前激射兩道月牙型空間震波！',
     isEvo: true,
     maxLevel: 5,
@@ -772,9 +800,41 @@ export function elementOf(id) {
   return ELEMENTS[id] || ELEMENTS.physical;
 }
 
-// 哪一種敵人的攻擊帶哪一種屬性。沒有列到的就是純物理 —— 名單刻意只覆蓋
-// 「主題上說得通」的那一批（酸液、火焰、電擊、冰霜），大約四成，
-// 這樣「堆護甲」仍然是有意義的選擇，而不是被屬性傷害全面作廢。
+// ── 元素相剋循環 (四系循環相剋，物理中立) ───────────────────────────
+// 🔥火 → ❄️冰 → ⚡電 → ☠️毒 → 🔥火
+// 克制 (effective):   1.40× (+40% 傷害)
+// 逆剋 (ineffective): 0.80× (-20% 傷害)
+// 同屬 (resisted):    0.75× (-25% 傷害，同屬抗性)
+// 物理 (physical):    1.00× (中立穩定無加減)
+export const ELEMENT_COUNTERS = {
+  fire:     { strong: 'frost', weak: 'toxic' },
+  frost:    { strong: 'shock', weak: 'fire' },
+  shock:    { strong: 'toxic', weak: 'frost' },
+  toxic:    { strong: 'fire',  weak: 'shock' },
+  physical: { strong: null,    weak: null },
+};
+
+export function getElementMultiplier(attackElement, targetElement) {
+  const atk = (attackElement && attackElement.id) || attackElement || 'physical';
+  const def = (targetElement && targetElement.id) || targetElement || 'physical';
+  if (atk === 'physical' || def === 'physical') {
+    return { mul: 1.0, relation: 'neutral' };
+  }
+  if (atk === def) {
+    return { mul: 0.75, relation: 'resisted' };
+  }
+  const rule = ELEMENT_COUNTERS[atk];
+  if (rule && rule.strong === def) {
+    return { mul: 1.4, relation: 'effective' };
+  }
+  if (rule && rule.weak === def) {
+    return { mul: 0.8, relation: 'ineffective' };
+  }
+  return { mul: 1.0, relation: 'neutral' };
+}
+
+// 哪一種敵人的攻擊與身軀帶哪一種屬性。沒有列到的就是純物理 —— 名單刻意覆蓋
+// （酸液、火焰、電擊、冰霜），各屬性皆有普通怪、精英與首領。
 export const ENEMY_ELEMENTS = {
   // 毒／酸：噴吐、孢子、自爆、焦油、毒氣
   boomer: 'toxic', spitter: 'toxic', spore_host: 'toxic', sporeling: 'toxic',
@@ -782,15 +842,18 @@ export const ENEMY_ELEMENTS = {
   medic: 'toxic', termagant: 'toxic', poxwalker: 'toxic', spore_mine: 'toxic',
   boss_broodlord: 'toxic', rat_evil: 'toxic', snake_evil: 'toxic',
   ink_gas_boar: 'toxic', ink_ape_mother: 'toxic', pig_evil: 'toxic',
-  // 火：砲擊、巨像重擊、龍息、狐火、爆破
+  // 火：砲擊、巨像重擊、龍息、狐火、爆破、猛獸
   mortar: 'fire', chimera: 'fire', dragon_evil: 'fire', squig_bomb: 'fire',
   makai_red_arremer: 'fire', tiger_evil: 'fire', dog_evil: 'fire',
   ink_fox: 'fire', ink_fox_guard: 'fire', ink_boar_king: 'fire',
-  // 電：相位閃現、風刃、電場型
+  brute: 'fire',
+  // 電：相位閃現、風刃、電場型、迅捷奔襲
   blinker: 'shock', warden: 'shock', rooster_evil: 'shock',
   horse_evil: 'shock', goat_evil: 'shock', ink_gale_wolf: 'shock',
-  // 冰：寒霜主題
+  runner: 'shock',
+  // 冰：寒霜主題、蝙蝠、暗鴉
   ink_shadow_crow: 'frost', ink_fox_spirit: 'frost', rabbit_evil: 'frost',
+  bat: 'frost',
 };
 
 // 依關卡主題追加的屬性覆寫：同一隻雜兵在「冰封荒原」與「淪陷商業街」不該一樣冷。

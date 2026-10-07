@@ -2019,6 +2019,24 @@ export class UIManager {
     box.innerHTML = `
       <div class="pb-section"><div class="pb-title">🔫 武器（${wm.weapons.size}/${GAME_CONFIG.MAX_WEAPON_SLOTS}）</div>${weaponRows || '<div class="pb-empty">—</div>'}</div>
       <div class="pb-section"><div class="pb-title">🧩 配件（${wm.passives.size}/${GAME_CONFIG.MAX_PASSIVE_SLOTS}）</div>${passiveRows || '<div class="pb-empty">尚未取得</div>'}</div>
+      <div class="pb-section">
+        <div class="pb-title">🌀 元素相剋與戰況</div>
+        <div class="pb-cycle-bar">
+          <span class="pbc-node node-fire">🔥 火</span> ➔
+          <span class="pbc-node node-frost">❄️ 冰</span> ➔
+          <span class="pbc-node node-shock">⚡ 電</span> ➔
+          <span class="pbc-node node-toxic">☠️ 毒</span> ➔
+          <span class="pbc-node node-fire">🔥 火</span>
+          <span class="pbc-tag">剋制 +40% · 同屬 -25% · 逆剋 -20%</span>
+        </div>
+        <div class="pb-stats pb-elem-stats">
+          <div class="pb-stat"><span>💥 剋制命中</span><strong>${game._elementCounterHits || 0} 次</strong></div>
+          <div class="pb-stat"><span>🔥 火殺 / 敵</span><strong>${game._elementKills?.fire || 0} / ${game._elementFoeKills?.fire || 0}</strong></div>
+          <div class="pb-stat"><span>❄️ 冰殺 / 敵</span><strong>${game._elementKills?.frost || 0} / ${game._elementFoeKills?.frost || 0}</strong></div>
+          <div class="pb-stat"><span>⚡ 電殺 / 敵</span><strong>${game._elementKills?.shock || 0} / ${game._elementFoeKills?.shock || 0}</strong></div>
+          <div class="pb-stat"><span>☠️ 毒殺 / 敵</span><strong>${game._elementKills?.toxic || 0} / ${game._elementFoeKills?.toxic || 0}</strong></div>
+        </div>
+      </div>
       <div class="pb-section"><div class="pb-title">📊 總數值</div><div class="pb-stats">${stats}</div></div>
       ${buffs.length ? `<div class="pb-section"><div class="pb-title">✨ 規則卡、祝福與協同</div><div class="pb-chips">${chips(buffs)}</div></div>` : ''}
       <div class="pb-section pb-meta">🚫 封印剩 ${game.banishesLeft ?? 0} 次 · ⏭️ 跳過剩 ${game.skipsLeft ?? 0} 次 · 🎲 刷新 ${game.rerollCost} 🪙</div>
@@ -2082,11 +2100,23 @@ export class UIManager {
         ? 'NEW 首次獲取'
         : '★'.repeat(opt.nextLevel || 1) + '☆'.repeat(Math.max(0, (opt.maxLevel || 1) - (opt.nextLevel || 1)));
 
+      const elemBadgeMap = {
+        fire: '🔥 燃燒',
+        frost: '❄️ 冰凍',
+        shock: '⚡ 電擊',
+        toxic: '☠️ 劇毒',
+        physical: '🩸 物理',
+      };
+      const elemBadge = opt.element
+        ? `<span class="card-elem-badge elem-${opt.element}">${elemBadgeMap[opt.element] || opt.element}</span>`
+        : '';
+
       card.innerHTML = `
         <div class="card-icon-box">${renderWeaponIconHtml(opt.targetId || opt.id, opt.icon, opt.name)}</div>
         <div class="card-info">
           <div class="card-title-row">
             <span class="card-name">${opt.name}</span>
+            ${elemBadge}
             <span class="card-tag ${opt.isEvo ? 'tag-evo' : (opt.type === 'special' ? 'tag-special' : '')}">${opt.tag}</span>
           </div>
           <div class="card-desc">${opt.description}</div>
@@ -2197,6 +2227,7 @@ export class UIManager {
             targetId: def.evoTarget,
             name: evoDef.name,
             icon: evoDef.icon,
+            element: evoDef.element || 'physical',
             description: evoDef.description,
             tag: '超武 EVO',
             isEvo: true,
@@ -2236,6 +2267,7 @@ export class UIManager {
           id: id,
           name: def.name,
           icon: def.icon,
+          element: def.element || 'physical',
           description: desc,
           tag,
           nextLevel: item.level + 1,
@@ -2257,6 +2289,7 @@ export class UIManager {
         id,
         name: def.name,
         icon: def.icon,
+        element: def.element || 'physical',
         description: `超武覺醒：傷害 +${gain}%（累積 +${total}%）。`,
         tag: `超武覺醒 ${item.level} → ${item.level + 1}`,
         nextLevel: item.level + 1,
@@ -2297,6 +2330,7 @@ export class UIManager {
             id: id,
             name: def.name,
             icon: def.icon,
+            element: def.element || 'physical',
             description: hint
               ? `${def.description}（缺件：取得並升滿即可與【${hint.weaponName}】合成【${hint.evoName}】）`
               : def.description,

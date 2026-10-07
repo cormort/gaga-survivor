@@ -679,6 +679,72 @@ body.orient-auto,
   letter-spacing: 2px;
 }
 
+/* 屬性系統：卡牌徽章 */
+.card-elem-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  vertical-align: middle;
+}
+.card-elem-badge.elem-fire {
+  background: rgba(255, 107, 0, 0.2);
+  color: #ff9e42;
+  border: 1px solid rgba(255, 107, 0, 0.5);
+}
+.card-elem-badge.elem-frost {
+  background: rgba(127, 216, 255, 0.2);
+  color: #7fd8ff;
+  border: 1px solid rgba(127, 216, 255, 0.5);
+}
+.card-elem-badge.elem-shock {
+  background: rgba(0, 229, 255, 0.2);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.5);
+}
+.card-elem-badge.elem-toxic {
+  background: rgba(125, 255, 143, 0.2);
+  color: #7dff8f;
+  border: 1px solid rgba(125, 255, 143, 0.5);
+}
+.card-elem-badge.elem-physical {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e0e0e0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* 暫停面板：元素相剋條與數據 */
+.pb-cycle-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pbc-node {
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.node-fire { background: rgba(255, 107, 0, 0.25); color: #ff9e42; }
+.node-frost { background: rgba(127, 216, 255, 0.25); color: #7fd8ff; }
+.node-shock { background: rgba(0, 229, 255, 0.25); color: #00e5ff; }
+.node-toxic { background: rgba(125, 255, 143, 0.25); color: #7dff8f; }
+.pbc-tag {
+  font-size: 11px;
+  color: #ffd166;
+  font-weight: 500;
+  margin-left: auto;
+}
+
 /* ==================== 開始 & 結算面板 ==================== */
 .start-box {
   width: 90%;

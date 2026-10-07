@@ -1,6 +1,6 @@
 // 怪物實體類別 (普通殭屍、突襲蝙蝠、生化巨漢、自爆蟲、噴吐者、衝刺獵犬、孵化胞囊、攻城巨像、Boss 暴君)
 
-import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE, ENEMY_ELEMENTS, LEVEL_ENEMY_ELEMENTS, elementOf, VIEW } from '../config.js';
+import { ENEMY_TYPES, ELITE_AFFIXES, CHARGE, ENEMY_ELEMENTS, LEVEL_ENEMY_ELEMENTS, elementOf, getElementMultiplier, ELEMENTS, VIEW } from '../config.js';
 import { getSprite, blit, FRAMES, firstSpriteKey } from '../sprites.js';
 
 // 狀態光暈烘焙：灼燒/中毒原本每隻每幀都重建一個徑向漸層，再填一個半徑 1.5 倍的
@@ -698,11 +698,18 @@ export class Enemy {
     this.bleedSource = weaponId || this.bleedSource;
   }
 
-  takeDamage(amount, knockbackDist = 0, sourceX = 0, sourceY = 0) {
+  takeDamage(amount, knockbackDist = 0, sourceX = 0, sourceY = 0, element = 'physical') {
+    // 屬性相剋運算 (🔥火 → ❄️冰 → ⚡電 → ☠️毒 → 🔥火)
+    // 攻 vs 守：克制 1.4×、逆剋 0.8×、同屬抗性 0.75×、物理中立 1.0×
+    const targetElem = this.element || 'physical';
+    const elemResult = getElementMultiplier(element, targetElem);
+    let mul = (this.damageTakenMul || 1) * elemResult.mul;
+    this.lastElementHit = element;
+    this.lastElementRelation = elemResult.relation;
+
     // 方向性防禦：防暴盾衛的「正面大盾」只看來襲方向 vs 面向。
     // 原本是一顆不分方向的 damageTakenMul: 0.55 —— README 寫的「正面」在程式裡
     // 根本不存在，從背後打也減傷 45%，於是「繞背」這個戰術完全不成立。
-    let mul = this.damageTakenMul || 1;
     const ai = this.ai || {};
     if (ai.kind === 'shield' && !this.isBoss) {
       const kdx = sourceX - this.x;
@@ -1082,5 +1089,18 @@ export class Enemy {
     ctx.drawImage(sheet.cv,
       sheet.pad, row * sheet.sh + sheet.pad, fillW, sheet.h,
       sx + sheet.pad, sy + sheet.pad, fillW, sheet.h);
+
+    // 怪物屬性標記：在小血條左側微型呈現 (🔥 / ❄️ / ⚡ / ☠️)
+    if (this.element && this.element !== 'physical') {
+      const elemDef = ELEMENTS[this.element];
+      if (elemDef && elemDef.icon) {
+        ctx.save();
+        ctx.font = '8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(elemDef.icon, sx - 6, sy + 3);
+        ctx.restore();
+      }
+    }
   }
 }

@@ -228,6 +228,11 @@ class Game {
     this.buildMenuSocket = null;   // 建造選單開在哪一個建塔點（Facilities.openBuildMenu 寫入）
     this.buildMenuKeys = null;     // 建造選單目前的 1–4 對應表（Menu.js 數字鍵讀取）
     this.lastPointer = null;
+
+    // 屬性系統戰況統計
+    this._elementCounterHits = 0;
+    this._elementKills = { fire: 0, frost: 0, shock: 0, toxic: 0, physical: 0 };
+    this._elementFoeKills = { fire: 0, frost: 0, shock: 0, toxic: 0, physical: 0 };
     this.selectedFacility = 'turret';
     this.mercenaries = [];
     this.alliedUnits = [];
@@ -1324,6 +1329,9 @@ class Game {
     this._eliteKills = 0;
     this._bossKills = 0;
     this._weaponsSeen = new Set(this.weaponManager.weapons.keys());
+    this._elementCounterHits = 0;
+    this._elementKills = { fire: 0, frost: 0, shock: 0, toxic: 0, physical: 0 };
+    this._elementFoeKills = { fire: 0, frost: 0, shock: 0, toxic: 0, physical: 0 };
 
     // 戰術口袋與武器型態重設
     this.player.pockets = [null, null, null, null];
@@ -1420,13 +1428,17 @@ class Game {
 
 
   // 對外統一的傷害入口 (角色特質、道具都走這裡，才會計入傷害統計與跳字)
-  damageEnemy(enemy, damage, knockback, sourceX, sourceY, weaponId = null) {
-    enemy.takeDamage(damage, knockback, sourceX, sourceY);
+  damageEnemy(enemy, damage, knockback, sourceX, sourceY, weaponId = null, element = null) {
+    const atkElem = element || (weaponId && WEAPONS[weaponId]?.element) || 'physical';
+    enemy.takeDamage(damage, knockback, sourceX, sourceY, atkElem);
     // 顯示與統計都要用「實際扣除」的值：裝甲/盾衛/標記會改變最終傷害，
     // 用傳入值會虛報 (打防暴盾衛時畫面數字是實際的兩倍以上)
     const applied = enemy.lastDamageTaken || damage;
     if (weaponId) this.weaponManager.recordDamage(weaponId, applied);
-    this.particles.createDamageText(enemy.x, enemy.y, applied, false);
+    if (enemy.lastElementRelation === 'effective') {
+      this._elementCounterHits = (this._elementCounterHits || 0) + 1;
+    }
+    this.particles.createDamageText(enemy.x, enemy.y, applied, false, false, enemy.lastElementRelation);
   }
 
   onBossSpawned(boss) {
@@ -2619,10 +2631,14 @@ class Game {
         // 基隆型態的追蹤印記：記在敵人身上，受傷 +25% (原本 markOnHit 只被
         // 存進投射物就沒有人讀，_markedTimer 只會被扣、永遠不會被設)
         if (p.markOnHit) enemy.applyMark(p.markDur, p.markBonus);
-        const died = enemy.takeDamage(actualDmg, p.knockback, p.x, p.y);
+        const atkElem = p.element || (p.weaponId && WEAPONS[p.weaponId]?.element) || 'physical';
+        const died = enemy.takeDamage(actualDmg, p.knockback, p.x, p.y, atkElem);
         if (died && p.mercOwner) p.mercOwner.gainKill(enemy); // 傭兵擊殺 → 全額經驗
         this.weaponManager.recordDamage(p.weaponId, actualDmg);
-        this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit);
+        if (enemy.lastElementRelation === 'effective') {
+          this._elementCounterHits = (this._elementCounterHits || 0) + 1;
+        }
+        this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
         sound.playHit(enemy.x);
 
         // 塔納托斯：每次命中傷害 +bounceDmgGrowth，第 implosionAt 次命中引發虛空引爆。
@@ -2805,6 +2821,15 @@ class Game {
       if (enemy.isDead) {
         this.kills++;
         this.addCombo();
+        // 屬性系統擊殺統計
+        const atkElem = enemy.lastElementHit || 'physical';
+        const foeElem = enemy.element || 'physical';
+        if (this._elementKills) {
+          this._elementKills[atkElem] = (this._elementKills[atkElem] || 0) + 1;
+        }
+        if (this._elementFoeKills) {
+          this._elementFoeKills[foeElem] = (this._elementFoeKills[foeElem] || 0) + 1;
+        }
         if (this.player.maxMp) this.player.mp = Math.min(this.player.maxMp, this.player.mp + MP_PER_KILL);
         // 傳奇特效：擊殺汲取生命
         if (this.player.legendaryEffects?.includes('kill_heal')) {
@@ -3532,6 +3557,9 @@ class Game {
       gold: this.gold,
       clears: isVictory ? 1 : 0,
       weaponDamage,
+      elementCounterHits: this._elementCounterHits || 0,
+      elementKills: this._elementKills || { fire: 0, frost: 0, shock: 0, toxic: 0, physical: 0 },
+      elementFoeKills: this._elementFoeKills || { fire: 0, frost: 0, shock: 0, toxic: 0, physical: 0 },
     };
   }
 
