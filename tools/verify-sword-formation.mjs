@@ -38,8 +38,11 @@ const out = await page.evaluate(async () => {
 
 
   g.characterId = 'xian_sword';
+  g.levelId = 'street';
+  g.spawner.setLevel('street');
   g.ui.startScreen.classList.add('hidden');
   g.start();
+  g.spawner.setLevel('street');
   g.triggerLevelUp = () => {};        // 升級彈窗會停掉 update
   g.player.invulnerableTimer = 1e9;
   // 等第一批怪真的生出來（要拿牠們的原型當假敵人的模板，不能自己捏一個空物件）。
@@ -64,7 +67,11 @@ const out = await page.evaluate(async () => {
   g.enemies.push(foe);
   const hits = [];
   const origTake = foe.takeDamage.bind(foe);
-  foe.takeDamage = (dmg, knock, sx, sy) => { hits.push({ dmg, t: g.gameTime, scale: enemyScale(g.gameTime, g.level, g.rules).hp }); return origTake(dmg, knock, sx, sy); };
+  foe.takeDamage = (dmg, knock, sx, sy) => {
+    const sc = enemyScale(g.gameTime, g.level, g.rules).hp || 1;
+    if (dmg / (100 * sc) >= 0.2) hits.push({ dmg, t: g.gameTime, scale: sc });
+    return origTake(dmg, knock, sx, sy);
+  };
 
   // ── 真的走技能路徑（靈力/冷卻檢查都在裡面）────────────
   g.player.mp = 999;

@@ -35,8 +35,11 @@ const out = await page.evaluate(async () => {
   // 用真實流程開局（青霜劍尊以外的角色才進得了這裡的判定）
   const boot = (charId) => {
     g.characterId = charId;
+    g.levelId = 'street';
+    g.spawner.setLevel('street');
     g.ui.startScreen.classList.add('hidden');
     g.start();
+    g.spawner.setLevel('street');
     g.triggerLevelUp = () => {};
     g.player.invulnerableTimer = 1e9;
     for (let i = 0; i < 300 && !g.enemies.length; i++) g.update(DT);

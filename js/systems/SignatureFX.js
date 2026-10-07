@@ -18,6 +18,7 @@
 // 掛在場上的天花板 1396（+690，加色混合仍為 0，塗抹倍率 +1.0）；實戰一次只有一招。
 
 import { enemyScale } from '../levels.js';
+import { drawVfxImage } from '../sprites.js';
 
 const MAX_TEXTS = 10;   // 傷害飄字只印最近的 N 隻（與劍陣同一條規矩）
 
@@ -190,6 +191,8 @@ function drawFireRites(ctx, f, camera, layer) {
       }
       continue;
     }
+    // 水墨符火大陣貼圖 (Nano Banana 重繪)
+    drawVfxImage(ctx, 'vfx_talisman_fire', x, y, r * 2.1, spin, 0.88 * fade);
     // 燒紅的地面：兩層填色（外圈暗紅、內圈亮橙）——這是「這一塊在燒」最直接的視覺
     ctx.globalAlpha = 0.13 * fade;
     ctx.fillStyle = SIG_COLOR.fire;
@@ -296,6 +299,8 @@ function drawThunder(ctx, f, x, y, layer) {
     const a = (1 - k) * 0.95;
     const bx = b.x - (f.x - x);
     const by = b.y - (f.y - y);
+    // 水墨雷柱貼圖 (Nano Banana 重繪)
+    drawVfxImage(ctx, 'vfx_ink_thunder', bx, by - 65, 140, 0, a * 0.92);
     // 電柱：三條折線 + 落地光環
     ctx.globalAlpha = a * 0.5;
     ctx.strokeStyle = SIG_COLOR.thunder;
@@ -364,6 +369,8 @@ function drawPillForge(ctx, f, x, y, layer) {
     }
     return;
   }
+  // 水墨乾坤八卦丹爐貼圖 (Nano Banana 重繪)
+  drawVfxImage(ctx, 'vfx_alchemy_forge', x, fy + 4, 95, 0, 0.95 * fade);
   // 爐身的暖光暈（填色，不用漸層物件）
   ctx.globalAlpha = 0.16 * heat * fade;
   ctx.fillStyle = SIG_COLOR.pillGold;
@@ -405,6 +412,8 @@ function drawPillForge(ctx, f, x, y, layer) {
 function drawLionHalo(ctx, f, x, y, layer) {
   const fade = Math.max(0, 1 - f.t / SIG.lion.life);
   if (layer === 'upper') {
+  // 水墨佛光金蓮輪 (Nano Banana 重繪)
+  drawVfxImage(ctx, 'vfx_zen_halo', x, y - 26, 110, f.t * 0.6, 0.9 * fade);
   // 佛光輪：12 道光芒
   ctx.globalAlpha = 0.55 * fade;
   ctx.strokeStyle = SIG_COLOR.lion;
@@ -455,6 +464,8 @@ function drawBloodBloom(ctx, f, camera, layer) {
   const x = f.x - camera.x;
   const y = f.y - camera.y;
   if (layer === 'upper') {
+    // 水墨紫電狂瀾氣旋纏身 (Nano Banana 重繪)
+    drawVfxImage(ctx, 'vfx_purple_vortex', x, y - 10, 92, f.t * 2.6, 0.8 * fade);
     // 纏身血氣：三圈繞著角色轉的血紅弧（畫在角色之上才像纏在身上）
     ctx.globalAlpha = 0.5 * fade;
     ctx.strokeStyle = SIG_COLOR.bloodDeep;
@@ -467,8 +478,10 @@ function drawBloodBloom(ctx, f, camera, layer) {
     }
     return;
   }
-  // 血霧（地面）
+  // 水墨妖異血蓮綻放 (Nano Banana 重繪)
   const bloomP = Math.min(1, f.t / SIG.blood.bloom);
+  drawVfxImage(ctx, 'vfx_blood_lotus', x, y, (SIG.blood.radius * (0.35 + 0.65 * bloomP)) * 1.9, f.t * 0.35, 0.85 * fade);
+  // 血霧（地面）
   ctx.globalAlpha = 0.3 * (1 - bloomP * 0.6) * fade;
   ctx.strokeStyle = SIG_COLOR.bloodDeep;
   ctx.lineWidth = 3;

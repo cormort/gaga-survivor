@@ -7906,3 +7906,45 @@ export function blit(ctx, sprite, frameIndex, sx, sy, useFlash = false) {
   const img = list[frameIndex % list.length];
   ctx.drawImage(img, sx - sprite.w / 2, sy - sprite.h / 2, sprite.w, sprite.h);
 }
+
+// ===== 修仙六脈水墨戰鬥特效貼圖 (assets/xian/vfx_*.png) =====
+export const XIAN_VFX_KEYS = [
+  'vfx_sword_vortex',
+  'vfx_sword_crescent',
+  'vfx_sword_ring',
+  'vfx_sword_burst',
+  'vfx_purple_vortex',
+  'vfx_talisman_fire',
+  'vfx_ink_thunder',
+  'vfx_alchemy_forge',
+  'vfx_zen_halo',
+  'vfx_blood_lotus',
+];
+
+const xianVfxCache = new Map();
+if (typeof Image !== 'undefined') {
+  for (const k of XIAN_VFX_KEYS) {
+    const img = new Image();
+    img.src = `./assets/xian/${k}.png?v=20261007`;
+    xianVfxCache.set(k, img);
+  }
+}
+
+export function getXianVFX(key) {
+  const img = xianVfxCache.get(key);
+  if (img && img.complete && img.naturalWidth > 0) return img;
+  return null;
+}
+
+export function drawVfxImage(ctx, key, x, y, size, angle = 0, alpha = 1) {
+  const img = getXianVFX(key);
+  if (!img) return false;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(x, y);
+  if (angle !== 0) ctx.rotate(angle);
+  ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  ctx.restore();
+  return true;
+}
+

@@ -14,6 +14,7 @@
 
 import { enemyScale } from '../levels.js';
 import { drawFlyingSword } from '../entities/Mercenary.js';
+import { drawVfxImage } from '../sprites.js';
 
 export const FORMATION = {
   drop: 0.45,        // 飛劍落下的時間（插進地面）
@@ -192,6 +193,20 @@ export function drawSwordFormation(ctx, camera, game) {
 
   ctx.save();
 
+  // 0) 水墨劍陣底盤與劍氣旋渦 (Nano Banana 水墨重繪)
+  if (f.phase !== 'gather') {
+    const spin = (f.t * FORMATION.spin);
+    // 陣盤外環萬劍流光
+    drawVfxImage(ctx, 'vfx_sword_ring', sx, sy, FORMATION.ringR * 2.3, spin, 0.72 * fade);
+    // 陣眼核心水墨劍氣旋渦（逆時針旋轉呼應太極意境）
+    drawVfxImage(ctx, 'vfx_sword_vortex', sx, sy, FORMATION.ringR * 1.45, -spin * 0.7, 0.55 * fade);
+  } else {
+    // 歸宗收招：八方劍陣爆破環爆散收斂
+    const k = Math.min(1, (f.gatherT || 0) / FORMATION.gather);
+    const r = FORMATION.ringR * (1 - k * 0.65);
+    drawVfxImage(ctx, 'vfx_sword_burst', sx, sy, r * 2.4, (f.gatherT || 0) * 3, fade * 0.9);
+  }
+
   // 1) 劍氣：從劍陣外緣往外甩的弧線，越外圈越淡（貼近參考圖那種一圈圈掃出去的軌跡）
   // 三層描邊 = 柔光 + 劍氣本體 + 白亮核心，看起來才像一道「甩出去的劍光」而不是一條線
   if (f.slashes.length) {
@@ -204,6 +219,12 @@ export function drawSwordFormation(ctx, camera, game) {
       const span = 0.9 * (1 - k * 0.3);
       const alpha = (1 - k) * 0.9 * fade * calm;
       const taper = 1 - k * 0.45;
+
+      // 水墨新月斬擊貼圖 (跟隨劍氣外緣角度)
+      const slashX = sx + Math.cos(a) * r;
+      const slashY = sy + Math.sin(a) * r;
+      drawVfxImage(ctx, 'vfx_sword_crescent', slashX, slashY, 86 * taper, a + Math.PI / 2 + s.dir * 0.25, alpha * 0.82);
+
       ctx.strokeStyle = FORMATION_COLOR;
       ctx.globalAlpha = alpha * 0.32;
       ctx.lineWidth = 15 * taper;

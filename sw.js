@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v100';
+const FALLBACK_VERSION = 'gaga-v101';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -131,6 +131,17 @@ const PRECACHE = [
   './assets/xian/xian_sword.png',
   './assets/xian/xian_talisman.png',
   './assets/xian/xian_zen.png',
+  // 修仙六脈水墨戰鬥特效貼圖 (assets/xian/vfx_*.png)
+  './assets/xian/vfx_alchemy_forge.png',
+  './assets/xian/vfx_blood_lotus.png',
+  './assets/xian/vfx_ink_thunder.png',
+  './assets/xian/vfx_purple_vortex.png',
+  './assets/xian/vfx_sword_burst.png',
+  './assets/xian/vfx_sword_crescent.png',
+  './assets/xian/vfx_sword_ring.png',
+  './assets/xian/vfx_sword_vortex.png',
+  './assets/xian/vfx_talisman_fire.png',
+  './assets/xian/vfx_zen_halo.png',
   // 魔界村角色與魔物貼圖 (sprites.js MAKAIMURA_SPRITES)
   './assets/makaimura/arthur.png',
   './assets/makaimura/makai_zombie.png',
