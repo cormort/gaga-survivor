@@ -63,9 +63,9 @@ export const LEVELS = {
       { until: 9999, pool: [['walker', 0.172], ['bat', 0.114], ['brute', 0.071], ['boomer', 0.101], ['runner', 0.114], ['hound', 0.043], ['spitter', 0.403], ['blinker', 0.05], ['bloater', 0.06]], interval: 0.8, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 4000, name: '狂暴推土喪屍', speed: 58, damage: 30, skin: 'boss_street' },   // 慢、重、撞一下很痛
-      { at: 300, hp: 14000, name: '變異清潔工', speed: 84, damage: 26, behaviors: ['summon'], skin: 'boss_street' },
-      { at: LEVEL_DURATION, hp: 42000, name: '巨神‧暴虐霸王龍', speed: 68, damage: 30, final: true, behaviors: ['nova', 'summon', 'barrage'], skin: 'boss_street' },
+      { at: 120, hp: 4000, name: '狂暴推土喪屍', speed: 58, damage: 30, moveStyle: 'rush', skin: 'boss_street' },   // 慢、重、撞一下很痛
+      { at: 300, hp: 14000, name: '變異清潔工', speed: 84, damage: 26, moveStyle: 'serpentine', behaviors: ['summon'], skin: 'boss_street' },
+      { at: LEVEL_DURATION, hp: 42000, name: '巨神‧暴虐霸王龍', speed: 68, damage: 30, moveStyle: 'leap', final: true, behaviors: ['nova', 'summon', 'barrage'], skin: 'boss_street' },
     ],
   },
 
@@ -123,9 +123,9 @@ export const LEVELS = {
       { until: 9999, pool: [['boomer', 0.146], ['brute', 0.106], ['walker', 0.12], ['spore_host', 0.106], ['spitter', 0.478], ['hatcher', 0.067], ['medic', 0.047], ['bloater', 0.06], ['tar_slug', 0.06]], interval: 0.593, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 5500, name: '生化軟泥聚合體', speed: 52, damage: 30, behaviors: ['summon'], skin: 'boss_lab' },  // 極慢但黏
-      { at: 300, hp: 19000, name: '外骨骼改造猩猩', speed: 96, damage: 30, behaviors: ['nova', 'barrage'], skin: 'boss_lab' },  // 快、追擊型
-      { at: LEVEL_DURATION, hp: 55000, name: '母體‧零號實驗體', speed: 64, damage: 32, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_lab' },
+      { at: 120, hp: 5500, name: '生化軟泥聚合體', speed: 52, damage: 30, moveStyle: 'serpentine', behaviors: ['summon'], skin: 'boss_lab' },  // 極慢但黏
+      { at: 300, hp: 19000, name: '外骨骼改造猩猩', speed: 96, damage: 30, moveStyle: 'leap', behaviors: ['nova', 'barrage'], skin: 'boss_lab' },  // 快、追擊型
+      { at: LEVEL_DURATION, hp: 55000, name: '母體‧零號實驗體', speed: 64, damage: 32, moveStyle: 'orbit', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_lab' },
     ],
   },
 
@@ -185,9 +185,9 @@ export const LEVELS = {
       { until: 9999, pool: [['brute', 0.116], ['bat', 0.116], ['boomer', 0.129], ['warden', 0.103], ['hound', 0.051], ['chimera', 0.045], ['spitter', 0.333], ['sniper', 0.18], ['mortar', 0.06]], interval: 0.593, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 7000, name: '冰霜機甲', speed: 46, damage: 34, behaviors: ['ground'], skin: 'boss_frost' },  // 最慢最痛的重甲
-      { at: 300, hp: 24000, name: '極地穿山甲王', speed: 104, damage: 28, behaviors: ['nova', 'barrage'], skin: 'boss_frost' },  // 最快
-      { at: LEVEL_DURATION, hp: 68000, name: '冰霜暴君‧雪帝', speed: 60, damage: 34, final: true, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_frost' },
+      { at: 120, hp: 7000, name: '冰霜機甲', speed: 46, damage: 34, moveStyle: 'rush', behaviors: ['ground'], skin: 'boss_frost' },  // 最慢最痛的重甲
+      { at: 300, hp: 24000, name: '極地穿山甲王', speed: 104, damage: 28, moveStyle: 'rush', behaviors: ['nova', 'barrage'], skin: 'boss_frost' },  // 最快
+      { at: LEVEL_DURATION, hp: 68000, name: '冰霜暴君‧雪帝', speed: 60, damage: 34, moveStyle: 'orbit', final: true, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_frost' },
     ],
   },
 
@@ -248,9 +248,9 @@ export const LEVELS = {
       { until: 9999, pool: [['brute', 0.116], ['boomer', 0.116], ['bat', 0.088], ['warden', 0.088], ['spore_host', 0.073], ['runner', 0.058], ['spitter', 0.409], ['hound', 0.043], ['hatcher', 0.043], ['blinker', 0.051], ['medic', 0.051], ['tar_slug', 0.06], ['mortar', 0.06]], interval: 0.593, batch: 5 },
     ],
     bosses: [
-      { at: 120, hp: 9000, name: '烈焰暴君', speed: 88, damage: 32, behaviors: ['nova', 'ground'], skin: 'boss_core' },
-      { at: 300, hp: 30000, name: '熔核巨獸', speed: 56, damage: 38, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_core' },  // 慢而致命
-      { at: LEVEL_DURATION, hp: 88000, name: '毀滅特工‧暗影鴨', speed: 90, damage: 38, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_core' },
+      { at: 120, hp: 9000, name: '烈焰暴君', speed: 88, damage: 32, moveStyle: 'rush', behaviors: ['nova', 'ground'], skin: 'boss_core' },
+      { at: 300, hp: 30000, name: '熔核巨獸', speed: 56, damage: 38, moveStyle: 'leap', behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_core' },  // 慢而致命
+      { at: LEVEL_DURATION, hp: 88000, name: '毀滅特工‧暗影鴨', speed: 90, damage: 38, moveStyle: 'orbit', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_core' },
     ],
   },
 
@@ -315,9 +315,9 @@ export const LEVELS = {
       { until: 9999, pool: [['hound', 0.129], ['runner', 0.116], ['brute', 0.103], ['warden', 0.077], ['spitter', 0.36], ['chimera', 0.064], ['bat', 0.064], ['sniper', 0.18], ['medic', 0.045], ['mortar', 0.06], ['tar_slug', 0.06]], interval: 0.474, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 12000, name: '裝甲列車長', speed: 70, damage: 34, behaviors: ['ground'], skin: 'boss_subway' },
-      { at: 300, hp: 36000, name: '軌道劊子手', speed: 96, damage: 30, behaviors: ['nova', 'barrage'], skin: 'boss_subway' },
-      { at: LEVEL_DURATION, hp: 105000, name: '鏽鐵暴君‧終末列車', speed: 74, damage: 36, final: true, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_subway' },
+      { at: 120, hp: 12000, name: '裝甲列車長', speed: 70, damage: 34, moveStyle: 'rush', behaviors: ['ground'], skin: 'boss_subway' },
+      { at: 300, hp: 36000, name: '軌道劊子手', speed: 96, damage: 30, moveStyle: 'blink', behaviors: ['nova', 'barrage'], skin: 'boss_subway' },
+      { at: LEVEL_DURATION, hp: 105000, name: '鏽鐵暴君‧終末列車', speed: 74, damage: 36, moveStyle: 'rush', final: true, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_subway' },
     ],
   },
 
@@ -377,9 +377,9 @@ export const LEVELS = {
       { until: 9999, pool: [['spore_host', 0.113], ['spitter', 0.499], ['hatcher', 0.091], ['brute', 0.08], ['warden', 0.057], ['chimera', 0.057], ['hound', 0.046], ['blinker', 0.04], ['sniper', 0.159], ['tar_slug', 0.06], ['bloater', 0.06]], interval: 0.474, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 15000, name: '孢子主教', speed: 62, damage: 32, behaviors: ['summon'], skin: 'boss_swamp' },
-      { at: 300, hp: 42000, name: '腐沼巨口', speed: 80, damage: 36, behaviors: ['nova', 'barrage'], skin: 'boss_swamp' },
-      { at: LEVEL_DURATION, hp: 125000, name: '疫霧之母‧腐潮', speed: 66, damage: 38, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_swamp' },
+      { at: 120, hp: 15000, name: '孢子主教', speed: 62, damage: 32, moveStyle: 'serpentine', behaviors: ['summon'], skin: 'boss_swamp' },
+      { at: 300, hp: 42000, name: '腐沼巨口', speed: 80, damage: 36, moveStyle: 'leap', behaviors: ['nova', 'barrage'], skin: 'boss_swamp' },
+      { at: LEVEL_DURATION, hp: 125000, name: '疫霧之母‧腐潮', speed: 66, damage: 38, moveStyle: 'serpentine', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_swamp' },
     ],
   },
 
@@ -440,9 +440,9 @@ export const LEVELS = {
       { until: 9999, pool: [['runner', 0.156], ['hound', 0.141], ['boomer', 0.125], ['warden', 0.094], ['chimera', 0.109], ['hatcher', 0.078], ['spitter', 0.313], ['blinker', 0.055], ['mortar', 0.06]], interval: 0.395, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 18000, name: '沙暴裝甲車', speed: 92, damage: 34, behaviors: ['barrage'], skin: 'boss_storm' },
-      { at: 300, hp: 50000, name: '沙蟲女王', speed: 74, damage: 38, behaviors: ['nova', 'summon'], skin: 'boss_storm' },
-      { at: LEVEL_DURATION, hp: 150000, name: '天譴沙皇‧烈日', speed: 84, damage: 40, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_storm' },
+      { at: 120, hp: 18000, name: '沙暴裝甲車', speed: 92, damage: 34, moveStyle: 'rush', behaviors: ['barrage'], skin: 'boss_storm' },
+      { at: 300, hp: 50000, name: '沙蟲女王', speed: 74, damage: 38, moveStyle: 'serpentine', behaviors: ['nova', 'summon'], skin: 'boss_storm' },
+      { at: LEVEL_DURATION, hp: 150000, name: '天譴沙皇‧烈日', speed: 84, damage: 40, moveStyle: 'orbit', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_storm' },
     ],
   },
 
@@ -507,9 +507,9 @@ export const LEVELS = {
       { until: 9999, pool: [['brute', 0.156], ['warden', 0.125], ['hatcher', 0.125], ['chimera', 0.125], ['boomer', 0.109], ['spitter', 0.313], ['hound', 0.062], ['medic', 0.055], ['mortar', 0.06], ['tar_slug', 0.06]], interval: 0.348, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 24000, name: '鑄造監督官', speed: 66, damage: 36, behaviors: ['ground'], skin: 'boss_foundry' },
-      { at: 300, hp: 62000, name: '鐵水巨兵', speed: 54, damage: 42, behaviors: ['nova', 'summon'], skin: 'boss_foundry' },
-      { at: LEVEL_DURATION, hp: 180000, name: '熔毀泰坦‧爐心', speed: 70, damage: 44, final: true, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_foundry' },
+      { at: 120, hp: 24000, name: '鑄造監督官', speed: 66, damage: 36, moveStyle: 'rush', behaviors: ['ground'], skin: 'boss_foundry' },
+      { at: 300, hp: 62000, name: '鐵水巨兵', speed: 54, damage: 42, moveStyle: 'leap', behaviors: ['nova', 'summon'], skin: 'boss_foundry' },
+      { at: LEVEL_DURATION, hp: 180000, name: '熔毀泰坦‧爐心', speed: 70, damage: 44, moveStyle: 'leap', final: true, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_foundry' },
     ],
   },
 
@@ -568,9 +568,9 @@ export const LEVELS = {
       { until: 9999, pool: [['brute', 0.113], ['warden', 0.101], ['chimera', 0.126], ['spore_host', 0.088], ['spitter', 0.352], ['hound', 0.063], ['hatcher', 0.05], ['sniper', 0.176], ['bloater', 0.06], ['mortar', 0.06]], interval: 0.348, batch: 4 },
     ],
     bosses: [
-      { at: 120, hp: 30000, name: '霜封守望者', speed: 58, damage: 38, behaviors: ['nova'], skin: 'boss_frostvoid' },
-      { at: 300, hp: 72000, name: '虛空冰像', speed: 92, damage: 36, behaviors: ['barrage', 'summon'], skin: 'boss_frostvoid' },
-      { at: LEVEL_DURATION, hp: 210000, name: '霜封巨像‧永凍', speed: 62, damage: 46, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_frostvoid' },
+      { at: 120, hp: 30000, name: '霜封守望者', speed: 58, damage: 38, moveStyle: 'orbit', behaviors: ['nova'], skin: 'boss_frostvoid' },
+      { at: 300, hp: 72000, name: '虛空冰像', speed: 92, damage: 36, moveStyle: 'blink', behaviors: ['barrage', 'summon'], skin: 'boss_frostvoid' },
+      { at: LEVEL_DURATION, hp: 210000, name: '霜封巨像‧永凍', speed: 62, damage: 46, moveStyle: 'leap', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex'], skin: 'boss_frostvoid' },
     ],
   },
 
@@ -627,9 +627,9 @@ export const LEVELS = {
       { until: 9999, pool: [['runner', 0.142], ['hound', 0.127], ['chimera', 0.158], ['boomer', 0.111], ['warden', 0.095], ['hatcher', 0.079], ['spitter', 0.317], ['blinker', 0.055], ['medic', 0.055], ['mortar', 0.06], ['bloater', 0.06], ['tar_slug', 0.06]], interval: 0.369, batch: 5 },
     ],
     bosses: [
-      { at: 120, hp: 36000, name: '裂道遊魂', speed: 104, damage: 38, behaviors: ['barrage'], skin: 'boss_voidroad' },
-      { at: 300, hp: 82000, name: '虛空騎士', speed: 86, damage: 42, behaviors: ['nova', 'vortex'], skin: 'boss_voidroad' },
-      { at: LEVEL_DURATION, hp: 250000, name: '裂道行者‧終焉', speed: 88, damage: 48, final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_voidroad' },
+      { at: 120, hp: 36000, name: '裂道遊魂', speed: 104, damage: 38, moveStyle: 'blink', behaviors: ['barrage'], skin: 'boss_voidroad' },
+      { at: 300, hp: 82000, name: '虛空騎士', speed: 86, damage: 42, moveStyle: 'rush', behaviors: ['nova', 'vortex'], skin: 'boss_voidroad' },
+      { at: LEVEL_DURATION, hp: 250000, name: '裂道行者‧終焉', speed: 88, damage: 48, moveStyle: 'blink', final: true, behaviors: ['summon', 'nova', 'barrage', 'vortex', 'ground'], skin: 'boss_voidroad' },
     ],
   },
 
@@ -687,9 +687,9 @@ export const LEVELS = {
       { until: 9999, pool: [['ink_wolf', 0.06], ['ink_gale_wolf', 0.1], ['ink_crow', 0.1], ['ink_shadow_crow', 0.08], ['ink_boar', 0.1], ['ink_boar_king', 0.06], ['ink_gas_boar', 0.06], ['ink_fox', 0.21], ['ink_fox_guard', 0.08], ['ink_fox_spirit', 0.05], ['ink_ape', 0.07], ['ink_ape_mother', 0.03]], interval: 0.207, batch: 5 },
     ],
     bosses: [
-      { at: 120, hp: 42000, name: '山魈妖王', speed: 100, damage: 40, behaviors: ['rockfall', 'barrage', 'summon'], skin: 'boss_inkape' },
-      { at: 300, hp: 95000, name: '九尾墨狐', speed: 96, damage: 44, behaviors: ['foxfire', 'nova', 'vortex'], skin: 'boss_inkfox' },
-      { at: LEVEL_DURATION, hp: 290000, name: '天劫雷尊‧渡劫', speed: 86, damage: 50, final: true, behaviors: ['tribulation', 'summon', 'nova', 'barrage', 'vortex'], skin: 'boss_thunder' },
+      { at: 120, hp: 42000, name: '山魈妖王', speed: 100, damage: 40, moveStyle: 'leap', behaviors: ['rockfall', 'barrage', 'summon'], skin: 'boss_inkape' },
+      { at: 300, hp: 95000, name: '九尾墨狐', speed: 96, damage: 44, moveStyle: 'serpentine', behaviors: ['foxfire', 'nova', 'vortex'], skin: 'boss_inkfox' },
+      { at: LEVEL_DURATION, hp: 290000, name: '天劫雷尊‧渡劫', speed: 86, damage: 50, moveStyle: 'blink', final: true, behaviors: ['tribulation', 'summon', 'nova', 'barrage', 'vortex'], skin: 'boss_thunder' },
     ],
   },
 
@@ -744,9 +744,9 @@ export const LEVELS = {
       { until: 9999, pool: [['makai_zombie', 0.20], ['makai_red_arremer', 0.40], ['makai_woody', 0.25], ['brute', 0.15]], interval: 0.198, batch: 5 },
     ],
     bosses: [
-      { at: 120, hp: 48000, name: '一角魔將‧獨角巨靈', speed: 85, damage: 38, behaviors: ['rockfall', 'barrage', 'charge'], skin: 'boss_unicorn' },
-      { at: 300, hp: 110000, name: '猩紅魔王‧阿雷默', speed: 105, damage: 45, behaviors: ['nova', 'summon', 'vortex'], skin: 'boss_arremer_king' },
-      { at: LEVEL_DURATION, hp: 280000, name: '雙面魔王‧阿斯塔羅特', speed: 88, damage: 52, final: true, behaviors: ['nova', 'barrage', 'summon', 'vortex'], skin: 'boss_astaroth' },
+      { at: 120, hp: 48000, name: '一角魔將‧獨角巨靈', speed: 85, damage: 38, moveStyle: 'leap', behaviors: ['rockfall', 'barrage', 'charge'], skin: 'boss_unicorn' },
+      { at: 300, hp: 110000, name: '猩紅魔王‧阿雷默', speed: 105, damage: 45, moveStyle: 'leap', behaviors: ['nova', 'summon', 'vortex'], skin: 'boss_arremer_king' },
+      { at: LEVEL_DURATION, hp: 280000, name: '雙面魔王‧阿斯塔羅特', speed: 88, damage: 52, moveStyle: 'blink', final: true, behaviors: ['nova', 'barrage', 'summon', 'vortex'], skin: 'boss_astaroth' },
     ],
   },
 

@@ -213,6 +213,74 @@ export class ParticleSystem {
     }
   }
 
+  // 劇毒自爆蟲／酸液爆裂專用特效
+  createToxicExplosion(x, y, radius = 80, colorScheme = 'toxic') {
+    const isPurple = colorScheme === 'dark' || colorScheme === 'chaos';
+    const mainColor = isPurple ? '#b5179e' : '#38b000';
+    const brightColor = isPurple ? '#f72585' : '#70e000';
+    const neonColor = isPurple ? '#7209b7' : '#ccff33';
+
+    // 1. 雙層衝擊波 (內層高速擴散、外層稍慢光暈)
+    if (this.particles.length < this.cap) {
+      this.particles.push({
+        type: 'shockwave',
+        x, y,
+        radius: 6,
+        maxRadius: radius,
+        color: brightColor,
+        life: 0.38,
+        maxLife: 0.38,
+      });
+      this.particles.push({
+        type: 'shockwave',
+        x, y,
+        radius: 4,
+        maxRadius: radius * 1.25,
+        color: mainColor,
+        life: 0.48,
+        maxLife: 0.48,
+      });
+    }
+
+    // 2. 劇毒膽汁與腐蝕酸液濺射 (32 顆散落微粒與酸液水滴)
+    const splashCount = 32;
+    for (let i = 0; i < splashCount; i++) {
+      if (this.particles.length >= this.cap) break;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 260 + 50;
+      const colorPick = Math.random();
+      const col = colorPick < 0.45 ? brightColor : (colorPick < 0.8 ? mainColor : neonColor);
+      this.particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: Math.random() * 5 + 2.5,
+        color: col,
+        life: Math.random() * 0.35 + 0.35,
+        maxLife: 0.7,
+        friction: 0.84,
+      });
+    }
+
+    // 3. 核心酸液煙團 (微向上飄散的腐蝕毒氣團)
+    for (let i = 0; i < 8; i++) {
+      if (this.particles.length >= this.cap) break;
+      const ang = Math.random() * Math.PI * 2;
+      const spd = Math.random() * 45 + 10;
+      this.particles.push({
+        x: x + Math.cos(ang) * 12,
+        y: y + Math.sin(ang) * 12,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 25, // 向上蒸騰
+        radius: Math.random() * 7 + 4,
+        color: mainColor,
+        life: 0.55,
+        maxLife: 0.55,
+        friction: 0.90,
+      });
+    }
+  }
+
   // 純衝擊波環 (角色特質用)
   createShockwave(x, y, radius, color = '#00e5ff') {
     if (this.particles.length >= this.cap) return;

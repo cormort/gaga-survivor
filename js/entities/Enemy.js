@@ -212,11 +212,24 @@ export class Enemy {
     this.isDead = false;
     this.lastDamageTaken = 0;  // 實際扣除的傷害 (供飄字/傷害榜顯示減傷後的數字)
 
-    // Boss 專屬技能冷卻
+    // Boss 專屬技能冷卻與移動風格
     if (this.isBoss) {
+      this.moveStyle = config.moveStyle || null;
       this.chargeTimer = 0;
       this.isCharging = false;
       this.chargeDir = { x: 0, y: 0 };
+      this.rushRebound = false;
+      this.blinkTimer = 0;
+      this.leapTimer = 0;
+      this.leapState = 'idle'; // 'idle' | 'windup' | 'air'
+      this.leapAirTimer = 0;
+      this.leapAirDuration = 0.55;
+      this.leapTarget = { x: 0, y: 0 };
+      this.leapStart = { x: 0, y: 0 };
+      this.leapWindupTimer = 0;
+      this.orbitState = 'orbit'; // 'orbit' | 'dive'
+      this.orbitTimer = 0;
+      this.diveDir = { x: 0, y: 0 };
       this.skillTimer = 5;       // 離下一次專屬技能的時間
       this.behaviors = [];       // 由關卡 boss 定義帶入：'summon' / 'nova'
       this._lastSkill = null;    // 上一招 (避免連放同一招)
@@ -303,7 +316,7 @@ export class Enemy {
     let moveY = 0;
 
     if (this.isBoss) {
-      this.updateBoss(dt, dx, dy, dist, cb.onBossSkill);
+      this.updateBoss(dt, dx, dy, dist, cb.onBossSkill, target, cb);
     } else if (this.ranged) {
       // 遠程怪邏輯：在射程外保持距離開火，太近則後撤；繞行方向逐隻隨機
       const desiredRange = this.ranged.range;
@@ -352,12 +365,13 @@ export class Enemy {
     }
 
     // 自爆蟲邏輯：引信會隨距離增減。
-    // 原本只增不減 —— 靠近過一次就永遠是「已武裝」的膨脹狀態，離開也不會解除。
+    // 引信檢測距離放寬至 85px，更易讓玩家察覺引爆預警並帶心跳閃爍
     if (this.explodes) {
-      if (dist < 65 && this.freezeTimer <= 0 && this.stunTimer <= 0) {
+      if (dist < 85 && this.freezeTimer <= 0 && this.stunTimer <= 0) {
         this.fuseTimer += dt;
+        if (Math.sin(this.fuseTimer * 22) > 0) this.flashTimer = 0.04;
       } else if (this.fuseTimer > 0) {
-        this.fuseTimer = Math.max(0, this.fuseTimer - dt * 0.6);
+        this.fuseTimer = Math.max(0, this.fuseTimer - dt * 0.4);
       }
       if (this.fuseTimer >= this.fuseMax) {
         this.isDead = true;
@@ -595,7 +609,19 @@ export class Enemy {
     return 0;
   }
 
-  updateBoss(dt, dx, dy, dist, onBossSkill = null) {
+  // 獲取 Boss 實際移動風格 (支援自訂 moveStyle，若無則依 skin 或名稱智能判定)
+  getEffectiveMoveStyle() {
+    if (this.moveStyle) return this.moveStyle;
+    const skin = (this.skin || '').toLowerCase();
+    const name = (this.name || '').toLowerCase();
+    if (skin.includes('inkfox') || skin.includes('swamp') || name.includes('蛇') || name.includes('狐') || name.includes('軟泥')) return 'serpentine';
+    if (skin.includes('void') || skin.includes('thunder') || skin.includes('broodlord') || name.includes('瞬') || name.includes('雷尊') || name.includes('遊魂') || name.includes('魔王')) return 'blink';
+    if (skin.includes('inkape') || skin.includes('nob') || skin.includes('carnifex') || skin.includes('arremer') || skin.includes('foundry') || name.includes('山魈') || name.includes('泰坦') || name.includes('巨神') || name.includes('猩猩') || name.includes('霸王龍')) return 'leap';
+    if (skin.includes('core') || skin.includes('frostvoid') || name.includes('鴨') || name.includes('龍') || name.includes('兔') || name.includes('守望者') || name.includes('宿主') || name.includes('沙皇')) return 'orbit';
+    return 'rush'; // 預設：二段狂暴折射衝鋒
+  }
+
+  updateBoss(dt, dx, dy, dist, onBossSkill = null, target = null, cb = {}) {
     const stage = this.bossStage();
     if (stage > this._bossStageSeen) {
       this._bossStageSeen = stage;
@@ -605,28 +631,197 @@ export class Enemy {
     if (this._enrageFlash > 0) this._enrageFlash -= dt;
 
     const rage = 1 + stage * 0.35;      // 階段 0/1/2 → 1.0 / 1.35 / 1.7
-    this.chargeTimer += dt * rage;
+    const spdFactor = this.speedFactor();
+    const style = this.getEffectiveMoveStyle();
+    const nx = dist > 0.001 ? dx / dist : 0;
+    const ny = dist > 0.001 ? dy / dist : 0;
 
-    // 每 5 秒發動一次極速衝鋒 (狂暴後更頻繁)
-    if (!this.isCharging && this.chargeTimer >= 5.0) {
-      this.isCharging = true;
-      this.chargeTimer = 0;
-      if (dist > 0) {
-        this.chargeDir = { x: dx / dist, y: dy / dist };
+    // ─────────────────────────────────────────────
+    // 依 5 大移動風格分支
+    // ─────────────────────────────────────────────
+    if (style === 'serpentine') {
+      // 1. 靈蛇游移 (S 形滑步穿插)：沿主朝向推進疊加正弦波切線側移
+      this.chargeTimer += dt * rage;
+      const isBurst = this.isCharging;
+      if (!this.isCharging && this.chargeTimer >= 4.5) {
+        this.isCharging = true;
+        this.chargeTimer = 0;
       }
-    }
-
-    if (this.isCharging) {
-      this.x += this.chargeDir.x * this.speed * this.speedFactor() * 3.2 * rage * dt;
-      this.y += this.chargeDir.y * this.speed * this.speedFactor() * 3.2 * rage * dt;
-      if (this.chargeTimer >= 1.2) {
+      if (this.isCharging && this.chargeTimer >= 1.4) {
         this.isCharging = false;
         this.chargeTimer = 0;
       }
+
+      const freq = (isBurst ? 7.2 : 4.2) * rage;
+      const sideAmp = (isBurst ? 210 : 125) * rage * spdFactor;
+      const sideOffset = Math.sin(this.animTimer * freq) * sideAmp;
+      const forwardMul = isBurst ? 2.3 : 1.0;
+      const forwardSpd = this.speed * forwardMul * rage * spdFactor;
+
+      this.x += (nx * forwardSpd - ny * sideOffset) * dt;
+      this.y += (ny * forwardSpd + nx * sideOffset) * dt;
+      this.facingX = nx;
+      this.facingY = ny;
+
+    } else if (style === 'blink') {
+      // 2. 虛空折躍 (瞬移至視野盲區/背後)：
+      this.blinkTimer = (this.blinkTimer || 0) + dt * rage;
+      const blinkInterval = Math.max(2.6, 4.0 / rage);
+
+      if (this.blinkTimer >= blinkInterval && dist > 140) {
+        this.blinkTimer = 0;
+        // 起點虛空殘影
+        cb.onBlink?.(this);
+        // 折躍至目標周圍角度 (盲區或側面 170~220px)
+        const blinkAngle = Math.random() * Math.PI * 2;
+        const blinkDist = Math.random() * 50 + 170;
+        if (target) {
+          this.x = target.x + Math.cos(blinkAngle) * blinkDist;
+          this.y = target.y + Math.sin(blinkAngle) * blinkDist;
+        } else {
+          this.x += nx * 180;
+          this.y += ny * 180;
+        }
+        // 落地虛空殘影與微衝擊
+        cb.onBlink?.(this);
+        this.flashTimer = 0.12;
+      } else {
+        // 平時優雅懸浮逼近
+        if (dist > 0.1) {
+          this.x += nx * this.speed * 0.95 * spdFactor * rage * dt;
+          this.y += ny * this.speed * 0.95 * spdFactor * rage * dt;
+          this.facingX = nx;
+          this.facingY = ny;
+        }
+      }
+
+    } else if (style === 'leap') {
+      // 3. 飛撲躍擊 (泰山壓頂蓄力跳砸)：
+      this.leapTimer = (this.leapTimer || 0) + dt * rage;
+      const leapInterval = Math.max(3.2, 5.2 / rage);
+
+      if (this.leapState === 'air') {
+        this.leapAirTimer -= dt;
+        const t = Math.max(0, 1 - (this.leapAirTimer / this.leapAirDuration));
+        // 向落點平滑過渡
+        this.x = this.leapStart.x + (this.leapTarget.x - this.leapStart.x) * t;
+        this.y = this.leapStart.y + (this.leapTarget.y - this.leapStart.y) * t;
+
+        if (this.leapAirTimer <= 0) {
+          // 砸地重擊：泰山壓頂 Nova
+          this.leapState = 'idle';
+          this.leapTimer = 0;
+          cb.onSlam?.(this, {
+            radius: Math.round(this.radius * 3.4),
+            dmg: Math.round(this.damage * 1.3),
+            color: '#ff0055'
+          });
+          this.flashTimer = 0.15;
+        }
+      } else if (this.leapState === 'windup') {
+        this.leapWindupTimer -= dt;
+        this.facingX = nx;
+        this.facingY = ny;
+        if (this.leapWindupTimer <= 0) {
+          // 起跳升空
+          this.leapState = 'air';
+          this.leapAirDuration = 0.55;
+          this.leapAirTimer = 0.55;
+          this.leapStart = { x: this.x, y: this.y };
+        }
+      } else {
+        // idle 狀態
+        if (this.leapTimer >= leapInterval && dist < 500 && dist > 110) {
+          this.leapState = 'windup';
+          this.leapWindupTimer = 0.45;
+          this.leapTarget = target ? { x: target.x, y: target.y } : { x: this.x + dx, y: this.y + dy };
+        } else if (dist > 0.1) {
+          this.x += nx * this.speed * 0.85 * spdFactor * rage * dt;
+          this.y += ny * this.speed * 0.85 * spdFactor * rage * dt;
+          this.facingX = nx;
+          this.facingY = ny;
+        }
+      }
+
+    } else if (style === 'orbit') {
+      // 4. 盤旋環伺與突襲 (維持中距離環繞，週期性高速俯衝掠過特工)：
+      this.orbitTimer = (this.orbitTimer || 0) + dt * rage;
+      const desiredRange = 210;
+
+      if (this.orbitState === 'dive') {
+        // 俯衝階段：暴衝掠過特工
+        this.x += this.diveDir.x * this.speed * 2.8 * spdFactor * rage * dt;
+        this.y += this.diveDir.y * this.speed * 2.8 * spdFactor * rage * dt;
+        if (this.orbitTimer >= 0.85) {
+          this.orbitState = 'orbit';
+          this.orbitTimer = 0;
+        }
+      } else {
+        // 盤旋階段：維持距離切向繞行
+        const orbitDir = this.orbitDir || 1;
+        let vx = 0;
+        let vy = 0;
+        if (dist > desiredRange + 40) {
+          vx = nx * 1.1 - ny * 0.7 * orbitDir;
+          vy = ny * 1.1 + nx * 0.7 * orbitDir;
+        } else if (dist < desiredRange - 40) {
+          vx = -nx * 1.0 - ny * 0.8 * orbitDir;
+          vy = -ny * 1.0 + nx * 0.8 * orbitDir;
+        } else {
+          vx = -ny * 1.25 * orbitDir;
+          vy = nx * 1.25 * orbitDir;
+        }
+        const vlen = Math.hypot(vx, vy) || 1;
+        this.x += (vx / vlen) * this.speed * 1.15 * spdFactor * rage * dt;
+        this.y += (vy / vlen) * this.speed * 1.15 * spdFactor * rage * dt;
+        this.facingX = nx;
+        this.facingY = ny;
+
+        if (this.orbitTimer >= Math.max(2.4, 3.8 / rage)) {
+          this.orbitState = 'dive';
+          this.orbitTimer = 0;
+          this.diveDir = { x: nx, y: ny };
+        }
+      }
+
     } else {
-      if (dist > 0.1) {
-        this.x += (dx / dist) * this.speed * this.speedFactor() * rage * dt;
-        this.y += (dy / dist) * this.speed * this.speedFactor() * rage * dt;
+      // 5. rush (二段折衝狂暴衝鋒)：預設衝鋒，並帶二段折射突進
+      this.chargeTimer += dt * rage;
+
+      if (!this.isCharging && this.chargeTimer >= 4.5) {
+        this.isCharging = true;
+        this.chargeTimer = 0;
+        this.rushRebound = false;
+        this.chargeDir = dist > 0 ? { x: nx, y: ny } : { x: 1, y: 0 };
+      }
+
+      if (this.isCharging) {
+        // 第一段直衝 0.7s -> 觸發二段折射 0.5s
+        if (!this.rushRebound && this.chargeTimer >= 0.7) {
+          this.rushRebound = true;
+          const ang = Math.atan2(this.chargeDir.y, this.chargeDir.x) + (Math.random() < 0.5 ? 1.57 : -1.57);
+          this.chargeDir = { x: Math.cos(ang), y: Math.sin(ang) };
+          this.flashTimer = 0.08;
+        }
+
+        const burstMul = this.rushRebound ? 2.6 : 3.3;
+        this.x += this.chargeDir.x * this.speed * spdFactor * burstMul * rage * dt;
+        this.y += this.chargeDir.y * this.speed * spdFactor * burstMul * rage * dt;
+        this.facingX = this.chargeDir.x;
+        this.facingY = this.chargeDir.y;
+
+        if (this.chargeTimer >= 1.25) {
+          this.isCharging = false;
+          this.rushRebound = false;
+          this.chargeTimer = 0;
+        }
+      } else {
+        if (dist > 0.1) {
+          this.x += nx * this.speed * spdFactor * rage * dt;
+          this.y += ny * this.speed * spdFactor * rage * dt;
+          this.facingX = nx;
+          this.facingY = ny;
+        }
       }
     }
 
@@ -635,7 +830,6 @@ export class Enemy {
       this.skillTimer -= dt;
       if (this.skillTimer <= 0 && this.behaviors && this.behaviors.length > 0) {
         this.skillTimer = (8 + Math.random() * 3) / rage;
-        // 不連續重複同一招：兩招的 Boss 原本可能連放四次同一招
         let act = this.behaviors[Math.floor(Math.random() * this.behaviors.length)];
         if (this.behaviors.length > 1 && act === this._lastSkill) {
           const other = this.behaviors.filter((b) => b !== act);
@@ -824,9 +1018,63 @@ export class Enemy {
       return;
     }
 
+    // 自爆蟲引爆倒數地面預警圈 (高反差毒綠與危險紅脈衝環)
+    if (this.explodes && this.fuseTimer > 0) {
+      const progress = Math.min(1, this.fuseTimer / this.fuseMax);
+      const warnRadius = 85;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, warnRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = Math.sin(this.animTimer * 24) > 0 ? '#ff0055' : '#70e000';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([7, 4]);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255, 0, 85, ${0.08 + progress * 0.22})`;
+      ctx.fill();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // Boss 泰山壓頂飛撲 (leap) 落點紅色大預警圈
+    if (this.isBoss && (this.leapState === 'windup' || this.leapState === 'air')) {
+      const targetScreenX = this.leapTarget.x - camera.x;
+      const targetScreenY = this.leapTarget.y - camera.y;
+      const slamRadius = Math.round(this.radius * 3.4);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(targetScreenX, targetScreenY, slamRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = Math.sin(this.animTimer * 20) > 0 ? '#ff0055' : '#ff9900';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 5]);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 0, 85, 0.16)';
+      ctx.fill();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // Boss 躍起滯空時的地面影子與高度拋物線
+    let drawOffsetY = 0;
+    let airScale = 1;
+    if (this.isBoss && this.leapState === 'air') {
+      const airProgress = Math.max(0, Math.min(1, 1 - (this.leapAirTimer / this.leapAirDuration)));
+      const airHeight = Math.sin(airProgress * Math.PI) * 95;
+      airScale = 1 + Math.sin(airProgress * Math.PI) * 0.35;
+      drawOffsetY = -airHeight;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(screenX, screenY, this.radius * 0.9, this.radius * 0.45, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fill();
+      ctx.restore();
+    }
+
     const sprite = getSprite(this.spriteKey);
     const frame = Math.floor(this.animTimer * 1.4) % FRAMES;
-    const scale = (this.spriteScale || 1) * (this.tdDrawScale || 1);
+    const scale = (this.spriteScale || 1) * (this.tdDrawScale || 1) * airScale;
+    const isFlashing = this.flashTimer > 0 || (this.explodes && this.fuseTimer > 0 && Math.sin(this.animTimer * 26) > 0);
+
     // 有方向的貼圖（守塔主題敵人，面朝右）：依實際移動方向左右翻轉
     let flip = 1;
     if (sprite.faceRight) {
@@ -838,30 +1086,29 @@ export class Enemy {
       if (this._faceLeft) flip = -1;
     }
 
-    if (scale !== 1) {
-      // 巨獸詞綴：整隻放大 (自爆膨脹與詞綴倍率疊乘)
+    if (scale !== 1 || drawOffsetY !== 0) {
       ctx.save();
-      ctx.translate(screenX, screenY);
-      const swell = this.explodes && this.fuseTimer > 0 ? 1 + this.fuseTimer * 0.3 : 1;
+      ctx.translate(screenX, screenY + drawOffsetY);
+      const swell = this.explodes && this.fuseTimer > 0 ? 1 + (this.fuseTimer / this.fuseMax) * 0.45 : 1;
       ctx.scale(scale * swell * flip, scale * swell);
-      blit(ctx, sprite, frame, 0, 0, this.flashTimer > 0);
+      blit(ctx, sprite, frame, 0, 0, isFlashing);
       ctx.restore();
     } else if (this.explodes && this.fuseTimer > 0) {
-      // 自爆倒數時整隻膨脹
-      const swell = 1 + this.fuseTimer * 0.3;
+      // 自爆倒數時整隻大幅膨脹
+      const swell = 1 + (this.fuseTimer / this.fuseMax) * 0.45;
       ctx.save();
       ctx.translate(screenX, screenY);
       ctx.scale(swell * flip, swell);
-      blit(ctx, sprite, frame, 0, 0, this.flashTimer > 0);
+      blit(ctx, sprite, frame, 0, 0, isFlashing);
       ctx.restore();
     } else if (flip < 0) {
       ctx.save();
       ctx.translate(screenX, screenY);
       ctx.scale(-1, 1);
-      blit(ctx, sprite, frame, 0, 0, this.flashTimer > 0);
+      blit(ctx, sprite, frame, 0, 0, isFlashing);
       ctx.restore();
     } else {
-      blit(ctx, sprite, frame, screenX, screenY, this.flashTimer > 0);
+      blit(ctx, sprite, frame, screenX, screenY, isFlashing);
     }
 
     // 預警前搖 (撲擊方向扇形 / 踏地範圍圈 / 射擊瞄準線)

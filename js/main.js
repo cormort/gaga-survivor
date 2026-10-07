@@ -1685,6 +1685,64 @@ class Game {
     }
   }
 
+  // 自爆蟲引爆統一處理（撞擊特工、引信期滿、或被武器射殺）
+  triggerBoomerExplosion(boomer, isKilledByWeapon = false) {
+    if (!boomer || boomer._exploded) return;
+    boomer._exploded = true;
+    boomer.isDead = true;
+
+    const explosionRadius = 85;
+    const elem = boomer.element || 'toxic';
+    // 1. 震撼視覺：劇毒衝擊波、噴射酸液濺滴與毒煙
+    if (this.particles.createToxicExplosion) {
+      this.particles.createToxicExplosion(boomer.x, boomer.y, explosionRadius, elem);
+    } else {
+      this.particles.createExplosion(boomer.x, boomer.y, explosionRadius);
+    }
+
+    // 2. 地面劇毒腐蝕印漬
+    this.addDecal(boomer.x, boomer.y, boomer.radius * 2.2, '45,170,35', 0.85);
+
+    // 3. 殘留毒池 (2.2 秒危險區域)
+    placeHazard(this, {
+      type: 'pool',
+      radius: 46,
+      dur: 2.2,
+      dmg: 7,
+      color: '#38b000',
+      source: `${boomer.name}・毒池`,
+      element: 'toxic',
+    }, boomer.x, boomer.y);
+
+    // 4. 音效與鏡頭震動
+    sound.playExplosion(boomer.x);
+    this.camera.shake = Math.max(this.camera.shake, 9);
+
+    // 5. 對玩家的傷害結算
+    const distToPlayer = Math.hypot(this.player.x - boomer.x, this.player.y - boomer.y);
+    if (distToPlayer <= explosionRadius + this.player.radius) {
+      const dmgToPlayer = isKilledByWeapon ? Math.max(8, Math.round(boomer.damage * 0.6)) : boomer.damage;
+      this.player.takeDamage(dmgToPlayer, `${boomer.name}・自爆`, elem, boomer.elementPotency || 1);
+      this.particles.createHurtText(this.player.x, this.player.y, dmgToPlayer);
+    }
+
+    // 6. 友軍連鎖傷害 (Chain Reaction Friendly Fire)
+    const friendlyFireRadius = explosionRadius * 1.15;
+    const friendlyFireDmg = 45 + (boomer.damage || 22) * 1.6;
+    for (const other of this.enemies) {
+      if (other === boomer || other.isDead) continue;
+      const d = Math.hypot(other.x - boomer.x, other.y - boomer.y);
+      if (d <= friendlyFireRadius + other.radius) {
+        other.takeDamage(friendlyFireDmg, 16, boomer.x, boomer.y, elem);
+        this.particles.createDamageText(other.x, other.y, Math.round(friendlyFireDmg), true, false, 'effective');
+        // 波及其他自爆蟲引發殉爆
+        if (other.explodes && !other._exploded) {
+          other.fuseTimer = Math.max(other.fuseTimer, other.fuseMax * 0.9);
+        }
+      }
+    }
+  }
+
   // 失敗結算的「為什麼死」：最後一擊 + 本局承受最多的來源
   deathRecap() {
     if (this.core && this.core.isDead) return '💥 基地核心被摧毀';
@@ -1960,14 +2018,7 @@ class Game {
       // 守塔關的首領也沿路線走（tdTarget）；其餘模式的首領照舊追玩家
       enemy.update(dt, tdTarget || (enemy.isBoss ? this.player : mobTarget), {
         onExplode: (boomer) => {
-          // 自爆蟲引爆
-          this.particles.createExplosion(boomer.x, boomer.y, 75);
-          sound.playExplosion();
-          const dist = Math.hypot(this.player.x - boomer.x, this.player.y - boomer.y);
-          if (dist <= 75 + this.player.radius) {
-            this.player.takeDamage(20, `${boomer.name}・自爆`, boomer.element, boomer.elementPotency);
-            this.camera.shake = 8;
-          }
+          this.triggerBoomerExplosion(boomer, false);
         },
         onBossSkill: (boss, act) => this.handleBossSkill(boss, act),
         onShoot: (shooter, projData) => this.spawnEnemyProjectile(shooter, projData),
@@ -2041,15 +2092,48 @@ class Game {
         }
       }
 
-      // 怪物撞擊特工傷害檢測
+      // 怪物撞擊特工實體層判定 (軟碰撞分離 Soft Separation & 衝刺撞散 & 傷害檢測)
       const dist = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
-      if (dist < this.player.radius + enemy.radius) {
-        // 屬性帶進 takeDamage：這一發照常吃無敵影格與減傷，但會留下持續傷害
-        // （元素衝擊 → Player.applyElement），那是唯一不受 0.5 秒無敵影格限制的壓力。
-        if (this.player.takeDamage(enemy.damage, enemy.name, enemy.element, enemy.elementPotency)) {
-          this.camera.shake = 6;
-          this.particles.createDeathParticles(this.player.x, this.player.y, '#ff0055', 6);
-          this.player.character.onHit?.(this);
+      const minDist = this.player.radius + enemy.radius;
+      if (dist < minDist) {
+        if (dist > 0.001) {
+          const overlap = minDist - dist;
+          const nx = (this.player.x - enemy.x) / dist;
+          const ny = (this.player.y - enemy.y) / dist;
+
+          if (this.player.isDashing) {
+            // 衝刺撞散：特工擁有霸體突圍狀態，如重型裝甲車強行撞開雜兵，突圍不被卡死！
+            const scatterForce = enemy.isBoss ? 0.35 : 2.2;
+            enemy.x -= nx * overlap * scatterForce;
+            enemy.y -= ny * overlap * scatterForce;
+            if (!enemy.isBoss) {
+              enemy.kbX -= nx * 120;
+              enemy.kbY -= ny * 120;
+            }
+            if (Math.random() < 0.25) {
+              this.particles.createHitSpark(enemy.x, enemy.y, '#00e5ff');
+            }
+          } else {
+            // 軟碰撞分離：阻止怪物直接穿模穿透特工身體中心
+            const enemyPushWeight = enemy.isBoss ? 0.25 : 0.82;
+            const playerPushWeight = 1 - enemyPushWeight;
+            enemy.x -= nx * overlap * enemyPushWeight;
+            enemy.y -= ny * overlap * enemyPushWeight;
+            this.player.x += nx * overlap * playerPushWeight;
+            this.player.y += ny * overlap * playerPushWeight;
+          }
+        }
+
+        // 自爆蟲碰觸特工：立即引爆（不再像普通雜兵一樣黏著啃咬）
+        if (enemy.explodes && !enemy._exploded) {
+          this.triggerBoomerExplosion(enemy, false);
+        } else {
+          // 普通怪物近戰攻擊傷害檢測
+          if (this.player.takeDamage(enemy.damage, enemy.name, enemy.element, enemy.elementPotency)) {
+            this.camera.shake = 6;
+            this.particles.createDeathParticles(this.player.x, this.player.y, '#ff0055', 6);
+            this.player.character.onHit?.(this);
+          }
         }
       }
     }
@@ -2863,9 +2947,12 @@ class Game {
         }
         this.player.character.onKill?.(enemy, this);
         this.spawner.reportDeath(enemy, this.gameTime);   // 動態難度：量雜兵存活時間
-        // 任何擊殺都分一點經驗給隨行傭兵 (跨局累積)
-        for (const m of this.mercenaries) m.gainExp((enemy.exp || 1) * MERC.shareExpMul);
-        this.particles.createDeathParticles(enemy.x, enemy.y, enemy.color, enemy.isBoss ? 28 : 8);
+        // 自爆蟲死亡殉爆：若被玩家武器擊殺且尚未引爆，原地爆裂並造成友軍連鎖傷害
+        if (enemy.explodes && !enemy._exploded) {
+          this.triggerBoomerExplosion(enemy, true);
+        } else {
+          this.particles.createDeathParticles(enemy.x, enemy.y, enemy.color, enemy.isBoss ? 28 : 8);
+        }
 
         // 地面殘跡：雜兵死亡留血漬 (Soulstone 風格視覺回饋)
         if (!enemy.isBoss && Math.random() < FX.bloodChance) {

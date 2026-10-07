@@ -77,7 +77,7 @@ export const TD_LEVELS = {
       wave(1.6, [['brute', 6, 1.1], ['spitter', 4, 1.0], ['runner', 10, 0.5]]),
       wave(1.8, [['hound', 12, 0.4], ['bat', 10, 0.4], ['brute', 5, 1.2]], null, ['swarm']),   // 蟲潮：考驗清場速度
       wave(2.0, [['walker', 16, 0.5], ['warden', 4, 1.5], ['bat', 8, 0.4]],
-        { hp: 7000, name: '峽谷掠奪者', speed: 60, damage: 30, behaviors: ['summon', 'barrage'], skin: 'boss_storm' }),
+        { hp: 7000, name: '峽谷掠奪者', speed: 60, damage: 30, moveStyle: 'rush', behaviors: ['summon', 'barrage'], skin: 'boss_storm' }),
     ],
     rules: { label: '守塔規則', desc: '怪物沿路線進攻核心；波間休息可蓋塔，提前開戰拿金幣' },
     sockets: [
@@ -132,7 +132,7 @@ export const TD_LEVELS = {
       wave(1.85, [['hound', 14, 0.4, 0], ['spitter', 6, 0.9, 1], ['blinker', 10, 0.5, 1]]),
       wave(2.0, [['warden', 5, 1.3], ['bat', 14, 0.35], ['runner', 14, 0.45]], null, ['elite']),
       wave(2.2, [['walker', 20, 0.4], ['brute', 6, 1.0], ['bat', 10, 0.4]],
-        { hp: 16000, name: '沼澤雙頭蛇', speed: 64, damage: 34, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_swamp' }),
+        { hp: 16000, name: '沼澤雙頭蛇', speed: 64, damage: 34, moveStyle: 'serpentine', behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_swamp' }),
     ],
     rules: { label: '守塔規則', desc: '兩條路線同時進攻；波間休息可蓋塔，提前開戰拿金幣' },
     sockets: [
@@ -193,7 +193,7 @@ export const TD_LEVELS = {
       wave(2.2, [['warden', 6, 1.2], ['bat', 18, 0.3], ['runner', 16, 0.4]], null, ['elite']),
       wave(2.4, [['chimera', 3, 2.5], ['mortar', 5, 1.4], ['hound', 16, 0.35]], null, ['armored']),
       wave(2.4, [['brute', 9, 0.9], ['bat', 16, 0.3], ['walker', 24, 0.35], ['chimera', 2, 3.0]],
-        { hp: 24000, name: '要塞攻城巨像', speed: 56, damage: 40, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_frostvoid' }),
+        { hp: 24000, name: '要塞攻城巨像', speed: 56, damage: 40, moveStyle: 'leap', behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_frostvoid' }),
     ],
     rules: { label: '守塔規則', desc: '三條路線輪番進攻；波間休息可蓋塔，提前開戰拿金幣' },
     sockets: [
@@ -266,17 +266,17 @@ export const TD_LEVELS = {
       wave(0.7, [['ork_boy', 4, 1.4, 0], ['hormagaunt', 10, 0.6, 1]]),            // 歐克小子是重甲
       wave(0.85, [['spore_mine', 8, 0.7], ['termagant', 6, 0.9]], null, ['aerial']),   // 孢子囊會飛（空襲）
       wave(1.0, [['hormagaunt', 12, 0.5], ['ork_boy', 4, 1.3]],
-        { hp: 4500, name: '歐克戰爭頭目', speed: 64, damage: 38, behaviors: ['summon', 'barrage', 'ground'], skin: 'boss_nob' }),
+        { hp: 4500, name: '歐克戰爭頭目', speed: 64, damage: 38, moveStyle: 'leap', behaviors: ['summon', 'barrage', 'ground'], skin: 'boss_nob' }),
       wave(1.25, [['genestealer', 8, 0.7], ['squig_bomb', 8, 0.5]]),
       wave(1.4, [['poxwalker', 10, 0.8, 0], ['ork_boy', 6, 1.1, 1]], null, ['fortified']),
       wave(1.55, [['spore_mine', 12, 0.5], ['hormagaunt', 18, 0.35]]),
       wave(1.7, [['termagant', 10, 0.7], ['genestealer', 10, 0.55], ['ork_boy', 5, 1.2]],
-        { hp: 11000, name: '蟲群基因原體', speed: 78, damage: 45, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' }),
+        { hp: 11000, name: '蟲群基因原體', speed: 78, damage: 45, moveStyle: 'blink', behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' }),
       wave(1.85, [['squig_bomb', 14, 0.35], ['poxwalker', 12, 0.6]], null, ['swarm']),
       wave(2.0, [['ork_boy', 10, 0.9], ['spore_mine', 14, 0.45]]),
       wave(2.2, [['genestealer', 16, 0.4], ['termagant', 12, 0.6], ['hormagaunt', 20, 0.3]], null, ['elite']),
       wave(2.4, [['ork_boy', 12, 0.8], ['poxwalker', 14, 0.5], ['spore_mine', 12, 0.4]], null, ['armored'],
-        { hp: 24000, name: '泰倫劊子手暴君', speed: 52, damage: 60, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_carnifex' }),
+        { hp: 24000, name: '泰倫劊子手暴君', speed: 52, damage: 60, moveStyle: 'leap', behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_carnifex' }),
     ],
     rules: { label: '卡迪亞死守令', desc: '兩條主要戰線遭受蟲群與綠皮猛烈衝擊；佈署星界軍兵營與機械製造廠構築阻絕陣線' },
     sockets: [
@@ -339,12 +339,12 @@ export const TD_LEVELS = {
       wave(1.55, [['mortar', 4, 1.5], ['warden', 4, 1.4], ['walker', 14, 0.5]]),
       wave(1.7, [['chimera', 2, 3.0, 0], ['hound', 14, 0.4, 1]], null, ['swift']),
       wave(1.85, [['bat', 12, 0.35], ['brute', 6, 1.0]],
-        { hp: 6000, name: '天啟坦克', speed: 46, damage: 50, behaviors: ['barrage', 'ground'], skin: 'boss_frost' }),
+        { hp: 6000, name: '天啟坦克', speed: 46, damage: 50, moveStyle: 'rush', behaviors: ['barrage', 'ground'], skin: 'boss_frost' }),
       wave(2.0, [['warden', 6, 1.2], ['sniper', 6, 1.0], ['runner', 16, 0.4]], null, ['elite']),
       wave(2.2, [['chimera', 3, 2.5], ['bat', 16, 0.32], ['hound', 16, 0.35]], null, ['aerial']),
       wave(2.35, [['brute', 10, 0.8], ['mortar', 6, 1.2], ['walker', 24, 0.35]]),
       wave(2.5, [['chimera', 4, 2.2], ['bat', 18, 0.3], ['warden', 6, 1.2]], null, ['fortified'],
-        { hp: 20000, name: '蘇聯天啟巨坦', speed: 42, damage: 60, behaviors: ['barrage', 'ground', 'nova'], skin: 'boss_frost' }),
+        { hp: 20000, name: '蘇聯天啟巨坦', speed: 42, damage: 60, moveStyle: 'rush', behaviors: ['barrage', 'ground', 'nova'], skin: 'boss_frost' }),
     ],
     rules: { label: '守塔規則', desc: '兩路裝甲縱隊同時推進；坦克是重甲、空艇與蝙蝠會飛' },
     sockets: [
@@ -398,13 +398,13 @@ export const TD_LEVELS = {
       wave(1.35, [['spore_mine', 10, 0.6], ['hormagaunt', 16, 0.4]], null, ['swarm']),
       wave(1.5, [['chimera', 2, 3.0, 0], ['termagant', 8, 0.8, 1]]),                    // 雷獸：重甲
       wave(1.65, [['bat', 12, 0.36], ['genestealer', 10, 0.55]], null, ['swift'],
-        { hp: 5000, name: '異蟲刀鋒宿主', speed: 56, damage: 50, behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' }),
+        { hp: 5000, name: '異蟲刀鋒宿主', speed: 56, damage: 50, moveStyle: 'orbit', behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' }),
       wave(1.8, [['sniper', 6, 1.0, 1], ['hormagaunt', 20, 0.35, 0]], null, ['elite']),
       wave(1.95, [['spore_mine', 14, 0.45], ['bat', 14, 0.35], ['genestealer', 10, 0.5]]),
       wave(2.1, [['chimera', 3, 2.5], ['termagant', 12, 0.6]], null, ['armored']),
       wave(2.3, [['hormagaunt', 28, 0.28], ['bat', 18, 0.3], ['genestealer', 12, 0.45]], null, ['swarm']),
       wave(2.2, [['chimera', 2, 2.5], ['spore_mine', 8, 0.5], ['hormagaunt', 20, 0.32]],
-        { hp: 10000, name: '原生異蟲 ‧ 雷獸之王', speed: 44, damage: 62, behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_carnifex' }),
+        { hp: 10000, name: '原生異蟲 ‧ 雷獸之王', speed: 44, damage: 62, moveStyle: 'rush', behaviors: ['summon', 'nova', 'barrage', 'ground'], skin: 'boss_carnifex' }),
     ],
     rules: { label: '守塔規則', desc: '長路與短路同時來；異龍與孢子囊會飛，記得蓋對空塔' },
     sockets: [
@@ -452,14 +452,14 @@ export const TD_LEVELS = {
       wave(1.3, [['makai_woody', 4, 1.5, 1], ['makai_zombie', 12, 0.5, 0], ['medic', 3, 1.3, 2]]),
       wave(1.45, [['brute', 4, 1.3, 0], ['brute', 4, 1.3, 2], ['makai_red_arremer', 10, 0.45, 1]], null, ['armored']),   // 憎惡：重甲（重甲縱隊）
       wave(1.6, [['spitter', 6, 0.9], ['makai_zombie', 18, 0.4]],
-        { hp: 7000, name: '恐懼魔王 ‧ 瑪爾加尼斯', speed: 54, damage: 50, behaviors: ['summon', 'nova'], skin: 'boss_arremer_king' }),
+        { hp: 7000, name: '恐懼魔王 ‧ 瑪爾加尼斯', speed: 54, damage: 50, moveStyle: 'blink', behaviors: ['summon', 'nova'], skin: 'boss_arremer_king' }),
       wave(1.75, [['makai_red_arremer', 16, 0.32], ['blinker', 12, 0.45]], null, ['swift']),
       wave(1.9, [['makai_woody', 8, 1.0], ['warden', 5, 1.3], ['makai_zombie', 20, 0.35]]),
       wave(2.05, [['brute', 8, 0.9], ['medic', 6, 1.0], ['makai_red_arremer', 14, 0.35]], null, ['elite']),
       wave(2.2, [['chimera', 2, 3.0, 1], ['makai_woody', 8, 0.9], ['hound', 18, 0.35]], null, ['fortified']),
       wave(2.4, [['makai_zombie', 30, 0.28], ['makai_red_arremer', 18, 0.3], ['brute', 8, 0.9]], null, ['swarm']),
       wave(2.5, [['makai_woody', 8, 0.9], ['chimera', 2, 2.8], ['makai_red_arremer', 14, 0.35]],
-        { hp: 14000, name: '巫妖王 ‧ 寒冰王座', speed: 50, damage: 62, behaviors: ['nova', 'barrage', 'summon', 'vortex'], skin: 'boss_astaroth' }),
+        { hp: 14000, name: '巫妖王 ‧ 寒冰王座', speed: 50, damage: 62, moveStyle: 'blink', behaviors: ['nova', 'barrage', 'summon', 'vortex'], skin: 'boss_astaroth' }),
     ],
     rules: { label: '守塔規則', desc: '三路同時進攻；石像鬼會飛、憎惡與枯木妖靈是重甲' },
     sockets: [

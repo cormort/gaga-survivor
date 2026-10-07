@@ -183,6 +183,8 @@ export class Spawner {
     boss.elementPotency = (scale && scale.elem) || 1;
     // 關卡主題外觀：一般 Boss 用該關皮膚，最終 Boss 換更大號的「最終」變體
     boss.skin = def.skin ? (def.final ? def.skin + '_final' : def.skin) : undefined;
+    // 移動模式 (5大風格：serpentine, blink, leap, orbit, rush)
+    boss.moveStyle = def.moveStyle || boss.getEffectiveMoveStyle();
     // 關卡專屬技能：charge 內建衝鋒，額外技能由 def.behaviors 帶入
     boss.behaviors = Array.isArray(def.behaviors) && def.behaviors.length > 0 ? def.behaviors.slice() : [];
     boss.skillTimer = 4 + Math.random() * 2;
