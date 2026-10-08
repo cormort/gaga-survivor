@@ -477,7 +477,7 @@ export function generateProceduralPaths(level, isPortrait = false) {
   return JSON.parse(JSON.stringify(level._defaultPaths || level.paths));
 }
 
-// ── 沿道路隨機生成固定數量的砲塔地基 ──
+// ── 沿道路隨機生成固定數量的砲塔地基（Kingdom Rush 戰略拓撲結構加權）──
 export function generateProceduralSockets(level, targetCount) {
   const paths = level.paths;
   const bounds = level.bounds;
@@ -485,65 +485,139 @@ export function generateProceduralSockets(level, targetCount) {
   const halfW = pathWidth / 2;
   const candidates = [];
 
-  // 1. 沿著每一條路徑的所有路段，在左右兩側路肩取樣候選建塔點
+  const isValidSocketPos = (sx, sy) => {
+    // 邊界安全過濾
+    if (sx < bounds.minX + 34 || sx > bounds.maxX - 34 || sy < bounds.minY + 34 || sy > bounds.maxY - 34) {
+      return false;
+    }
+    // 不得靠近核心主堡 (>= 115px)
+    if (Math.hypot(sx, sy) < 115) return false;
+    // 不得靠近任何怪物的入口巢穴 (>= 155px)
+    for (const p of paths) {
+      if (Math.hypot(sx - p[0][0], sy - p[0][1]) < 155) {
+        return false;
+      }
+    }
+    // 確保落在路外（距離所有路線中心線 >= halfW + 24px）
+    const dPath = distToAllPaths(paths, sx, sy);
+    if (dPath < halfW + 24) return false;
+    return true;
+  };
+
+  // 1. Kingdom Rush 核心精髓：內彎頂點偵測 (Inner Apex Bends)
+  // 彎道內凹處擁有最大射程扇面（270°~360°覆蓋），是王國保衛戰最關鍵的火力核心
   for (const path of paths) {
-    const entrancePt = path[0];
-    for (let i = 1; i < path.length; i++) {
-      const [x1, y1] = path[i - 1];
-      const [x2, y2] = path[i];
-      const segLen = Math.hypot(x2 - x1, y2 - y1);
-      if (segLen < 42) continue;
+    for (let i = 1; i < path.length - 1; i++) {
+      const pPrev = path[i - 1];
+      const pCurr = path[i];
+      const pNext = path[i + 1];
 
-      const nx = -(y2 - y1) / segLen;
-      const ny = (x2 - x1) / segLen;
+      const uX = pCurr[0] - pPrev[0];
+      const uY = pCurr[1] - pPrev[1];
+      const uLen = Math.hypot(uX, uY) || 1;
+      const unX = uX / uLen;
+      const unY = uY / uLen;
 
-      // 沿線段每 48px 切一個取樣點
-      const steps = Math.max(1, Math.floor(segLen / 48));
-      for (let s = 1; s <= steps; s++) {
-        const t = s / (steps + 1);
-        const px = x1 + (x2 - x1) * t;
-        const py = y1 + (y2 - y1) * t;
+      const vX = pNext[0] - pCurr[0];
+      const vY = pNext[1] - pCurr[1];
+      const vLen = Math.hypot(vX, vY) || 1;
+      const vnX = vX / vLen;
+      const vnY = vY / vLen;
 
-        // 左右兩側路肩各取一個點
-        for (const side of [-1, 1]) {
-          const offset = halfW + rand(34, 56);
-          const sx = Math.round(px + nx * side * offset);
-          const sy = Math.round(py + ny * side * offset);
+      const dot = unX * vnX + unY * vnY;
+      const cross = unX * vnY - unY * vnX;
+      if (Math.abs(cross) < 0.05) continue; // 平行直線不具備彎道特徵
 
-          // 邊界安全過濾
-          if (sx < bounds.minX + 34 || sx > bounds.maxX - 34 || sy < bounds.minY + 34 || sy > bounds.maxY - 34) {
-            continue;
+      // 內角平分方向向量 (介於 -un 與 vn 之間)
+      let inX = -unX + vnX;
+      let inY = -unY + vnY;
+      let inLen = Math.hypot(inX, inY);
+      if (inLen < 0.01) continue;
+      const dirX = inX / inLen;
+      const dirY = inY / inLen;
+
+      // 半角 theta/2: cos(theta) = dot => sin(theta/2) = sqrt((1 - dot) / 2)
+      const sinHalf = Math.sqrt(Math.max(0.1, (1 - dot) / 2));
+      const reqDist = halfW + 34;
+      const offset = Math.min(135, Math.max(reqDist + 8, reqDist / sinHalf));
+
+      const sx = Math.round(pCurr[0] + dirX * offset);
+      const sy = Math.round(pCurr[1] + dirY * offset);
+
+      if (isValidSocketPos(sx, sy)) {
+        // 戰略權重評分：轉折越急（dot 越小），射程覆蓋扇面越大，權重越高
+        const score = 135 + (1 - dot) * 35;
+        candidates.push({ x: sx, y: sy, score, type: 'inner_apex' });
+      }
+
+      // 若內凹腹地寬闊，在內角頂點兩翼也延伸次級戰略點
+      if (dot < 0.3) {
+        for (const wingOffset of [-42, 42]) {
+          const wx = Math.round(sx + -dirY * wingOffset);
+          const wy = Math.round(sy + dirX * wingOffset);
+          if (isValidSocketPos(wx, wy)) {
+            candidates.push({ x: wx, y: wy, score: 105, type: 'inner_flank' });
           }
-          // 不得靠近核心主堡
-          if (Math.hypot(sx, sy) < 115) continue;
-          // 不得靠近任何怪物的入口巢穴
-          let closeToEntrance = false;
-          for (const p of paths) {
-            if (Math.hypot(sx - p[0][0], sy - p[0][1]) < 155) {
-              closeToEntrance = true;
-              break;
-            }
-          }
-          if (closeToEntrance) continue;
-          // 確保落在路外（距離所有路線中心線 >= halfW + 25px）
-          const dPath = distToAllPaths(paths, sx, sy);
-          if (dPath < halfW + 25) continue;
-
-          candidates.push({ x: sx, y: sy });
         }
       }
     }
   }
 
-  // 2. 將候選點完全隨機洗牌
-  for (let i = candidates.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  // 2. 基地前線守望咽喉點 (Base Chokepoints / Gatekeepers)
+  // 核心門前是防線的最後阻截點，兩側對稱或交錯守衛
+  for (const path of paths) {
+    const lastSeg = [path[path.length - 2], path[path.length - 1]];
+    const dx = lastSeg[1][0] - lastSeg[0][0];
+    const dy = lastSeg[1][1] - lastSeg[0][1];
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    for (const distFromCore of [135, 185]) {
+      const px = - (dx / len) * distFromCore;
+      const py = - (dy / len) * distFromCore;
+      for (const side of [-1, 1]) {
+        const offset = halfW + 36;
+        const sx = Math.round(px + nx * side * offset);
+        const sy = Math.round(py + ny * side * offset);
+        if (isValidSocketPos(sx, sy)) {
+          candidates.push({ x: sx, y: sy, score: 98, type: 'base_guard' });
+        }
+      }
+    }
   }
 
-  // 3. 泊松盤（Poisson-disc）距離篩選：從寬到窄逐級放寬，直到填滿目標數量。
-  //    「每張地圖建塔點總數不變」是這套系統的硬性承諾，所以最後一定要達標，
-  //    最後幾級只剩「不要把兩座地基疊在同一格」的作用。
+  // 3. 沿路肩密集常規取樣 (步長 46px)，形成完整的備選火力網
+  for (const path of paths) {
+    for (let i = 1; i < path.length; i++) {
+      const [x1, y1] = path[i - 1];
+      const [x2, y2] = path[i];
+      const segLen = Math.hypot(x2 - x1, y2 - y1);
+      if (segLen < 40) continue;
+
+      const nx = -(y2 - y1) / segLen;
+      const ny = (x2 - x1) / segLen;
+      const steps = Math.max(1, Math.floor(segLen / 46));
+      for (let s = 1; s <= steps; s++) {
+        const t = s / (steps + 1);
+        const px = x1 + (x2 - x1) * t;
+        const py = y1 + (y2 - y1) * t;
+
+        for (const side of [-1, 1]) {
+          const offset = halfW + rand(35, 46);
+          const sx = Math.round(px + nx * side * offset);
+          const sy = Math.round(py + ny * side * offset);
+          if (isValidSocketPos(sx, sy)) {
+            candidates.push({ x: sx, y: sy, score: 35 + Math.random() * 12, type: 'flank' });
+          }
+        }
+      }
+    }
+  }
+
+  // 4. 依戰略評分排序 (高戰略價值優先，附帶少量隨機抖動維持局局驚喜)
+  candidates.sort((a, b) => (b.score + (Math.random() * 8 - 4)) - (a.score + (Math.random() * 8 - 4)));
+
+  // 5. 泊松盤（Poisson-disc）分級距離篩選：從寬到窄逐級放寬，精確填滿 targetCount
   function filterWithMinDist(dist) {
     const selected = [];
     for (const cand of candidates) {
@@ -562,7 +636,7 @@ export function generateProceduralSockets(level, targetCount) {
     selected = filterWithMinDist(POISSON_TIERS[ti]);
   }
 
-  // 4. 洗牌分配戰術地基加成
+  // 6. 洗牌分配戰術地基加成
   const bonusPool = [...(level._bonusPool || Object.keys(SOCKET_BONUSES))];
   for (let i = bonusPool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));

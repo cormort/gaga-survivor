@@ -15,6 +15,7 @@ import {
   setWorldBounded,
   VIEW,
   TD_CHAR_SCALE,
+  PASSIVES,
 } from './config.js';
 import { Player, MP_PER_KILL } from './entities/Player.js';
 import { updateSkills } from './systems/Skills.js';
@@ -3106,14 +3107,16 @@ class Game {
       }
     } else if (enemy.exp >= 3) {
       kind = 'EXP_PURPLE';
-    } else if (rand < 0.015) {
+    } else if (rand < 0.008) {
+      kind = 'UNBAN_TICKET'; // 0.8% 解除封鎖券
+    } else if (rand < 0.008 + 0.015) {
       kind = 'MAGNET'; // 1.5% 磁鐵
-    } else if (rand < 0.015 + BOMB_TUNING.dropChance) {
+    } else if (rand < 0.008 + 0.015 + BOMB_TUNING.dropChance) {
       // 全場重創炸彈：掉落率由 BOMB_TUNING 控制（原 1.5%，現 1.0%）
       kind = 'BOMB';
-    } else if (rand < 0.05) {
+    } else if (rand < 0.058) {
       kind = 'ROAST_CHICKEN'; // 2% 烤雞回血
-    } else if (rand < 0.12) {
+    } else if (rand < 0.128) {
       kind = 'GOLD_COIN'; // 7% 金幣
     } else if (rand < 0.35) {
       kind = 'EXP_BLUE'; // 藍色水晶
@@ -3121,6 +3124,14 @@ class Game {
 
     // 精英怪掉得更好：保底紫水晶，22% 機率掉幸運補給箱，35% 機率掉落戰術消費道具 (惡魔城風格)，另有機率改噴金幣
     if (enemy.isElite && !enemy.isBoss) {
+      if (enemy.affixKey === 'sealer') {
+        // 封印精英：必掉解除封鎖券！破除詛咒的戰略獎勵
+        this.dropItems.push(new DropItem(enemy.x - 18, enemy.y, 'UNBAN_TICKET'));
+      } else if (Math.random() < 0.12) {
+        // 其他精英怪：12% 機率掉落解除封鎖券
+        this.dropItems.push(new DropItem(enemy.x - 18, enemy.y, 'UNBAN_TICKET'));
+      }
+
       if (Math.random() < 0.22) {
         this.dropItems.push(new DropItem(enemy.x + 18, enemy.y, 'CHEST'));
       } else if (Math.random() < 0.35) {
@@ -3356,6 +3367,47 @@ class Game {
       } else {
         this.activateConsumable(item.subType);
         this.ui.say(`口袋已滿，拾獲並立即使用【${cDef.name}】！`, cDef.color, 2.0);
+      }
+    } else if (item.type === 'unban_ticket' || item.kind === 'UNBAN_TICKET') {
+      sound.playPowerup();
+      this.particles.createShockwave(this.player.x, this.player.y, 110, '#ff2a85');
+      this.banishesLeft = (this.banishesLeft || 0) + 1;
+
+      // 1. 解除戰場上被「封印精英」鎖住的武器
+      let unsealedCount = 0;
+      if (this.weaponManager && this.weaponManager.weapons) {
+        for (const [, wItem] of this.weaponManager.weapons.entries()) {
+          if (wItem.sealedBy) {
+            if (wItem.sealedBy.sealedWeapon) wItem.sealedBy.sealedWeapon = null;
+            wItem.sealedBy = null;
+            unsealedCount++;
+          }
+        }
+        if (unsealedCount > 0) {
+          this.ui.updateSkillSlots(this.weaponManager);
+          this.particles.createDamageText(this.player.x, this.player.y - 45, `🔓 武器解鎖 x${unsealedCount}`, false);
+        }
+      }
+
+      // 2. 解除卡池中被封印的項目 (技能/配件)
+      let unbannedName = null;
+      if (this.banished && this.banished.size > 0) {
+        const arr = Array.from(this.banished);
+        const unbannedId = arr.pop();
+        this.banished.delete(unbannedId);
+        unbannedName = WEAPONS[unbannedId]?.name || PASSIVES[unbannedId]?.name || unbannedId;
+      }
+
+      this.particles.createDamageText(this.player.x, this.player.y - 20, `🎟️ 封印券 +1 (剩 ${this.banishesLeft} 次)`, false);
+
+      if (unbannedName && unsealedCount > 0) {
+        this.ui.say(`🎟️ 戰略解鎖！【${unbannedName}】重返卡池，戰場封印解除（封印剩 ${this.banishesLeft} 次）`, '#ff2a85', 3.0);
+      } else if (unbannedName) {
+        this.ui.say(`🎟️ 封鎖解除！【${unbannedName}】重返卡池（封印剩 ${this.banishesLeft} 次）`, '#ff2a85', 2.8);
+      } else if (unsealedCount > 0) {
+        this.ui.say(`🎟️ 獲得解除封鎖券！戰場封印粉碎，封印次數 +1（剩 ${this.banishesLeft} 次）`, '#ff2a85', 2.8);
+      } else {
+        this.ui.say(`🎟️ 獲得解除封鎖券！封印次數 +1（目前剩 ${this.banishesLeft} 次）`, '#ff2a85', 2.2);
       }
     }
   }

@@ -307,6 +307,8 @@ export function sceneryRespawnDist() {
 export function dropCrateLoot(game, x, y, kind = 'crate') {
   // 額外機率掉一顆珠寶（不佔下面的掉落表）
   if (Math.random() < JEWEL_DROP.crate) game.dropItems.push(new DropItem(x + 14, y - 10, 'JEWEL', rollJewel()));
+  // 8% 機率額外開出戰略解除封鎖券（不佔下方常規掉落）
+  if (Math.random() < 0.08) game.dropItems.push(new DropItem(x - 12, y - 8, 'UNBAN_TICKET'));
   const r = Math.random();
   // 55% 掉落惡魔城式戰術消費道具、25% 金幣、10% 烤雞回血、10% 紫色經驗
   if (r < 0.55) {

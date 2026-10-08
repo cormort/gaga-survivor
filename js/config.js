@@ -1513,6 +1513,7 @@ export const DROP_TYPES = {
   GEAR: { type: 'gear', icon: '🎁', radius: 11 },      // 裝備掉落 (顏色由稀有度覆寫)
   JEWEL: { type: 'jewel', icon: '💎', radius: 10 },    // 珠寶 (圖示與顏色由 jewels.js 覆寫；陣亡也保留)
   CHEST: { type: 'chest', icon: '🧰', radius: 14, color: '#ffb703' }, // 幸運補給箱 (Boss/精英掉落)
+  UNBAN_TICKET: { type: 'unban_ticket', icon: '🎟️', color: '#ff2a85', radius: 11, label: '解除封鎖券' }, // 戰略解除封鎖券
 
   // 惡魔城風格消費道具 (可拾取至口袋手動使用或直接觸發)
   POTION:        { type: 'consumable', subType: 'potion',        icon: '🧪', color: '#00f59b', radius: 11 },

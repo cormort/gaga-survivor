@@ -230,7 +230,44 @@ export class DropItem {
       ctx.font = `${this.radius * 1.8}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(this.icon, 0, 0);
+    } else if (this.type === 'unban_ticket' || this.kind === 'UNBAN_TICKET') {
+      // 解除封鎖券：紫粉金邊流光發光光暈 + 旋轉八角星芒環繞
+      const g = ctx.createRadialGradient(0, 0, 2, 0, 0, this.radius * 2.8);
+      g.addColorStop(0, '#ff2a85');
+      g.addColorStop(0.55, 'rgba(255, 42, 133, 0.45)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.7 + Math.sin(this.animTime * 3) * 0.2;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 2.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 旋轉八角星芒裝飾圈
+      ctx.save();
+      ctx.rotate(this.animTime * 0.9);
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      const spikes = 8;
+      const outerR = this.radius * 1.55;
+      const innerR = this.radius * 1.15;
+      for (let i = 0; i < spikes * 2; i++) {
+        const r = (i % 2 === 0) ? outerR : innerR;
+        const angle = (i * Math.PI) / spikes;
+        const sx = Math.cos(angle) * r;
+        const sy = Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.globalAlpha = 1;
+      ctx.font = `${this.radius * 2.0}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.icon || '🎟️', 0, 0);
     } else {
       // 道具 (磁鐵、炸彈、烤雞、金幣、電池、油桶)
       let itemImg = null;
