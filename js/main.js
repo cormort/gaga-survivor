@@ -56,6 +56,7 @@ import {
   mergeRules,
   getDailyChallenge,
   DIFFICULTIES,
+  MECH_INFO,
 } from './levels.js';
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
@@ -1167,6 +1168,8 @@ class Game {
     // this.game 永遠是 null，於是 `this.game?.chainShock(...)` 靜默不執行 ——
     // 宙斯型態的連鎖電弧從來沒有生效過。
     this.weaponManager.game = this;
+    // 升級卡「新武器」只從已解鎖的武器抽（通關關卡解鎖）；每日挑戰大家條件一致，開放全部
+    this.weaponManager.weaponPool = this.isDaily ? null : save.unlockedWeapons();
     this.applyMetaTalents();
     this.player.modeDmgMul = this.mode.weaponMul;
     this.weaponManager.applyPassives();
@@ -3749,6 +3752,7 @@ class Game {
           ? (save.data.daily && save.data.daily.date === this.dailyConfig?.date ? save.data.daily.bestTime || 0 : 0)
           : (save.bestOf(this.level.id, this.modeId)?.time || 0),
         unlockedName: result.unlockedNew ? LEVELS[this.level.next].name : null,
+        unlockedWeapon: result.unlockedWeapon ? WEAPONS[result.unlockedWeapon] : null,
         achievements: newAchievements,
         blessings: this.blessings,
         synergies: this.activeSynergies,
@@ -4146,15 +4150,52 @@ class Game {
       ctx.stroke();
     }
 
-    // 地形區域 (毒池／熔岩／流沙等)：用各自的顏色標出範圍，走位前先看得到危險區
+    // 地形與特殊事件：每一種各有自己的圖示，並列入圖例（legend: icon → 名稱）
+    const legend = new Map();
+    const mechs = (this.level && this.level.mechs) || [];
+    const iconFont = `${size < 120 ? 9 : 11}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // pin=true 的重要事件跑出範圍時貼在小地圖邊緣，當方位指示
+    const mark = (wx, wy, icon, name, pin = false) => {
+      let x = toX(wx);
+      let y = toY(wy);
+      const outside = x < ox + 6 || x > ox + size - 6 || y < oy + 6 || y > oy + size - 6;
+      if (outside && !pin) return;
+      x = Math.max(ox + 6, Math.min(ox + size - 6, x));
+      y = Math.max(oy + 6, Math.min(oy + size - 6, y));
+      ctx.font = iconFont;
+      ctx.fillText(icon, x, y);
+      legend.set(icon, name);
+    };
+
+    // 縮圈結界（深淵）：安全圈邊界
+    if (this._shrinkCircle) {
+      const scMech = mechs.find((m) => m.type === 'shrinkCircle');
+      ctx.strokeStyle = scMech ? scMech.color : '#b388ff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(toX(0), toY(0), this._shrinkCircle.radius * k, 0, Math.PI * 2);
+      ctx.stroke();
+      legend.set(MECH_INFO.shrinkCircle.icon, MECH_INFO.shrinkCircle.name);
+    }
+    // 冰面是整張地圖的特性，沒有位置可標，只列進圖例
+    if (mechs.some((m) => m.type === 'ice')) legend.set(MECH_INFO.ice.icon, MECH_INFO.ice.name);
+
+    // 地面區域 (毒池／熔岩／流沙等)：用各自的顏色標出範圍，走位前先看得到危險區；
+    // 認得的地形再在中心放一個圖示（MECH_INFO），並逐項收進圖例
     for (const hz of this.hazards) {
+      const hx = toX(hz.x);
+      const hy = toY(hz.y);
       ctx.fillStyle = hz.color || '#ffffff';
       ctx.globalAlpha = 0.28;
       ctx.beginPath();
-      ctx.arc(toX(hz.x), toY(hz.y), Math.max(2, hz.r * k), 0, Math.PI * 2);
+      ctx.arc(hx, hy, Math.max(2, hz.r * k), 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
+      const info = MECH_INFO[hz.kind];
+      if (info) mark(hz.x, hz.y, info.icon, info.name);
     }
-    ctx.globalAlpha = 1;
 
     // 地圖邊界 (走近時才會出現在小地圖上，提示別撞牆)；無限地圖沒有邊界
     if (isWorldBounded()) {
@@ -4175,12 +4216,34 @@ class Game {
       ctx.fillRect(toX(t.x) - 2, toY(t.y) - 2, 4, 4);
     }
 
-    // 稀有掉落物 (經驗水晶太多，標了會糊成一片)
+    // 稀有掉落物 (經驗水晶太多，標了會糊成一片)；空投與寶箱另外用圖示標
     ctx.fillStyle = '#ffb703';
     for (const d of this.dropItems) {
       if (d.type === 'exp') continue;
+      if (d.type === 'supply') { mark(d.x, d.y, MECH_INFO.supply.icon, MECH_INFO.supply.name); continue; }
+      if (d.type === 'chest') {
+        if (d.icon === '👑') mark(d.x, d.y, '👑', '首領寶箱', true);
+        else mark(d.x, d.y, '🧰', '幸運物資箱');
+        continue;
+      }
       ctx.fillRect(toX(d.x) - 1.5, toY(d.y) - 1.5, 3, 3);
     }
+
+    // 可引爆物件
+    ctx.fillStyle = '#ff7b00';
+    let anyProp = false;
+    for (const pr of this.explodableProps || []) {
+      const prx = toX(pr.x);
+      const pry = toY(pr.y);
+      if (prx < ox || prx > ox + size || pry < oy || pry > oy + size) continue;
+      ctx.fillRect(prx - 1.5, pry - 1.5, 3, 3);
+      anyProp = true;
+    }
+    if (anyProp) legend.set('🛢️', '可引爆物');
+
+    // 局內事件：撤離井、流浪商人（出界時貼邊指示方位）
+    if (this.extractionWell && this.extractionWell.active) mark(this.extractionWell.x, this.extractionWell.y, '🚁', '撤離井', true);
+    if (this.merchant) mark(this.merchant.x, this.merchant.y, '🏪', '流浪商人', true);
 
     // 基地核心：不論多大場面都要一眼找到自己家在畫面哪個方位
     if (this.core) {
@@ -4199,12 +4262,25 @@ class Game {
       ctx.stroke();
     }
 
-    // 敵人
+    // 敵人（精英與寶藏哥布林另外標）
     ctx.fillStyle = 'rgba(255, 90, 90, 0.9)';
     for (const e of this.enemies) {
-      if (e.isDead || e.isBoss) continue;
-      if (e.isElite) { ctx.fillStyle = e.eliteColor || '#ffb703'; ctx.fillRect(toX(e.x) - 2.5, toY(e.y) - 2.5, 5, 5); ctx.fillStyle = 'rgba(255, 90, 90, 0.9)'; continue; }
+      if (e.isDead || e.isBoss || e.isElite || e._isGoblin) continue;
       ctx.fillRect(toX(e.x) - 1.5, toY(e.y) - 1.5, 3, 3);
+    }
+    ctx.fillStyle = '#c77dff';
+    for (const e of this.enemies) {
+      if (e.isDead || e.isBoss || !e.isElite) continue;
+      const ex = toX(e.x);
+      const ey = toY(e.y);
+      if (ex < ox || ex > ox + size || ey < oy || ey > oy + size) continue;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      legend.set('🟣', '精英怪');
+    }
+    for (const e of this.enemies) {
+      if (!e.isDead && e._isGoblin) mark(e.x, e.y, '💰', '寶藏哥布林', true);
     }
 
     // Boss：範圍外時貼在小地圖邊緣當方位指示
@@ -4240,6 +4316,31 @@ class Game {
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    ctx.restore();
+    this._drawMinimapLegend(legend, ox, oy, size);
+  }
+
+  // 小地圖圖例：目前小地圖上出現的地形／事件逐項列在小地圖左側（由下往上）
+  _drawMinimapLegend(legend, ox, oy, size) {
+    if (!legend.size) return;
+    const ctx = this.ctx;
+    const small = size < 120;
+    const lh = small ? 13 : 15;
+    const entries = [...legend].slice(0, Math.floor(size / lh));
+    ctx.save();
+    ctx.font = `${small ? 9 : 11}px sans-serif`;
+    const w = Math.max(...entries.map(([icon, name]) => ctx.measureText(`${icon} ${name}`).width)) + 10;
+    const h = entries.length * lh + 6;
+    const lx = ox - w - 6;
+    const ly = oy + size - h;
+    ctx.fillStyle = 'rgba(6, 10, 18, 0.62)';
+    ctx.beginPath();
+    ctx.roundRect(lx, ly, w, h, 6);
+    ctx.fill();
+    ctx.fillStyle = '#e6f1ff';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    entries.forEach(([icon, name], i) => ctx.fillText(`${icon} ${name}`, lx + 5, ly + 3 + lh * (i + 0.5)));
     ctx.restore();
   }
 

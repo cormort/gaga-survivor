@@ -38,6 +38,8 @@ import {
   affixName,
 } from '../items.js';
 import { JEWELS, JEWEL_ORDER, jewelValue } from '../jewels.js';
+// 地形機制的圖示／名稱（選關卡片逐項標籤用）。levels.js 是純資料檔，不會循環。
+import { MECH_INFO } from '../levels.js';
 import { renderWeaponIconHtml } from '../weapons/WeaponSprites.js';
 import { questText } from '../quests.js';
 import { socketBonusOf } from '../tdsockets.js';
@@ -1561,6 +1563,7 @@ export class UIManager {
   // 開始畫面的關卡選擇 (未解鎖的關卡不能點)
   buildLevelSelect(levels, order, save, onPick, currentId) {
     this.levelSelect.innerHTML = '';
+    const weaponsOwned = save.unlockedWeapons();
 
     order.forEach((id) => {
       const lv = levels[id];
@@ -1573,11 +1576,24 @@ export class UIManager {
       const bestLine = best
         ? `最佳 ${String(Math.floor(best.time / 60)).padStart(2, '0')}:${String(Math.floor(best.time % 60)).padStart(2, '0')}${best.cleared ? ' ✔' : ''}`
         : '尚未挑戰';
+      // 地形機制逐項列出（每種一個標籤），不再只寫在說明文字裡
+      const mechChips = unlocked && lv.mechs?.length
+        ? `<span class="level-mechs">${lv.mechs.filter((m) => MECH_INFO[m.type])
+          .map((m) => `<span class="level-mech">${MECH_INFO[m.type].icon} ${MECH_INFO[m.type].name}</span>`).join('')}</span>`
+        : '';
+      // 過關獎勵武器：取得前是「🎁 過關解鎖」，取得後打勾
+      const rw = lv.rewardWeapon && WEAPONS[lv.rewardWeapon];
+      const rewardLine = rw
+        ? `<span class="level-reward${weaponsOwned.has(lv.rewardWeapon) ? ' owned' : ''}">`
+          + `${weaponsOwned.has(lv.rewardWeapon) ? '✔ 已取得' : '🎁 過關解鎖'}：${rw.icon} ${rw.name}</span>`
+        : '';
       card.innerHTML = `
         <span class="level-icon">${unlocked ? lv.icon : '🔒'}</span>
         <span class="level-name">${lv.name}</span>
         <span class="level-sub">${lv.sub} ‧ 難度 ${'★'.repeat(lv.difficulty)}</span>
         ${unlocked && lv.rules?.label ? `<span class="level-rule" title="${lv.rules.desc}">⚔️ ${lv.rules.label}</span>` : ''}
+        ${mechChips}
+        ${rewardLine}
         <span class="level-best">${unlocked ? bestLine : '通關前一關即可解鎖'}</span>
       `;
       card.addEventListener('click', () => {
@@ -2323,7 +2339,9 @@ export class UIManager {
         // skipsAsNewCard：已經被超武吃掉的材料不能再給 —— 否則同一箱裡會同時出現
         // 「進化」與「再抽到剛吃掉的基礎武器」，玩家等於白丟一張卡又白佔一格
         // （實測約 1/6 的首領箱會發生，verify-chest 的間歇紅燈就是它）。
-        if (!def.isEvo && !weaponManager.weapons.has(id) && !weaponManager.skipsAsNewCard(id)) {
+        // weaponPool：本局可抽的武器（未通關解鎖的不進卡池）；null = 全開放（每日挑戰）。
+        if (!def.isEvo && !weaponManager.weapons.has(id) && !weaponManager.skipsAsNewCard(id)
+          && (!weaponManager.weaponPool || weaponManager.weaponPool.has(id))) {
           const hint = recipeHints.get(id);
           candidates.push({
             type: 'weapon_new',
@@ -2481,8 +2499,11 @@ export class UIManager {
     }
 
     const unlockRow = document.getElementById('unlock-notice');
-    if (stats.unlockedName) {
-      unlockRow.textContent = `🎉 解鎖新關卡：${stats.unlockedName}`;
+    const unlockLines = [];
+    if (stats.unlockedName) unlockLines.push(`🎉 解鎖新關卡：${stats.unlockedName}`);
+    if (stats.unlockedWeapon) unlockLines.push(`🔓 解鎖新武器：${stats.unlockedWeapon.icon} ${stats.unlockedWeapon.name}（之後的升級卡會出現）`);
+    if (unlockLines.length) {
+      unlockRow.innerHTML = unlockLines.join('<br>');   // 關卡與武器名稱都是靜態資料
       unlockRow.classList.remove('hidden');
     } else {
       unlockRow.classList.add('hidden');

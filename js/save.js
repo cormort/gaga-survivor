@@ -6,7 +6,7 @@ import { SLOT_ORDER, salvageValue, salvageGold, reforgeCost, rerollAffixes, FUSI
 // 倉庫基礎容量也住在黑市（擴建成本要從它算第幾次擴建），這裡再匯出給既有的讀者
 import { MAX_BOOSTER_STACK, STASH_CAP } from './shop.js';
 // 舊存檔的解鎖鏈修補需要關卡表（levels.js 是純資料、不 import 任何模組，不會循環）
-import { LEVELS, DIFFICULTIES } from './levels.js';
+import { LEVELS, STARTER_WEAPONS, DIFFICULTIES } from './levels.js';
 // 各模式的關卡階梯住在模式表裡（modes.js 同樣只 import 純資料檔，不會循環）：
 // 生存者 13 關（無盡沒有通關，不算）、守塔自己的 7 張圖
 import { MODES } from './modes.js';
@@ -665,7 +665,20 @@ export const save = {
     return rec;
   },
 
-  // 單局結算：回傳這場拿到多少 DNA 與金幣、是否破紀錄、是否解鎖新關卡
+  // 已解鎖的武器（升級卡「新武器」的卡池）：起始兩把 + 任一模式通關過的關卡的 rewardWeapon。
+  // 由通關紀錄推導而不另存，舊存檔已通關的關卡自動補發，不需要存檔遷移。
+  unlockedWeapons() {
+    const set = new Set(STARTER_WEAPONS);
+    for (const m of MODE_IDS) {
+      for (const [levelId, rec] of Object.entries(this.data.best[m] || {})) {
+        const w = rec && rec.cleared && LEVELS[levelId] && LEVELS[levelId].rewardWeapon;
+        if (w) set.add(w);
+      }
+    }
+    return set;
+  },
+
+  // 單局結算：回傳這場拿到多少 DNA 與金幣、是否破紀錄、是否解鎖新關卡／新武器
   // skipProgress=true (每日挑戰) 時只發 DNA/金幣，不寫該關最佳紀錄、不解鎖下一關
   recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null, skipProgress = false, modeId = 'survivor', gold = 0 }) {
     const dna = Math.max(1, Math.round((time / 10 + kills / 20 + level * 2) * dnaMult * (cleared ? 1.5 : 1)));
@@ -674,6 +687,7 @@ export const save = {
     this.data.gold = (this.data.gold || 0) + runGold;
 
     if (!skipProgress) {
+      const weaponsBefore = this.unlockedWeapons();
       if (!this.data.best[modeId]) this.data.best[modeId] = {};
       const prev = this.data.best[modeId][levelId];
       const isRecord = !prev || time > prev.time;
@@ -684,11 +698,14 @@ export const save = {
       };
 
       const unlockedNew = cleared ? this.unlock(nextLevel, modeId) : false;
+      // 這場首次通關該關且帶出新武器才算解鎖（重複通關不再回報）
+      const w = LEVELS[levelId] && LEVELS[levelId].rewardWeapon;
+      const unlockedWeapon = w && !weaponsBefore.has(w) && this.unlockedWeapons().has(w) ? w : null;
       this.flush();
-      return { dna, isRecord, unlockedNew };
+      return { dna, isRecord, unlockedNew, unlockedWeapon };
     }
     this.flush();
-    return { dna, isRecord: false, unlockedNew: false };
+    return { dna, isRecord: false, unlockedNew: false, unlockedWeapon: null };
   },
 
   // 該模式目前選的難度 id（守塔與生存者各記一份）
