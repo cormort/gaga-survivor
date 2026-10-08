@@ -391,6 +391,26 @@ export function bindEvents(game) {
     pan = null;
   });
   cv.addEventListener('pointercancel', () => { pan = null; });
+
+  // 守塔自由縮放：滑鼠滾輪 / 觸控板以光標為世界錨點自由縮放
+  cv.addEventListener('wheel', (e) => {
+    if (!game.td || game.state !== 'PLAYING') return;
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.10 : 0.90;
+    const newZoom = Math.max(0.50, Math.min(1.75, game.zoom * factor));
+    if (Math.abs(newZoom - game.zoom) < 0.001) return;
+
+    const rect = cv.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const wx = mx / game.zoom + game.camera.x;
+    const wy = my / game.zoom + game.camera.y;
+
+    game.setTdZoom(newZoom);
+    game.camera.x = wx - mx / game.zoom;
+    game.camera.y = wy - my / game.zoom;
+    game.clampCamera();
+  }, { passive: false });
   cv.addEventListener('pointermove', (e) => {
     if (pan && game.td) {
       if (!pan.moved && Math.hypot(e.clientX - pan.x, e.clientY - pan.y) < 8) return;   // 手指微抖不算拖曳

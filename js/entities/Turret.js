@@ -46,6 +46,17 @@ if (typeof Image !== 'undefined') {
   }
 }
 
+// 守塔建塔基地槽 Nano Banana 手繪貼圖
+export const TD_SOCKET_IMAGES = {};
+const TD_SOCKET_KEYS = ['socket_stone', 'socket_flag', 'socket_rune', 'socket_iron'];
+if (typeof Image !== 'undefined') {
+  for (const k of TD_SOCKET_KEYS) {
+    const img = new Image();
+    img.src = `assets/td/${k}.png`;
+    TD_SOCKET_IMAGES[k] = img;
+  }
+}
+
 export const FACILITY_TYPES = {
   turret: {
     id: 'turret',
@@ -1435,64 +1446,150 @@ export function drawSocket(ctx, camera, socket, isOccupied = false, isHovered = 
 
   ctx.save();
 
-  // 六角形合金底座
-  const r = 30;
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const ang = (i * Math.PI) / 3;
-    const px = sx + Math.cos(ang) * r;
-    const py = sy + Math.sin(ang) * r;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.fillStyle = isOccupied ? 'rgba(20, 32, 48, 0.9)' : 'rgba(12, 20, 32, 0.85)';
-  ctx.fill();
-
-  // 外框高亮
-  ctx.lineWidth = isHovered ? 3 : 1.8;
-  ctx.strokeStyle = isHovered ? '#ffffff' : themeColor;
-  if (isHovered) {
-    ctx.shadowColor = themeColor;
-    ctx.shadowBlur = 14;
-  }
-  ctx.stroke();
-
-  // 若未佔用，繪製內部全息發光能量紋理與戰術標誌
-  if (!isOccupied) {
-    // 內縮六角形
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = `${themeColor}66`;
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const ang = (i * Math.PI) / 3;
-      const px = sx + Math.cos(ang) * (r * 0.65);
-      const py = sy + Math.sin(ang) * (r * 0.65);
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.stroke();
-
-    // 全息浮動圖標
-    const floatY = Math.sin(animTimer * 4 + socket.x) * 3;
-    ctx.font = '16px "Segoe UI Emoji", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(icon, sx, sy + floatY);
-
-    // 戰術加成簡短標籤（守塔的一般建塔點沒有 label）
-    if (socket.label) {
-      ctx.font = 'bold 10px sans-serif';
-      ctx.fillStyle = themeColor;
-      ctx.fillText(socket.label.split(' ')[0], sx, sy + r + 13);
+  // ── 優先使用 Nano Banana 手繪 2D Sprite 貼圖 ──
+  let spriteKey = null;
+  if (def) {
+    if (socket.bonus === 'armor' || socket.bonus === 'bank' || socket.bonus === 'pierce') {
+      spriteKey = 'socket_iron';
+    } else {
+      spriteKey = 'socket_rune';
     }
   } else {
-    // 佔用時繪製精簡插槽指示燈
-    ctx.fillStyle = themeColor;
+    spriteKey = isOccupied ? 'socket_stone' : 'socket_flag';
+  }
+
+  const spriteImg = TD_SOCKET_IMAGES[spriteKey];
+  if (spriteImg && spriteImg.naturalWidth > 0) {
+    const pulse = 0.5 + 0.5 * Math.sin(animTimer * 3 + socket.x * 0.01);
+
+    // 地面柔和陰影
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
     ctx.beginPath();
-    ctx.arc(sx - r + 8, sy - r + 8, 3, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy + 10, 36, 20, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // 懸停高亮光暈
+    if (isHovered) {
+      ctx.shadowColor = themeColor;
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + 3, 34, 21, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // 繪製 Nano Banana 高解析 Sprite
+    const targetW = 72;
+    const targetH = targetW * (spriteImg.naturalHeight / spriteImg.naturalWidth);
+    // socket_flag 頂部帶旗桿，錨點稍往下壓 6px 使石台與其他基台平齊
+    const yOffset = spriteKey === 'socket_flag' ? -7 : 2;
+    ctx.drawImage(spriteImg, sx - targetW / 2, sy - targetH / 2 + yOffset, targetW, targetH);
+
+    // 加成基座外圈鑲嵌流光光環
+    if (def) {
+      ctx.strokeStyle = hexA(themeColor, isOccupied ? 0.45 : 0.45 + 0.35 * pulse);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + 3, 28, 17, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // 未佔用時的戰術加成徽章與標籤
+    if (!isOccupied) {
+      if (def) {
+        // 浮動圓形加成圖示徽章
+        const floatY = Math.sin(animTimer * 4 + socket.x) * 2 - 4;
+        ctx.fillStyle = hexA(themeColor, 0.92);
+        ctx.beginPath();
+        ctx.arc(sx, sy + floatY, 11, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff6dc';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.font = '13px "Segoe UI Emoji", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(icon, sx, sy + floatY + 1);
+      }
+
+      // 戰術加成文字銘牌
+      if (socket.label) {
+        const text = socket.label.split(' ')[0];
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const ty = sy + 28;
+        // 背景深色銘牌膠囊
+        ctx.fillStyle = 'rgba(15, 20, 28, 0.82)';
+        ctx.fillRect(sx - 24, ty - 7, 48, 14);
+        ctx.strokeStyle = themeColor;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sx - 24, ty - 7, 48, 14);
+        ctx.fillStyle = themeColor;
+        ctx.fillText(text, sx, ty);
+      }
+    }
+
+    ctx.restore();
+    return;
+  }
+
+  // ── Procedural Fallback（若貼圖尚未加載完成）──
+  const rx = 32, ry = 21, depth = 7;
+  const pulse = 0.5 + 0.5 * Math.sin(animTimer * 3 + socket.x * 0.01);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.beginPath();
+  ctx.ellipse(sx + 2, sy + depth + 5, rx + 3, ry + 1, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const wall = ctx.createLinearGradient(0, sy, 0, sy + depth + ry);
+  wall.addColorStop(0, '#8a8478');
+  wall.addColorStop(1, '#4d483f');
+  ctx.fillStyle = wall;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + depth, rx, ry, 0, 0, Math.PI);
+  ctx.lineTo(sx - rx, sy);
+  ctx.ellipse(sx, sy, rx, ry, 0, Math.PI, 0, true);
+  ctx.closePath();
+  ctx.fill();
+
+  const rim = ctx.createLinearGradient(sx - rx, sy - ry, sx + rx, sy + ry);
+  rim.addColorStop(0, '#d6cfbd');
+  rim.addColorStop(1, '#9d9684');
+  ctx.fillStyle = rim;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = isHovered ? '#ffffff' : 'rgba(40,34,26,0.8)';
+  ctx.lineWidth = isHovered ? 2.5 : 1.4;
+  ctx.stroke();
+
+  const dirt = ctx.createRadialGradient(sx - 6, sy - 5, 2, sx, sy, rx * 0.78);
+  dirt.addColorStop(0, isOccupied ? '#6b5a42' : '#a58a63');
+  dirt.addColorStop(1, isOccupied ? '#4a3d2c' : '#7a6444');
+  ctx.fillStyle = dirt;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, rx * 0.74, ry * 0.74, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (def) {
+    ctx.strokeStyle = hexA(themeColor, isOccupied ? 0.55 : 0.55 + 0.35 * pulse);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, rx * 0.6, ry * 0.6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  if (!isOccupied && socket.label) {
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = themeColor;
+    ctx.fillText(socket.label.split(' ')[0], sx, sy + ry + depth + 9);
   }
 
   ctx.restore();

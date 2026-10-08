@@ -31,10 +31,10 @@ import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/T
 import { heroMoveVector, updateHeroRespawn, keepHeroOnRoad } from './systems/TDHero.js';
 import { COLLAPSE_FRAME } from './entities/Core.js';
 
-// 守塔關的鏡頭縮放範圍：fit 地圖寬度再乘上 TD_ZOOM_IN（見 tdPlayZoom）；太小的螢幕最多拉到 TD_MIN_ZOOM，剩下的用拖曳平移
-const TD_MIN_ZOOM = 0.45;
-const TD_MAX_ZOOM = 1.4;
-const TD_ZOOM_IN = 1.15;   // 視野收進來的比例：讓 2080 寬的地圖「看得到的範圍」≈ 放大前的 1600 寬地圖
+// 守塔關的鏡頭縮放範圍：放大顯示比例以清晰呈現塔樓、小兵與戰術地基細節（允許玩家自由滑動地圖）
+export const TD_MIN_ZOOM = 0.50;  // 縮小極限（方便拉遠總覽全戰局）
+export const TD_MAX_ZOOM = 1.75;  // 放大極限（清晰特寫）
+const TD_BASE_VIEW_SPAN = 430;    // 基準視野短邊跨度（世界座標單位），使短邊顯示約 430px 的細緻戰場特寫
 const ENEMY_NAMES = Object.fromEntries(Object.entries(ENEMY_TYPES).map(([k, v]) => [k, v.name]));   // 守塔下一波預告用
 // 頂部 HUD 佔的螢幕高度：資訊列＋任務提示＋下一波預告（實測底部約 118px）。地圖排在它下面，
 // 貼著上緣的入口（三門要塞北門）才不會被蓋住。生命改放進資訊列，就是為了不讓這塊再往下長。
@@ -602,14 +602,14 @@ class Game {
   }
 
   // 守塔的「遊玩視角」縮放：地圖寬度塞滿畫面後再放大一點點。
-  // 舊版是寬高兩軸都塞進畫面（fit 兩軸），v92 地圖放大 1.3 倍之後那樣會把整張圖壓得
-  // 更小、才剛放大的角色又縮回去；改成只 fit 寬度（地圖比畫面高時可拖曳平移），
-  // 再乘上 TD_ZOOM_IN 讓視野稍微收進來 —— 這樣「看得到的範圍」和放大前差不多，
-  // 世界本身變大 → 欄位與巢穴之間需要移動鏡頭，開場導覽才有東西可以飛。
+  // 守塔的「遊玩視角」縮放：大幅放大顯示比例，看清建築、小兵、地基與戰鬥特效細節。
+  // 不再強行把整張地圖塞進單一畫面，玩家透過拖曳平移瀏覽全圖戰局。
   tdPlayZoom() {
     const b = worldBounds();
     if (!b) return 1;
-    return Math.max(TD_MIN_ZOOM, Math.min(TD_MAX_ZOOM, (this.sw / (b.maxX - b.minX)) * TD_ZOOM_IN));
+    const shortEdge = Math.min(this.sw, Math.max(300, this.sh - TD_HUD_PAD));
+    const targetZoom = shortEdge / TD_BASE_VIEW_SPAN;
+    return Math.max(0.85, Math.min(1.40, targetZoom));
   }
 
   // 開場導覽的「全覽」用：兩軸都塞得進畫面（＝舊版的 fit 兩軸）
