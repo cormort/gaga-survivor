@@ -171,7 +171,7 @@ console.log('\n=== A2. 程序化隨機地圖（v86）：原始資料要過驗證
 console.log('\n=== B. 瀏覽器：改動真的進到塔的數值與畫面 ===');
 const pw = (await import(process.env.PW_MODULE || 'playwright')).default;
 const PAGE_URL = process.env.PROBE_URL || 'http://127.0.0.1:8899/index.html';
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const page = await browser.newPage();
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(e.message.split('\n')[0]));

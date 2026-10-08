@@ -42,7 +42,7 @@ const up = async () => {
 };
 if (!await up()) { console.log('伺服器沒起來'); server.kill('SIGKILL'); process.exit(1); }
 
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const page = await ctx.newPage();
 const errs = [];

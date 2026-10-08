@@ -1,6 +1,6 @@
 // 橫幅尺寸/位置檢查：三種視窗尺寸下都不覆蓋搖桿與動作列，說明文字不被裁掉。
 const pw = (await import(process.env.PW_MODULE)).default;
-const b = await pw.chromium.launch();
+const b = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 let bad = 0;
 for (const vp of [{ width: 390, height: 844 }, { width: 740, height: 360 }, { width: 1280, height: 720 }]) {
   const ctx = await b.newContext({ viewport: vp });

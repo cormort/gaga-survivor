@@ -13,7 +13,7 @@
 const pw = (await import(process.env.PW_MODULE || 'playwright')).default;
 const URL = process.env.PROBE_URL || 'http://127.0.0.1:8899/index.html';
 
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const out = [];
 const ok = (name, pass, detail) => out.push({ name, pass: !!pass, detail: String(detail) });
 const errs = [];

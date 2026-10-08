@@ -169,7 +169,7 @@ async function probe(page, sc) {
   }, { sc, FRAMES, DT });
 }
 
-const browser = await pw.chromium.launch({ args: ['--disable-gpu', '--use-gl=swiftshader', '--disable-gpu-rasterization'] });
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--disable-gpu', '--use-gl=swiftshader', '--disable-gpu-rasterization'] });
 const rows = [];
 for (const sc of SCENARIOS) {
   const ctx = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });

@@ -85,7 +85,7 @@ const ok = (name, pass, detail = '') => {
 }
 
 // ── 2、3) 實機連玩多關 ──
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const page = await (await browser.newContext({ viewport: { width: 900, height: 700 } })).newPage();
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(e.message.split('\n')[0].slice(0, 140)));

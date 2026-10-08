@@ -20,6 +20,7 @@ const pw = (await import(process.env.PW_MODULE || 'playwright')).default;
 const URL = process.env.PROBE_URL || 'http://127.0.0.1:8899/index.html';
 
 const browser = await pw.chromium.launch({
+  executablePath: process.env.CHROMIUM || undefined,
   args: ['--disable-gpu', '--use-gl=swiftshader', '--disable-gpu-rasterization'],
 });
 const ctx = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1280, height: 720 } });

@@ -15,7 +15,7 @@
 const pw = (await import(process.env.PW_MODULE || 'playwright')).default;
 const URL = process.env.PROBE_URL || 'http://127.0.0.1:8899/index.html';
 
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const page = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(e.message.split('\n')[0].slice(0, 120)));

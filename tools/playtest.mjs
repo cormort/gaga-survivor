@@ -413,6 +413,7 @@ console.log(`# 自動試玩：${CFG.level} / ${CFG.difficulty} / 走位 ${CFG.po
 console.log(`# 目標 ${TARGET}${CFG.realtime ? '（真實時間模式）' : '（加速模式：不渲染，量平衡用）'}`);
 
 const browser = await pw.chromium.launch({
+  executablePath: process.env.CHROMIUM || undefined,
   args: ['--disable-gpu', '--use-gl=swiftshader', '--disable-gpu-rasterization', '--mute-audio'],
 });
 const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1280, height: 720 } });

@@ -20,7 +20,7 @@ const ok = (name, cond, detail = '') => {
   else { failed++; console.log(`FAIL  ${name}${detail ? `  [${detail}]` : ''}`); }
 };
 
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const page = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
 const errs = [];
 page.on('pageerror', (e) => errs.push(e.message.split('\n')[0].slice(0, 120)));

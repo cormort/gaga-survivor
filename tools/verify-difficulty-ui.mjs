@@ -25,7 +25,7 @@ const ok = (name, cond, detail = '') => {
   else { failed++; console.log(`FAIL  ${name}${detail ? `  [${detail}]` : ''}`); }
 };
 
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const pageErrors = [];
 
 async function probe(width, height, mobile, label) {

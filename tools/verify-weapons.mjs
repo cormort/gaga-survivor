@@ -151,7 +151,7 @@ process.on('exit', stopServer);
 /* ── 1) 開頁面 ─────────────────────────────────────────────── */
 console.log(`# 目標 ${TARGET}`);
 
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
 const page = await context.newPage();
 page.setDefaultTimeout(180000);

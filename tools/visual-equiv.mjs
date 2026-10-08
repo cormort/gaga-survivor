@@ -9,7 +9,7 @@ const OLD = {
   '/js/systems/__old_ps.js': fs.readFileSync('/tmp/before/ParticleSystem.js', 'utf8'),
 };
 
-const browser = await pw.chromium.launch({ args: ['--disable-gpu', '--use-gl=swiftshader', '--disable-gpu-rasterization'] });
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--disable-gpu', '--use-gl=swiftshader', '--disable-gpu-rasterization'] });
 const ctx = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
 await page.route('**/js/entities/__old_*.js', (route) => {

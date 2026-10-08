@@ -63,7 +63,7 @@ const swSrc = readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const precache = [...swSrc.match(/const PRECACHE = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
 const assetCount = precache.filter((p) => p.replace(/^\.\//, '').startsWith('assets/')).length;
 
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const pageErrors = [];
 
 async function newPage() {

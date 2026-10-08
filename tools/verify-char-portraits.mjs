@@ -69,7 +69,7 @@ const server = http.createServer((req, res) => {
 await new Promise((resolve) => server.listen(PORT, '127.0.0.1', resolve));
 const killServer = () => { try { server.close(); } catch (err) { /* 已關 */ } };
 
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const pageErrors = [];
 
 // 在頁面裡數「畫出來的頭像」：canvas 有不透明像素就算畫出來了

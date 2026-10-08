@@ -145,7 +145,7 @@ const up = await waitForServer();
 ok(`自備測試伺服器 ${BASE} 起來了`, up, `port ${PORT}`);
 if (!up) { killServer(); process.exit(1); }
 
-const browser = await pw.chromium.launch();
+const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const page = await ctx.newPage();
 const pageErrors = [];
