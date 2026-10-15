@@ -854,11 +854,27 @@ export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'subway', 'swamp',
   'foundry', 'frostvoid', 'voidroad', 'inkmount', 'makaimura', 'endless'];
 
 // 無盡模式輪播的 Boss 池 (全關卡 Boss 全收錄)
-export const ENDLESS_BOSS_CYCLE = []
-  .concat(LEVELS.street.bosses, LEVELS.lab.bosses, LEVELS.frost.bosses, LEVELS.core.bosses,
-    LEVELS.subway.bosses, LEVELS.swamp.bosses, LEVELS.storm.bosses,
-    LEVELS.foundry.bosses, LEVELS.frostvoid.bosses, LEVELS.voidroad.bosses, LEVELS.inkmount.bosses,
-    LEVELS.makaimura.bosses)
+// 魔化十二生肖：無盡模式專屬 Boss，每關三隻首領之後插一隻（外觀用 assets/zodiac/*_evil.png，BossCutscene 依名字對到同一張）。
+// 血量逐隻遞增，約為同一輪那關終極首領的 0.75～0.9 倍；動作與技能依生肖個性挑。
+const ZODIAC_BOSSES = [
+  { hp: 32000, name: '魔化子鼠', skin: 'rat_evil', speed: 95, damage: 24, moveStyle: 'serpentine', behaviors: ['summon'] },             // 鼠群
+  { hp: 42000, name: '魔化丑牛', skin: 'ox_evil', speed: 60, damage: 34, moveStyle: 'rush', behaviors: ['nova'] },                    // 蠻牛衝撞
+  { hp: 52000, name: '魔化寅虎', skin: 'tiger_evil', speed: 90, damage: 30, moveStyle: 'leap', behaviors: ['barrage'] },
+  { hp: 66000, name: '魔化卯兔', skin: 'rabbit_evil', speed: 100, damage: 24, moveStyle: 'leap', behaviors: ['ground'] },
+  { hp: 80000, name: '魔化辰龍', skin: 'dragon_evil', speed: 70, damage: 32, moveStyle: 'orbit', behaviors: ['barrage', 'nova'] },
+  { hp: 95000, name: '魔化巳蛇', skin: 'snake_evil', speed: 80, damage: 26, moveStyle: 'serpentine', behaviors: ['vortex'] },
+  { hp: 115000, name: '魔化午馬', skin: 'horse_evil', speed: 105, damage: 28, moveStyle: 'rush', behaviors: ['ground'] },
+  { hp: 135000, name: '魔化未羊', skin: 'goat_evil', speed: 70, damage: 28, moveStyle: 'orbit', behaviors: ['summon', 'nova'] },
+  { hp: 160000, name: '魔化申猴', skin: 'monkey_evil', speed: 90, damage: 30, moveStyle: 'blink', behaviors: ['barrage', 'summon'] },
+  { hp: 190000, name: '魔化酉雞', skin: 'rooster_evil', speed: 85, damage: 26, moveStyle: 'blink', behaviors: ['ground', 'barrage'] },
+  { hp: 220000, name: '魔化戌狗', skin: 'dog_evil', speed: 100, damage: 30, moveStyle: 'rush', behaviors: ['summon', 'nova'] },
+  { hp: 250000, name: '魔化亥豬', skin: 'pig_evil', speed: 65, damage: 36, moveStyle: 'rush', behaviors: ['nova', 'vortex', 'ground'] },
+].map((b) => ({ ...b, drawScale: 2 }));   // *_evil 圖是雜兵尺寸（高 56~78px），一般 Boss 圖約 120px
+
+const ENDLESS_BOSS_LEVELS = ['street', 'lab', 'frost', 'core', 'subway', 'swamp', 'storm',
+  'foundry', 'frostvoid', 'voidroad', 'inkmount', 'makaimura'];
+export const ENDLESS_BOSS_CYCLE = ENDLESS_BOSS_LEVELS
+  .flatMap((id, i) => [...LEVELS[id].bosses, ZODIAC_BOSSES[i]])
   .map((b) => ({ ...b }));
 
 export const ENDLESS_BOSS_INTERVAL = 90;

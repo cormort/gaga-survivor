@@ -193,6 +193,7 @@ export class Spawner {
     // 血量與技能子集 —— 「冰霜機甲」和「極地穿山甲王」打起來一模一樣。
     if (def.speed) boss.speed = def.speed;
     if (def.damage) boss.damage = def.damage;
+    if (def.drawScale) boss.spriteScale = def.drawScale;   // 借雜兵尺寸圖當 Boss 時放大繪製（魔化十二生肖）
 
     if (def.final) {
       boss.isFinal = true;
