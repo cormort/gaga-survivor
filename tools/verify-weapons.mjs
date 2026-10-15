@@ -232,7 +232,8 @@ const results = await page.evaluate(async () => {
     }
 
     {
-      const noTarget = bases.filter((id) => !WEAPONS[id].evoTarget);
+      // 特工專屬武器（exclusiveTo）可以沒有超武：亞瑟的火把／戰斧是補充火力，合成線只有長矛一條
+      const noTarget = bases.filter((id) => !WEAPONS[id].evoTarget && !WEAPONS[id].exclusiveTo);
       const twice = evos.filter((id) => WEAPONS[id].evoTarget);
       ok('A3 每把基礎武器都有 evoTarget；超武的 evoTarget 必須是 falsy（不能二次進化）',
         noTarget.length === 0 && twice.length === 0,
@@ -271,6 +272,8 @@ const results = await page.evaluate(async () => {
         const probe = g.weaponManager.aspectOf(id);
         const fam = probe.fam;
         const aspects = WEAPON_ASPECTS[fam];
+        // 'none'＝明確宣告「沒有型態」（40K、亞瑟專屬）；以前這些武器會靜默退回 kunai 家族、吃到苦無的型態
+        if (fam === 'none') { meta.push(`${id}→none`); continue; }
         if (!Array.isArray(aspects) || aspects.length !== 3) {
           bad.push(`${id}→${fam}（${Array.isArray(aspects) ? `${aspects.length} 個型態` : 'WEAPON_ASPECTS 沒有這個家族'}）`);
           continue;
@@ -619,6 +622,7 @@ const results = await page.evaluate(async () => {
       const detail = [];
       for (const id of bases) {
         const def = WEAPONS[id];
+        if (!def.evoTarget && def.exclusiveTo) continue;   // 專屬武器可以沒有超武（見 A3）
         if (!def.evoTarget || !WEAPONS[def.evoTarget]) { bad.push(`${id}（沒有可用的 evoTarget）`); continue; }
         beginRun();
         const W = g.weaponManager;
@@ -721,6 +725,9 @@ const results = await page.evaluate(async () => {
       const bad = [];
       const bad5 = [];
       const detail = [];
+      // 武器自帶的暴擊加成（苦無系 critBonus）會讓「單發傷害」隨機翻倍，量等級成長時先關掉
+      const critBackup = Object.fromEntries(evos.map((id) => [id, WEAPONS[id].critBonus]));
+      for (const id of evos) WEAPONS[id].critBonus = 0;
       for (const id of evos) {
         const a = shotDamage(id, 1);
         const b = shotDamage(id, 3);
@@ -737,6 +744,7 @@ const results = await page.evaluate(async () => {
           bad5.push(`${id}（Lv1 ${a.dmg} → Lv5 ${c.dmg}，${a.dmg > 0 ? r5.toFixed(2) : '0'}×，量法：${a.how} / ${c.how}）`);
         }
       }
+      for (const id of evos) WEAPONS[id].critBonus = critBackup[id];
       ok('C12 超武覺醒：單發傷害 Lv3 ≥ Lv1 的 1.2 倍（每級 +15%）',
         bad.length === 0 && evos.length > 0,
         bad.length ? `不合格：${list(bad)}` : detail.join('、'));

@@ -1176,6 +1176,10 @@ class Game {
     this.weaponManager.game = this;
     // 升級卡「新武器」只從已解鎖的武器抽（通關關卡解鎖）；每日挑戰大家條件一致，開放全部
     this.weaponManager.weaponPool = this.isDaily ? null : save.unlockedWeapons();
+    // 特工專屬武器（WEAPONS[id].exclusiveTo）不靠通關解鎖，選了那位特工就開放
+    if (this.weaponManager.weaponPool) {
+      for (const [id, def] of Object.entries(WEAPONS)) if (def.exclusiveTo === this.characterId) this.weaponManager.weaponPool.add(id);
+    }
     this.applyMetaTalents();
     this.player.modeDmgMul = this.mode.weaponMul;
     this.weaponManager.applyPassives();
@@ -2705,6 +2709,8 @@ class Game {
 
         // 給予傷害與擊退
         let actualDmg = p.damage;
+        // 騎士長矛：每多貫穿一隻，傷害 +pierceRamp（hitEnemies 已含這一隻）
+        if (p.pierceRamp) actualDmg = Math.round(actualDmg * (1 + p.pierceRamp * (p.hitEnemies.size - 1)));
         // 處刑人祝福：對低血量 (<30%) 敵人傷害 +60%
         if (this.player.blessingExecute && (enemy.hp / enemy.maxHp) < 0.3) {
           actualDmg = Math.round(actualDmg * 1.6);
@@ -2732,6 +2738,7 @@ class Game {
         // 基隆型態的追蹤印記：記在敵人身上，受傷 +25% (原本 markOnHit 只被
         // 存進投射物就沒有人讀，_markedTimer 只會被扣、永遠不會被設)
         if (p.markOnHit) enemy.applyMark(p.markDur, p.markBonus);
+        if (p.shred) enemy.applyMark(p.shred.dur, p.shred.bonus);   // 爆彈槍破甲：沿用印記的「受傷 +X%」
         const atkElem = p.element || (p.weaponId && WEAPONS[p.weaponId]?.element) || 'physical';
         const died = enemy.takeDamage(actualDmg, p.knockback, p.x, p.y, atkElem);
         if (died && p.mercOwner) p.mercOwner.gainKill(enemy); // 傭兵擊殺 → 全額經驗
@@ -2830,6 +2837,7 @@ class Game {
 
         p.pierce--;
         if (p.pierce <= 0) {
+          if (p.pinStun) enemy.applyStun(p.pinStun);   // 騎士長矛：最後一隻被釘在原地
           p.isDead = true;
           return true;   // 穿透耗盡 → 結束走訪（等同原本的 break）
         }

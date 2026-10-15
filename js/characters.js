@@ -886,7 +886,7 @@ export const CHARACTERS = {
     classTitle: '重甲破邪 / 絕境不屈',
     traitName: '黃金聖鎧與草莓四角褲',
     traitDesc: '常駐減傷 25%；受致命傷時鎧甲碎裂爆發聖光擊退全場，獲得 2.5 秒無敵與 +50% 移速 (每局 2 次)',
-    startWeapon: 'kunai',
+    startWeapon: 'lance',   // 魔界村專屬武器：騎士長矛／妖火火把／旋轉戰斧（config.js 的 exclusiveTo）
     unlockCost: 0,
     accent: '#4cc9f0',
     lines: {

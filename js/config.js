@@ -67,6 +67,7 @@ export const WEAPONS = {
     pierce: [1, 1, 2, 2, 3],
     charge: { every: 5, effect: 'burn' }, // 每 5 發射出一枚燃燒苦無
     range: 480,               // 中程：鎖定後直線飛行，射程中等
+    critBonus: 0.15,          // 定位：便宜的快速連射，靠暴擊（+15% 暴擊率）
   },
   guardian: {
     id: 'guardian',
@@ -77,6 +78,7 @@ export const WEAPONS = {
     isEvo: false,
     evoTarget: 'eternal_domain',
     pairPassive: 'max_hp_vest',   // 護身武器 ↔ 生存配件 (原 magnet)
+    blockBullets: true,           // 定位：防禦 —— 刀刃碰到的敵方子彈直接擊碎（重力環鋸則是把怪拉進來）
     maxLevel: 5,
     baseDamage: 9,  // 射程定位校準（原 19）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 16）
     baseCooldown: 2.2, // 冷卻（非超武時有旋轉週期）
@@ -105,6 +107,7 @@ export const WEAPONS = {
     count: [1, 2, 2, 3, 4],
     charge: { every: 3, effect: 'poison' }, // 每 3 發射出毒氣彈，爆炸範圍內全部中毒
     range: 620,               // 鎖定飛彈的追擊距離（飛行 380×2.5s，實際交戰距離較短）
+    targeting: 'densest',     // 鎖定最密集的怪群
     pierceAll: true,          // 撞到即爆，爆炸半徑內全中
   },
   molotov: {
@@ -185,6 +188,7 @@ export const WEAPONS = {
     projType: 'shuriken',
     homing: 6.0,
     range: 560,               // 直線穿透的飛行距離
+    critBonus: 0.15,
   },
   eternal_domain: {
     id: 'eternal_domain',
@@ -196,6 +200,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'guardian',
+    blockBullets: true,
     baseDamage: 54,  // 射程定位校準（原 109）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 78）  // 傷害節奏改由 rehit (0.4s) 控制，單刀要拉高才撐得起超武定位
     baseCooldown: 0, // 無 CD，永久旋轉
     duration: 999999,
@@ -225,6 +230,7 @@ export const WEAPONS = {
     count: 2,
     charge: { every: 2, effect: 'poison' },
     range: 660,               // 追咬距離
+    targeting: 'densest',
     pierceAll: true,          // 核爆：範圍內全中
   },
   napalm_sea: {
@@ -315,6 +321,7 @@ export const WEAPONS = {
     pierce: [2, 2, 3, 3, 4],
     rehit: 0.45,
     range: 520,               // 去回各一刀的飛行距離
+    targeting: 'heading',     // 朝移動方向擲出：邊跑邊清前方的路
   },
   railgun: {
     id: 'railgun',
@@ -331,6 +338,7 @@ export const WEAPONS = {
     cooldownGrowth: -0.4,
     projType: 'rail_beam',
     range: 900,
+    targeting: 'densest',     // 朝最密集的怪群開一條線
     width: [26, 30, 34, 38, 42],
     laneCount: 1,
     pierceAll: true,          // 光束：一條線整排貫穿（長射程＝高穿透）
@@ -356,6 +364,7 @@ export const WEAPONS = {
     rehit: 0.30,
     burnOnHit: 4,                // 命中點燃（每秒 4 點、由 molotov 的燃燒系統處理）
     range: 560,               // 雙迴力鏢的飛行距離
+    targeting: 'heading',
   },
   annihilation_beam: {
     id: 'annihilation_beam',
@@ -371,6 +380,7 @@ export const WEAPONS = {
     baseCooldown: 1.25,
     projType: 'rail_beam',
     range: 1200,
+    targeting: 'densest',
     width: [64, 64, 64, 64, 64],
     laneCount: 3,
     burnOnHit: 6,
@@ -579,6 +589,7 @@ export const WEAPONS = {
     explosionRadius: [40, 45, 52, 60, 70],
     projType: 'bolter',
     range: 600,               // 爆彈槍的飛行距離（穿透低，靠爆炸吃群）
+    shred: { dur: 4, bonus: 0.2 },   // 定位：破甲 —— 命中的敵人 4 秒內受到所有傷害 +20%
   },
   chainsword: {
     id: 'chainsword',
@@ -620,6 +631,7 @@ export const WEAPONS = {
     explosionRadius: [75, 80, 85, 90, 100],
     projType: 'storm_bolter',
     range: 660,               // 風暴爆彈槍的飛行距離
+    shred: { dur: 4, bonus: 0.25 },
   },
   power_sword: {
     id: 'power_sword',
@@ -639,6 +651,88 @@ export const WEAPONS = {
     shockwaveSpeed: 520,
     shockwavePierce: 99,
     pierceAll: true,          // 揮砍弧：弧內全部
+  },
+
+  // ── 魔界村：亞瑟專屬武器（exclusiveTo：只有該特工的升級卡會抽到） ─────────
+  lance: {
+    id: 'lance',
+    name: '騎士長矛',
+    icon: '🔱',
+    element: 'physical',
+    description: '亞瑟的招牌武器：朝最近的敵人擲出沉重長矛，筆直貫穿整排敵人。',
+    exclusiveTo: 'arthur',
+    isEvo: false,
+    evoTarget: 'goddess_bracelet',
+    pairPassive: 'max_hp_vest',    // 黃金聖鎧：防護背心滿級合成
+    maxLevel: 5,
+    baseDamage: 42,
+    baseCooldown: 0.9,
+    cooldownGrowth: -0.08,
+    speed: 760,
+    projectiles: [1, 2, 2, 3, 4],
+    pierce: [2, 2, 3, 3, 4],
+    projType: 'lance',
+    range: 560,               // 比苦無遠、穿透多，但較慢
+    targeting: 'strongest',   // 瞄準射程內血量最高的（精英、Boss 優先）
+    pierceRamp: 0.15,         // 每多貫穿一隻，傷害 +15%
+    pinStun: 0.8,             // 穿透耗盡時把最後一隻釘住 0.8 秒
+  },
+  torch: {
+    id: 'torch',
+    name: '妖火火把',
+    icon: '🔥',
+    element: 'fire',
+    description: '拋出燃燒的火把，落地點燃一片妖火，燒灼踏入的敵人。',
+    exclusiveTo: 'arthur',
+    isEvo: false,
+    maxLevel: 5,
+    baseDamage: 4,                 // 每跳傷害（火牆 5 段，單段比燃燒瓶小、總面積比較大）
+    baseCooldown: 2.6,
+    cooldownGrowth: -0.15,
+    duration: 2.8,
+    radius: [50, 56, 64, 72, 82],
+    count: [1, 2, 2, 3, 4],
+    flightType: 'torch',           // 飛行中的投射物外觀（燃燒瓶是 bottle）
+    pierceAll: true,
+    fireWall: 5,              // 落地展開成 5 段的橫向火牆（燃燒瓶是一灘圓形火海）
+  },
+  battle_axe: {
+    id: 'battle_axe',
+    name: '旋轉戰斧',
+    icon: '🪓',
+    element: 'physical',
+    description: '甩出旋轉的戰斧，沿弧線劈向敵人，短程但沉重。',
+    exclusiveTo: 'arthur',
+    isEvo: false,
+    maxLevel: 5,
+    baseDamage: 60,
+    baseCooldown: 1.3,
+    cooldownGrowth: -0.1,
+    speed: 430,
+    count: [1, 1, 2, 2, 3],
+    pierce: [1, 2, 2, 3, 3],
+    curve: 0.55,              // 出手時偏離目標的角度（弧度），再以 homing 轉回 → 弧線
+    homing: 6,                // 轉彎半徑 = 速度/homing ≈ 72px；太小（3.2 → 134px）近身的怪會被繞圈繞過去
+    range: 380,
+    targeting: 'random',      // 隨機劈向射程內的敵人
+  },
+  goddess_bracelet: {
+    id: 'goddess_bracelet',
+    name: '女神手環 (超武)',
+    icon: '💫',
+    element: 'shock',
+    description: '女神賜予的聖光手環：向四周放出一圈追蹤光球，自動飛向敵人。',
+    isEvo: true,
+    maxLevel: 5,
+    evoGrowth: 0.25,
+    baseWeapon: 'lance',
+    baseDamage: 62,
+    baseCooldown: 1.0,
+    count: 8,
+    speed: 420,
+    homing: 3.5,
+    pierce: 3,
+    range: 520,
   },
 };
 

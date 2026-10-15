@@ -2341,7 +2341,8 @@ export class UIManager {
         // （實測約 1/6 的首領箱會發生，verify-chest 的間歇紅燈就是它）。
         // weaponPool：本局可抽的武器（未通關解鎖的不進卡池）；null = 全開放（每日挑戰）。
         if (!def.isEvo && !weaponManager.weapons.has(id) && !weaponManager.skipsAsNewCard(id)
-          && (!weaponManager.weaponPool || weaponManager.weaponPool.has(id))) {
+          && (!weaponManager.weaponPool || weaponManager.weaponPool.has(id))
+          && (!def.exclusiveTo || def.exclusiveTo === weaponManager.player?.character?.id)) {   // 專屬武器：每日挑戰（全開放）也只給本人
           const hint = recipeHints.get(id);
           candidates.push({
             type: 'weapon_new',

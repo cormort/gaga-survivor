@@ -38,6 +38,12 @@ export const WEAPON_ART = {
   railgun: { family: 'launcher', len: 44, color: '#7df8ff' },
   annihilation_beam: { family: 'launcher', len: 52, color: '#7df8ff', evoGlow: true },
 
+  // 魔界村：亞瑟專屬（沒有 PNG，照族系程序繪製）
+  lance: { family: 'blade', len: 34, color: '#e9ecef' },
+  battle_axe: { family: 'blade', len: 26, color: '#ced4da' },
+  torch: { family: 'coil', len: 24, color: '#ff7b00' },
+  goddess_bracelet: { family: 'disc', len: 22, color: '#ffd166', evoGlow: true },
+
   // 第三輪擴充：冰霜新星、霰彈槍
   frost_nova: { family: 'coil', len: 28, color: '#7fd8ff' },
   absolute_zero: { family: 'coil', len: 32, color: '#e0fbff', evoGlow: true },
@@ -1750,6 +1756,12 @@ const HELD_DRAWERS = {
   },
 };
 
+// 亞瑟專屬武器的程序繪製備案：沒有 PNG 時借同型武器的畫法（有 assets/weapons/<id>.png 就會改用貼圖）
+HELD_DRAWERS.lance = HELD_DRAWERS.kunai;
+HELD_DRAWERS.torch = HELD_DRAWERS.molotov;
+HELD_DRAWERS.battle_axe = HELD_DRAWERS.boomerang;
+HELD_DRAWERS.goddess_bracelet = HELD_DRAWERS.eternal_domain;
+
 // ── 武器掛載點 ──────────────────────────────────────────────────────────
 // 為什麼不是「四把都拿在手上」：實測四把武器共用同一個手部原點時，兩兩重疊率高達 54~99%
 // （kunai/rocket 87%、rocket/molotov 99%），而且火箭/軌道炮這種長管武器會直接橫在角色臉上。
@@ -1763,6 +1775,43 @@ export const HELD_MOUNTS = [
   { dx: -16, dy: 18, angle: 1.50, scale: 0.55, layer: 'back' },    // 後腰：垂在身後下方
 ];
 const DEFAULT_MOUNT = HELD_MOUNTS[0];
+
+// 刀光殘影的顏色：[外層, 內芯]
+const SWING_TRAIL = {
+  chainsword: ['#ff3344', '#ffd166'],
+  power_sword: ['#00f5ff', '#ffffff'],
+  phase_blade: ['#7df8ff', '#ffffff'],
+  phase_storm: ['#7df8ff', '#ffffff'],
+  battle_axe: ['#ced4da', '#ffffff'],
+};
+
+// 揮砍殘影：在「揮動前」的座標系裡，沿刃尖走過的弧從起手角畫到目前角度，
+// 分段畫、越接近刀身越亮越粗；收招階段整道殘影淡出。
+function drawSwingTrail(ctx, angleNow, tip, p, [outer, inner]) {
+  const fade = p < 0.72 ? 1 : 1 - (p - 0.72) / 0.18;
+  const from = Math.max(-0.68, angleNow - 1.5);
+  if (angleNow - from < 0.05) return;
+  const R = tip * 0.95;
+  const N = 8;
+  ctx.save();
+  ctx.rotate(-angleNow);   // 回到「刀身未轉」的座標系（揮砍位移 mx/my 保留，弧心就在握把）
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  for (let i = 0; i < N; i++) {
+    const a0 = from + ((angleNow - from) * i) / N;
+    const a1 = from + ((angleNow - from) * (i + 1)) / N;
+    const k = (i + 1) / N;
+    ctx.globalAlpha = fade * k * 0.75;
+    ctx.strokeStyle = outer;
+    ctx.lineWidth = 2 + k * 6;
+    ctx.beginPath(); ctx.arc(0, 0, R, a0, a1); ctx.stroke();
+    ctx.globalAlpha = fade * k * 0.9;
+    ctx.strokeStyle = inner;
+    ctx.lineWidth = 1 + k * 2;
+    ctx.beginPath(); ctx.arc(0, 0, R, a0, a1); ctx.stroke();
+  }
+  ctx.restore();
+}
 
 export function drawHeldWeapon(ctx, id, opts) {
   const a = WEAPON_ART[id];
@@ -1778,7 +1827,10 @@ export function drawHeldWeapon(ctx, id, opts) {
   // 只有 `aim: true` 的主手會追瞄敵人；其餘以固定角度背/掛在身上。
   // 掛在身上的武器角度用「方向向量鏡射」換算（θ → π−θ），所以面向左時整組會左右對調。
   const baseAngle = mount.aim ? aim : (facing > 0 ? mount.angle : Math.PI - mount.angle);
-  const handX = opts.x + facing * mount.dx;
+  // 主手換邊：手放在「瞄準的那一側」而不是「走路面向的那一側」—— 否則敵人在背後時，
+  // 武器會從身體前面橫掃過去指向身後。side 由 WeaponManager 帶遲滯計算（瞄準接近垂直時不來回閃）。
+  const side = mount.aim ? (opts.side || facing) : facing;
+  const handX = opts.x + side * mount.dx;
   const handY = opts.y + mount.dy;
   // 掛在身上的武器不會整把跟著開火往後彈，只留一點震動
   const kick = mount.aim ? recoil : recoil * 0.25;
@@ -1794,9 +1846,10 @@ export function drawHeldWeapon(ctx, id, opts) {
   const spinSpeed = a.family === 'disc' ? 3.0 : 2.2;
   const currentSpin = (time * spinSpeed) + (kick * 14.0); // 攻擊時加速狂轉
 
-  if (id === 'kunai' || id === 'drill') {
+  let swingP = -1;   // 揮砍進度（0~1）；-1 = 不是揮砍動作。刀光殘影用
+  if (id === 'kunai' || id === 'drill' || id === 'lance') {
     // ── 突刺類 (Thrust) ──
-    const thrustDist = id === 'drill' ? 9.0 : 13.5;
+    const thrustDist = id === 'drill' ? 9.0 : id === 'lance' ? 16 : 13.5;
     const thrustCycle = Math.sin(kick * Math.PI);
     motionOffsetX = thrustCycle * thrustDist;
     // 突刺時槍尖/刃尖微幅上挑
@@ -1809,6 +1862,7 @@ export function drawHeldWeapon(ctx, id, opts) {
     // ── 揮砍斬擊類 (Slash Swing: 蓄力後拉 → 破空暴斬 → 順勢收招) ──
     // kick 從 1.0 衰減到 0.0 (p 從 0.0 到 1.0)
     const p = 1 - kick;
+    if (kick > 0) swingP = p;
     let swingAngle = 0;
     let swingFwd = 0;
     let swingLat = 0;
@@ -1850,25 +1904,31 @@ export function drawHeldWeapon(ctx, id, opts) {
     motionOffsetX = Math.sin(kick * Math.PI) * 4.8;
   } else if (id === 'railgun' || id === 'annihilation_beam' || id === 'rocket' || id === 'shark_torpedo' || id === 'dragon_breath' || id === 'napalm_sea') {
     // ── 重型發射器與粒子炮 (Heavy Recoil & Muzzle Rise) ──
-    motionOffsetX = -kick * 9.5;
-    motionOffsetY = -kick * 2.8;
-    motionAngle = -kick * 0.26;
+    // kick 隨時間線性衰減；取平方＝開火瞬間猛退、之後緩緩回正（ease-out），不像彈簧等速回彈
+    const ek = kick * kick;
+    motionOffsetX = -ek * 9.5;
+    motionOffsetY = -ek * 2.8;
+    motionAngle = -ek * 0.26;
   } else if (a.family === 'coil') {
     // ── 法杖施法能量脈衝 (Magic Surge) ──
-    motionOffsetX = Math.sin(kick * Math.PI) * 5.5 - kick * 2.5;
+    motionOffsetX = Math.sin(kick * Math.PI) * 5.5 - kick * kick * 2.5;
     motionOffsetY = Math.sin(time * 30) * kick * 2.0;
     motionAngle = -kick * 0.10;
   } else {
     // ── 一般標準槍械 (Standard Gun Recoil) ──
-    motionOffsetX = -kick * 5.5;
-    motionOffsetY = -kick * 1.8;
-    motionAngle = -kick * 0.16;
+    const ek = kick * kick;
+    motionOffsetX = -ek * 5.5;
+    motionOffsetY = -ek * 1.8;
+    motionAngle = -ek * 0.16;
   }
 
   ctx.save();
   ctx.translate(handX, handY);
   ctx.rotate(baseAngle);
   if (mount.scale && mount.scale !== 1) ctx.scale(mount.scale, mount.scale);
+  // 朝左瞄準時上下鏡射：rotate(π) 會把刀刃與槍身翻成倒的。鏡射放在動作位移之前，
+  // 揮砍的「先往上揚再劈下」在左右兩邊看起來才一致。
+  if (mount.aim && side < 0) ctx.scale(1, -1);
   ctx.translate(motionOffsetX, motionOffsetY);
   ctx.rotate(motionAngle);
 
@@ -1918,60 +1978,40 @@ export function drawHeldWeapon(ctx, id, opts) {
   }
 
   // ── 專屬武器打擊與開火特效系統 (Weapon Attack FX) ─────────────────
-  const flashPower = Math.max(muzzle, recoil);
+  // 只有主手（追瞄的那把）出特效：背在身上的武器不是子彈真正射出的位置，冒火光反而誤導。
+  const isMain = !!mount.aim;
+
+  // 揮砍：沿著實際揮過的角度畫一道由淡到濃的刀光殘影（不是黏在刀上的固定半圓）
+  if (isMain && swingP > 0.22 && swingP < 0.9) {
+    const trail = SWING_TRAIL[id] || [a.color || '#cfe8ff', '#ffffff'];
+    drawSwingTrail(ctx, motionAngle, tip, swingP, trail);
+    if (id === 'chainsword') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = '#ffffff';   // 鋸齒摩擦火星
+      for (let i = 0; i < 4; i++) ctx.fillRect(tip * 0.7 + Math.random() * 10, (Math.random() - 0.5) * 14, 2.2, 2.2);
+      ctx.restore();
+    }
+  }
+
+  // 槍口火光只看 muzzle（約 70 毫秒衰減完），取平方讓它「啪」一下就收；突刺類的破空線看整個動作
+  const thrust = id === 'kunai' || id === 'lance';
+  const flashPower = !isMain || isSpinner || swingP >= 0 ? 0 : thrust ? Math.max(muzzle, recoil) : muzzle * muzzle;
 
   if (flashPower > 0.04) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    // 每一幀火光的大小與角度略有抖動，連射時不會是同一張貼紙
+    if (!thrust) {
+      ctx.translate(tip, 0);
+      ctx.rotate((Math.random() - 0.5) * 0.25);
+      const j = 0.85 + Math.random() * 0.3;
+      ctx.scale(j, j);
+      ctx.translate(-tip, 0);
+    }
 
-    if (id === 'chainsword') {
-      // 1. 鏈鋸劍：雙層鋸齒切割弧光 + 橘紅摩擦火星噴濺
-      ctx.globalAlpha = flashPower * 0.95;
-      ctx.strokeStyle = '#ffd166';
-      ctx.lineWidth = 4.2;
-      ctx.beginPath();
-      ctx.arc(tip * 0.5, 0, tip * 0.7, -Math.PI * 0.42, Math.PI * 0.42);
-      ctx.stroke();
-      ctx.strokeStyle = '#ff3344';
-      ctx.lineWidth = 2.0;
-      ctx.beginPath();
-      ctx.arc(tip * 0.5, 0, tip * 0.75, -Math.PI * 0.35, Math.PI * 0.35);
-      ctx.stroke();
-      // 火星粒子
-      ctx.fillStyle = '#ffffff';
-      for (let i = 0; i < 4; i++) {
-        const sx = tip * 0.7 + Math.sin(time * 30 + i) * 6;
-        const sy = (i - 1.5) * 6 * flashPower;
-        ctx.fillRect(sx, sy, 2.2, 2.2);
-      }
-    } else if (id === 'power_sword') {
-      // 2. 動力劍：力場分解弧光 (Power Disruption Crescent)
-      ctx.globalAlpha = flashPower;
-      const R = 32;
-      ctx.drawImage(glowCanvas('#00f5ff'), tip - R * 0.4, -R / 2, R, R);
-      ctx.strokeStyle = '#00f5ff';
-      ctx.lineWidth = 4.5;
-      ctx.beginPath();
-      ctx.arc(tip * 0.55, 0, tip * 0.8, -Math.PI * 0.45, Math.PI * 0.45);
-      ctx.stroke();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2.0;
-      ctx.beginPath();
-      ctx.arc(tip * 0.55, 0, tip * 0.8, -Math.PI * 0.3, Math.PI * 0.3);
-      ctx.stroke();
-    } else if (id === 'phase_blade' || id === 'phase_storm') {
-      // 3. 相位刀刃：全息相位割裂弧光 + 數位矩陣方塊
-      ctx.globalAlpha = flashPower * 0.9;
-      ctx.strokeStyle = '#7df8ff';
-      ctx.lineWidth = 3.6;
-      ctx.beginPath();
-      ctx.arc(tip * 0.6, 0, tip * 0.75, -Math.PI * 0.38, Math.PI * 0.38);
-      ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(tip * 0.9, -3, 2.5, 2.5);
-      ctx.fillRect(tip * 0.7, 4, 2, 2);
-    } else if (id === 'kunai') {
-      // 4. 苦無：破空穿透流線 (Sonic Slipstream)
+    if (thrust) {
+      // 苦無／長矛：破空穿透流線 (Sonic Slipstream)
       ctx.globalAlpha = flashPower * 0.85;
       ctx.strokeStyle = '#cfe8ff';
       ctx.lineWidth = 2.0;
@@ -1987,18 +2027,6 @@ export function drawHeldWeapon(ctx, id, opts) {
       ctx.moveTo(tip + 4, 3.5);
       ctx.lineTo(tip + 14 * flashPower, 1.5);
       ctx.stroke();
-    } else if (id === 'orbit_saw') {
-      // 5. 軌道圓鋸：切割金屬火花流 (Cutting Sparks)
-      ctx.globalAlpha = flashPower;
-      ctx.strokeStyle = '#ffd166';
-      ctx.lineWidth = 2.0;
-      for (let i = 0; i < 4; i++) {
-        const offY = (i - 1.5) * 5;
-        ctx.beginPath();
-        ctx.moveTo(tip * 0.4, offY);
-        ctx.lineTo(tip * 0.4 + (10 + i * 4) * flashPower, offY * 1.6);
-        ctx.stroke();
-      }
     } else if (id === 'railgun' || id === 'annihilation_beam') {
       // 6. 軌道炮/湮滅射線：同心電磁震波環 + 超音速貫穿光軸
       ctx.globalAlpha = flashPower;
@@ -2087,20 +2115,6 @@ export function drawHeldWeapon(ctx, id, opts) {
       ctx.lineTo(tip + 3, -11 * flashPower);
       ctx.moveTo(tip - 2, 3);
       ctx.lineTo(tip + 3, 11 * flashPower);
-      ctx.stroke();
-    } else if (a.family === 'blade') {
-      // 11. 刃系全域斬擊刀光與破空月牙 (Blade Slashing Arc & Crescent Flash)
-      ctx.globalAlpha = flashPower * 0.95;
-      const arcR = tip * 0.95;
-      ctx.strokeStyle = a.color || '#cfe8ff';
-      ctx.lineWidth = 3.8;
-      ctx.beginPath();
-      ctx.arc(tip * 0.3, 0, arcR, -Math.PI * 0.44, Math.PI * 0.44);
-      ctx.stroke();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(tip * 0.3, 0, arcR, -Math.PI * 0.30, Math.PI * 0.30);
       ctx.stroke();
     } else {
       // 12. 標準槍械火光 (Standard Muzzle Flash)

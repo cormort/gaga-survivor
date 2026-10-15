@@ -1,0 +1,12 @@
+{
+  "name": "gaga-survivor",
+  "private": true,
+  "description": "遊戲本體是純靜態網頁、不需要建置；這個檔案只為了 tools/ 的回歸測試安裝 playwright",
+  "scripts": {
+    "test:levels": "node tools/verify-levels.mjs",
+    "test:smoke": "node tools/smoke-branches.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.60.0"
+  }
+}

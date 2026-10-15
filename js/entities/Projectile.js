@@ -179,6 +179,10 @@ export class Projectile {
     // 武器型態專屬 (Hades Aspects)
     this.aspect = options.aspect || null;
     this.markOnHit = !!options.markOnHit;
+    // 直線武器各自的命中效果（config.js）：爆彈槍破甲、長矛越穿越痛＋最後一隻釘住
+    this.shred = options.shred || null;
+    this.pierceRamp = options.pierceRamp || 0;
+    this.pinStun = options.pinStun || 0;
     this.markDur = options.markDur || 5;
     this.markBonus = options.markBonus || 0.25;
     this.reflectBullets = !!options.reflectBullets;
@@ -267,12 +271,14 @@ export class Projectile {
         break;
 
       case 'shuriken':
+      case 'axe':
         this.x += this.vx * dt;
         this.y += this.vy * dt;
         this.spin += dt * 22;
         break;
 
-      case 'bottle': {
+      case 'bottle':
+      case 'torch': {
         // 拋物線：水平等速從起點到落點，垂直加一段 sin 弧（畫面上的「往上拋」）
         const k = Math.min(1, this.age / (this.flight || 0.4));
         this.x = this.fromX + (this.toX - this.fromX) * k;
@@ -527,6 +533,22 @@ export class Projectile {
         this.drawBottle(ctx);
         break;
 
+      case 'torch':
+        this.drawTorch(ctx);
+        break;
+
+      case 'lance':
+        this.drawLance(ctx);
+        break;
+
+      case 'axe':
+        this.drawAxe(ctx);
+        break;
+
+      case 'holy_orb':
+        this.drawHolyOrb(ctx);
+        break;
+
       case 'force_field':
         this.drawForceField(ctx);
         break;
@@ -630,6 +652,58 @@ export class Projectile {
   }
 
   // 燃燒瓶：沿拋物線旋轉飛行的玻璃瓶，地面有落點預告圈與影子
+  // ── 亞瑟專屬武器（向量繪製，沒有 PNG） ──
+  drawLance(ctx) {
+    ctx.rotate(Math.atan2(this.vy, this.vx));
+    ctx.strokeStyle = '#8d5a2b';           // 木柄
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-22, 0); ctx.lineTo(10, 0); ctx.stroke();
+    ctx.fillStyle = '#e9ecef';             // 鋼製矛頭
+    ctx.strokeStyle = '#495057';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(24, 0); ctx.lineTo(8, -5); ctx.lineTo(10, 0); ctx.lineTo(8, 5); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+
+  drawAxe(ctx) {
+    ctx.rotate(this.spin);
+    ctx.strokeStyle = '#6b4226';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(0, -10); ctx.stroke();
+    ctx.fillStyle = '#ced4da';
+    ctx.strokeStyle = '#343a40';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();                       // 雙刃斧頭
+    ctx.moveTo(0, -10); ctx.quadraticCurveTo(14, -16, 13, -2); ctx.lineTo(0, -4);
+    ctx.quadraticCurveTo(-14, -16, -13, -2); ctx.lineTo(0, -4);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+
+  drawTorch(ctx) {
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.beginPath(); ctx.ellipse(0, 4, 7, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.translate(0, -(this.lift || 0));
+    ctx.rotate(this.spin);
+    ctx.strokeStyle = '#6b4226';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(0, -4); ctx.stroke();
+    const flick = 1 + Math.sin(this.age * 40) * 0.15;
+    ctx.fillStyle = '#ff7b00';
+    ctx.beginPath(); ctx.ellipse(0, -8, 5 * flick, 8 * flick, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.ellipse(0, -7, 2.5, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  drawHolyOrb(ctx) {
+    const r = this.radius;
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.8);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.35, 'rgba(255,224,102,0.95)');
+    g.addColorStop(1, 'rgba(255,183,3,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.8, 0, Math.PI * 2); ctx.fill();
+  }
+
   drawBottle(ctx) {
     const lift = this.lift || 0;
     const k = Math.min(1, this.age / (this.flight || 0.4));

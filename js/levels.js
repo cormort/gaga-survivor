@@ -874,8 +874,12 @@ const ZODIAC_BOSSES = [
 
 const ENDLESS_BOSS_LEVELS = ['street', 'lab', 'frost', 'core', 'subway', 'swamp', 'storm',
   'foundry', 'frostvoid', 'voidroad', 'inkmount', 'makaimura'];
+// 依血量由低到高排：照關卡順序排的話，每關終極首領後面接的是下一關的小 Boss
+// （霸王龍 42,000 → 軟泥 5,500），強度是鋸齒狀。排序後壓力隨輪播穩定往上，打完一輪從頭再來
+// （血量另外乘時間倍率，所以第二輪的「弱」Boss 也比第一輪強）。
 export const ENDLESS_BOSS_CYCLE = ENDLESS_BOSS_LEVELS
   .flatMap((id, i) => [...LEVELS[id].bosses, ZODIAC_BOSSES[i]])
+  .sort((a, b) => a.hp - b.hp)
   .map((b) => ({ ...b }));
 
 export const ENDLESS_BOSS_INTERVAL = 90;

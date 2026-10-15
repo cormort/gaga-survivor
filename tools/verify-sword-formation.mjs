@@ -27,7 +27,9 @@ const out = await page.evaluate(async () => {
   // ── 契約 ──────────────────────────────────────────────
   ok('傷害總量契約 = 3.0×（舊版 aoe(...,3) 的總量）', Math.abs(formationTotalMul() - 3) < 1e-9, formationTotalMul());
   ok('技能說明寫的是劍陣掃斬', /陣/.test(SKILLS.xian_sword[1].desc) && /掃斬/.test(SKILLS.xian_sword[1].desc), SKILLS.xian_sword[1].desc);
-  ok('只有修仙角色有技能（劍陣掛在青霜劍尊身上）', skillsFor('xian_sword')?.length === 2 && skillsFor('duck') === null);
+  // 經典特工隊後來各有一招 Q（純冷卻），所以這裡改成「修仙兩招、經典一招、劍陣只在青霜劍尊身上」
+  ok('修仙角色兩招、經典特工一招（劍陣掛在青霜劍尊身上）',
+    skillsFor('xian_sword')?.length === 2 && skillsFor('duck')?.length === 1 && !skillsFor('duck').some((s) => /陣/.test(s.desc)));
 
   // ── 開局：選青霜劍尊，站著不動也不會被打死 ─────────────
   const g = window.game;

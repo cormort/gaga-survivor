@@ -2,7 +2,7 @@
 
 import { WEAPONS, PASSIVES, CHARGE, WEAPON_ASPECTS, rangeTradeoffMul, weaponRangeMul, weaponRangeTier, PIERCE_ALL } from '../config.js';
 import { Projectile } from '../entities/Projectile.js';
-import { drawHeldWeapon, HELD_MOUNTS } from './WeaponArt.js';
+import { drawHeldWeapon, HELD_MOUNTS, WEAPON_ART, WEAPON_PNG_CONFIG } from './WeaponArt.js';
 import { sound } from '../audio.js';
 
 // 同一隻敵人被同一個投射物再次命中的間隔 (秒)
@@ -24,6 +24,10 @@ const ASPECT_FAMILY = {
   railgun: 'railgun', annihilation_beam: 'railgun',
   frost_nova: 'frost_nova', absolute_zero: 'frost_nova',
   shotgun: 'shotgun', dragon_breath: 'shotgun',
+  // 沒有型態的武器：指到不存在的家族 → stats 為空（不寫的話會退回 kunai 家族、吃到苦無的型態，
+  // 例如選了基隆型態的人，爆彈槍也會變成扇形射擊）
+  bolter: 'none', storm_bolter: 'none', chainsword: 'none', power_sword: 'none',
+  lance: 'none', goddess_bracelet: 'none', torch: 'none', battle_axe: 'none',
 };
 
 export class WeaponManager {
@@ -352,9 +356,21 @@ export class WeaponManager {
 
       item.cooldownTimer -= dt;
 
-      // 手持外觀的後座與槍口火光衰減（純視覺，不影響任何傷害路徑）
-      if (item.recoil > 0) item.recoil = Math.max(0, item.recoil - dt * 5.5);
-      if (item.muzzle > 0) item.muzzle = Math.max(0, item.muzzle - dt * 8);
+      // 手持外觀的後座與槍口火光衰減（純視覺，不影響任何傷害路徑）。
+      // 動作長度跟著這把武器的冷卻走（recoilDur，開火時設定）：重武器揮得慢、快槍不會動作沒做完就被重置
+      if (item.recoil > 0) item.recoil = Math.max(0, item.recoil - dt / (item.recoilDur || 0.18));
+      if (item.muzzle > 0) item.muzzle = Math.max(0, item.muzzle - dt * 14);   // 槍口火光約 70 毫秒
+      // 瞄準平滑轉向：畫面上的角度 drawAim 追著實際瞄準 aim 轉（約 0.1 秒到位），換目標不再瞬間跳角度
+      if (item.aim != null) {
+        if (item.drawAim == null) item.drawAim = item.aim;
+        const d = Math.atan2(Math.sin(item.aim - item.drawAim), Math.cos(item.aim - item.drawAim));
+        item.drawAim += d * Math.min(1, dt * 20);
+        // 主手換邊（帶遲滯）：瞄準接近正上/正下時維持原本那一手，避免左右來回閃
+        const c = Math.cos(item.drawAim);
+        if (c > 0.2) item.handSide = 1;
+        else if (c < -0.2) item.handSide = -1;
+        else if (!item.handSide) item.handSide = c >= 0 ? 1 : -1;
+      }
 
       // 被封印精英鎖住的武器不攻擊（擊殺封印者才解封，見 main.js updateSeals）
       if (item.sealedBy) continue;
@@ -398,6 +414,8 @@ export class WeaponManager {
         // 這兩個數字先前都沒有任何讀者。
         const aspectCd = this.aspectOf(id).stats.cdMul || 1;
         item.cooldownTimer = Math.max(0.08, baseCd * this.player.cdrMultiplier * overload * aspectCd);
+        // 苦無（冷卻 0.7）≈ 0.25 秒、鏈鋸劍（1.35）封頂 0.35 秒、快槍下限 0.12 秒
+        item.recoilDur = Math.min(0.35, Math.max(0.12, item.cooldownTimer * 0.35));
 
         // 彈匣武器 (霰彈槍)：打完一匣進入換彈卡頓；沒目標沒開火就不扣彈
         if (def.magazine && fired !== false) {
@@ -435,6 +453,23 @@ export class WeaponManager {
     }
   }
 
+  // 投射物的出發點：主手武器從槍口／刃尖（與手持外觀同一套掛載點與 tipX），
+  // 背在身上的武器從身體朝瞄準方向偏一點。延遲開火的閉包要在「真的射出那一刻」呼叫，玩家會移動。
+  muzzle(id) {
+    const p = this.player;
+    const item = this.weapons.get(id);
+    // 用「實際瞄準」而非畫面上還在轉的 drawAim：剛換到背後的目標時，子彈要從轉過去的那一側出，
+    // 不能從舊方向的槍口飛出來再橫越身體
+    const aim = item && item.aim;
+    if (aim == null) return { x: p.x, y: p.y };
+    const slot = [...this.weapons.keys()].indexOf(id);
+    if (slot !== 0) return { x: p.x + Math.cos(aim) * 14, y: p.y + Math.sin(aim) * 14 };
+    const m = HELD_MOUNTS[0];
+    const tip = (WEAPON_PNG_CONFIG[id]?.tipX ?? WEAPON_ART[id]?.len ?? 20) * (m.scale || 1);
+    const side = Math.cos(aim) >= 0 ? 1 : -1;
+    return { x: p.x + side * m.dx + Math.cos(aim) * tip, y: p.y + m.dy + Math.sin(aim) * tip };
+  }
+
   // 統一產生投射物。crit 必須由開火端顯式帶入 —— 延遲開火的閉包若回頭讀 this，
   // 期間別把武器開火會把旗標蓋掉，暴擊跳字與「連環爆裂」特效就會掛在錯的彈上。
   mkProjectile(options, crit = false) {
@@ -467,7 +502,7 @@ export class WeaponManager {
     // 幸運藥劑 (+25% 暴擊率) 與力量藥劑 (+40% 傷害) 在這裡讀計時器。
     // 兩者原本都只被倒數與畫光環，沒有任何傷害路徑讀取 —— 撿到等於沒撿。
     const crit = Math.random() < (this.player.critChance || 0) + (this.player.metaCrit || 0) +
-      (this.player.luckPotionTimer > 0 ? 0.25 : 0);
+      (this.player.luckPotionTimer > 0 ? 0.25 : 0) + (def.critBonus || 0);
     const critMul = 2 + (this.player.metaCritDmg || 0);
     const potionDmgMul = this.player.atkPotionTimer > 0 ? 1.4 : 1;
 
@@ -491,7 +526,7 @@ export class WeaponManager {
     // 手持武器外觀：記下這一發瞄準的方向，並補上後座與槍口火光。
     // 方向以「最近的敵人」為準 —— 與各武器實際鎖定的目標一致，玩家看到的槍口
     // 永遠指著它正在打的東西（沒有敵人時維持上一個方向，不會亂轉）。
-    const aimTarget = this.getClosestEnemy(enemies);
+    const aimTarget = this.pickTarget(def, enemies);
     if (aimTarget) item.aim = Math.atan2(aimTarget.y - this.player.y, aimTarget.x - this.player.x);
     item.recoil = 1;
     item.muzzle = 1;
@@ -501,7 +536,20 @@ export class WeaponManager {
       case 'ghost_shuriken':
       case 'phase_blade':
       case 'phase_storm':
+      case 'lance':
         this.fireKunai(def, item, finalDamage, enemies, crit);
+        break;
+
+      case 'torch':
+        this.fireMolotov(def, item, finalDamage, enemies, crit);
+        break;
+
+      case 'battle_axe':
+        this.fireAxe(def, item, finalDamage, enemies, crit);
+        break;
+
+      case 'goddess_bracelet':
+        this.fireBracelet(def, item, finalDamage, enemies, crit);
         break;
 
       case 'guardian':
@@ -573,7 +621,7 @@ export class WeaponManager {
   }
 
   fireKunai(def, item, damage, enemies, crit = false) {
-    const target = this.getClosestEnemy(enemies);
+    const target = this.pickTarget(def, enemies);
     if (!target) return;
 
     // 型態要跟著「這把武器自己的家族」而不是永遠讀 kunai：fireKunai 同時服務
@@ -600,9 +648,10 @@ export class WeaponManager {
       this.schedule(i * 0.07, () => {
         if (!target) return;
         // 相位風暴：飛刃從玩家周圍隨機的相位裂隙射出，而不是全部從手上出來
-        let ox = this.player.x;
-        let oy = this.player.y;
+        let { x: ox, y: oy } = this.muzzle(def.id);
         if (def.riftRadius) {
+          ox = this.player.x;
+          oy = this.player.y;
           const ra = Math.random() * Math.PI * 2;
           ox += Math.cos(ra) * def.riftRadius;
           oy += Math.sin(ra) * def.riftRadius;
@@ -643,6 +692,8 @@ export class WeaponManager {
               phaseJump: def.phaseJump || 0,
               phaseJumps: def.phaseJumps || 0,
               afterimage: !!def.phaseJump,
+              pierceRamp: def.pierceRamp || 0,
+              pinStun: def.pinStun || 0,
             }, finalCrit)
           );
         }
@@ -711,7 +762,7 @@ export class WeaponManager {
           isEvo: def.isEvo,
           knockback: 4.5,
           rehit: ORBIT_REHIT,
-          reflectBullets: !!stats.reflectBullets,
+          reflectBullets: !!stats.reflectBullets || !!def.blockBullets,
         }, crit)
       );
     }
@@ -729,14 +780,14 @@ export class WeaponManager {
       field = this.mkProjectile({
         type: 'force_field', weaponId: def.id, x: this.player.x, y: this.player.y,
         damage: dmg, radius, pierce: this.declaredPierce(def, item.level), life: def.duration, isEvo: true,
-        knockback: 1.5, rehit, reflectBullets: !!stats.reflectBullets, followPlayer: true,
+        knockback: 1.5, rehit, reflectBullets: !!stats.reflectBullets || !!def.blockBullets, followPlayer: true,
       }, crit);
       this.projectiles.push(field);
     }
     field.damage = dmg;
     field.radius = radius;
     field.rehit = rehit;
-    field.reflectBullets = !!stats.reflectBullets;
+    field.reflectBullets = !!stats.reflectBullets || !!def.blockBullets;
 
     // 擊退風暴：以遊戲時間倒數（update 扣 _stormCd，暫停時不會偷跑）
     if (this._stormCd <= 0) {
@@ -759,7 +810,7 @@ export class WeaponManager {
 
   // 3. 火箭 / 鯊魚核彈
   fireRocket(def, item, damage, enemies, crit = false) {
-    const target = this.getRandomEnemy(enemies);
+    const target = this.pickTarget(def, enemies);
     if (!target) return;
 
     const { id: aspect, stats } = this.aspectOf(def.id);
@@ -790,8 +841,7 @@ export class WeaponManager {
           this.mkProjectile({
             type: 'rocket',
             weaponId: def.id,
-            x: this.player.x,
-            y: this.player.y,
+            ...this.muzzle(def.id),
             vx: Math.cos(a) * spd,
             vy: Math.sin(a) * spd,
             damage: dmg,
@@ -829,6 +879,7 @@ export class WeaponManager {
       const targetY = target ? target.y + (Math.random() * 40 - 20) : this.player.y + (Math.random() * 160 - 80);
 
       sound.playShoot('molotov', this.player.x);   // 燃燒瓶原本沒有任何投擲音效（六種武器唯一的靜音）
+      const from = this.muzzle(def.id);
 
       // 真的「投擲」：瓶子沿拋物線飛到落點（純視覺、不碰撞），落地摔碎才點燃火海。
       // 先前火海是開火當下直接出現在目標腳下，看不出是丟出去的瓶子。
@@ -836,18 +887,51 @@ export class WeaponManager {
       const flight = Math.min(0.55, 0.28 + dist / 1400);
       this.projectiles.push(
         this.mkProjectile({
-          type: 'bottle', weaponId: def.id, x: this.player.x, y: this.player.y,
+          type: def.flightType || 'bottle', weaponId: def.id, x: from.x, y: from.y,
           toX: targetX, toY: targetY, flight, arcHeight: 40 + dist * 0.15,
           damage, radius: 6, pierce: this.declaredPierce(def, item.level), life: flight, isEvo: def.isEvo, noCollide: true,
         }, crit)
       );
 
-      this.schedule(flight, () => this.landMolotov(def, item, stats, damage, r, targetX, targetY, enemies, crit));
+      this.schedule(flight, () => this.landMolotov(def, item, stats, damage, r, targetX, targetY, enemies, crit, from));
     });
   }
 
+  // 旋轉戰斧（亞瑟專屬）：出手先偏 curve 弧度，再以 homing 轉回目標 → 弧線劈過去
+  fireAxe(def, item, damage, enemies, crit = false) {
+    const target = this.pickTarget(def, enemies);
+    if (!target) return;
+    const n = def.count[item.level - 1];
+    for (let i = 0; i < n; i++) this.schedule(i * 0.15, () => {
+      const side = i % 2 === 0 ? 1 : -1;   // 多把時左右交替，像雙手輪流甩
+      const a = Math.atan2(target.y - this.player.y, target.x - this.player.x) - side * def.curve;
+      this.projectiles.push(this.mkProjectile({
+        type: 'axe', weaponId: def.id, ...this.muzzle(def.id),
+        vx: Math.cos(a) * def.speed, vy: Math.sin(a) * def.speed,
+        damage, radius: 13 * this.player.rangeMultiplier, pierce: this.declaredPierce(def, item.level),
+        life: def.range / def.speed + 0.3, homing: def.homing, target, knockback: 6,
+      }, crit));
+      sound.playShoot('chainsword', this.player.x);
+    });
+  }
+
+  // 女神手環（騎士長矛的超武）：向四周放一圈追蹤光球
+  fireBracelet(def, item, damage, enemies, crit = false) {
+    const offset = Math.random() * Math.PI * 2;
+    for (let i = 0; i < def.count; i++) {
+      const a = offset + (i / def.count) * Math.PI * 2;
+      this.projectiles.push(this.mkProjectile({
+        type: 'holy_orb', weaponId: def.id, x: this.player.x, y: this.player.y,
+        vx: Math.cos(a) * def.speed, vy: Math.sin(a) * def.speed,
+        damage, radius: 10 * this.player.rangeMultiplier, pierce: this.declaredPierce(def, item.level),
+        life: def.range / def.speed + 0.6, homing: def.homing, target: this.getRandomEnemy(enemies), isEvo: true, knockback: 2,   // 各追各的，不要全部擠向同一隻
+      }, crit));
+    }
+    sound.playShoot('phase_blade', this.player.x);
+  }
+
   // 燃燒瓶落地：玻璃碎裂 → 火海（燃油煉獄的火海會沿地面擴散）
-  landMolotov(def, item, stats, damage, r, targetX, targetY, enemies, crit) {
+  landMolotov(def, item, stats, damage, r, targetX, targetY, enemies, crit, from = null) {
     const ps = this.game?.particles;
     if (ps) {
       ps.createHitSpark(targetX, targetY, '#e9ecef');
@@ -865,31 +949,39 @@ export class WeaponManager {
       }
     }
 
-    this.projectiles.push(
-      this.mkProjectile({
-        type: 'fire_pool',
-        weaponId: def.id,
-        x: targetX,
-        y: targetY,
-        damage: damage,
-        radius: r,
-        pierce: this.declaredPierce(def, item.level),
-        life: def.duration,
-        isEvo: def.isEvo,
-        knockback: 0.2,
-        isSanctuary: !!stats.sanctuary,
-        // 雅典娜型態的 dmgResist 先前**全 repo 沒有讀取端**（宣告了 25% 減傷但完全沒生效），
-        // 這裡把值傳進火海實體，站在領域內時由 Player.takeDamage 套用
-        sanctuaryResist: stats.dmgResist || 0,
-        // 札格型態：火海跳頻 +30% (tickRateMul 0.70) —— 這個欄位先前沒有讀者
-        tickInterval: 0.25 * (stats.tickRateMul || 1),
-        healPerSec: stats.healPerSec || 0,
-        // 燃油煉獄：火海從 spreadFrom 倍擴散到 spreadTo 倍（spreadTime 秒內）
-        growFrom: def.spreadFrom || 0,
-        growTo: def.spreadTo || 0,
-        growTime: def.spreadTime || 0,
-      }, crit)
-    );
+    // 妖火火把：落地展開成一道垂直於投擲方向的火牆（fireWall 段），擋住一整條來路；
+    // 燃燒瓶則是一灘圓形火海。兩者用的是同一種 fire_pool 實體。
+    const wall = def.fireWall || 1;
+    const dirA = from ? Math.atan2(targetY - from.y, targetX - from.x) : 0;
+    const segR = wall > 1 ? r * 0.6 : r;
+    for (let k = 0; k < wall; k++) {
+      const off = (k - (wall - 1) / 2) * segR * 1.5;
+      this.projectiles.push(
+        this.mkProjectile({
+          type: 'fire_pool',
+          weaponId: def.id,
+          x: targetX - Math.sin(dirA) * off,
+          y: targetY + Math.cos(dirA) * off,
+          damage: damage,
+          radius: segR,
+          pierce: this.declaredPierce(def, item.level),
+          life: def.duration,
+          isEvo: def.isEvo,
+          knockback: 0.2,
+          isSanctuary: !!stats.sanctuary,
+          // 雅典娜型態的 dmgResist 先前**全 repo 沒有讀取端**（宣告了 25% 減傷但完全沒生效），
+          // 這裡把值傳進火海實體，站在領域內時由 Player.takeDamage 套用
+          sanctuaryResist: stats.dmgResist || 0,
+          // 札格型態：火海跳頻 +30% (tickRateMul 0.70) —— 這個欄位先前沒有讀者
+          tickInterval: 0.25 * (stats.tickRateMul || 1),
+          healPerSec: stats.healPerSec || 0,
+          // 燃油煉獄：火海從 spreadFrom 倍擴散到 spreadTo 倍（spreadTime 秒內）
+          growFrom: def.spreadFrom || 0,
+          growTo: def.spreadTo || 0,
+          growTime: def.spreadTime || 0,
+        }, crit)
+      );
+    }
   }
 
   // 5. 雷電矩陣 / 狂雷星暴
@@ -1007,7 +1099,7 @@ export class WeaponManager {
   // 6. 量子足球 / 量子星雲球
   // 迴力鏢：去程 outTime 秒後折返，去回都會切開路徑（靠 rehit 讓同一隻敵人被兩次命中）
   fireBoomerang(def, item, damage, enemies, crit = false) {
-    const target = this.getClosestEnemy(enemies);
+    const target = this.pickTarget(def, enemies);
     if (!target) return;
 
     const { stats } = this.aspectOf(def.id);
@@ -1026,8 +1118,7 @@ export class WeaponManager {
         this.mkProjectile({
           type: 'boomerang',
           weaponId: def.id,
-          x: this.player.x,
-          y: this.player.y,
+          ...this.muzzle(def.id),
           vx: Math.cos(a) * speed,
           vy: Math.sin(a) * speed,
           damage: dmg,
@@ -1048,7 +1139,7 @@ export class WeaponManager {
 
   // 軌道炮：開火當下就結算整條直線的傷害（不是飛行彈體），再補一個純視覺的光束實體
   fireRailgun(def, item, damage, enemies, particleSystem, crit = false) {
-    const target = this.getClosestEnemy(enemies);
+    const target = this.pickTarget(def, enemies);
     if (!target) return;
 
     const { stats } = this.aspectOf(def.id);
@@ -1185,7 +1276,7 @@ export class WeaponManager {
 
   // 霰彈槍：朝最近敵人扇形噴出多顆短射程彈丸（射程 = 彈速 × 壽命）
   fireShotgun(def, item, damage, enemies, crit = false) {
-    const target = this.getClosestEnemy(enemies);
+    const target = this.pickTarget(def, enemies);
     if (!target) return false;
 
     const { stats } = this.aspectOf(def.id);
@@ -1209,8 +1300,7 @@ export class WeaponManager {
         this.mkProjectile({
           type: 'pellet',
           weaponId: def.id,
-          x: this.player.x,
-          y: this.player.y,
+          ...this.muzzle(def.id),
           vx: Math.cos(a) * speed,
           vy: Math.sin(a) * speed,
           damage: dmg,
@@ -1347,6 +1437,43 @@ export class WeaponManager {
   }
 
   // 預設以玩家為中心；追蹤彈換目標時改用彈體位置與搜尋半徑
+  // 瞄準規則（WEAPONS[id].targeting）：每把武器打不同的目標，不再全部擠向最近那一隻。
+  //   nearest（預設）最近的 ／ strongest 射程內血量最高（精英、Boss 優先）／ densest 射程內最密集的怪群
+  //   random 射程內隨機 ／ heading 朝玩家移動方向最近的那隻（沒有就退回最近）
+  pickTarget(def, enemies) {
+    const rule = def.targeting;
+    if (!rule || rule === 'nearest') return this.getClosestEnemy(enemies);
+    if (rule === 'random') return this.getRandomEnemy(enemies);
+    const p = this.player;
+    const R = (def.range || 600) * 1.1 * (p.rangeMultiplier || 1);
+    const inRange = [];
+    for (const e of enemies) if (!e.isDead && (e.x - p.x) ** 2 + (e.y - p.y) ** 2 <= R * R) inRange.push(e);
+    if (!inRange.length) return this.getClosestEnemy(enemies);
+    let best = null, bestScore = -Infinity;
+    if (rule === 'strongest') {
+      for (const e of inRange) { const sc = e.hp * (e.isBoss ? 3 : e.isElite ? 2 : 1); if (sc > bestScore) { bestScore = sc; best = e; } }
+    } else if (rule === 'densest') {
+      // ponytail: O(n²)，候選只取 60 隻；怪海時夠準，要更準再改用 main.js 的空間格
+      const cand = inRange.length > 60 ? inRange.slice(0, 60) : inRange;
+      for (const e of cand) {
+        let n = 0;
+        for (const o of inRange) if ((o.x - e.x) ** 2 + (o.y - e.y) ** 2 < 100 * 100) n++;
+        if (n > bestScore) { bestScore = n; best = e; }
+      }
+    } else if (rule === 'heading') {
+      const v = this.game?.input?.vector || { x: 0, y: 0 };
+      const len = Math.hypot(v.x, v.y);
+      const hx = len > 0.1 ? v.x / len : (p.facing || 1), hy = len > 0.1 ? v.y / len : 0;
+      for (const e of inRange) {
+        const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
+        const sc = (dx * hx + dy * hy) / d - (d / R) * 0.3;
+        if (sc > bestScore) { bestScore = sc; best = e; }
+      }
+      if (bestScore < 0) best = null;
+    }
+    return best || this.getClosestEnemy(enemies);
+  }
+
   getClosestEnemy(enemies, fromX = this.player.x, fromY = this.player.y, maxDist = Infinity) {
     let closest = null;
     let minDist = maxDist;
@@ -1448,7 +1575,8 @@ export class WeaponManager {
       drawHeldWeapon(ctx, id, {
         x: sx,
         y: sy,
-        aim: item.aim,
+        aim: item.drawAim ?? item.aim,
+        side: item.handSide,
         recoil: item.recoil || 0,
         muzzle: item.muzzle || 0,
         level: item.level,
@@ -1492,7 +1620,7 @@ export class WeaponManager {
 
   // 11. 帝國爆彈槍 / 神聖風暴爆彈槍 (高爆火箭穿甲彈)
   fireBolter(def, item, damage, enemies, crit = false) {
-    const target = this.getClosestEnemy(enemies);
+    const target = this.pickTarget(def, enemies);
     if (!target) return;
 
     const baseCount = Array.isArray(def.projectiles) ? def.projectiles[item.level - 1] : (def.projectiles || 1);
@@ -1506,8 +1634,7 @@ export class WeaponManager {
     for (let i = 0; i < baseCount; i++) {
       this.schedule(i * interval, () => {
         if (!target || target.isDead) return;
-        const ox = this.player.x;
-        const oy = this.player.y;
+        const { x: ox, y: oy } = this.muzzle(def.id);
         const dx = target.x - ox;
         const dy = target.y - oy;
         const dist = Math.hypot(dx, dy);
@@ -1526,6 +1653,7 @@ export class WeaponManager {
         this.projectiles.push(
           this.mkProjectile({
             type: def.projType || 'bolter',
+            shred: def.shred || null,   // 破甲：命中的敵人一段時間內受傷增加
             weaponId: def.id,
             x: ox,
             y: oy,

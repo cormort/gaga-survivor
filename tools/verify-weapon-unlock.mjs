@@ -47,7 +47,8 @@ const res = await page.evaluate(async () => {
   const out = {};
 
   // 資料：每把基礎武器恰好由「起始」或「一張關卡」取得一次
-  const base = Object.keys(WEAPONS).filter((id) => !WEAPONS[id].isEvo);
+  // 特工專屬武器（exclusiveTo）不走通關解鎖，選那位特工就開放，不列入「起始 + 關卡獎勵」
+  const base = Object.keys(WEAPONS).filter((id) => !WEAPONS[id].isEvo && !WEAPONS[id].exclusiveTo);
   const rewards = LEVEL_ORDER.map((id) => LEVELS[id].rewardWeapon).filter(Boolean);
   const sources = [...STARTER_WEAPONS, ...rewards];
   out.base = base;

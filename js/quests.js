@@ -54,7 +54,8 @@ export function generateDailyQuests(dateKey) {
   const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 
   const pool = [...QUEST_POOL];
-  const baseWeapons = Object.keys(WEAPONS).filter((id) => !WEAPONS[id].isEvo);
+  // 專屬武器不出任務：其他特工永遠拿不到，任務會卡死
+  const baseWeapons = Object.keys(WEAPONS).filter((id) => !WEAPONS[id].isEvo && !WEAPONS[id].exclusiveTo);
   const list = [];
   for (let i = 0; i < 3 && pool.length > 0; i++) {
     const def = pool.splice(Math.floor(rand() * pool.length), 1)[0];
