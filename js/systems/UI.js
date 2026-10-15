@@ -1573,9 +1573,11 @@ export class UIManager {
       const card = document.createElement('button');
       card.className = 'level-card' + (id === currentId && unlocked ? ' selected' : '') + (unlocked ? '' : ' locked');
       card.disabled = !unlocked;
-      const bestLine = best
-        ? `最佳 ${String(Math.floor(best.time / 60)).padStart(2, '0')}:${String(Math.floor(best.time % 60)).padStart(2, '0')}${best.cleared ? ' ✔' : ''}`
-        : '尚未挑戰';
+      // 守塔關改顯示三星評價（守塔的勝負看命數，不看撐了多久）
+      const bestLine = !best ? '尚未挑戰'
+        : lv.endless ? `最佳 守住 ${best.waves || 0} 波`
+        : lv.td && best.cleared ? `${'★'.repeat(best.stars || 1)}${'☆'.repeat(3 - (best.stars || 1))} ✔`
+        : `最佳 ${String(Math.floor(best.time / 60)).padStart(2, '0')}:${String(Math.floor(best.time % 60)).padStart(2, '0')}${best.cleared ? ' ✔' : ''}`;
       // 地形機制逐項列出（每種一個標籤），不再只寫在說明文字裡
       const mechChips = unlocked && lv.mechs?.length
         ? `<span class="level-mechs">${lv.mechs.filter((m) => MECH_INFO[m.type])

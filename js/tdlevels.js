@@ -486,7 +486,7 @@ export const TD_LEVELS = {
     desc: '天譴軍團的瘟疫吞沒了洛丹倫！食屍鬼、石像鬼與憎惡從三個方向湧向人類王城，守住最後的城堡。',
     difficulty: 7,
     dnaMult: 4.0,
-    next: null,
+    next: 'td_endless',   // 最後一張打完開放無盡防線
     td: true,
     startGold: 520,
     pathWidth: 85,
@@ -543,6 +543,25 @@ export const TD_LEVELS = {
   },
 };
 
+// 守塔無盡（td_endless）：沿用三門要塞的三線地圖與 12 波，打完之後 TowerDefense.endlessWave() 往後一直生成，
+// 直到核心被打破為止，記錄撐到第幾波。路線／建塔點要深拷貝 —— 兩張關卡共用同一份陣列的話，
+// 地基展平與每局的程序化重排會互相改到對方。
+TD_LEVELS.td_endless = {
+  ...TD_LEVELS.td_fortress,
+  id: 'td_endless',
+  name: '無盡防線',
+  sub: '守塔 ‧ 無盡波次',
+  icon: '♾️',
+  desc: '三門要塞的地圖，波次永不停止：每波更硬、隨機掛上詞綴，每 10 波來一隻首領。看你能守到第幾波。',
+  difficulty: 8,
+  next: null,
+  endless: true,
+  rewardWeapon: undefined,
+  paths: JSON.parse(JSON.stringify(TD_LEVELS.td_fortress.paths)),
+  sockets: JSON.parse(JSON.stringify(TD_LEVELS.td_fortress.sockets)),
+  waves: TD_LEVELS.td_fortress.waves.map((w) => ({ ...w, groups: w.groups.map((g) => ({ ...g })) })),
+};
+
 // 地基加成展平：socketPlan 只是「逐格意圖」的書寫形式，載入時寫進 sockets[i].bonus / .label。
 // 讀取端（Turret.js 蓋塔、Facilities.js 護甲相剋與光環、UI.js 徽章、TowerDefense.draw 的六角底座）
 // 一律只看 socket.bonus，不需要知道 plan 的存在；寫完就刪，避免同一份資料有兩個來源。
@@ -563,7 +582,7 @@ for (const level of Object.values(TD_LEVELS)) {
 
 export { randomizeTDLevel };
 
-export const TD_ORDER = ['td_canyon', 'td_fork', 'td_fortress', 'td_forgeworld', 'td_redalert', 'td_starcraft', 'td_warcraft'];
+export const TD_ORDER = ['td_canyon', 'td_fork', 'td_fortress', 'td_forgeworld', 'td_redalert', 'td_starcraft', 'td_warcraft', 'td_endless'];
 
 // 併入 LEVELS：Spawner、音樂、關卡選單等所有以 id 查關卡的地方都能直接用
 Object.assign(LEVELS, TD_LEVELS);

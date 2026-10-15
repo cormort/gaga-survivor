@@ -160,6 +160,12 @@ const DECOR_SPRITE_KEYS = new Set([
   'makai_tombstone', 'makai_dead_tree', 'makai_gargoyle', 'makai_skull_urn'
 ]);
 
+// 貼圖角色的邊光色預設取 CHARACTERS[*].accent（UI 主色）。技術神甫的深紅混白後仍比自己的輪廓暗，
+// verify-art 量到左上外緣亮點只有 3% —— 邊光代表「光」而不是配色，改用同色系的淺色。
+// （兔子與喵喵也沒過門檻，但調亮邊光會連整圈輪廓中位數一起拉高、比例反而不變或變差，
+//   要動的是剪影本身，列在 README「已知技術債」）
+const RIM_ACCENT_OVERRIDE = { techpriest_goose: '#ffe0d8' };
+
 function accentFor(key, b) {
   // 場景裝飾維持平面：它們本來就是貼在地上的圖，加了邊光反而像浮起來。
   if (b.static) return null;
@@ -168,7 +174,7 @@ function accentFor(key, b) {
   if (DECOR_SPRITE_KEYS.has(base)) return null;
   if (b.image) {
     if (PLAYER_SPRITE_KEYS.has(base)) {
-      return (CHARACTERS[base] && CHARACTERS[base].accent) || DEFAULT_ACCENT;
+      return RIM_ACCENT_OVERRIDE[base] || (CHARACTERS[base] && CHARACTERS[base].accent) || DEFAULT_ACCENT;
     }
     for (const [prefix, color] of BOSS_ACCENT) {
       if (base.startsWith(prefix)) return color;

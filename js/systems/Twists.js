@@ -42,7 +42,9 @@ export function updateTwist(game, dt) {
     if (!tw.warn && tw.timer >= tw.every - tw.warnTime) {
       tw.next = turnAngle(tw.angle);
       tw.warn = 1;
-      const msg = tw.type === 'front'
+      // tw.msg 可自訂（{dir} 換成方向）：同一種規則在不同關卡有自己的說法（鑄造廠的傳送帶、魔界村的大門）
+      const msg = tw.msg ? tw.msg.replace('{dir}', dirName(tw.next))
+        : tw.type === 'front'
         ? `🚇 隧道轉向！怪潮即將改從【${dirName(tw.next)}】湧入`
         : `🌪️ 風向轉變！沙暴即將吹向【${dirName(tw.next)}】`;
       game.ui.say(msg, '#ffb703', 3);
@@ -78,10 +80,11 @@ export function drawTwist(game, ctx, cam) {
 
   if (tw.type === 'fog') {
     const r = tw.radius;
+    const c = tw.color || '28,44,22';   // 霧的顏色（沼澤孢子綠、霜封暴風雪白、仙山山嵐灰）
     const g = ctx.createRadialGradient(px, py, r * 0.55, px, py, r * 1.35);
-    g.addColorStop(0, 'rgba(28,44,22,0)');
-    g.addColorStop(0.6, 'rgba(28,44,22,0.78)');
-    g.addColorStop(1, 'rgba(18,30,14,0.96)');
+    g.addColorStop(0, `rgba(${c},0)`);
+    g.addColorStop(0.6, `rgba(${c},0.78)`);
+    g.addColorStop(1, `rgba(${c},0.96)`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, vw, vh);
     return;
@@ -102,7 +105,7 @@ export function drawTwist(game, ctx, cam) {
     const dx = w.x / len, dy = w.y / len;
     const t = game.gameTime * 420;
     ctx.save();
-    ctx.strokeStyle = 'rgba(232,200,140,0.35)';
+    ctx.strokeStyle = tw.streak || 'rgba(232,200,140,0.35)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = 0; i < 48; i++) {

@@ -131,10 +131,11 @@ const results = await page.evaluate(async () => {
   const m2 = g.goldMul();
   g._goldRushTimer = 0;
   const m3 = g.goldMul();
+  // 以 m0 為基準比倍率：新存檔預設「輕鬆」難度，金幣基準本來就是 ×0.75，不是 1
   ok('M7 淘金狂潮為 ×2 且不疊加/不殘留',
-    m0 === 1 && m1 === 2 && m2 === 2 && m3 === 1, `${m0}/${m1}/${m2}/${m3}`);
+    m1 === m0 * 2 && m2 === m0 * 2 && m3 === m0, `${m0}/${m1}/${m2}/${m3}`);
   g.player.luckPotionTimer = 20;
-  ok('幸運藥劑金幣 ×2', g.goldMul() === 2, g.goldMul());
+  ok('幸運藥劑金幣 ×2', g.goldMul() === m0 * 2, `${m0} → ${g.goldMul()}`);
   g.player.luckPotionTimer = 0;
 
   // 5) 聖光結界不再永久有效

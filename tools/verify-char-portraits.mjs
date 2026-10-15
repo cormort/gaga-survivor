@@ -7,7 +7,7 @@
 // 只要有一個請求卡住不 fire load/error，更是永遠不畫。
 //
 // 這支把「感覺」變成可量測的門檻：
-//   1. 正常網速：25 張卡的頭像都要畫出來，而且逐像素等於對應的精靈圖
+//   1. 正常網速：每張特工卡的頭像都要畫出來，而且逐像素等於對應的精靈圖
 //      （防「畫出來了但畫成 getSprite 退回的 walker 殭屍」）
 //   2. 漸進式：冷快取 + Fast 3G，頭像必須**陸續冒出來**，不能等到全部到齊才有
 //      （舊版這裡是 0 張）
@@ -98,7 +98,8 @@ async function newPage({ throttle = null, stall = null } = {}) {
   return { context, page: p, stallHits: () => stallHits };
 }
 
-/* ── 1) 正常網速：25 張頭像都要畫出來，而且要等於正確的精靈圖 ── */
+let N = 25;   // 特工數，第 1 組測試開頭從 characters.js 讀
+/* ── 1) 正常網速：所有特工頭像都要畫出來，而且要等於正確的精靈圖 ── */
 {
   const { context, page } = await newPage();
   await page.goto(`${BASE}/index.html`, { waitUntil: 'load', timeout: 60000 });
@@ -115,7 +116,9 @@ async function newPage({ throttle = null, stall = null } = {}) {
     }, null, { timeout: 60000 }).catch(() => {});
 
   const counts = await page.evaluate(COUNT_DRAWN);
-  ok('正常網速下 25 張特工頭像全部畫出來', counts.cards === 25 && counts.drawn === 25,
+  // 特工數從資料讀（新增特工不用回來改測試；原本寫死 25，亞瑟加入後 26 張就整組誤判）
+  N = await page.evaluate(async () => Object.keys((await import('/js/characters.js')).CHARACTERS).length);
+  ok(`正常網速下 ${N} 張特工頭像全部畫出來`, counts.cards === N && counts.drawn === N,
     `畫出 ${counts.drawn}/${counts.cards}`);
 
   // 逐像素比對：卡片畫的必須是「這隻角色」自己的貼圖，不是退回的 walker
@@ -153,9 +156,9 @@ async function newPage({ throttle = null, stall = null } = {}) {
     return { bad, placeholders };
   });
   ok('每一張頭像都等於該角色自己的貼圖（沒有畫成 walker 殭屍）', mismatch.bad.length === 0,
-    mismatch.bad.length ? mismatch.bad.join(' ') : '25/25 吻合');
-  ok('25 張用的都是真圖貼圖，不是 BUILDERS 裡的程式繪圖佔位', mismatch.placeholders.length === 0,
-    mismatch.placeholders.length ? `仍為佔位：${mismatch.placeholders.join(' ')}` : '25/25 都是 image:true');
+    mismatch.bad.length ? mismatch.bad.join(' ') : `${N}/${N} 吻合`);
+  ok(`${N} 張用的都是真圖貼圖，不是 BUILDERS 裡的程式繪圖佔位`, mismatch.placeholders.length === 0,
+    mismatch.placeholders.length ? `仍為佔位：${mismatch.placeholders.join(' ')}` : `${N}/${N} 都是 image:true`);
   await context.close();
 }
 
@@ -172,14 +175,14 @@ const PROGRESS = [];
     PROGRESS.push({ s: Math.round((Date.now() - t0) / 1000), drawn: c.drawn, cards: c.cards });
   }
   const line = PROGRESS.map((p) => `${p.s}s:${p.drawn}/${p.cards}`).join(' ');
-  const ready = PROGRESS.filter((p) => p.cards === 25);
+  const ready = PROGRESS.filter((p) => p.cards === N);
   const best = ready.reduce((m, p) => Math.max(m, p.drawn), 0);
   // 「部分畫出來、其他還沒」是舊版**不可能**出現的狀態：舊版一次畫或一張都不畫。
   const partial = ready.find((p) => p.drawn > 0 && p.drawn < p.cards);
   ok('Fast 3G 冷快取下，頭像只等自己那張圖（會出現「部分已畫、部分還沒」的中間狀態）',
     !!partial, partial ? `第 ${partial.s}s：${partial.drawn}/${partial.cards}` : line);
   ok('Fast 3G 冷快取下 60 秒內至少畫出 5 張（舊版：58 秒仍是 0 張）',
-    best >= 5, `最多畫出 ${best}/25｜${line}`);
+    best >= 5, `最多畫出 ${best}/${N}｜${line}`);
   await context.close();
 }
 
@@ -196,7 +199,7 @@ const PROGRESS = [];
   const counts = await page.evaluate(COUNT_DRAWN);
   ok('有一張圖永遠不回應時，其餘特工頭像仍然畫得出來（舊版：0 張）',
     counts.drawn === counts.cards - 1,
-    `畫出 ${counts.drawn}/${counts.cards}（被攔的是蒼龍天尊，應為 24/25；攔截命中 ${stallHits()} 次）`);
+    `畫出 ${counts.drawn}/${counts.cards}（被攔的是蒼龍天尊，應為 ${N - 1}/${N}；攔截命中 ${stallHits()} 次）`);
 
   const stalledCard = await page.evaluate(async () => {
     const imp = (p) => import(new URL(p, document.baseURI).href);

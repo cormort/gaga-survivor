@@ -34,8 +34,8 @@ const ok = (name, cond, detail = '') => {
 
 console.log('=== A. 資料層：地基／詞綴／王國三張表與關卡資料對得上 ===');
 {
-  ok('守塔關卡 7 關，TD_ORDER 與 TD_LEVELS 一致',
-    TD_ORDER.length === 7 && TD_ORDER.every((id) => TD_LEVELS[id]),
+  ok('守塔關卡 7 關＋無盡防線，TD_ORDER 與 TD_LEVELS 一致',
+    TD_ORDER.length === 8 && TD_ORDER.every((id) => TD_LEVELS[id]) && TD_LEVELS.td_endless.endless === true,
     `${TD_ORDER.length} 關：${TD_ORDER.join('、')}`);
 
   let sockets = 0, planLeft = 0, badBonus = [], labelMismatch = 0;
@@ -563,22 +563,34 @@ const out = await page.evaluate(async () => {
   // 落在畫布外（getImageData 回 0,0,0，貼圖有沒有效看起來都一樣）。
   g.render();
   const trn = g.ctx.getTransform();
-  const midPt = g.td.paths[0][Math.floor(g.td.paths[0].length / 2)];
-  const roadPx = [Math.round((midPt[0] - g.camera.x) * trn.a), Math.round((midPt[1] - g.camera.y) * trn.d)];
-  const sampleRoad = () => {
-    const d = g.ctx.getImageData(roadPx[0], roadPx[1], 1, 1).data;
-    return [d[0], d[1], d[2]];
-  };
+  // 取「畫面內」的路段中點（最多 10 個）：v86 起地圖程序化生成、比視野大，第一條路線的中點常常在畫面外
+  // （取樣落在畫布外 → getImageData 回 0,0,0）；路線節點本身又可能被巢穴入口蓋住，所以取路段中點、比最大差異
+  const toPx = ([x, y]) => [Math.round((x - g.camera.x) * trn.a), Math.round((y - g.camera.y) * trn.d)];
+  const cvs = g.ctx.canvas;
+  const mids = [];
+  // 每段取 1/4、1/2、3/4 三點：地圖每局重新生成，只取中點時畫面內可能只剩 1 個點，又剛好壓在入口或路標上
+  for (const path of g.td.paths) {
+    for (let i = 1; i < path.length - 1; i++) {
+      for (const t of [0.25, 0.5, 0.75]) mids.push([path[i][0] + (path[i + 1][0] - path[i][0]) * t, path[i][1] + (path[i + 1][1] - path[i][1]) * t]);
+    }
+  }
+  const roadPts = mids.map(toPx).filter(([sx, sy]) => sx > 20 && sy > 20 && sx < cvs.width - 20 && sy < cvs.height - 20).slice(0, 20);
+  const roadPx = roadPts[0] || toPx(g.td.paths[0][Math.floor(g.td.paths[0].length / 2)]);
+  const sampleAt = ([x, y]) => { const d = g.ctx.getImageData(x, y, 1, 1).data; return [d[0], d[1], d[2]]; };
+  const sampleRoad = () => sampleAt(roadPx);
+  const sampleAll = () => roadPts.map(sampleAt);
   const dist3 = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
   g.render();
   const withTex = sampleRoad();
+  const withAll = sampleAll();
   const keepImg = TD_PATH_IMAGES[tkey];
   TD_PATH_IMAGES[tkey] = null;          // 拔掉貼圖 → 圖層換 key（#notex）會重烘
   g.render();
-  const noTex = sampleRoad();
+  const noAll = sampleAll();
   TD_PATH_IMAGES[tkey] = keepImg;
-  ok('路面貼圖真的畫在路面上（拔掉貼圖，同一點的顏色會變）', dist3(withTex, noTex) >= 6,
-    `有貼圖=${withTex.join(',')} 沒貼圖=${noTex.join(',')} 差異=${dist3(withTex, noTex)}`);
+  const texDiff = Math.max(0, ...withAll.map((c, i) => dist3(c, noAll[i])));
+  ok('路面貼圖真的畫在路面上（拔掉貼圖，同一點的顏色會變）', texDiff >= 6,
+    `${roadPts.length} 個畫面內路段取樣點，最大差異=${texDiff}`);
 
   g.render();
   const c1 = g.td._roadLayerCanvas, k1 = g.td._roadLayerKey;

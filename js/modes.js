@@ -59,7 +59,7 @@ export const MODES = {
     // 守塔的難度是獨立的一條階梯：要解鎖下一難度，得先把這 7 張圖在前一難度全通關。
     // 與生存者共用進度時，「生存者選地獄、守塔第一關就被地獄倍率打爛」是沒有出路的錯配
     // （守塔的關卡階梯是自己的 1~7 星，玩家進度也完全不同）。
-    difficultyLevels: TD_ORDER,
+    difficultyLevels: TD_ORDER.filter((id) => id !== 'td_endless'),   // 無盡防線沒有通關，不列入難度解鎖
     enemyTarget: 'core',
 
     weaponMul: 0.6,      // 自身武器變弱 → 砲塔才是主力

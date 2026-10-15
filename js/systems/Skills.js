@@ -220,6 +220,128 @@ Object.assign(SKILLS, {
   ],
 });
 
+// 朝移動方向衝刺並斬過路徑（蘿蔔衝刺、神駒踐踏、白虎撲擊共用）
+function dashStrike(game, dist, mul, knock, invuln, color) {
+  const p = game.player;
+  const v = game.input.vector;
+  const len = Math.hypot(v.x, v.y);
+  const dx = len > 0.1 ? v.x / len : p.facing || 1;
+  const dy = len > 0.1 ? v.y / len : 0;
+  const x0 = p.x;
+  const y0 = p.y;
+  for (let t = 0; t <= 1.0001; t += 0.2) aoe(game, x0 + dx * dist * t, y0 + dy * dist * t, 50, mul, { knock });
+  p.x += dx * dist;
+  p.y += dy * dist;
+  p.invulnerableTimer = Math.max(p.invulnerableTimer, invuln);
+  game.particles.createShockwave(p.x, p.y, 90, color);
+}
+
+function shieldUp(game, frac, secs, color) {
+  const p = game.player;
+  p.shield = Math.max(p.shield, Math.round(p.maxHp * frac));
+  p.shieldPotionTimer = Math.max(p.shieldPotionTimer, secs);
+  game.particles.createShockwave(p.x, p.y, 110, color);
+}
+
+// 戰鎚、亞瑟與十二生肖正道特工：同樣是一招純冷卻的 Q（倍率對齊經典特工隊）
+Object.assign(SKILLS, {
+  astartes_duck: [
+    { name: '陶鋼衝鋒', icon: '🛡️', cd: 12, desc: '架盾衝鋒 220 距離，撞飛路徑上的敵人，並獲得 20% 生命護盾',
+      cast(game) { dashStrike(game, 220, 1.0, 22, 0.4, '#0077b6'); shieldUp(game, 0.2, 3, '#0077b6'); } },
+  ],
+  techpriest_goose: [
+    { name: '機魂修復', icon: '⚙️', cd: 14, desc: '回復 20% 生命，並放出伺服灼光燒灼 200 範圍敵人',
+      cast(game) {
+        const p = game.player;
+        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.2);
+        aoe(game, p.x, p.y, 200, 0.9);
+        game.particles.createShockwave(p.x, p.y, 200, '#d90429');
+      } },
+  ],
+  arthur: [
+    { name: '聖光長矛雨', icon: '🔱', cd: 12, desc: '向最近的 4 個敵人各擲出一支聖光長矛（1.3 倍）',
+      cast(game) { for (const e of nearest(game, 4, 560)) strike(game, e, 1.3, '#ffd166'); } },
+  ],
+  rat_hero: [
+    { name: '暗影疾行', icon: '🐭', cd: 9, desc: '化影疾行 240 距離，斬過路徑上的敵人，疾行中無敵',
+      cast(game) { dashStrike(game, 240, 1.0, 6, 0.5, '#00f5d4'); } },
+  ],
+  ox_hero: [
+    { name: '撼地震擊', icon: '🐂', cd: 14, desc: '重踏大地：震退 230 範圍敵人並暈眩 1.5 秒，獲得 25% 生命護盾',
+      cast(game) {
+        const p = game.player;
+        aoe(game, p.x, p.y, 230, 0.8, { knock: 36, stun: 1.5 });
+        shieldUp(game, 0.25, 3, '#ffb703');
+      } },
+  ],
+  tiger_hero: [
+    { name: '猛虎嘯天', icon: '🐯', cd: 12, desc: '虎嘯震盪 260 範圍，造成 1.3 倍傷害並暈眩 1 秒',
+      cast(game) {
+        const p = game.player;
+        aoe(game, p.x, p.y, 260, 1.3, { knock: 20, stun: 1 });
+        game.particles.createShockwave(p.x, p.y, 260, '#7fd8ff');
+      } },
+  ],
+  rabbit_hero: [
+    { name: '月影連射', icon: '🌙', cd: 10, desc: '向最近的 6 個敵人各射一箭月光（1.1 倍）',
+      cast(game) { for (const e of nearest(game, 6, 620)) strike(game, e, 1.1, '#ff758f'); } },
+  ],
+  dragon_hero: [
+    { name: '龍魂天雷', icon: '🐉', cd: 14, desc: '雷劫劈向最近的 4 個敵人（1.6 倍）並麻痺 1 秒',
+      cast(game) { for (const e of nearest(game, 4, 560)) strike(game, e, 1.6, '#00f59b', 1); } },
+  ],
+  snake_hero: [
+    { name: '萬毒蔓延', icon: '🐍', cd: 12, desc: '在最近的 3 群敵人腳下噴出毒霧（1.2 倍）',
+      cast(game) {
+        for (const e of nearest(game, 3, 520)) {
+          aoe(game, e.x, e.y, 110, 1.2);
+          game.particles.createShockwave(e.x, e.y, 110, '#52b788');
+        }
+      } },
+  ],
+  horse_hero: [
+    { name: '奔雷踐踏', icon: '🐎', cd: 9, desc: '朝移動方向奔騰 300 距離，踐踏路徑上的敵人，奔騰中無敵',
+      cast(game) { dashStrike(game, 300, 0.9, 26, 0.5, '#ffd166'); } },
+  ],
+  goat_hero: [
+    { name: '靈泉回春', icon: '🐐', cd: 15, desc: '回復 30% 生命，並獲得 20% 生命護盾',
+      cast(game) {
+        const p = game.player;
+        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.3);
+        shieldUp(game, 0.2, 4, '#b8c0ff');
+      } },
+  ],
+  monkey_hero: [
+    { name: '定海神針', icon: '🐒', cd: 13, desc: '金箍棒橫掃 240 範圍（1.5 倍），並擊退敵人',
+      cast(game) {
+        const p = game.player;
+        aoe(game, p.x, p.y, 240, 1.5, { knock: 30 });
+        game.particles.createShockwave(p.x, p.y, 240, '#ff9e00');
+      } },
+  ],
+  rooster_hero: [
+    { name: '破曉之鳴', icon: '🐓', cd: 12, desc: '烈陽光刃劈向最近的 3 個敵人（1.8 倍）',
+      cast(game) { for (const e of nearest(game, 3, 560)) strike(game, e, 1.8, '#e63946'); } },
+  ],
+  dog_hero: [
+    { name: '忠犬警戒', icon: '🐕', cd: 12, desc: '槍火支援 260 範圍（0.8 倍），並獲得 25% 生命護盾',
+      cast(game) {
+        const p = game.player;
+        aoe(game, p.x, p.y, 260, 0.8, { knock: 12 });
+        shieldUp(game, 0.25, 3, '#48cae4');
+      } },
+  ],
+  pig_hero: [
+    { name: '九齒釘耙', icon: '🐖', cd: 13, desc: '釘耙橫掃 220 範圍（1.4 倍），每命中一個敵人回 1% 生命',
+      cast(game) {
+        const p = game.player;
+        const hits = aoe(game, p.x, p.y, 220, 1.4, { knock: 18 });
+        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.01 * hits);
+        game.particles.createShockwave(p.x, p.y, 220, '#ff758f');
+      } },
+  ],
+});
+
 // 守塔關一律換成守塔英雄的兩招（TDHero.js），生存者照角色決定
 export function skillsFor(characterId, game = null) {
   if (game && game.td) return TD_SKILLS;

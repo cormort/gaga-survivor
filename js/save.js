@@ -680,7 +680,7 @@ export const save = {
 
   // 單局結算：回傳這場拿到多少 DNA 與金幣、是否破紀錄、是否解鎖新關卡／新武器
   // skipProgress=true (每日挑戰) 時只發 DNA/金幣，不寫該關最佳紀錄、不解鎖下一關
-  recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null, skipProgress = false, modeId = 'survivor', gold = 0 }) {
+  recordRun(levelId, { time, kills, level, cleared, dnaMult = 1, nextLevel = null, skipProgress = false, modeId = 'survivor', gold = 0, stars = 0, waves = 0 }) {
     const dna = Math.max(1, Math.round((time / 10 + kills / 20 + level * 2) * dnaMult * (cleared ? 1.5 : 1)));
     const runGold = Math.max(0, Math.floor(gold));
     this.data.dna += dna;
@@ -695,6 +695,8 @@ export const save = {
         time: Math.max(time, prev ? prev.time : 0),
         kills: Math.max(kills, prev ? prev.kills : 0),
         cleared: cleared || (prev ? prev.cleared : false),
+        stars: Math.max(stars || 0, (prev && prev.stars) || 0),   // 守塔三星評價（只留最佳）
+        waves: Math.max(waves || 0, (prev && prev.waves) || 0),   // 無盡防線撐到的波數（只留最佳）
       };
 
       const unlockedNew = cleared ? this.unlock(nextLevel, modeId) : false;

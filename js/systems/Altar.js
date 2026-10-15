@@ -5,6 +5,7 @@ import { Enemy } from '../entities/Enemy.js';
 import { currentWave, pickEnemy, enemyScale } from '../levels.js';
 import { rollEliteAffix } from '../config.js';
 import { DropItem } from '../entities/DropItem.js';
+import { showHint } from './Hints.js';
 
 const FIRST_AT = 75;        // 第一座祭壇出現時間（秒）
 const EVERY = 90;           // 之後的間隔（± JITTER）
@@ -29,6 +30,7 @@ export function updateAltar(game, dt) {
     const ang = Math.random() * Math.PI * 2;
     game.altar = { x: p.x + Math.cos(ang) * 380, y: p.y + Math.sin(ang) * 380, state: 'idle', t: 0, charge: 0, foes: [] };
     game.ui.say('⚔️ 挑戰祭壇出現了！站上去召喚精英怪，限時全滅可得物資箱', '#c77dff', 3.5);
+    showHint(game, 'altar');
     return;
   }
 

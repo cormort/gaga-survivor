@@ -444,6 +444,7 @@ export function generateProceduralPaths(level, isPortrait = false) {
         candidate = generateForkPaths(bounds, pathWidth, isPortrait);
         break;
       case 'td_fortress':
+      case 'td_endless':   // 無盡防線沿用三門要塞的地圖
         candidate = generateFortressPaths(bounds, pathWidth, isPortrait, ref);
         break;
       case 'td_forgeworld':

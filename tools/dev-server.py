@@ -23,8 +23,16 @@ class NoStoreHandler(SimpleHTTPRequestHandler):
         pass  # 安靜一點，免得洗掉工具輸出
 
 
+class Server(ThreadingHTTPServer):
+    # listen backlog 預設只有 5：瀏覽器載入 ES module 時會同時開幾十條連線，
+    # 超過的在 macOS 上直接被 reset（ERR_CONNECTION_RESET）→ 某個模組載不到、整頁卡住，
+    # 回歸測試就隨機 TimeoutError。拉大到 128 之後同一批測試不再隨機失敗。
+    request_queue_size = 128
+    daemon_threads = True
+
+
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8899
-    with ThreadingHTTPServer(('127.0.0.1', port), NoStoreHandler) as httpd:
+    with Server(('127.0.0.1', port), NoStoreHandler) as httpd:
         print(f'dev-server: http://127.0.0.1:{port}/ (no-store)', flush=True)
         httpd.serve_forever()

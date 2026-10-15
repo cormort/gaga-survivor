@@ -504,8 +504,9 @@ export const LEVELS = {
     hpScale: 3.4,
     // 重甲產線：怪更厚、我方更脆，但金幣回報高（換裝備的關）
     rules: {
-      label: '鐵水產線', desc: '敵人血量 +40%、我方受到傷害 +25%；金幣 +80%',
+      label: '鐵水產線', desc: '地面傳送帶持續把你往一個方向送，每 35 秒換向（箭頭預告）；敵人血量 +40%、我方受到傷害 +25%；金幣 +80%',
       enemyHpMul: 1.4, damageTakenMul: 1.25, goldMul: 1.8,
+      twist: { type: 'wind', force: 70, every: 35, warnTime: 5, msg: '⚙️ 產線換向！傳送帶即將往【{dir}】送', streak: 'rgba(255,150,60,0.35)' },
     },
     mechs: [
       { type: 'geyser', interval: 16, jitter: 6, radius: 200, fuse: 1.1, dmg: 20, dmgEnemy: 2600, color: '#ff7700' },
@@ -566,8 +567,9 @@ export const LEVELS = {
     hpScale: 3.8,
     // 冰面 + 符文池：慢怪厚血，靠滑行與走位
     rules: {
-      label: '霜封法則', desc: '敵人移速 -10%、血量 +55%；經驗 +35%',
+      label: '暴風雪', desc: '暴風雪遮蔽視野，可視範圍忽大忽小；敵人移速 -10%、血量 +55%；經驗 +35%',
       enemySpeedMul: 0.9, enemyHpMul: 1.55, expMul: 1.35,
+      twist: { type: 'fog', min: 200, max: 380, every: 30, color: '205,225,255' },
     },
     mechs: [
       { type: 'ice', friction: 0.90 },
@@ -626,8 +628,9 @@ export const LEVELS = {
     hpScale: 4.2,
     // 無盡之前的最終檢查點：又快又多，金幣爆量
     rules: {
-      label: '裂道法則', desc: '敵人移速 +30%、生成 +40%；金幣 +220%',
+      label: '裂隙單向', desc: '虛空生物只從一個方向的裂隙湧出，每 45 秒轉移（箭頭預告）；敵人移速 +30%、生成 +40%；金幣 +220%',
       enemySpeedMul: 1.3, spawnMul: 1.4, goldMul: 3.2,
+      twist: { type: 'front', arc: 1.2, every: 45, warnTime: 6, msg: '🕳️ 裂隙轉移！虛空生物即將從【{dir}】湧出' },
     },
     mechs: [
       { type: 'pool', interval: 14, jitter: 5, radius: 170, dur: 9, dmg: 15, color: '#7dffe8' },
@@ -687,8 +690,9 @@ export const LEVELS = {
     decorDensity: 0.5,
     hpScale: 4.6,
     rules: {
-      label: '天劫法則', desc: '變異體出現率 ×1.6、生成 +30%；經驗 +40%、金幣 +200%',
+      label: '山嵐', desc: '山嵐遮蔽視野，雲霧散開時才看得清遠方；變異體出現率 ×1.6、生成 +30%；經驗 +40%、金幣 +200%',
       eliteChanceMul: 1.6, spawnMul: 1.3, expMul: 1.4, goldMul: 3.0,
+      twist: { type: 'fog', min: 240, max: 440, every: 40, color: '215,215,205' },
     },
     mechs: [
       { type: 'spring', interval: 32, jitter: 10, radius: 100, dur: 7, heal: 4, color: '#e0782a' },
@@ -746,20 +750,21 @@ export const LEVELS = {
     decorDensity: 0.65,
     hpScale: 4.9,
     rules: {
-      label: '魔界詛咒', desc: '魔界古墓惡靈躁動：敵人移速 +12%、暴擊率 +20%；金幣收益 +250%',
+      label: '魔界大門', desc: '亡者只從一扇魔界大門湧入，每 55 秒換一扇門（箭頭預告）；變異體 ×1.7、生成 +35%；經驗 +45%、金幣 +250%',
       eliteChanceMul: 1.7, spawnMul: 1.35, expMul: 1.45, goldMul: 3.5,
+      twist: { type: 'front', arc: 1.6, every: 55, warnTime: 6, msg: '🚪 魔界大門開啟！亡者即將從【{dir}】湧入' },
     },
     mechs: [
       { type: 'supply', interval: 35, jitter: 12 },
       { type: 'spring', interval: 30, jitter: 10, radius: 95, dur: 6, heal: 4, color: '#ff0055' },
     ],
     waves: [
-      { until: 40, pool: [['makai_zombie', 0.65], ['bat', 0.35]], interval: 0.5, batch: 2 },
+      { until: 40, pool: [['makai_zombie', 0.6], ['bat', 0.3], ['spitter', 0.1]], interval: 0.5, batch: 2 },
       { until: 120, pool: [['makai_zombie', 0.45], ['makai_red_arremer', 0.35], ['spitter', 0.20]], interval: 0.4, batch: 2 },
-      { until: 240, pool: [['makai_zombie', 0.35], ['makai_red_arremer', 0.35], ['makai_woody', 0.18], ['runner', 0.12]], interval: 0.4, batch: 3 },
-      { until: 360, pool: [['makai_zombie', 0.25], ['makai_red_arremer', 0.35], ['makai_woody', 0.25], ['boomer', 0.15]], interval: 0.267, batch: 3 },
-      { until: LEVEL_DURATION, pool: [['makai_zombie', 0.22], ['makai_red_arremer', 0.38], ['makai_woody', 0.25], ['blinker', 0.15]], interval: 0.237, batch: 4 },
-      { until: 9999, pool: [['makai_zombie', 0.20], ['makai_red_arremer', 0.40], ['makai_woody', 0.25], ['brute', 0.15]], interval: 0.198, batch: 5 },
+      { until: 240, pool: [['makai_zombie', 0.35], ['makai_red_arremer', 0.35], ['makai_woody', 0.18], ['runner', 0.12], ['spitter', 0.14]], interval: 0.4, batch: 3 },
+      { until: 360, pool: [['makai_zombie', 0.25], ['makai_red_arremer', 0.35], ['makai_woody', 0.25], ['boomer', 0.15], ['spitter', 0.12], ['mortar', 0.05]], interval: 0.267, batch: 3 },
+      { until: LEVEL_DURATION, pool: [['makai_zombie', 0.22], ['makai_red_arremer', 0.38], ['makai_woody', 0.25], ['blinker', 0.15], ['spitter', 0.12], ['mortar', 0.06]], interval: 0.237, batch: 4 },
+      { until: 9999, pool: [['makai_zombie', 0.20], ['makai_red_arremer', 0.40], ['makai_woody', 0.25], ['brute', 0.15], ['spitter', 0.12], ['mortar', 0.06]], interval: 0.198, batch: 5 },
     ],
     bosses: [
       { at: 120, hp: 48000, name: '一角魔將‧獨角巨靈', speed: 85, damage: 38, moveStyle: 'leap', behaviors: ['rockfall', 'barrage', 'charge'], skin: 'boss_unicorn' },

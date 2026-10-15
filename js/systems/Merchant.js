@@ -7,6 +7,7 @@
 // 呼叫端：main.js 以 checkMerchantSchedule(this, dt) 這種形式呼叫。
 
 import { sound } from '../audio.js';
+import { showHint } from './Hints.js';
 import { MERCHANT_ITEMS } from '../config.js';
 import { shuffleInPlace } from './Progression.js';
 
@@ -20,6 +21,7 @@ export function checkMerchantSchedule(game, dt) {
 }
 
 export function spawnMerchant(game) {
+  showHint(game, 'merchant');
   const ang = Math.random() * Math.PI * 2;
   const dist = 250 + Math.random() * 150;
   const mx = game.player.x + Math.cos(ang) * dist;

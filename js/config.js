@@ -601,7 +601,7 @@ export const WEAPONS = {
     evoTarget: 'power_sword',
     pairPassive: 'max_hp_vest',    // 防護背心滿級合成
     maxLevel: 5,
-    baseDamage: 17,  // 射程定位校準（原 34）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 28）
+    baseDamage: 34,  // 射程校準曾砍到 17，tools/weapon-dps.mjs 量到 Lv5 貼身只有 107（環鋸 1428、苦無 616），恢復原值
     baseCooldown: 1.35,
     cooldownGrowth: -0.15,
     radius: [75, 85, 95, 105, 120],

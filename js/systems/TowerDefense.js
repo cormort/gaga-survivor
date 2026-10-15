@@ -286,8 +286,11 @@ export const TD_PATH_STYLES = {
     },
   },
 };
+TD_PATH_STYLES.td_endless = TD_PATH_STYLES.td_fortress;   // 無盡防線沿用三門要塞的路面
 const LAIR = { w: 256, h: 224, foot: 214, scale: 0.62 };   // 畫出來約 140 寬（路寬 85~95）
 export const TD_LIVES = 20;              // 關卡沒寫 lives 時的預設命數
+// 三星評價（像王國保衛戰）：通關時剩餘命數比例 → 星數
+export const tdStarsFor = (frac) => (frac >= 0.9 ? 3 : frac >= 0.5 ? 2 : 1);
 export const TD_START_GOLD = 250;        // 關卡沒寫 startGold 時的開局金幣（約 4 座基礎砲台）
 export const LEAK = (e) => (e.isBoss ? 10 : 1);           // 漏一隻扣幾條命
 export const bounty = (e) => Math.round((e.isBoss ? 150 : 2 + (e.exp || 1) * 2) * (e.bountyMul || 1));   // 擊殺賞金（精英詞綴會再乘）
@@ -298,7 +301,8 @@ export class TowerDefense {
     this.level = game.level;
     // 配合玩家的視野選擇（橫屏 / 竪屏 / 自動）動態隨機化生成道路走勢與砲塔地基點（維持每關固定建塔總數）
     randomizeTDLevel(this.level, this.game.orientation || 'auto');
-    this.waves = this.level.waves;
+    // 無盡防線會往 waves 後面一直加：先複製一份，不然生成的波次會留在關卡資料裡帶到下一局
+    this.waves = this.level.endless ? this.level.waves.slice() : this.level.waves;
     this.waveIdx = 0;                 // 下一個要出的波（0-based）
     this.phase = 'break';
     this.timer = this.level.breakTime + 6;   // 開場多給 6 秒佈防
@@ -460,7 +464,33 @@ export class TowerDefense {
   }
 
   get total() {
-    return this.waves.length;
+    return this.level.endless ? Infinity : this.waves.length;
+  }
+
+  // 顯示用的總波數（無盡防線顯示 ∞）
+  get totalLabel() {
+    return this.level.endless ? '∞' : this.total;
+  }
+
+  // 無盡防線：手寫波次打完後，隨機挑一波當骨架，血量逐波複利成長、隨機掛 1~2 個詞綴，每 10 波帶一隻首領
+  endlessWave(n) {
+    const src = this.level.waves;
+    const base = src[Math.floor(Math.random() * src.length)];
+    const extra = n - src.length + 1;                      // 手寫波次之後的第幾波
+    const lastHp = src[src.length - 1].hp || 2;
+    const pool = ['swift', 'armored', 'swarm', 'aerial', 'elite', 'fortified', 'stealth', 'warded'];
+    const mods = [];
+    for (let k = 0; k < (Math.random() < 0.5 ? 1 : 2); k++) {
+      const m = pool[Math.floor(Math.random() * pool.length)];
+      if (!mods.includes(m)) mods.push(m);
+    }
+    const bossSrc = src.find((w) => w.boss);
+    return {
+      hp: +(lastHp * Math.pow(1.12, extra)).toFixed(2),
+      groups: base.groups.map((g) => ({ ...g, count: Math.round(g.count * (1 + extra * 0.04)) })),
+      boss: (n + 1) % 10 === 0 && bossSrc ? { ...bossSrc.boss, hp: Math.round(bossSrc.boss.hp * Math.pow(1.15, extra)) } : null,
+      mods,
+    };
   }
 
   update(dt) {
@@ -489,6 +519,7 @@ export class TowerDefense {
       g.gold += bonus;
       g.ui.say(`⏩ 提前開戰！+${bonus} 🪙`, '#ffd166', 1.8);
     }
+    while (this.level.endless && this.waveIdx >= this.waves.length) this.waves.push(this.endlessWave(this.waves.length));
     const wave = this.waves[this.waveIdx];
     const paths = this.paths;
     // 波次詞綴（js/tdwaves.js）：數量與空襲要在排佇列時就決定，
@@ -517,7 +548,7 @@ export class TowerDefense {
     this.waveIdx++;
     sound.playEvoFanfare();
     const modNames = mods.map((m) => (WAVE_MODS[m] ? WAVE_MODS[m].name : null)).filter(Boolean).join('、');
-    g.ui.say(`⚔️ 第 ${this.waveIdx}/${this.total} 波來襲！${modNames ? `〔${modNames}〕` : ''}`, '#ff5e5e', 2);
+    g.ui.say(`⚔️ 第 ${this.waveIdx}/${this.totalLabel} 波來襲！${modNames ? `〔${modNames}〕` : ''}`, '#ff5e5e', 2);
     if (wave.boss) {
       const isFinal = this.waveIdx === this.total;
       g.spawner.spawnBoss({ ...wave.boss, hp: Math.round(wave.boss.hp * TD_BOSS_HP * g.rules.enemyHpMul), final: isFinal }, g.player, g.enemies, (boss) => g.onBossSpawned(boss));
@@ -718,6 +749,8 @@ export class TowerDefense {
   // 下一波預告（休息時顯示）：每群的怪種、數量、護甲與入口；首領另列
   nextWaveInfo() {
     if (this.phase !== 'break' || this.waveIdx >= this.total) return null;
+    // 無盡防線：預告要先把下一波生成出來（startWave 會直接用這一份，預告與實際一致）
+    while (this.level.endless && this.waveIdx >= this.waves.length) this.waves.push(this.endlessWave(this.waves.length));
     const w = this.waves[this.waveIdx];
     const mods = w.mods || [];
     const mm = waveModMul(mods);
@@ -750,9 +783,9 @@ export class TowerDefense {
 
   objective() {
     if (this.phase === 'break') {
-      return `第 ${this.waveIdx + 1}/${this.total} 波 ‧ 佈防時間 ${Math.ceil(this.timer)} 秒（N 提前開戰拿金幣）`;
+      return `第 ${this.waveIdx + 1}/${this.totalLabel} 波 ‧ 佈防時間 ${Math.ceil(this.timer)} 秒（N 提前開戰拿金幣）`;
     }
-    if (this.phase === 'wave') return `第 ${this.waveIdx}/${this.total} 波進攻中 ‧ 守住核心！`;
+    if (this.phase === 'wave') return `第 ${this.waveIdx}/${this.totalLabel} 波進攻中 ‧ 守住核心！`;
     return '最後一波！守住終極首領即可通關';
   }
 

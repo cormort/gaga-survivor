@@ -15,6 +15,7 @@ import { enemyScale } from '../levels.js';
 import { CHARACTER_ORDER } from '../characters.js';
 import { sound } from '../audio.js';
 import { save } from '../save.js';
+import { showHint } from './Hints.js';
 
 // 擊殺里程碑的間隔。固定每 100 殺的話，8 分鐘約 1430 殺 = 14 次彈窗打斷世界，
 // 加上升級卡與寶箱，後期幾乎在看選單而不是在玩。改成愈後面愈稀疏。
@@ -125,6 +126,7 @@ export function grantMilestone(game, tag, title) {
 }
 
 export function offerBlessingChoice(game, title) {
+  showHint(game, 'blessing');
   // 其他彈窗開著時先排隊，回到 PLAYING 再補發 (兩層 overlay 疊加會鎖死操作)
   if (game.state !== 'PLAYING') {
     game._pendingBlessings.push(title);
@@ -224,6 +226,7 @@ export function checkEventSchedule(game, dt) {
 }
 
 export function triggerMiniEvent(game) {
+  showHint(game, 'event');
   // 洗牌袋：抽完一輪才重置，避免像純隨機那樣同一個事件短時間內連中兩次
   if (game._eventBag.length === 0) {
     game._eventBag = [...MINI_EVENTS];

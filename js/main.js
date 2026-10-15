@@ -27,7 +27,7 @@ import { DropItem } from './entities/DropItem.js';
 import { MERC } from './entities/Mercenary.js';
 import { drawSocket, drawPlacementGhost, drawTurretRange, drawTurretStars } from './entities/Turret.js';
 import './tdlevels.js';   // 守塔專屬關卡併入 LEVELS（side effect）
-import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty } from './systems/TowerDefense.js';
+import { TowerDefense, TD_LIVES, TD_START_GOLD, LEAK, bounty, tdStarsFor } from './systems/TowerDefense.js';
 import { heroMoveVector, updateHeroRespawn, keepHeroOnRoad } from './systems/TDHero.js';
 import { COLLAPSE_FRAME } from './entities/Core.js';
 
@@ -64,6 +64,7 @@ import { drawDecor } from './systems/Decor.js';
 import { GroundRenderer } from './systems/Ground.js';
 import { initTwist, updateTwist, drawTwist } from './systems/Twists.js';
 import { initAltar, updateAltar, drawAltar } from './systems/Altar.js';
+import { showHint } from './systems/Hints.js';
 import { ZODIAC_ACTS, ZODIAC_ACT_NAMES } from './systems/ZodiacSkills.js';
 import {
   initExplodableProps,
@@ -3381,6 +3382,7 @@ class Game {
       } else if (empty >= 0) {
         pockets[empty] = { id: item.subType, count: 1 };
         this.ui.updatePockets(pockets);
+        showHint(this, 'pocket');
         const key = empty === 0 ? 'E' : 'F';
         this.ui.say(save.data.settings.autoPocket === false
           ? `獲得道具【${cDef.name}】！[${key}] 鍵使用`
@@ -3741,7 +3743,13 @@ class Game {
     });
     save.consumeBoosters(); // 本局結算了才真正消耗戰術興奮劑
     const lines = this.player.character.lines;
+    // 守塔三星：通關時依剩餘命數評價（≥90% ★★★、≥50% ★★、其餘 ★），只記最佳
+    const tdStars = this.td && isVictory && this.core ? tdStarsFor(this.core.hp / this.core.maxHp) : 0;
+    const endlessWaves = this.td && this.level.endless ? Math.max(0, this.td.waveIdx - 1) : 0;   // 打破核心的那一波不算守住
+    if (this.td && this.level.endless) this.ui.say(`♾️ 無盡防線：守住了 ${endlessWaves} 波`, '#ffd166', 4);
     const result = save.recordRun(this.level.id, {
+      stars: tdStars,
+      waves: endlessWaves,
       time: this.gameTime,
       kills: this.kills,
       level: this.player.level,
@@ -3755,6 +3763,9 @@ class Game {
     });
     // 難度逐級開放：非每日挑戰的通關記到該難度；該模式的關卡全部通關即解鎖下一難度
     // （守塔記守塔的、生存者記生存者的，見 save.js 的 recordDifficultyClear）
+    if (tdStars) {
+      this.ui.say(`${'★'.repeat(tdStars)}${'☆'.repeat(3 - tdStars)} 守住 ${Math.ceil(this.core.hp)}/${this.core.maxHp} 命${tdStars < 3 ? '（剩 90% 以上可拿三星）' : '！'}`, '#ffd166', 4);
+    }
     if (isVictory && !this.isDaily) {
       const newDiff = save.recordDifficultyClear(this.diffKey, this.level.id, this.modeId);
       if (newDiff) this.ui.say(`🔓 新難度解鎖：${DIFFICULTIES[newDiff].name}！`, '#ffd166', 4);
