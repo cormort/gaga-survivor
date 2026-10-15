@@ -332,8 +332,14 @@ export function bindEvents(game) {
     if (!b) return;
     const n = Number(b.dataset.n);
     if (b.dataset.act === 'load') return save.switchSlot(n);
-    const info = save.slotSummary(n);
-    if (info && !confirm(`存檔 ${n} 的所有進度會清空、從頭開始（會自動留一份備份）。確定嗎？`)) return;
+    // 有進度的欄位要 3 秒內再按一次（同放棄任務：不用會被內嵌瀏覽器擋掉的 confirm()）
+    if (save.slotSummary(n) && !b.dataset.armed) {
+      b.dataset.armed = '1';
+      const text = b.textContent;
+      b.textContent = `⚠️ 再按一次清空存檔 ${n}（會留備份）`;
+      setTimeout(() => { delete b.dataset.armed; b.textContent = text; }, 3000);
+      return;
+    }
     save.switchSlot(n, true);
   });
   document.getElementById('btn-slots')?.addEventListener('click', () => {

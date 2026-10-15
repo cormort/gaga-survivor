@@ -63,6 +63,7 @@ import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
 import { GroundRenderer } from './systems/Ground.js';
 import { initTwist, updateTwist, drawTwist } from './systems/Twists.js';
+import { initAltar, updateAltar, drawAltar } from './systems/Altar.js';
 import {
   initExplodableProps,
   initDestructibles,
@@ -1159,6 +1160,7 @@ class Game {
     this.player.game = this;
     this.td = this.level.td && this.core ? new TowerDefense(this) : null;   // 守塔：路線＋分波
     initTwist(this);   // 關卡玩法規則（隧道／濃霧／沙暴），要在 td 決定之後
+    initAltar(this);   // 挑戰祭壇（生存者模式）
     if (this.td) {
       setWorldBounded(!!this.mode.boundedMap, this.level.bounds);   // 配合橫屏/竪屏動態 bounds 重新綁定世界邊界
       this.core.isLives = true;   // HUD 改顯示成命數膠囊（UI.updateCoreHUD）
@@ -2246,6 +2248,7 @@ class Game {
     // 4.6 關卡地形機制 (毒霧/地雷/噴發/空投)
     updateHazards(this, dt);
     updateTwist(this, dt);
+    updateAltar(this, dt);
     this.updateAutoPocket(dt);
 
     // 4.7 可引爆物件受傷閃白更新
@@ -3885,6 +3888,7 @@ class Game {
 
     // 繪製地形機制 (毒霧圈 / 地雷警示)
     drawHazards(this, renderCam);
+    drawAltar(this, this.ctx, renderCam);
 
     // 技能演出的地面層（符火陣、血霧、蓮花、音波、丹爐）：畫在敵人與角色「之下」
     drawSignatureFX(this.ctx, renderCam, this, 'ground');
@@ -4224,6 +4228,8 @@ class Game {
       ctx.fillText(icon, x, y);
       legend.set(icon, name);
     };
+
+    if (this.altar) mark(this.altar.x, this.altar.y, '⚔️', '挑戰祭壇', true);
 
     // 縮圈結界（深淵）：安全圈邊界
     if (this._shrinkCircle) {
