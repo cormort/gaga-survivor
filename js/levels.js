@@ -805,8 +805,14 @@ export const LEVELS = {
     hpScale: 1,
     // 無盡深淵：全面加壓，用經驗加成補償
     rules: {
-      label: '深淵法則', desc: '敵人移速 +20%、變異體出現率 ×2；經驗 +30%',
+      label: '深淵法則', desc: '每 2 分鐘輪換一種深淵變相（隧道／濃霧／沙暴）；敵人移速 +20%、變異體 ×2、經驗 +30%',
       enemySpeedMul: 1.2, eliteChanceMul: 2, expMul: 1.3,
+      // 玩法規則：三關的規則輪流上場，無盡模式越打越不一樣（js/systems/Twists.js 的 cycle）
+      twist: { type: 'cycle', every: 120, pool: [
+        { type: 'fog', min: 230, max: 420, every: 36, label: '濃霧蔽日——視野忽大忽小' },
+        { type: 'front', arc: 1.4, every: 50, warnTime: 6, label: '裂隙單向——怪潮只從箭頭方向湧入' },
+        { type: 'wind', force: 75, every: 40, warnTime: 5, label: '虛空風暴——持續被推向下風處' },
+      ] },
     },
     // 關卡機制：縮圈結界 (圈外持續扣血 + 向圈心微推，場地越來越小)
     mechs: [

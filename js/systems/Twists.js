@@ -3,6 +3,7 @@
 //   front：怪潮只從一個扇形方向湧入，方向定時轉移（鏽蝕地下鐵）
 //   fog  ：玩家周圍以外被濃霧遮蔽，視野半徑緩慢呼吸（毒霧沼澤）
 //   wind ：持續沙暴推著特工走，風向定時改變並先預警（沙暴要塞）
+//   cycle：每 every 秒輪換 pool 裡的下一條規則，開場 every 秒內無規則（深淵無盡戰）
 
 const DIR_NAMES = ['東', '東南', '南', '西南', '西', '西北', '北', '東北'];
 const dirName = (a) => DIR_NAMES[Math.round((((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8];
@@ -12,6 +13,11 @@ const turnAngle = (a) => a + (Math.PI / 2 + Math.random() * Math.PI) * (Math.ran
 
 export function initTwist(game) {
   const t = game.td ? null : game.level?.rules?.twist;
+  game.twistCycle = t?.type === 'cycle' ? { ...t, timer: 0, idx: 0 } : null;
+  applyTwist(game, game.twistCycle ? null : t);
+}
+
+function applyTwist(game, t) {
   // radius 先給 min：start() 會在第一次 update 前就 render 一次
   game.twist = t ? { ...t, angle: Math.random() * Math.PI * 2, timer: 0, warn: 0, radius: t.min } : null;
   game.spawner.frontArc = null;
@@ -20,6 +26,13 @@ export function initTwist(game) {
 }
 
 export function updateTwist(game, dt) {
+  const c = game.twistCycle;
+  if (c && (c.timer += dt) >= c.every) {
+    c.timer = 0;
+    const t = c.pool[c.idx++ % c.pool.length];
+    applyTwist(game, t);
+    game.ui.say(`🌀 深淵變相：${t.label}`, '#b388ff', 3.5);
+  }
   const tw = game.twist;
   if (!tw) return;
   tw.timer += dt;
