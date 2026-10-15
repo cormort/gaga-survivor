@@ -261,9 +261,25 @@ export function bindEvents(game) {
   });
 
   // 放棄任務 (暫停時可見)：以「陣亡」結算後回主選單
-  const quitMission = () => {
+  // 不用 confirm()：內嵌瀏覽器／部分 WebView 會靜默擋掉對話框並回傳 false，按鈕就像沒反應。
+  // 改成「3 秒內再按一次」確認，按鈕文字直接告訴玩家要再按一次。
+  let quitArmed = null;   // { btn, text, timer }
+  const disarmQuit = () => {
+    if (!quitArmed) return;
+    clearTimeout(quitArmed.timer);
+    quitArmed.btn.textContent = quitArmed.text;
+    quitArmed = null;
+  };
+  const quitMission = (e) => {
     if (game.state !== 'PAUSED') return;
-    if (!confirm('確定要放棄本次任務？（將以失敗結算）')) return;
+    const btn = e.currentTarget;
+    if (quitArmed?.btn !== btn) {
+      disarmQuit();
+      quitArmed = { btn, text: btn.textContent, timer: setTimeout(disarmQuit, 3000) };
+      btn.textContent = btn === game.ui.quitBtn ? '⚠️' : '⚠️ 再按一次確認放棄（以失敗結算）';
+      return;
+    }
+    disarmQuit();
     game.ui.quitBtn?.classList.add('hidden');
     pauseModal?.classList.add('hidden');
     game.handleGameOver(false);

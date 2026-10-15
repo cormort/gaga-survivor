@@ -62,6 +62,7 @@ import {
 import { save } from './save.js';
 import { drawDecor } from './systems/Decor.js';
 import { GroundRenderer } from './systems/Ground.js';
+import { initTwist, updateTwist, drawTwist } from './systems/Twists.js';
 import {
   initExplodableProps,
   initDestructibles,
@@ -1157,6 +1158,7 @@ class Game {
     setGearTheme(this.characterId);
     this.player.game = this;
     this.td = this.level.td && this.core ? new TowerDefense(this) : null;   // 守塔：路線＋分波
+    initTwist(this);   // 關卡玩法規則（隧道／濃霧／沙暴），要在 td 決定之後
     if (this.td) {
       setWorldBounded(!!this.mode.boundedMap, this.level.bounds);   // 配合橫屏/竪屏動態 bounds 重新綁定世界邊界
       this.core.isLives = true;   // HUD 改顯示成命數膠囊（UI.updateCoreHUD）
@@ -2243,6 +2245,7 @@ class Game {
 
     // 4.6 關卡地形機制 (毒霧/地雷/噴發/空投)
     updateHazards(this, dt);
+    updateTwist(this, dt);
     this.updateAutoPocket(dt);
 
     // 4.7 可引爆物件受傷閃白更新
@@ -3957,6 +3960,7 @@ class Game {
     drawSwordFormation(this.ctx, renderCam, this);
     drawSignatureFX(this.ctx, renderCam, this, 'upper');
     this.particles.draw(this.ctx, renderCam);
+    drawTwist(this, this.ctx, renderCam);
 
     // 畫面後製：暗角 + 玩家聚光，讓視覺焦點集中在主角身上
     this.ground.drawVignette(this.ctx, this.vw, this.vh, this.level || LEVELS.street);

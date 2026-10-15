@@ -302,8 +302,10 @@ export const LEVELS = {
     hpScale: 2.3,
     // 鏽蝕圍殺：通道窄、獵犬快，靠密度而不是靠單體強度施壓
     rules: {
-      label: '鏽蝕圍殺', desc: '敵人移速 +15%、生成密度 +20%；金幣 +40%',
+      label: '隧道圍殺', desc: '怪潮只從一個方向的隧道湧入，每 50 秒轉向（箭頭預告）；敵人移速 +15%、生成 +20%、金幣 +40%',
       enemySpeedMul: 1.15, spawnMul: 1.2, goldMul: 1.4,
+      // 玩法規則（js/systems/Twists.js）：背後是安全的，但正面的密度是平常的好幾倍
+      twist: { type: 'front', arc: 1.4, every: 50, warnTime: 6 },
     },
     // 關卡機制：軌道爆破地雷 + 定期空投物資
     mechs: [
@@ -365,8 +367,10 @@ export const LEVELS = {
     hpScale: 2.6,
     // 劇毒領域：怪更厚、變異體更多，但經驗補償
     rules: {
-      label: '劇毒領域', desc: '敵人血量 +30%、變異體出現率 ×1.5；經驗 +20%',
+      label: '孢子濃霧', desc: '濃霧遮蔽視野，可視範圍隨霧氣忽大忽小；敵人血量 +30%、變異體 ×1.5、經驗 +20%',
       enemyHpMul: 1.3, eliteChanceMul: 1.5, expMul: 1.2,
+      // 玩法規則：看不到遠處的狙擊蟲與迫擊砲，霧散的窗口才是推進的時機
+      twist: { type: 'fog', min: 230, max: 420, every: 36 },
     },
     // 關卡機制：毒沼池 + 孢子噴發
     mechs: [
@@ -426,8 +430,10 @@ export const LEVELS = {
     hpScale: 3.0,
     // 沙暴侵襲：又快又多，靠金幣補償（這關是無盡之前的最終裝備檢查點）
     rules: {
-      label: '沙暴侵襲', desc: '敵人移速 +25%、生成密度 +30%；金幣 +70%',
+      label: '沙暴侵襲', desc: '沙暴持續把你往下風處推，每 40 秒換風向（箭頭預告）；敵人移速 +25%、生成 +30%、金幣 +70%',
       enemySpeedMul: 1.25, spawnMul: 1.3, goldMul: 1.7,
+      // 玩法規則：順風逃得快、逆風走不動；force 是 px/秒（特工基礎移速 190）
+      twist: { type: 'wind', force: 75, every: 40, warnTime: 5 },
     },
     // 關卡機制：沙暴噴發 + 掩體（站在掩體外持續受傷）
     mechs: [

@@ -278,6 +278,12 @@ export class Player {
       }
     }
 
+    // 沙暴推力（Twists.js 的 wind）：不論有沒有輸入都會被推
+    if (this.windPush) {
+      this.x += this.windPush.x * dt;
+      this.y += this.windPush.y * dt;
+    }
+
     // 地圖邊界限制
     const bounds = worldBounds();   // 無限地圖時 ±Infinity，不夾
     this.x = Math.max(bounds.minX, Math.min(bounds.maxX, this.x));

@@ -215,7 +215,10 @@ export class Spawner {
     let bestDist = -1;
 
     for (let i = 0; i < 8; i++) {
-      const angle = Math.random() * Math.PI * 2;
+      // 隧道圍殺（Twists.js 的 front）：只在扇形內生成
+      const angle = this.frontArc
+        ? this.frontArc.angle + (Math.random() - 0.5) * this.frontArc.width
+        : Math.random() * Math.PI * 2;
       const x = Math.max(b.minX + margin, Math.min(b.maxX - margin, player.x + Math.cos(angle) * distance));
       const y = Math.max(b.minY + margin, Math.min(b.maxY - margin, player.y + Math.sin(angle) * distance));
       const d = Math.hypot(x - player.x, y - player.y);
