@@ -158,6 +158,68 @@ export const SKILLS = {
   ],
 };
 
+// 經典特工隊：各一招純冷卻的 Q（沒有靈力條），讓「選哪個特工」不只差被動數值。
+// 倍率以「6 隻密集敵人、每秒傷害」對齊青霜劍尊的 Q（人劍合一 0.6×、冷卻 6 秒還要耗靈力）
+Object.assign(SKILLS, {
+  duck: [
+    { name: '特務狙殺', icon: '🎯', cd: 12, desc: '鎖定 600 範圍內血量最高的 3 個目標，各打一發 1.8 倍狙擊彈',
+      cast(game) {
+        const p = game.player;
+        const targets = game.enemies
+          .filter((e) => !e.isDead && Math.hypot(e.x - p.x, e.y - p.y) <= 600)
+          .sort((a, b) => b.hp - a.hp)
+          .slice(0, 3);
+        for (const e of targets) strike(game, e, 1.8, '#ffd166');
+      } },
+  ],
+  rabbit: [
+    { name: '蘿蔔衝刺', icon: '🥕', cd: 9, desc: '朝移動方向暴衝 260 距離，撞飛路徑上的敵人，衝刺中無敵',
+      cast(game) {
+        const p = game.player;
+        const v = game.input.vector;
+        const len = Math.hypot(v.x, v.y);
+        const dx = len > 0.1 ? v.x / len : p.facing || 1;
+        const dy = len > 0.1 ? v.y / len : 0;
+        const x0 = p.x;
+        const y0 = p.y;
+        for (let t = 0; t <= 1.0001; t += 0.2) aoe(game, x0 + dx * 260 * t, y0 + dy * 260 * t, 50, 0.9, { knock: 18 });
+        p.x += dx * 260;
+        p.y += dy * 260;
+        p.invulnerableTimer = Math.max(p.invulnerableTimer, 0.5);
+        game.particles.createShockwave(p.x, p.y, 90, '#ff9f1c');
+      } },
+  ],
+  penguin: [
+    { name: '鋼鐵壁壘', icon: '🛡️', cd: 15, desc: '展開 35% 生命的護盾並震退 200 範圍敵人，4 秒內受傷減半',
+      cast(game) {
+        const p = game.player;
+        p.shield = Math.max(p.shield, Math.round(p.maxHp * 0.35));
+        p.shieldPotionTimer = Math.max(p.shieldPotionTimer, 4);
+        aoe(game, p.x, p.y, 200, 0.8, { knock: 40 });
+        game.particles.createShockwave(p.x, p.y, 200, '#90e0ef');
+      } },
+  ],
+  cat: [
+    { name: 'EMP 脈衝', icon: '⚡', cd: 14, desc: '釋放電磁脈衝，癱瘓 280 範圍內所有敵人 2.5 秒',
+      cast(game) {
+        const p = game.player;
+        aoe(game, p.x, p.y, 280, 0.7, { knock: 4, stun: 2.5 });
+        game.particles.createShockwave(p.x, p.y, 280, '#00e5ff');
+        game.particles.createLightning(p.x, p.y, 120);
+      } },
+  ],
+  mechanic: [
+    { name: '遙控炸藥', icon: '💣', cd: 12, desc: '在最近的 3 群敵人腳下引爆炸藥，每顆 1.3 倍、範圍 120',
+      cast(game) {
+        const targets = nearest(game, 3, 520);
+        for (const e of targets) {
+          game.particles.createExplosion(e.x, e.y, 120);
+          aoe(game, e.x, e.y, 120, 1.3);
+        }
+      } },
+  ],
+});
+
 // 守塔關一律換成守塔英雄的兩招（TDHero.js），生存者照角色決定
 export function skillsFor(characterId, game = null) {
   if (game && game.td) return TD_SKILLS;
