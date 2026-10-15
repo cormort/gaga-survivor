@@ -33,6 +33,15 @@ export const WAVE_MODS = {
     icon: '🧱', name: '要塞', color: '#ffa94d',
     desc: '血量 +30%、移速 -15%：走得慢，但非常耐打',
   },
+  // 以下兩種是「指定要某種塔」的詞綴：數值不變，但塔選錯就打不到／打不痛
+  stealth: {
+    icon: '👻', name: '潛行', color: '#b8a9ff',
+    desc: '地面怪隱形：只有秘法塔、或秘法塔 220 範圍內的其他塔看得見（英雄看得見）',
+  },
+  warded: {
+    icon: '🔷', name: '魔盾', color: '#4dabf7',
+    desc: '每隻帶 60% 血量的魔法護盾：非魔法傷害只削 25%，魔法傷害對盾 ×2',
+  },
 };
 
 // 詞綴的數值（倍率相乘，可同時掛多個）
@@ -43,7 +52,15 @@ const WAVE_MOD_MUL = {
   fortified: { hp: 1.30, speed: 0.85 },
   armored: {},   // 只改護甲分類
   aerial: {},    // 只追加一群飛行怪
+  stealth: {},   // 只標上 e.stealth（TowerDefense.spawn）
+  warded: {},    // 只給 e.ward（TowerDefense.spawn）
 };
+
+// 潛行與魔盾的參數（TowerDefense／Facilities 讀）
+export const STEALTH_REVEAL_RADIUS = 220;   // 秘法塔周圍這麼遠內的潛行怪，所有塔都打得到
+export const WARD_HP_FRAC = 0.6;            // 護盾量 = 最大血量 × 0.6
+export const WARD_NONMAGIC_MUL = 0.25;      // 非魔法傷害只削這麼多盾、而且打不到血
+export const WARD_MAGIC_MUL = 2;            // 魔法傷害對盾 ×2
 
 // 空襲詞綴追加的怪種。挑 bat 是因為每個守塔關的 ARMOR_CLASS 都有它（air），
 // 不用每關另外指定；主題關卡要換成自己的飛行怪時再從關卡欄位擴充。

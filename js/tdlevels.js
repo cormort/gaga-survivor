@@ -72,10 +72,10 @@ export const TD_LEVELS = {
       wave(1.0, [['walker', 10, 0.9]]),
       wave(1.1, [['walker', 12, 0.8], ['runner', 5, 0.7]]),
       wave(1.2, [['runner', 10, 0.6], ['hound', 6, 0.5]], null, ['swift']),   // 快速輕甲：守衛塔（疾行：更考驗射程）
-      wave(1.3, [['walker', 12, 0.6], ['brute', 4, 1.4]]),                        // 第一次重甲：加農砲／秘法塔
+      wave(1.3, [['walker', 12, 0.6], ['brute', 4, 1.4]], null, ['stealth']),   // 第一次重甲：加農砲／秘法塔
       wave(1.4, [['bat', 12, 0.35], ['walker', 10, 0.6]]),                        // 第一次空中：加農砲、兵營沒用
       wave(1.6, [['brute', 6, 1.1], ['spitter', 4, 1.0], ['runner', 10, 0.5]]),
-      wave(1.8, [['hound', 12, 0.4], ['bat', 10, 0.4], ['brute', 5, 1.2]], null, ['swarm']),   // 蟲潮：考驗清場速度
+      wave(1.8, [['hound', 12, 0.4], ['bat', 10, 0.4], ['brute', 5, 1.2]], null, ['swarm', 'warded']),   // 蟲潮：考驗清場速度
       wave(2.0, [['walker', 16, 0.5], ['warden', 4, 1.5], ['bat', 8, 0.4]],
         { hp: 7000, name: '峽谷掠奪者', speed: 60, damage: 30, moveStyle: 'rush', behaviors: ['summon', 'barrage'], skin: 'boss_storm' }),
     ],
@@ -130,10 +130,10 @@ export const TD_LEVELS = {
       wave(1.0, [['walker', 8, 0.9, 0], ['walker', 8, 0.9, 1]]),
       wave(1.1, [['runner', 8, 0.7, 0], ['hound', 6, 0.6, 1]]),
       wave(1.2, [['bat', 10, 0.4], ['walker', 12, 0.6]]),
-      wave(1.3, [['brute', 4, 1.3, 0], ['runner', 12, 0.5, 1]], null, ['armored']),   // 西邊重甲、東邊輕甲：兩邊要蓋不同的塔（重甲縱隊：東邊也得穿甲）
+      wave(1.3, [['brute', 4, 1.3, 0], ['runner', 12, 0.5, 1]], null, ['armored', 'stealth']),   // 西邊重甲、東邊輕甲：兩邊要蓋不同的塔（重甲縱隊：東邊也得穿甲）
       wave(1.4, [['walker', 14, 0.5, 0], ['medic', 3, 1.4, 0], ['warden', 3, 1.6, 1]]),
       wave(1.55, [['bat', 14, 0.35], ['bloater', 6, 0.9]], null, ['aerial']),
-      wave(1.7, [['brute', 6, 1.1, 0], ['brute', 6, 1.1, 1]], null, ['fortified']),
+      wave(1.7, [['brute', 6, 1.1, 0], ['brute', 6, 1.1, 1]], null, ['fortified', 'warded']),
       wave(1.85, [['hound', 14, 0.4, 0], ['spitter', 6, 0.9, 1], ['blinker', 10, 0.5, 1]]),
       wave(2.0, [['warden', 5, 1.3], ['bat', 14, 0.35], ['runner', 14, 0.45]], null, ['elite']),
       wave(2.2, [['walker', 20, 0.4], ['brute', 6, 1.0], ['bat', 10, 0.4]],
@@ -195,10 +195,10 @@ export const TD_LEVELS = {
       wave(1.0, [['walker', 6, 0.9, 0], ['walker', 6, 0.9, 1], ['walker', 6, 0.9, 2]]),
       wave(1.1, [['runner', 8, 0.6, 0], ['hound', 6, 0.6, 1], ['hound', 6, 0.6, 2]]),
       wave(1.2, [['brute', 3, 1.4, 1], ['brute', 3, 1.4, 2], ['walker', 10, 0.6, 0]]),
-      wave(1.3, [['bat', 16, 0.3], ['blinker', 8, 0.6, 0]], null, ['swift']),
+      wave(1.3, [['bat', 16, 0.3], ['blinker', 8, 0.6, 0]], null, ['swift', 'stealth']),
       wave(1.45, [['warden', 3, 1.6, 0], ['medic', 4, 1.2, 1], ['runner', 12, 0.5, 2]]),
       wave(1.6, [['mortar', 4, 1.6], ['brute', 6, 1.0], ['walker', 12, 0.5]]),
-      wave(1.75, [['hound', 18, 0.35], ['bat', 12, 0.35]], null, ['swarm']),
+      wave(1.75, [['hound', 18, 0.35], ['bat', 12, 0.35]], null, ['swarm', 'warded']),
       wave(1.9, [['chimera', 2, 3.0, 0], ['spitter', 6, 0.9, 1], ['spitter', 6, 0.9, 2]]),   // 攻城巨像：最重的重甲
       wave(2.05, [['bloater', 8, 0.8], ['blinker', 12, 0.45], ['brute', 6, 1.0]]),
       wave(2.2, [['warden', 6, 1.2], ['bat', 18, 0.3], ['runner', 16, 0.4]], null, ['elite']),
@@ -283,12 +283,12 @@ export const TD_LEVELS = {
       wave(0.85, [['spore_mine', 8, 0.7], ['termagant', 6, 0.9]], null, ['aerial']),   // 孢子囊會飛（空襲）
       wave(1.0, [['hormagaunt', 12, 0.5], ['ork_boy', 4, 1.3]],
         { hp: 4500, name: '歐克戰爭頭目', speed: 64, damage: 38, moveStyle: 'leap', behaviors: ['summon', 'barrage', 'ground'], skin: 'boss_nob' }),
-      wave(1.25, [['genestealer', 8, 0.7], ['squig_bomb', 8, 0.5]]),
+      wave(1.25, [['genestealer', 8, 0.7], ['squig_bomb', 8, 0.5]], null, ['stealth']),
       wave(1.4, [['poxwalker', 10, 0.8, 0], ['ork_boy', 6, 1.1, 1]], null, ['fortified']),
       wave(1.55, [['spore_mine', 12, 0.5], ['hormagaunt', 18, 0.35]]),
       wave(1.7, [['termagant', 10, 0.7], ['genestealer', 10, 0.55], ['ork_boy', 5, 1.2]],
         { hp: 11000, name: '蟲群基因原體', speed: 78, damage: 45, moveStyle: 'blink', behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' }),
-      wave(1.85, [['squig_bomb', 14, 0.35], ['poxwalker', 12, 0.6]], null, ['swarm']),
+      wave(1.85, [['squig_bomb', 14, 0.35], ['poxwalker', 12, 0.6]], null, ['swarm', 'warded']),
       wave(2.0, [['ork_boy', 10, 0.9], ['spore_mine', 14, 0.45]]),
       wave(2.2, [['genestealer', 16, 0.4], ['termagant', 12, 0.6], ['hormagaunt', 20, 0.3]], null, ['elite']),
       wave(2.4, [['ork_boy', 12, 0.8], ['poxwalker', 14, 0.5], ['spore_mine', 12, 0.4]], null, ['armored'],
@@ -356,10 +356,10 @@ export const TD_LEVELS = {
       wave(1.0, [['walker', 8, 0.9, 0], ['walker', 8, 0.9, 1]]),                       // 徵召兵
       wave(1.1, [['runner', 10, 0.6], ['hound', 6, 0.55, 1]]),
       wave(1.2, [['hound', 14, 0.4]]),                                                 // 攻擊犬：快速輕甲
-      wave(1.3, [['brute', 4, 1.3, 0], ['brute', 4, 1.3, 1], ['walker', 10, 0.6]], null, ['armored']),    // 犀牛坦克：重甲（重甲縱隊）
+      wave(1.3, [['brute', 4, 1.3, 0], ['brute', 4, 1.3, 1], ['walker', 10, 0.6]], null, ['armored', 'stealth']),   // 犀牛坦克：重甲（重甲縱隊）
       wave(1.4, [['bat', 10, 0.4], ['runner', 10, 0.55]]),                             // 空中部隊
       wave(1.55, [['mortar', 4, 1.5], ['warden', 4, 1.4], ['walker', 14, 0.5]]),
-      wave(1.7, [['chimera', 2, 3.0, 0], ['hound', 14, 0.4, 1]], null, ['swift']),
+      wave(1.7, [['chimera', 2, 3.0, 0], ['hound', 14, 0.4, 1]], null, ['swift', 'warded']),
       wave(1.85, [['bat', 12, 0.35], ['brute', 6, 1.0]],
         { hp: 6000, name: '天啟坦克', speed: 46, damage: 50, moveStyle: 'rush', behaviors: ['barrage', 'ground'], skin: 'boss_frost' }),
       wave(2.0, [['warden', 6, 1.2], ['sniper', 6, 1.0], ['runner', 16, 0.4]], null, ['elite']),
@@ -430,12 +430,12 @@ export const TD_LEVELS = {
       wave(0.9, [['hormagaunt', 10, 0.7, 0]]),                                          // 跳蟲
       wave(1.0, [['hormagaunt', 12, 0.6, 0], ['termagant', 4, 1.0, 1]]),
       wave(1.1, [['bat', 12, 0.4]], null, ['aerial']),                                    // 異龍：空中（空襲）
-      wave(1.2, [['genestealer', 8, 0.7, 0], ['hormagaunt', 10, 0.5, 1]]),
+      wave(1.2, [['genestealer', 8, 0.7, 0], ['hormagaunt', 10, 0.5, 1]], null, ['stealth']),
       wave(1.35, [['spore_mine', 10, 0.6], ['hormagaunt', 16, 0.4]], null, ['swarm']),
       wave(1.5, [['chimera', 2, 3.0, 0], ['termagant', 8, 0.8, 1]]),                    // 雷獸：重甲
       wave(1.65, [['bat', 12, 0.36], ['genestealer', 10, 0.55]], null, ['swift'],
         { hp: 5000, name: '異蟲刀鋒宿主', speed: 56, damage: 50, moveStyle: 'orbit', behaviors: ['summon', 'nova', 'barrage'], skin: 'boss_broodlord' }),
-      wave(1.8, [['sniper', 6, 1.0, 1], ['hormagaunt', 20, 0.35, 0]], null, ['elite']),
+      wave(1.8, [['sniper', 6, 1.0, 1], ['hormagaunt', 20, 0.35, 0]], null, ['elite', 'warded']),
       wave(1.95, [['spore_mine', 14, 0.45], ['bat', 14, 0.35], ['genestealer', 10, 0.5]]),
       wave(2.1, [['chimera', 3, 2.5], ['termagant', 12, 0.6]], null, ['armored']),
       wave(2.3, [['hormagaunt', 28, 0.28], ['bat', 18, 0.3], ['genestealer', 12, 0.45]], null, ['swarm']),
@@ -502,12 +502,12 @@ export const TD_LEVELS = {
       wave(1.0, [['makai_zombie', 6, 0.9, 0], ['makai_zombie', 6, 0.9, 1], ['makai_zombie', 6, 0.9, 2]]),   // 食屍鬼
       wave(1.1, [['makai_zombie', 10, 0.6], ['hound', 8, 0.5]]),
       wave(1.2, [['makai_red_arremer', 12, 0.4]], null, ['aerial']),                                      // 石像鬼：空中（空襲）
-      wave(1.3, [['makai_woody', 4, 1.5, 1], ['makai_zombie', 12, 0.5, 0], ['medic', 3, 1.3, 2]]),
+      wave(1.3, [['makai_woody', 4, 1.5, 1], ['makai_zombie', 12, 0.5, 0], ['medic', 3, 1.3, 2]], null, ['stealth']),
       wave(1.45, [['brute', 4, 1.3, 0], ['brute', 4, 1.3, 2], ['makai_red_arremer', 10, 0.45, 1]], null, ['armored']),   // 憎惡：重甲（重甲縱隊）
       wave(1.6, [['spitter', 6, 0.9], ['makai_zombie', 18, 0.4]],
         { hp: 7000, name: '恐懼魔王 ‧ 瑪爾加尼斯', speed: 54, damage: 50, moveStyle: 'blink', behaviors: ['summon', 'nova'], skin: 'boss_arremer_king' }),
       wave(1.75, [['makai_red_arremer', 16, 0.32], ['blinker', 12, 0.45]], null, ['swift']),
-      wave(1.9, [['makai_woody', 8, 1.0], ['warden', 5, 1.3], ['makai_zombie', 20, 0.35]]),
+      wave(1.9, [['makai_woody', 8, 1.0], ['warden', 5, 1.3], ['makai_zombie', 20, 0.35]], null, ['warded']),
       wave(2.05, [['brute', 8, 0.9], ['medic', 6, 1.0], ['makai_red_arremer', 14, 0.35]], null, ['elite']),
       wave(2.2, [['chimera', 2, 3.0, 1], ['makai_woody', 8, 0.9], ['hound', 18, 0.35]], null, ['fortified']),
       wave(2.4, [['makai_zombie', 30, 0.28], ['makai_red_arremer', 18, 0.3], ['brute', 8, 0.9]], null, ['swarm']),

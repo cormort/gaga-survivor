@@ -22,7 +22,7 @@
 // FALLBACK_VERSION，tools/verify-pwa.mjs 會比對兩者），PWA 下次開啟就會換版。
 
 // 版本來源：根目錄 version.json。FALLBACK 只在離線安裝、抓不到 version.json 時使用。
-const FALLBACK_VERSION = 'gaga-v109';
+const FALLBACK_VERSION = 'gaga-v110';
 const VERSION_URL = './version.json';
 
 async function resolveCacheVersion() {
@@ -167,6 +167,7 @@ const PRECACHE = [
   // 武器手持精靈貼圖 (WeaponArt.js)
   './assets/weapons/absolute_zero.png',
   './assets/weapons/annihilation_beam.png',
+  './assets/weapons/battle_axe.png',
   './assets/weapons/bolter.png',
   './assets/weapons/boomerang.png',
   './assets/weapons/chainsword.png',
@@ -175,8 +176,10 @@ const PRECACHE = [
   './assets/weapons/eternal_domain.png',
   './assets/weapons/frost_nova.png',
   './assets/weapons/ghost_shuriken.png',
+  './assets/weapons/goddess_bracelet.png',
   './assets/weapons/guardian.png',
   './assets/weapons/kunai.png',
+  './assets/weapons/lance.png',
   './assets/weapons/lightning.png',
   './assets/weapons/molotov.png',
   './assets/weapons/napalm_sea.png',
@@ -193,6 +196,7 @@ const PRECACHE = [
   './assets/weapons/singularity_ring.png',
   './assets/weapons/soccer.png',
   './assets/weapons/storm_bolter.png',
+  './assets/weapons/torch.png',
   './assets/weapons/twin_storm.png',
   // 地圖無接縫高畫質地表貼圖 (Ground.js)：一關一張，改為進關才抓（見 isOnDemandEntry），
   // 因此不列在預快取清單裡。

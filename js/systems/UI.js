@@ -2173,7 +2173,7 @@ export class UIManager {
       skip.onclick = () => { if (left > 0 && extra.onSkip) extra.onSkip(); };
     }
     if (this.banishInfo) {
-      this.banishInfo.textContent = extra.onBanish ? `🚫 封印剩 ${extra.banishesLeft || 0} 次（點卡片右下角 🚫）` : '';
+      this.banishInfo.textContent = extra.onBanish ? `🚫 封印剩 ${extra.banishesLeft || 0} 次（點卡片上的 🚫）` : '';
     }
 
     // 金幣 reroll：花錢重抽三選一 (不重複目前顯示的卡)

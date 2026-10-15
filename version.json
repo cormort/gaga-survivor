@@ -1,6 +1,6 @@
 {
-  "version": "109",
+  "version": "110",
   "releasedAt": "2026-10-08",
-  "note": "v109 TD 守塔模式建塔地基槽手繪重繪（Nano Banana）：移除扁平科技底座，全面升級為 Kingdom Rush 手繪風格的立體石砌基台、插旗待建標記、戰術魔導金色符文陣與重型裝甲合金柳釘基座；新增戰略掉落道具解除封鎖券（UNBAN_TICKET）。",
+  "note": "v110 音樂合成引擎全面升級：支援 NES 晶片脈衝波 (12.5% / 25% Pulse Wave)、8 首關卡專屬主題曲結構化樂句、和弦動態對齊 Bassline、復古晶片虛擬回音 (Tracker Pseudo-Echo) 與動態過門鼓組。",
   "assetsKB": 8345
 }

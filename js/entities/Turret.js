@@ -411,6 +411,7 @@ export class Turret {
     for (const e of enemies) {
       if (e.isDead || (opts.air === 'never' && e.flying) || (opts.air === 'only' && !e.flying)) continue;
       if (opts.skip && opts.skip.includes(e)) continue;
+      if (e.stealth && !e.revealed && this.tdKey !== 'arcane') continue;   // 潛行：只有秘法塔或揭露範圍內看得見
       const dx = e.x - this.x;
       const dy = e.y - this.y;
       const d2 = dx * dx + dy * dy;

@@ -12,8 +12,8 @@
 //   4. 寶石連擊音高爬升 (Gem Combo Pitch Scaling)：連續吸寶時音調階梯上揚，製造極具爽快感的打擊回饋。
 //   5. 節拍穩定度 —— 前瞻排程器 (look-ahead scheduler)：以 ctx.currentTime 為時基、提前 250ms 排程。
 //   6. 混音限幅器 (DynamicsCompressor)：防止大量子彈、命中與爆炸疊加時過載破音。
-//   7. 豐富音樂主題 (BGM)：支援 street, lab, frost, core, endless，並新增 boss (首領戰高張力主題)、
-//      menu (營地/主選單舒緩 groove) 與 td (塔防戰術律動)。支援 首領戰動態切換 (switchToBossTheme)。
+//   7. 豐富音樂主題 (BGM)：12 關＋無盡／首領戰／選單／守塔共 16 首，每關一種風格（樂器 BGM_VOICES、
+//      鼓組 BGM_KITS、音階 scale 都由主題資料決定）。支援首領戰動態切換 (switchToBossTheme)。
 
 // ── 基礎工具與 PRNG (Mulberry32) ─────────────────────────────
 export const SAMPLE_RATE = 44100;
@@ -247,108 +247,479 @@ export function renderSfx(params, { sampleRate = SAMPLE_RATE } = {}) {
 // ── 各關卡與情境的 BGM 主題 ──────────────────────────────────
 export const BGM_THEMES = {
   street: {
-    bpm: 128,
+    // 合成器浪潮 (Synthwave)：霓虹商業街
+    bpm: 118,
+    kit: 'electro',
+    bassWave: 'sawbass',
+    bassLevel: 0.12,
+    keyRoot: 110,
     bass: [110, 110, 130.81, 146.83, 110, 110, 164.81, 146.83],
+    bassGroove: [0, 0, 12, 0, 7, 0, 12, 7],
     mode: 'maj',
-    chords: [110, 87.31, 130.81, 87.31, 110, 87.31, 98, 130.81],   // A F C F | A F G C
+    chords: [110, 87.31, 130.81, 98, 110, 87.31, 73.42, 82.41],   // Am F C G | Am F Dm Em
     kick: 'floor',
     clap: [2, 6],
     hat: 'eighth',
-    lead: { density: 0.3, octave: 2, wave: 'square', level: 0.045, dur: 0.16 },
-    arp: { wave: 'triangle', level: 0.032 },
-    pad: { level: 0.05, detune: 4, spread: false },
+    lead: { density: 0.3, octave: 2, wave: 'supersaw', level: 0.04, dur: 0.18 },
+    arp: { wave: 'pluck', level: 0.05 },
+    pad: { level: 0.05, detune: 4, spread: false, voice: 'warm' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [12, null, 10, 7, 5, null, 7, null],
+      [10, null, 10, 12, 14, null, 12, 10],
+      [7, null, 5, 3, 2, null, 3, 5],
+      [7, null, 7, 10, 12, null, 14, 15],
+      [17, null, 15, 12, 10, null, 7, null],
+      [8, null, 12, 15, 14, null, 12, 10],
+      [12, null, 10, null, 7, null, 5, null],
+    ],
+    melodyB: [
+      [12, 14, 15, 17, 19, null, 17, 15],
+      [17, null, 15, 12, 10, null, 12, null],
+      [14, null, 15, 17, 19, null, 17, 15],
+      [12, null, 10, null, 7, null, 10, 12],
+      [15, null, 17, 19, 20, null, 19, 17],
+      [19, null, 17, 15, 14, null, 12, null],
+      [14, null, 15, 17, 19, null, 17, 14],
+      [12, null, null, null, 7, null, 5, null],
+    ],
   },
   lab: {
-    bpm: 118,
+    // 工業電子 (Industrial)：金屬敲擊與 FM 冷光
+    bpm: 112,
+    kit: 'industrial',
+    bassWave: 'reese',
+    bassLevel: 0.14,
+    keyRoot: 87.31,
     bass: [87.31, 87.31, 98, 110, 87.31, 87.31, 123.47, 110],
+    bassGroove: [0, 0, 7, 0, 0, 12, 7, 0],
     mode: 'min',
-    chords: [87.31, 73.42, 65.41, 73.42, 87.31, 65.41, 73.42, 65.41],
+    chords: [87.31, 69.30, 116.54, 65.41, 87.31, 69.30, 77.78, 65.41],
     kick: 'half',
     clap: [],
     hat: 'sparse',
     drone: true,
-    lead: { density: 0.16, octave: 1, wave: 'sine', level: 0.04, dur: 0.3 },
-    arp: { wave: 'sine', level: 0.026 },
-    pad: { level: 0.05, detune: 10, spread: false },
+    lead: { density: 0.16, octave: 1, wave: 'fm', level: 0.04, dur: 0.24 },
+    arp: { wave: 'bell', level: 0.03 },
+    pad: { level: 0.05, detune: 10, spread: false, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [8, null, 7, null, 3, null, null, null],
+      [5, null, 8, null, 12, null, 10, null],
+      [7, null, 6, null, 3, null, 2, null],
+      [12, null, 15, null, 14, null, 12, null],
+      [8, null, 10, null, 7, null, 5, null],
+      [10, null, 12, null, 14, null, 15, null],
+      [12, null, 11, null, 7, null, 4, null],
+    ],
   },
   frost: {
-    bpm: 124,
+    // 冰原氛圍 (Ambient)：鐘聲與合唱，鼓點很輕
+    bpm: 96,
+    kit: 'soft',
+    bassWave: 'subsine',
+    bassLevel: 0.12,
+    keyRoot: 98,
     bass: [98, 98, 123.47, 146.83, 98, 98, 130.81, 123.47],
+    bassGroove: [0, 12, 0, 12, 7, 12, 10, 12],
     mode: 'min',
     chords: [196, 174.61, 146.83, 196, 174.61, 196, 146.83, 174.61],
     kick: 'half',
     clap: [],
     hat: 'sparse',
-    lead: { density: 0.2, octave: 2, wave: 'sine', level: 0.05, dur: 0.45 },
-    arp: { wave: 'sine', level: 0.028 },
-    pad: { level: 0.045, detune: 6, spread: true },
+    lead: { density: 0.18, octave: 2, wave: 'bell', level: 0.05, dur: 0.6 },
+    arp: { wave: 'bell', level: 0.03 },
+    pad: { level: 0.06, detune: 6, spread: true, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [15, null, 12, null, 10, null, null, null],
+      [14, null, 15, 17, 19, null, 17, 15],
+      [17, null, 14, null, 12, null, 10, null],
+      [19, null, 17, 15, 14, null, 15, 17],
+      [15, null, 14, 12, 10, null, 8, null],
+      [12, null, 15, 19, 17, null, 15, 14],
+      [12, null, null, null, 14, null, 15, null],
+    ],
   },
   core: {
-    bpm: 142,
+    // 金屬 (Metal)：破音吉他強力和弦
+    bpm: 150,
+    kit: 'rock',
+    bassWave: 'sawbass',
+    bassLevel: 0.13,
+    keyRoot: 65.41,
     bass: [65.41, 65.41, 73.42, 98, 65.41, 65.41, 82.41, 73.42],
+    bassGroove: [0, 0, 12, 0, 7, 0, 12, 0],
     mode: 'min',
-    chords: [65.41, 65.41, 55, 49, 65.41, 55, 49, 55],
+    chords: [65.41, 51.91, 58.27, 49, 65.41, 51.91, 43.65, 49],
     kick: 'floor',
     kickLevel: 0.62,
     clap: [2, 6],
     hat: 'eighth',
     ghost: true,
-    lead: { density: 0.34, octave: 2, wave: 'square', level: 0.05, dur: 0.13 },
-    arp: { wave: 'square', level: 0.028 },
-    pad: { level: 0.05, detune: 7, spread: false },
+    lead: { density: 0.3, octave: 1, wave: 'distgtr', level: 0.03, dur: 0.16 },
+    arp: { wave: 'harpsi', level: 0.03 },
+    pad: { level: 0.04, detune: 6, spread: false, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [7, 7, null, 10, 12, null, 10, 7],
+      [8, 8, null, 10, 12, null, 14, 15],
+      [10, 10, null, 12, 14, null, 12, 10],
+      [7, 7, null, 10, 8, null, 7, 5],
+      [12, 12, null, 15, 14, null, 12, 10],
+      [8, 8, null, 12, 15, null, 17, 19],
+      [7, null, 10, 14, 12, null, 10, 7],
+    ],
   },
   endless: {
+    // 暗黑合成器 (Darksynth)：深淵無盡
     bpm: 138,
+    kit: 'industrial',
+    bassWave: 'reese',
+    bassLevel: 0.14,
+    keyRoot: 73.42,
     bass: [73.42, 73.42, 87.31, 110, 73.42, 73.42, 98, 87.31],
+    bassGroove: [0, 0, 12, 7, 0, 12, 7, 10],
     mode: 'maj',
-    chords: [73.42, 73.42, 87.31, 98, 73.42, 98, 87.31, 110],
+    chords: [73.42, 58.27, 87.31, 65.41, 73.42, 58.27, 49, 55],
     kick: 'floor',
     clap: [2, 6],
     hat: 'eighth',
-    lead: { density: 0.3, octave: 2, wave: 'square', level: 0.05, dur: 0.15 },
-    arp: { wave: 'triangle', level: 0.032 },
-    pad: { level: 0.05, detune: 5, spread: false },
+    lead: { density: 0.3, octave: 2, wave: 'supersaw', level: 0.04, dur: 0.15 },
+    arp: { wave: 'fm', level: 0.03 },
+    pad: { level: 0.05, detune: 5, spread: false, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [12, null, 14, 15, 17, null, 15, 14],
+      [15, null, 14, 12, 10, null, 12, null],
+      [14, null, 15, 17, 19, null, 17, 15],
+      [17, null, 19, 21, 22, null, 21, 19],
+      [19, null, 17, 15, 14, null, 12, null],
+      [15, null, 17, 19, 21, null, 19, 17],
+      [14, null, 12, null, 10, null, 7, null],
+    ],
   },
-  // ── 新增 BGM 主題 ───────────────────────────────────────────
   boss: {
-    bpm: 168,
+    // 史詩戰鬥 (Epic)：銅管＋太鼓＋大鍵琴頑固音型
+    bpm: 150,
+    kit: 'taiko',
+    bassWave: 'sawbass',
+    bassLevel: 0.13,
+    keyRoot: 65.41,
     bass: [65.41, 65.41, 69.30, 77.78, 65.41, 65.41, 87.31, 82.41],
+    bassGroove: [0, 0, 12, 0, 0, 7, 12, 7],
     mode: 'min',
-    chords: [65.41, 69.30, 87.31, 82.41, 65.41, 69.30, 77.78, 61.74],
+    chords: [65.41, 69.30, 61.74, 65.41, 65.41, 69.30, 77.78, 49],
     kick: 'floor',
     kickLevel: 0.68,
     clap: [2, 6],
     hat: 'eighth',
     ghost: true,
-    lead: { density: 0.42, octave: 2, wave: 'square', level: 0.055, dur: 0.12 },
-    arp: { wave: 'sawtooth', level: 0.035 },
-    pad: { level: 0.055, detune: 8, spread: true },
+    lead: { density: 0.42, octave: 2, wave: 'brass', level: 0.05, dur: 0.16 },
+    arp: { wave: 'harpsi', level: 0.035 },
+    pad: { level: 0.055, detune: 8, spread: true, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [13, 13, null, 12, 8, null, 7, null],
+      [11, 11, null, 12, 13, null, 12, 11],
+      [12, null, null, null, 7, null, 8, null],
+      [12, 12, 13, 15, 16, null, 15, 13],
+      [17, null, 16, 13, 12, null, 8, null],
+      [15, 15, 16, 17, 19, null, 17, 15],
+      [16, null, 15, null, 12, null, 11, null],
+    ],
   },
   menu: {
-    bpm: 104,
+    // Lo-fi：撥弦與鐘聲，放鬆的基地
+    bpm: 88,
+    kit: 'soft',
+    bassWave: 'subsine',
+    bassLevel: 0.12,
+    keyRoot: 110,
     bass: [110, 110, 130.81, 146.83, 110, 110, 146.83, 130.81],
+    bassGroove: [0, null, 7, null, 12, null, 7, null],
     mode: 'maj',
-    chords: [110, 130.81, 146.83, 130.81, 110, 130.81, 146.83, 164.81],
+    chords: [110, 146.83, 138.59, 92.50, 123.47, 82.41, 110, 110],
     kick: 'half',
     clap: [4],
     hat: 'sparse',
-    lead: { density: 0.22, octave: 2, wave: 'triangle', level: 0.038, dur: 0.20 },
-    arp: { wave: 'sine', level: 0.024 },
-    pad: { level: 0.04, detune: 3, spread: true },
+    lead: { density: 0.22, octave: 2, wave: 'pluck', level: 0.05, dur: 0.3 },
+    arp: { wave: 'bell', level: 0.024 },
+    pad: { level: 0.045, detune: 3, spread: true, voice: 'warm' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [9, null, 7, null, 4, null, 2, null],
+      [4, null, 7, 9, 11, null, 9, 7],
+      [9, null, 7, null, 4, null, null, null],
+      [7, null, 9, 11, 12, null, 11, 9],
+      [11, null, 9, null, 7, null, 4, null],
+      [2, null, 4, 7, 9, null, 7, 4],
+      [7, null, null, null, 4, null, 2, null],
+    ],
   },
   td: {
-    bpm: 132,
+    // 軍樂進行曲 (March)：銅管與小鼓滾奏
+    bpm: 120,
+    kit: 'march',
+    bassWave: 'sawbass',
+    bassLevel: 0.12,
+    keyRoot: 98,
     bass: [98, 98, 116.54, 130.81, 98, 98, 146.83, 130.81],
+    bassGroove: [0, 0, 7, 0, 12, 0, 7, 0],
     mode: 'min',
-    chords: [98, 116.54, 130.81, 116.54, 98, 116.54, 146.83, 130.81],
+    chords: [98, 87.31, 77.78, 73.42, 98, 116.54, 65.41, 73.42],
     kick: 'floor',
     kickLevel: 0.58,
     clap: [2, 6],
     hat: 'eighth',
     ghost: true,
-    lead: { density: 0.32, octave: 2, wave: 'square', level: 0.048, dur: 0.14 },
-    arp: { wave: 'triangle', level: 0.030 },
-    pad: { level: 0.045, detune: 5, spread: false },
+    lead: { density: 0.32, octave: 2, wave: 'brass', level: 0.045, dur: 0.16 },
+    arp: { wave: 'pluck', level: 0.035 },
+    pad: { level: 0.045, detune: 5, spread: false, voice: 'warm' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [10, null, 8, null, 5, null, 7, null],
+      [8, null, 10, 12, 13, null, 12, 10],
+      [7, null, 5, null, 3, null, 2, null],
+      [5, null, 7, 10, 12, null, 14, 15],
+      [15, null, 14, 12, 10, null, 7, null],
+      [8, null, 10, 12, 14, null, 12, 10],
+      [12, null, null, null, 10, null, 7, null],
+    ],
+  },
+  // ── 以下 8 關原本沒有自己的主題、全部播商業街的音樂 ──
+  subway: {
+    // 碎拍鼓打貝斯 (Breakbeat / D&B)：地鐵隧道的高速碎拍
+    bpm: 164,
+    kit: 'breakbeat',
+    bassWave: 'reese',
+    bassLevel: 0.14,
+    keyRoot: 73.42,
+    bass: [73.42, 58.27, 87.31, 65.41, 73.42, 58.27, 98.0, 65.41],
+    bassGroove: [0, 12, 0, 7, 0, 12, 10, 7],
+    mode: 'min',
+    chords: [73.42, 58.27, 87.31, 65.41, 73.42, 58.27, 98.0, 65.41],
+    kick: [0, 5],
+    clap: [2, 6],
+    hat: 'sixteenth',
+    lead: { density: 0.3, octave: 2, wave: 'fm', level: 0.04, dur: 0.12 },
+    arp: { wave: 'fm', level: 0.028 },
+    pad: { level: 0.045, detune: 6, spread: false, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [12, null, 10, 12, 15, null, 12, null],
+      [8, null, 7, null, 3, null, 5, 7],
+      [7, null, 5, 3, 2, null, 0, null],
+      [12, null, 15, 17, 19, null, 17, 15],
+      [17, null, 15, 12, 10, null, 8, null],
+      [10, 12, 15, 12, 10, null, 7, null],
+      [12, null, null, null, 7, null, null, null],
+    ],
+  },
+  swamp: {
+    // 黑暗部落 (Dark Tribal)：低鳴長笛、合唱與部落低鼓
+    bpm: 100,
+    kit: 'taiko',
+    bassWave: 'subsine',
+    bassLevel: 0.13,
+    keyRoot: 82.41,
+    bass: [82.41, 87.31, 82.41, 73.42, 82.41, 87.31, 98.0, 87.31],
+    bassGroove: [0, null, 7, null, 0, null, 12, null],
+    mode: 'min',
+    scale: [0, 1, 3, 5, 7, 8, 10, 12],
+    chords: [82.41, 87.31, 82.41, 73.42, 82.41, 87.31, 98.0, 87.31],
+    kick: [0, 3, 6],
+    clap: [4],
+    hat: 'sparse',
+    drone: true,
+    lead: { density: 0.15, octave: 2, wave: 'flute', level: 0.05, dur: 0.42 },
+    arp: { wave: 'pluck', level: 0.04 },
+    pad: { level: 0.055, detune: 8, spread: false, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [7, null, null, 8, 7, null, 5, null],
+      [3, null, 1, null, 0, null, null, null],
+      [null, null, 12, null, 10, null, 8, 7],
+      [8, null, null, null, 7, null, 5, null],
+      [7, null, 8, 10, 12, null, 10, 8],
+      [7, null, 5, null, 3, null, 1, null],
+      [0, null, null, null, null, null, null, null],
+    ],
+  },
+  storm: {
+    // 沙漠風 (Desert)：烏德琴撥弦、弗里吉亞屬音階與手鼓
+    bpm: 116,
+    kit: 'hand',
+    bassWave: 'sawbass',
+    bassLevel: 0.11,
+    keyRoot: 110,
+    bass: [110.0, 116.54, 110.0, 98.0, 110.0, 116.54, 98.0, 110.0],
+    bassGroove: [0, 0, 12, 0, 7, 0, 12, 0],
+    mode: 'maj',
+    scale: [0, 1, 4, 5, 7, 8, 10, 12],
+    chords: [110.0, 116.54, 110.0, 98.0, 110.0, 116.54, 98.0, 110.0],
+    kick: [0, 3, 4],
+    clap: [2, 6],
+    hat: 'eighth',
+    lead: { density: 0.3, octave: 2, wave: 'oud', level: 0.05, dur: 0.18 },
+    arp: { wave: 'pluck', level: 0.035 },
+    pad: { level: 0.04, detune: 4, spread: false, voice: 'warm' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [12, 13, 12, null, 8, null, 7, null],
+      [8, null, 7, 5, 4, null, 5, null],
+      [4, 5, 4, 1, 0, null, null, null],
+      [7, null, 8, null, 10, null, 12, 13],
+      [12, null, 10, 8, 7, null, 8, null],
+      [5, null, 4, null, 1, null, 4, 5],
+      [4, null, 1, null, 0, null, null, null],
+    ],
+  },
+  foundry: {
+    // 工業金屬 (Industrial Metal)：破音吉他與鐵砧敲擊
+    bpm: 132,
+    kit: 'industrial',
+    bassWave: 'sawbass',
+    bassLevel: 0.13,
+    keyRoot: 65.41,
+    bass: [65.41, 65.41, 51.92, 58.27, 65.41, 65.41, 77.79, 58.27],
+    bassGroove: [0, 0, 0, 12, 0, 0, 7, 0],
+    mode: 'min',
+    chords: [65.41, 65.41, 51.92, 58.27, 65.41, 65.41, 77.79, 58.27],
+    kick: 'floor',
+    clap: [2, 6],
+    hat: 'eighth',
+    ghost: true,
+    lead: { density: 0.3, octave: 2, wave: 'distgtr', level: 0.03, dur: 0.14 },
+    arp: { wave: 'fm', level: 0.03 },
+    pad: { level: 0.04, detune: 6, spread: false, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [12, null, 12, null, 15, null, 12, null],
+      [10, null, 8, null, 7, null, null, null],
+      [8, 8, 7, null, 3, null, 5, null],
+      [12, null, 15, null, 17, null, 19, null],
+      [20, null, 19, 17, 15, null, 12, null],
+      [15, null, 14, null, 12, null, 10, null],
+      [12, null, null, null, null, null, null, null],
+    ],
+  },
+  frostvoid: {
+    // 空靈 (Ethereal)：利底亞音階的鐘聲與合唱
+    bpm: 84,
+    kit: 'soft',
+    bassWave: 'subsine',
+    bassLevel: 0.12,
+    keyRoot: 87.31,
+    bass: [87.31, 98.0, 87.31, 98.0, 73.42, 98.0, 87.31, 87.31],
+    bassGroove: [0, null, null, null, 7, null, null, null],
+    mode: 'maj',
+    scale: [0, 2, 4, 6, 7, 9, 11, 12],
+    chords: [87.31, 98.0, 87.31, 98.0, 73.42, 98.0, 87.31, 87.31],
+    kick: [0],
+    clap: [4],
+    hat: 'sparse',
+    drone: true,
+    lead: { density: 0.12, octave: 2, wave: 'bell', level: 0.05, dur: 0.8 },
+    arp: { wave: 'bell', level: 0.03 },
+    pad: { level: 0.06, detune: 6, spread: true, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [12, null, null, null, 11, null, null, null],
+      [9, null, null, null, 6, null, 7, null],
+      [4, null, null, null, null, null, null, null],
+      [11, null, null, 12, 14, null, null, null],
+      [16, null, null, null, 14, null, 11, null],
+      [9, null, null, null, 7, null, 6, null],
+      [7, null, null, null, null, null, null, null],
+    ],
+  },
+  voidroad: {
+    // 賽博故障 (Cyber Glitch)：FM 琶音與碎拍
+    bpm: 150,
+    kit: 'breakbeat',
+    bassWave: 'reese',
+    bassLevel: 0.14,
+    keyRoot: 61.74,
+    bass: [61.74, 49.0, 73.42, 55.0, 61.74, 49.0, 82.41, 55.0],
+    bassGroove: [0, 12, 0, 12, 0, 12, 7, 12],
+    mode: 'min',
+    chords: [61.74, 49.0, 73.42, 55.0, 61.74, 49.0, 82.41, 55.0],
+    kick: [0, 3, 5],
+    clap: [2, 6],
+    hat: 'sixteenth',
+    lead: { density: 0.35, octave: 2, wave: 'fm', level: 0.04, dur: 0.1 },
+    arp: { wave: 'fm', level: 0.03 },
+    pad: { level: 0.045, detune: 7, spread: false, voice: 'choir' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [12, 12, null, 15, null, 12, null, 10],
+      [12, null, 7, null, 10, null, 12, null],
+      [15, 14, 12, null, 10, null, 7, null],
+      [19, null, 17, null, 15, null, 14, 12],
+      [14, null, 15, null, 17, 19, null, 17],
+      [15, null, 12, null, 10, null, 7, null],
+      [12, null, null, 7, null, null, 12, null],
+    ],
+  },
+  inkmount: {
+    // 國風 (Chinese)：笛子主奏、古箏琶音、五聲音階與太鼓
+    bpm: 96,
+    kit: 'taiko',
+    bassWave: 'subsine',
+    bassLevel: 0.12,
+    keyRoot: 73.42,
+    bass: [73.42, 98.0, 73.42, 110.01, 73.42, 98.0, 110.01, 73.42],
+    bassGroove: [0, null, 7, null, 12, null, 7, null],
+    mode: 'maj',
+    scale: [0, 2, 4, 7, 9, 12],
+    arpTones: [0, 2, 4, 7, 9],
+    chords: [73.42, 98.0, 73.42, 110.01, 73.42, 98.0, 110.01, 73.42],
+    kick: [0, 4],
+    clap: [6],
+    hat: 'sparse',
+    lead: { density: 0.2, octave: 2, wave: 'flute', level: 0.05, dur: 0.35 },
+    arp: { wave: 'pluck', level: 0.05 },
+    pad: { level: 0.04, detune: 4, spread: true, voice: 'warm' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [9, null, 7, null, 9, 12, null, null],
+      [14, null, 12, 9, 7, null, null, null],
+      [4, null, 7, null, 9, null, 7, 4],
+      [2, null, null, null, 0, null, null, null],
+      [12, null, 14, null, 16, null, 14, 12],
+      [9, null, 12, 9, 7, null, 4, null],
+      [7, null, 4, 2, 0, null, null, null],
+    ],
+  },
+  makaimura: {
+    // 哥德 (Gothic)：管風琴、大鍵琴、和聲小調與行進小鼓
+    bpm: 132,
+    kit: 'march',
+    bassWave: 'sawbass',
+    bassLevel: 0.11,
+    keyRoot: 110,
+    bass: [110.0, 73.42, 82.41, 110.0, 87.31, 73.42, 82.41, 82.41],
+    bassGroove: [0, 0, 12, 0, 7, 0, 12, 0],
+    mode: 'min',
+    scale: [0, 2, 3, 5, 7, 8, 11, 12],
+    chords: [110.0, 73.42, 82.41, 110.0, 87.31, 73.42, 82.41, 82.41],
+    kick: [0, 4],
+    clap: [2, 6],
+    hat: 'eighth',
+    lead: { density: 0.3, octave: 2, wave: 'harpsi', level: 0.04, dur: 0.14 },
+    arp: { wave: 'harpsi', level: 0.03 },
+    pad: { level: 0.05, detune: 4, spread: false, voice: 'organ' },
+    melody: [
+      [null, null, null, null, null, null, null, null],
+      [12, null, 11, 12, 14, null, 12, 11],
+      [8, null, 7, null, 5, null, 3, null],
+      [2, null, 3, 5, 7, null, 8, null],
+      [11, null, null, 12, null, null, null, null],
+      [12, null, 14, 15, 17, null, 15, 14],
+      [12, null, 11, null, 8, null, 7, null],
+      [5, null, 3, null, 2, null, -1, null],
+    ],
   },
 };
 
@@ -370,6 +741,55 @@ export const SHOOT_TIMBRES = {
   power_sword: { type: 'sawtooth', f0: 520,  f1: 160, dur: 0.18, level: 0.32 },
   phase_blade: { type: 'square',   f0: 820,  f1: 340, dur: 0.08, level: 0.22 },
   orbit_saw:   { type: 'sawtooth', f0: 260,  f1: 320, dur: 0.10, level: 0.20 },
+};
+
+// ── BGM 樂器音色（每關風格不同的基礎）────────────────────────────
+// 每個音色＝幾個振盪器層（波形、相對頻率 mul、微分音 cents、音量 gain）→ 選配破音 → 濾波器 → 音量包絡。
+// 主題資料的 wave / bassWave / pad.voice 寫這裡的名字就換樂器；寫 'square'、'pulse25' 這類原生波形則照舊（晶片風）。
+//   filter.env：濾波器截止頻率在 envTime 秒內從 from 滑到 to（撥弦的「亮→暗」、銅管的「暗→亮」）
+//   sustain：true = 音符持續到尾端再收（風琴、合唱、長笛），false = 一下就衰減（撥弦、鐘）
+const BGM_VOICES = {
+  supersaw: { layers: [['sawtooth', 1, -14, 0.4], ['sawtooth', 1, 0, 0.4], ['sawtooth', 1, 14, 0.4]], filter: ['lowpass', 2800, 1], attack: 0.01, sustain: true },
+  sawbass:  { layers: [['sawtooth', 1, 0, 0.7], ['square', 0.5, 0, 0.5]], filter: ['lowpass', 700, 2] },
+  reese:    { layers: [['sawtooth', 1, -22, 0.6], ['sawtooth', 1, 22, 0.6]], filter: ['lowpass', 520, 3], sustain: true },
+  subsine:  { layers: [['sine', 1, 0, 1], ['triangle', 2, 0, 0.15]] },
+  distgtr:  { layers: [['sawtooth', 1, 0, 0.6], ['sawtooth', 1.4983, 0, 0.45], ['sawtooth', 0.5, 0, 0.35]], drive: 6, filter: ['lowpass', 3000, 1], sustain: true },
+  pluck:    { layers: [['triangle', 1, 0, 0.8], ['sawtooth', 1, 4, 0.25]], filter: ['lowpass', 600, 2, 5200, 0.18] },
+  oud:      { layers: [['sawtooth', 1, 0, 0.6], ['triangle', 2, 0, 0.2]], filter: ['lowpass', 900, 4, 4200, 0.12] },
+  harpsi:   { layers: [['square', 1, 0, 0.45], ['sawtooth', 2, 0, 0.25]], filter: ['lowpass', 1600, 1, 7000, 0.1] },
+  bell:     { layers: [['sine', 1, 0, 0.8], ['sine', 2.76, 0, 0.32], ['sine', 5.4, 0, 0.12]] },
+  organ:    { layers: [['sine', 1, 0, 0.6], ['square', 2, 0, 0.12], ['sine', 3, 0, 0.3], ['sine', 4, 0, 0.15]], filter: ['lowpass', 3200, 0.7], attack: 0.02, sustain: true },
+  brass:    { layers: [['sawtooth', 1, -6, 0.5], ['sawtooth', 1, 6, 0.5]], filter: ['lowpass', 2600, 2, 500, 0.06], attack: 0.04, sustain: true },
+  flute:    { layers: [['sine', 1, 0, 0.9], ['triangle', 2, 0, 0.12]], attack: 0.05, sustain: true, vib: { depth: 0.012, rate: 5.5, delay: 0.12 } },
+  choir:    { layers: [['sawtooth', 1, -16, 0.3], ['sawtooth', 1, 0, 0.3], ['sawtooth', 1, 16, 0.3]], filter: ['lowpass', 1100, 0.6], attack: 0.35, sustain: true },
+  fm:       { layers: [['square', 1, 0, 0.45], ['square', 3.01, 0, 0.2], ['sine', 0.5, 0, 0.3]], filter: ['lowpass', 4200, 2] },
+  warm:     { layers: [['triangle', 1, -5, 0.5], ['triangle', 1, 5, 0.5]], attack: 0.3, sustain: true },
+};
+
+// 破音曲線（電吉他）：tanh 軟削波，依 drive 快取，不要每個音符都重算 1024 點
+const _driveCurves = {};
+function driveCurve(drive) {
+  if (_driveCurves[drive]) return _driveCurves[drive];
+  const n = 1024;
+  const c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    c[i] = Math.tanh(x * drive) / Math.tanh(drive);
+  }
+  return (_driveCurves[drive] = c);
+}
+
+// ── 鼓組：每種 kit 換掉大鼓／小鼓（clap）／hat 的音色 ─────────────────
+//   kick: [起始頻率, 結束頻率, 長度]   snare: [噪音濾波頻率, 長度, 鼓身音高(0=無), 鼓身波形]   hat: 高通頻率
+const BGM_KITS = {
+  electro:    { kick: [220, 38, 0.09], snare: [1900, 0.11, 0], hat: 7200 },
+  rock:       { kick: [160, 45, 0.14], snare: [2600, 0.16, 190, 'triangle'], hat: 8200 },
+  taiko:      { kick: [105, 48, 0.38], snare: [900, 0.07, 330, 'triangle'], hat: 5200 },
+  industrial: { kick: [190, 40, 0.12], snare: [3400, 0.09, 820, 'square'], hat: 9200 },
+  hand:       { kick: [300, 120, 0.09], snare: [2400, 0.05, 620, 'sine'], hat: 6400 },
+  breakbeat:  { kick: [200, 42, 0.1], snare: [2100, 0.13, 220, 'triangle'], hat: 8600 },
+  march:      { kick: [130, 55, 0.18], snare: [3000, 0.12, 240, 'triangle'], hat: 7600 },
+  soft:       { kick: [120, 50, 0.2], snare: [1300, 0.06, 0], hat: 9600 },
 };
 
 const SCHEDULE_AHEAD = 0.25;
@@ -418,6 +838,28 @@ export class SoundEngine {
     // 寶石連擊音調追蹤
     this._gemCombo = 0;
     this._lastGemTime = 0;
+
+    // 晶片脈衝波 (NES Pulse PeriodicWaves)
+    this._periodicWaves = null;
+  }
+
+  _initPeriodicWaves() {
+    if (!this.ctx || this._periodicWaves) return;
+    this._periodicWaves = {};
+    try {
+      const n = 64;
+      const makePulse = (duty) => {
+        const real = new Float32Array(n);
+        const imag = new Float32Array(n);
+        for (let i = 1; i < n; i++) imag[i] = (2 / (i * Math.PI)) * Math.sin(i * Math.PI * duty);
+        return this.ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+      };
+      this._periodicWaves.pulse12 = makePulse(0.125);
+      this._periodicWaves.pulse25 = makePulse(0.25);
+      this._periodicWaves.pulse75 = makePulse(0.75);
+    } catch (e) {
+      // 離線模擬環境或不支援 PeriodicWave 時靜默降級
+    }
   }
 
   _throttle(name, gapMs) {
@@ -468,6 +910,8 @@ export class SoundEngine {
       this.ctx = new AudioContext();
     }
 
+    this._initPeriodicWaves();
+
     // 兩條匯流排 → 限幅器 → 輸出
     this.master = this.ctx.createDynamicsCompressor();
     this.master.threshold.value = -8;
@@ -499,6 +943,7 @@ export class SoundEngine {
   ensureContext() {
     if (!this.ctx) this.init();
     if (!this.ctx) return;
+    if (!this._periodicWaves) this._initPeriodicWaves();
     if (!this._offline && this.ctx.state === 'suspended' && typeof this.ctx.resume === 'function') {
       this.ctx.resume().then(() => this._resyncBGM()).catch(() => {});
     }
@@ -903,12 +1348,19 @@ export class SoundEngine {
   }
 
   // ── BGM 合成工具 ─────────────────────────────────────────────
-  _bgmTone(t, freq, type, dur, level, glideTo = null, attack = 0.004, release = null) {
+  _bgmTone(t, freq, type, dur, level, glideTo = null, attack = 0.004, release = null, vib = null, dest = null) {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    osc.type = type;
+
+    if (this._periodicWaves && this._periodicWaves[type]) {
+      osc.setPeriodicWave(this._periodicWaves[type]);
+    } else {
+      osc.type = (type === 'pulse12' || type === 'pulse25' || type === 'pulse75') ? 'square' : (type || 'triangle');
+    }
+
     osc.frequency.setValueAtTime(freq, t);
     if (glideTo) osc.frequency.exponentialRampToValueAtTime(glideTo, t + dur);
+
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.linearRampToValueAtTime(level, t + attack);
     if (release === null) {
@@ -917,8 +1369,30 @@ export class SoundEngine {
       gain.gain.setValueAtTime(level, t + Math.max(attack, dur - release));
       gain.gain.exponentialRampToValueAtTime(0.0008, t + dur);
     }
+
+    // 晶片風格主奏長音顫音 (Chiptune Pitch Vibrato)
+    if (vib && vib.depth > 0) {
+      try {
+        const vStart = t + (vib.delay || 0.08);
+        if (vStart < t + dur) {
+          const vOsc = this.ctx.createOscillator();
+          const vGain = this.ctx.createGain();
+          vOsc.frequency.setValueAtTime(vib.rate || 6, vStart);
+          vGain.gain.setValueAtTime(0, vStart);
+          vGain.gain.linearRampToValueAtTime(freq * vib.depth, Math.min(t + dur, vStart + 0.08));
+          vOsc.connect(vGain);
+          vGain.connect(osc.frequency);
+          vOsc.start(vStart);
+          vOsc.stop(t + dur + 0.02);
+          vOsc.onended = () => {
+            try { vOsc.disconnect(); vGain.disconnect(); } catch (e) {}
+          };
+        }
+      } catch (e) {}
+    }
+
     osc.connect(gain);
-    gain.connect(this.bgmGain);
+    gain.connect(dest || this.bgmGain);
     osc.start(t);
     osc.stop(t + dur + 0.02);
     osc.onended = () => {
@@ -930,21 +1404,64 @@ export class SoundEngine {
     return osc;
   }
 
+  // 用 BGM_VOICES 的樂器演奏一個音；名字不在表裡就退回單一原生波形（晶片風的 pulse25 等）
+  _bgmVoice(t, freq, voice, dur, level, vib = null) {
+    const v = BGM_VOICES[voice];
+    if (!v) return this._bgmTone(t, freq, voice, dur, level, null, 0.004, null, vib);
+    let input = this.bgmGain;
+    let filter = null;
+    let shaper = null;
+    if (v.filter) {
+      const [type, f, q, envFrom, envTime] = v.filter;
+      filter = this.ctx.createBiquadFilter();
+      filter.type = type;
+      filter.Q.value = q;
+      filter.frequency.setValueAtTime(envFrom || f, t);
+      if (envFrom) filter.frequency.exponentialRampToValueAtTime(f, t + Math.min(dur, envTime));
+      filter.connect(this.bgmGain);
+      input = filter;
+    }
+    if (v.drive) {
+      shaper = this.ctx.createWaveShaper();
+      shaper.curve = driveCurve(v.drive);
+      shaper.connect(input);
+      input = shaper;
+    }
+    const attack = v.attack || 0.004;
+    const release = v.sustain ? Math.min(0.12, dur * 0.4) : null;
+    let last = null;
+    for (const [type, mul, cents, gain] of v.layers) {
+      const f = freq * mul * Math.pow(2, cents / 1200);
+      if (f > 6000) continue;
+      last = this._bgmTone(t, f, type, dur, level * gain, null, attack, release, vib || v.vib || null, input);
+    }
+    if (last && (filter || shaper)) {
+      last.addEventListener('ended', () => {
+        try { if (shaper) shaper.disconnect(); if (filter) filter.disconnect(); } catch (e) { /* ignore */ }
+      });
+    }
+    return last;
+  }
+
   _bgmNoise(t, dur, level, filterType = 'highpass', filterFreq = 6000) {
     return this._noiseVoice(t, dur, level, filterType, filterFreq, this.bgmGain, 0, Math.random() * 0.4);
   }
 
-  _bgmKick(t, level = 0.55) {
-    this._bgmTone(t, 150, 'sine', 0.1, level, 44);
+  _bgmKick(t, level = 0.55, kit = BGM_KITS.electro) {
+    // 大鼓：起始頻率疾速下潛（電子鼓 220→38Hz；太鼓 105→48Hz 長尾）
+    const [f0, f1, dur] = kit.kick;
+    this._bgmTone(t, f0, 'sine', dur, level, f1, 0.002);
   }
 
-  _bgmClap(t, level = 0.13) {
-    this._bgmNoise(t, 0.12, level, 'bandpass', 1700);
+  _bgmClap(t, level = 0.13, kit = BGM_KITS.electro) {
+    const [freq, dur, body, bodyWave] = kit.snare;
+    this._bgmNoise(t, dur, level, 'bandpass', freq);
+    if (body) this._bgmTone(t, body, bodyWave || 'triangle', dur * 0.8, level * 0.9, body * 0.7, 0.002);   // 鼓身
   }
 
-  _bgmHat(t, open = false, level = 0.05, at = null) {
+  _bgmHat(t, open = false, level = 0.05, at = null, kit = BGM_KITS.electro) {
     const st = at === null ? t : at;
-    this._bgmNoise(st, open ? 0.11 : 0.035, open ? level * 0.85 : level, 'highpass', 7200);
+    this._bgmNoise(st, open ? 0.10 : 0.03, open ? level * 0.85 : level, 'highpass', kit.hat);
   }
 
   _bgmCrash(t, level = 0.09) {
@@ -954,7 +1471,8 @@ export class SoundEngine {
   _bgmPad(t, dur, root, mode, cfg) {
     const offsets = mode === 'maj' ? [0, 4, 7] : [0, 3, 7];
     for (const semi of offsets) {
-      this._bgmTone(t, root * Math.pow(2, semi / 12), 'triangle', dur, cfg.level / 3, null, 0.5, 0.6);
+      if (cfg.voice) this._bgmVoice(t, root * Math.pow(2, semi / 12), cfg.voice, dur, cfg.level / 3);
+      else this._bgmTone(t, root * Math.pow(2, semi / 12), 'triangle', dur, cfg.level / 3, null, 0.5, 0.6);
     }
     if (cfg.spread) {
       this._bgmTone(t, root * 2, 'triangle', dur, cfg.level / 6, null, 0.5, 0.6);
@@ -1044,61 +1562,107 @@ export class SoundEngine {
     const chordRoot = theme.chords[barIdx % theme.chords.length];
     const padCfg = theme.pad || { level: 0.045, detune: 4, spread: false };
     const leadCfg = theme.lead || { density: 0.25, octave: 2, wave: 'square', level: 0.045, dur: 0.15 };
-    const kickSteps = theme.kick === 'floor' ? [0, 2, 4, 6] : [0, 4];
-    const leadPool = theme.mode === 'maj'
-      ? [0, 0, 0, 2, 4, 4, 7, 7, 7, 7, 9, 12, 12, 12]
-      : [0, 0, 0, 3, 5, 5, 7, 7, 7, 7, 10, 12, 12, 12];
+    const kickSteps = Array.isArray(theme.kick) ? theme.kick : theme.kick === 'floor' ? [0, 2, 4, 6] : [0, 4];
+    const kit = BGM_KITS[theme.kit] || BGM_KITS.electro;
+    // 音階：主題可以指定（五聲、弗里吉亞屬音、和聲小調…），即興填音與琶音都從這裡挑
+    const scale = theme.scale || (theme.mode === 'maj' ? [0, 2, 4, 7, 9, 12] : [0, 3, 5, 7, 10, 12]);
+    const leadPool = [0, 0, 0, ...scale, ...scale.filter((x) => x === 7 || x === 12)];
 
     this.intensity += (this._intensityTarget - this.intensity) * 0.12;
     const it = this.intensity;
     const phraseBar = barIdx % 8;
 
-    // 1. 鼓組
-    if (kickSteps.includes(stepInBar)) this._bgmKick(now, theme.kickLevel || 0.55);
-    if (theme.clap.includes(stepInBar)) this._bgmClap(now);
+    // 1. 鼓組 (節拍律動與過門 Drum Fills)
+    if (kickSteps.includes(stepInBar)) this._bgmKick(now, theme.kickLevel || 0.55, kit);
+    if (theme.clap.includes(stepInBar)) this._bgmClap(now, theme.clapLevel || 0.13, kit);
     if (theme.hat === 'eighth') {
-      if (stepInBar % 2 === 1) this._bgmHat(now, stepInBar === 7, 0.055);
+      if (stepInBar % 2 === 1) this._bgmHat(now, stepInBar === 7, 0.055, null, kit);
+    } else if (theme.hat === 'sixteenth') {
+      this._bgmHat(now, stepInBar === 7, 0.045, null, kit);
+      this._bgmHat(now, false, 0.025, now + stepTime * 0.5, kit);
     } else if (theme.hat === 'sparse' && (stepInBar === 2 || stepInBar === 6)) {
-      this._bgmHat(now, false, 0.035);
+      this._bgmHat(now, false, 0.035, null, kit);
     }
     if (theme.ghost && it > 0.2 && stepInBar % 2 === 0) {
-      this._bgmHat(now, false, 0.02 + it * 0.012, now + stepTime * 0.5);
+      this._bgmHat(now, false, 0.02 + it * 0.012, now + stepTime * 0.5, kit);
     }
     if (phraseBar === 7 && stepInBar >= 5 && stepInBar <= 7) {
-      this._bgmHat(now, false, 0.03 + it * 0.02, now + stepTime * 0.5);
+      // 樂句尾的過門：行進鼓組用小鼓滾奏，其餘用 hat
+      if (theme.kit === 'march' || theme.kit === 'taiko') this._bgmClap(now + stepTime * 0.5, 0.08 + it * 0.04, kit);
+      else this._bgmHat(now, false, 0.03 + it * 0.02, now + stepTime * 0.5, kit);
     }
     if (barIdx > 0 && phraseBar === 0 && stepInBar === 0) this._bgmCrash(now, 0.09 + it * 0.05);
     if (it > 0.6 && phraseBar === 4 && stepInBar === 0) this._bgmCrash(now, 0.05);
 
-    // 2. Bass 脈衝
-    this._bgmTone(now, bassNotes[this.bgmStep % bassNotes.length], 'triangle', stepTime * 0.85, 0.15);
+    // 2. Bass 脈衝 (和弦根音即時動態對齊，杜絕離調衝突)
+    let bassFreq = bassNotes ? bassNotes[this.bgmStep % bassNotes.length] : 110;
+    if (theme.bassGroove) {
+      const g = theme.bassGroove[stepInBar % theme.bassGroove.length];
+      if (g !== null && Number.isFinite(g)) {
+        bassFreq = chordRoot * Math.pow(2, g / 12) * (theme.bassMul || 1);
+      }
+    }
+    this._bgmVoice(now, bassFreq, theme.bassWave || 'triangle', stepTime * 0.85, theme.bassLevel || 0.15);
 
-    // 3. 和弦 pad
+    // 3. 和弦 pad (立體聲包圍氛圍層)
     if (stepInBar === 0) this._bgmPad(now, stepTime * 8, chordRoot, theme.mode, padCfg);
 
-    // 4. 高張力琶音層
+    // 4. 高張力琶音層 (16分音符快速跑動)
     if (theme.arp && it > 0.45 && stepInBar % 2 === 1) {
-      const tones = theme.mode === 'maj' ? [0, 4, 7, 12] : [0, 3, 7, 12];
+      const tones = theme.arpTones || (theme.mode === 'maj' ? [0, 4, 7, 12] : [0, 3, 7, 12]);
       const semi = tones[this._arpIdx % tones.length];
       this._arpIdx++;
       const freq = chordRoot * Math.pow(2, semi / 12) * 8;
       if (freq <= 5000) {
-        this._bgmTone(now, freq, theme.arp.wave || 'triangle', stepTime * 0.9,
-          theme.arp.level * (0.4 + it * 0.9), null, 0.006);
+        this._bgmVoice(now, freq, theme.arp.wave || 'triangle', stepTime * 0.9,
+          theme.arp.level * (0.4 + it * 0.9));
       }
     }
 
-    // 5. Lead 旋律
-    const leadChance = leadCfg.density * (0.75 + it * 0.6);
-    if (barIdx >= 1 && Math.random() < leadChance && !(stepInBar === 0 && this._bgmLastStep >= 6)) {
-      let semi = leadPool[Math.floor(Math.random() * leadPool.length)];
-      if (this._bgmLastLead > 0 && Math.abs(this._bgmLastLead - semi) < 2 && Math.random() < 0.7) {
-        semi = leadPool[Math.floor(Math.random() * leadPool.length)];
+    // 5. Lead 主奏旋律 (結構化主題樂句 + 即興有機填音 + 虛擬回音)
+    const melodyPhrase = theme.melody;
+    if (barIdx >= 1) {
+      let playedNote = false;
+      const mBar = barIdx % (melodyPhrase ? melodyPhrase.length : 8);
+      const isAltSection = Math.floor(barIdx / 8) % 2 === 1 && theme.melodyB;
+      const activeMelody = isAltSection ? theme.melodyB : melodyPhrase;
+
+      if (activeMelody && activeMelody[mBar]) {
+        const noteDef = activeMelody[mBar][stepInBar];
+        if (noteDef !== null && noteDef !== undefined) {
+          const semi = typeof noteDef === 'object' ? noteDef.semi : noteDef;
+          const dur = (typeof noteDef === 'object' && noteDef.dur) || leadCfg.dur || 0.16;
+          const keyRoot = theme.keyRoot || theme.chords[0] || 110;
+          const freq = keyRoot * Math.pow(2, semi / 12) * Math.pow(2, leadCfg.octave || 2);
+          if (freq > 20 && freq <= 4000) {
+            const vib = dur > 0.2 ? { depth: 0.02, rate: 7, delay: 0.08 } : null;
+            this._bgmVoice(now, freq, leadCfg.wave, dur, leadCfg.level * (0.85 + it * 0.3), vib);
+            playedNote = true;
+            this._bgmLastLead = semi;
+
+            // 晶片音樂虛擬回音 (Tracker Pseudo-Echo)
+            if (theme.echo !== false && it > 0.25 && stepInBar + 2 < 8) {
+              const echoTime = now + stepTime * 2;
+              this._bgmVoice(echoTime, freq, leadCfg.wave, dur * 0.65, leadCfg.level * 0.22);
+            }
+          }
+        }
       }
-      const freq = chordRoot * Math.pow(2, semi / 12) * Math.pow(2, leadCfg.octave);
-      if (freq <= 4000) {
-        this._bgmTone(now, freq, leadCfg.wave, leadCfg.dur, leadCfg.level);
-        this._bgmLastLead = semi;
+
+      // 若旋律槽位無指定音符，依張力機率有機填音 (Improvisational accents)
+      if (!playedNote) {
+        const leadChance = leadCfg.density * (0.6 + it * 0.5);
+        if (Math.random() < leadChance && !(stepInBar === 0 && this._bgmLastStep >= 6)) {
+          let semi = leadPool[Math.floor(Math.random() * leadPool.length)];
+          if (this._bgmLastLead > 0 && Math.abs(this._bgmLastLead - semi) < 2 && Math.random() < 0.7) {
+            semi = leadPool[Math.floor(Math.random() * leadPool.length)];
+          }
+          const freq = chordRoot * Math.pow(2, semi / 12) * Math.pow(2, leadCfg.octave);
+          if (freq <= 4000) {
+            this._bgmVoice(now, freq, leadCfg.wave, leadCfg.dur, leadCfg.level);
+            this._bgmLastLead = semi;
+          }
+        }
       }
     }
     this._bgmLastStep = stepInBar;

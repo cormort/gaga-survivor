@@ -3934,9 +3934,20 @@ class Game {
       if (t.eliteTier > 0 && this.td) drawTurretStars(this.ctx, renderCam, t);
     }
 
-    // 繪製怪物
+    // 繪製怪物（守塔：未被揭露的潛行怪半透明；魔盾怪外面一圈藍色護盾，越薄越淡）
     for (const enemy of this.enemies) {
+      const hidden = enemy.stealth && !enemy.revealed;
+      if (hidden) this.ctx.globalAlpha = 0.3;
       enemy.draw(this.ctx, renderCam);
+      if (hidden) this.ctx.globalAlpha = 1;
+      if (enemy.ward > 0 && !enemy.isDead) {
+        const c = this.ctx;
+        c.strokeStyle = `rgba(77,171,247,${(0.35 + 0.55 * enemy.ward / enemy.wardMax).toFixed(2)})`;
+        c.lineWidth = 3;
+        c.beginPath();
+        c.arc(enemy.x - renderCam.x, enemy.y - renderCam.y, enemy.drawRadius * 1.35, 0, Math.PI * 2);
+        c.stroke();
+      }
     }
     Enemy.drawStatusGlows(this.ctx, renderCam, this.enemies);
     if (this.td) this.td.drawBadges(this.ctx, renderCam);   // 守塔：重甲標記

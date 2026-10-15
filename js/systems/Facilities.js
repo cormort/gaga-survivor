@@ -16,6 +16,7 @@ import { sound } from '../audio.js';
 import { save } from '../save.js';
 import { enemyScale } from '../levels.js';
 import { TD_TOWERS, TD_BRANCHES, ARMOR_MUL, ARMOR_NAMES, applyTDStats, tdTowerPreview } from '../tdtowers.js';
+import { WARD_NONMAGIC_MUL, WARD_MAGIC_MUL } from '../tdwaves.js';
 
 // 打擊感 (E 項)：塔命中的火花顏色（跟 js/tdtowers.js 的 dmgType 對齊）
 const SPARK_COLORS = { pierce: '#ffd166', magic: '#c77dff', siege: '#ff8c42', normal: '#e9ecef' };
@@ -634,7 +635,17 @@ export function updateTurrets(game, dt) {
       // 等級／地基／訓練場／指揮所光環與守塔的護甲／魔抗都在這裡統一乘上
       const mul = (t.dmgMul || 1) * (1 + (t.auraBoost || 0));
       const wasDead = target.isDead;
-      game.damageEnemy(target, Math.round(dmg * mul * resistMul(t, target)), 1, t.x, t.y, t.facilityType || 'turret');
+      let final = Math.round(dmg * mul * resistMul(t, target));
+      // 魔盾：先扣盾。非魔法只削 25% 而且打不到血；魔法對盾 ×2，打穿後溢出的部分才扣血
+      if (target.ward > 0) {
+        const magic = t.dmgType === 'magic';
+        const k = magic ? WARD_MAGIC_MUL : WARD_NONMAGIC_MUL;
+        const absorbed = Math.min(target.ward, final * k);
+        target.ward -= absorbed;
+        final = magic ? Math.max(0, Math.round(final - absorbed / k)) : 0;
+        if (target.ward <= 0 && game.particles) game.particles.createShockwave(target.x, target.y, 40, '#4dabf7');   // 盾破
+      }
+      if (final > 0) game.damageEnemy(target, final, 1, t.x, t.y, t.facilityType || 'turret');
       // 打擊感 (E 項)：命中火花。顏色跟著傷害類型走，玩家光看顏色就知道哪種塔在輸出。
       // 用機率節流 —— 後期一波上百隻，每發都噴粒子會直接把 render 時間吃光。
       if (game.particles && !wasDead && Math.random() < TURRET_SPARK_CHANCE) {

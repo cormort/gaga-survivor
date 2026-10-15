@@ -19,7 +19,7 @@ import { projectToSegment } from '../tdlevels.js';
 import { randomizeTDLevel } from '../tdprocedural.js';
 import { sound } from '../audio.js';
 import { heroLevelUp, drawHeroTarget } from './TDHero.js';
-import { WAVE_MODS, waveModMul, AIR_FILLER } from '../tdwaves.js';
+import { WAVE_MODS, waveModMul, AIR_FILLER, STEALTH_REVEAL_RADIUS, WARD_HP_FRAC } from '../tdwaves.js';
 import { KINGDOM_UPGRADES, kingdomValue, kingdomNextCost, kingdomTrack } from '../tdkingdom.js';
 import { applyTDStats } from '../tdtowers.js';
 import { TD_CHAR_SCALE, rollEliteAffix } from '../config.js';
@@ -474,6 +474,7 @@ export class TowerDefense {
     if (this.phase !== 'wave') return;
     this.clock += dt;
     while (this.queue.length && this.queue[0].t <= this.clock) this.spawn(this.queue.shift());
+    this.revealStealth();
     // 該波清空：佇列出完、場上沒有沿路線走的怪（召喚／孵化的小怪不擋進度）
     if (!this.queue.length && !this.game.enemies.some((e) => !e.isDead && e.path)) this.waveCleared();
   }
@@ -604,6 +605,9 @@ export class TowerDefense {
     e.flying = e.armorClass === 'air';
     // 重甲縱隊：只把地面單位升成重甲。若連飛行怪也改，空襲＋重甲就會把「對空塔」整條廢掉。
     if (mods.includes('armored') && !e.flying) e.armorClass = 'heavy';
+    // 潛行只給地面怪（飛行怪已經要靠對空塔，再隱形就沒有解）；魔盾全體都給
+    if (mods.includes('stealth') && !e.flying) e.stealth = true;
+    if (mods.includes('warded')) e.ward = e.wardMax = Math.round(e.maxHp * WARD_HP_FRAC);
     e.bountyMul = mm.bounty;
     if (e.flying) path = [path[0], path[path.length - 1]];   // 飛行怪不走路線，從入口直線飛向核心
     e.path = path;
@@ -615,6 +619,18 @@ export class TowerDefense {
     const eliteChance = this.eliteChance();
     if (eliteChance > 0 && Math.random() < eliteChance) e.makeElite(rollEliteAffix());
     g.enemies.push(e);
+  }
+
+  // 潛行怪：秘法塔（含專精）周圍 STEALTH_REVEAL_RADIUS 內就「被揭露」，所有塔都能瞄準；
+  // 否則只有秘法塔自己看得見（Turret.pickTarget 讀 e.revealed / t.seesStealth）
+  revealStealth() {
+    const g = this.game;
+    const arcane = g.turrets.filter((t) => !t.isDead && t.tdKey === 'arcane');
+    const r2 = STEALTH_REVEAL_RADIUS ** 2;
+    for (const e of g.enemies) {
+      if (!e.stealth) continue;
+      e.revealed = arcane.some((t) => (t.x - e.x) ** 2 + (t.y - e.y) ** 2 <= r2);
+    }
   }
 
   waveCleared() {

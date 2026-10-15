@@ -84,6 +84,12 @@ export const WEAPON_PNG_CONFIG = {
   frost_nova:        { anchorX:  8, anchorY: 14, renderW: 44, renderH: 30, tipX: 35 },
   drill:             { anchorX:  9, anchorY: 17, renderW: 36, renderH: 29, tipX: 27 },
 
+  // ── 亞瑟專屬（Nano Banana 繪製）──
+  lance:             { anchorX: 16, anchorY:  3, renderW: 50, renderH:  5, tipX: 34 },
+  battle_axe:        { anchorX:  6, anchorY: 10, renderW: 32, renderH: 20, tipX: 26 },
+  goddess_bracelet:  { anchorX: 17, anchorY: 17, renderW: 34, renderH: 34, tipX: 25 },
+  torch:             { anchorX:  8, anchorY:  4, renderW: 32, renderH:  8, tipX: 30 },
+
   // ── 進化超武 ──
   ghost_shuriken:    { anchorX: 17, anchorY: 30, renderW: 34, renderH: 60, tipX: 24 },
   eternal_domain:    { anchorX: 17, anchorY: 17, renderW: 34, renderH: 35, tipX: 25 },

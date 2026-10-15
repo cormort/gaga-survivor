@@ -41,6 +41,11 @@ const FX = {
   storm_bolter: { color: '#ffd166', glow: 2.4, trail: 0.09 },
   power_wave:   { color: '#00f5ff', glow: 2.2, trail: 0.06 },
   tank_shell:   { color: '#ff6600', glow: 2.2, trail: 0.08 },
+  // 亞瑟專屬
+  lance:        { color: '#e9ecef', glow: 1.6, trail: 0.06 },
+  axe:          { color: '#ced4da', glow: 1.4, trail: 0.03 },
+  torch:        { color: '#ff7b00', glow: 1.6, trail: 0 },
+  holy_orb:     { color: '#ffd166', glow: 2.2, trail: 0.05 },
 };
 const FX_DEFAULT = { color: '#ffffff', glow: 1.8, trail: 0.05 };
 // 拖尾只在「真的在飛」時畫：環繞刀刃與地面积火是慢速/靜止實體
@@ -655,6 +660,7 @@ export class Projectile {
   // ── 亞瑟專屬武器（向量繪製，沒有 PNG） ──
   drawLance(ctx) {
     ctx.rotate(Math.atan2(this.vy, this.vx));
+    if (drawWeaponSprite(ctx, 'lance', 50)) return;   // assets/weapons/lance.png（矛尖朝右）
     ctx.strokeStyle = '#8d5a2b';           // 木柄
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(-22, 0); ctx.lineTo(10, 0); ctx.stroke();
@@ -667,6 +673,7 @@ export class Projectile {
 
   drawAxe(ctx) {
     ctx.rotate(this.spin);
+    if (drawWeaponSprite(ctx, 'battle_axe', 32)) return;   // 圖是斧頭朝右的橫圖，高度照比例
     ctx.strokeStyle = '#6b4226';
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(0, -10); ctx.stroke();
@@ -684,6 +691,7 @@ export class Projectile {
     ctx.beginPath(); ctx.ellipse(0, 4, 7, 3, 0, 0, Math.PI * 2); ctx.fill();
     ctx.translate(0, -(this.lift || 0));
     ctx.rotate(this.spin);
+    if (drawWeaponSprite(ctx, 'torch', 30)) return;   // 火把圖是火焰朝右的橫圖（飛行中本來就在轉）
     ctx.strokeStyle = '#6b4226';
     ctx.lineWidth = 3.5;
     ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(0, -4); ctx.stroke();

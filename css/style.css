@@ -4138,3 +4138,103 @@ body.td-mode:has(#start-screen.hidden) .pwa-banner .pwa-desc { display: none; }
 /* 守塔：不用設施鈕（蓋塔走建塔點選單）；速度鈕的 1×/2× 用淺色加粗，深底上看得清楚 */
 body.td-mode #btn-facility-toggle, body.td-mode #facility-bar { display: none !important; }
 #td-speed-label { color: #f2fbff; font-weight: 800; font-size: 20px; text-shadow: 0 0 6px rgba(0, 245, 255, 0.8), 0 1px 2px #000; }
+
+/* ==================== 版面整修（v111）：提示橫幅、主選單、升級卡、桌機搖桿、技能鈕 ==================== */
+
+/* 1. 提示橫幅（下載素材／新版本）不再浮在內容上：
+      - 有面板開著（主選單、升級、暫停、結算）時，橫幅貼頂，面板整體往下讓出一條空間
+      - 遊戲進行中（沒有任何面板）直接不顯示，回到選單或暫停時再出現 —— 它不急，不該擋戰場 */
+.pwa-banner { top: calc(env(safe-area-inset-top) + 6px); }
+body:has(.pwa-banner:not(.hidden)) .overlay { padding-top: calc(env(safe-area-inset-top) + 54px); }
+body:has(.pwa-banner:not(.hidden)) .overlay > .start-box,
+body:has(.pwa-banner:not(.hidden)) .overlay > .modal-content { max-height: calc(92dvh - 54px); }
+body:has(#start-screen.hidden):not(:has(.overlay:not(.hidden))) .pwa-banner { display: none; }
+@media (max-width: 619px), (max-height: 480px) {
+  .pwa-banner .pwa-desc { display: none; }
+  body:has(.pwa-banner:not(.hidden)) .overlay { padding-top: calc(env(safe-area-inset-top) + 44px); }
+  body:has(.pwa-banner:not(.hidden)) .overlay > .start-box,
+  body:has(.pwa-banner:not(.hidden)) .overlay > .modal-content { max-height: calc(94dvh - 44px); }
+}
+
+/* 2. 主選單：寬螢幕（桌機、手機橫放）改兩欄 —— 左欄捲動選模式／特工／關卡，右欄固定難度與出擊鈕。
+      原本是單欄 520px 加黏底操作列：桌機兩側大片留白，手機橫放時操作列直接佔滿整個畫面。 */
+@media (min-width: 900px), (orientation: landscape) and (min-width: 640px) {
+  #start-screen .start-box {
+    width: 94vw;
+    max-width: 1100px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    column-gap: 24px;
+    align-items: start;
+  }
+  #start-screen .start-box > * { grid-column: 1; }
+  #start-screen .start-actions {
+    grid-column: 2;
+    grid-row: 1 / span 30;
+    position: sticky;
+    top: 0;
+    bottom: auto;
+    margin: 0;
+    padding: 16px;
+    background: rgba(10, 16, 30, 0.6);
+    border: 1px solid rgba(0, 229, 255, 0.18);
+    border-radius: 16px;
+  }
+  #start-screen .start-actions .difficulty-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  #start-screen .start-actions select { width: 100%; }
+}
+/* 橫放手機（矮）：右欄再收緊，說明文字收起 */
+@media (orientation: landscape) and (max-height: 560px) {
+  #start-screen .start-box { padding: 14px 16px; grid-template-columns: minmax(0, 1fr) 240px; column-gap: 16px; }
+  #start-screen .start-actions { padding: 10px; }
+  #start-screen .start-actions .difficulty-desc { display: none; }
+  #start-screen .start-actions .difficulty-row { margin-bottom: 6px; }
+  #start-screen .start-actions select { min-height: 36px; font-size: 12px; }
+  #start-screen #btn-start-game { padding: 10px; font-size: 16px; }
+  #start-screen .game-title { font-size: 24px; margin-bottom: 8px; }
+}
+/* 直向手機：黏底操作列由三排收成兩排（難度／規則卡／視野並排），少佔約 50px，關卡清單不再被蓋住 */
+@media (max-width: 619px) {
+  .start-actions { grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 8px 12px 10px; }
+  .start-actions .orientation-row { grid-column: auto; }
+  #difficulty-select, #runcard-select, #orientation-select { min-height: 44px; font-size: 12px; padding: 4px 22px 4px 8px; background-position: right 6px center; }   /* 44px：行動版點擊目標下限 */
+}
+
+/* 3. 升級卡：清單版的封印鈕改到右側中間、內文讓出位置（原本壓在卡片右下角的文字上） */
+.upgrade-card:has(.card-banish) { padding-right: 52px; }
+.upgrade-card .card-banish { top: 50%; bottom: auto; transform: translateY(-50%); }
+/* 寬螢幕：三張卡並排（像吸血鬼倖存者），手機橫放一次就看得到全部三張 */
+@media (min-width: 900px), (orientation: landscape) and (min-width: 640px) {
+  #level-up-modal .modal-content { max-width: 1000px; }
+  #upgrade-cards { flex-direction: row; align-items: stretch; }
+  #upgrade-cards .upgrade-card {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: flex-start;
+    text-align: center;
+    gap: 10px;
+    padding: 18px 14px 48px;
+  }
+  #upgrade-cards .card-title-row { justify-content: center; flex-wrap: wrap; }
+  #upgrade-cards .card-banish { top: auto; bottom: 8px; left: 50%; right: auto; transform: translateX(-50%); }
+}
+@media (orientation: landscape) and (max-height: 480px) {
+  #level-up-modal .modal-content { padding: 12px 16px; }
+  #level-up-modal .modal-header h2 { font-size: 20px; margin-bottom: 0; }
+  #level-up-modal .subtitle { display: none; }
+  #upgrade-cards { gap: 8px; margin-bottom: 8px; }
+  #upgrade-cards .upgrade-card { padding: 10px 8px 42px; gap: 6px; }
+  #upgrade-cards .card-desc { font-size: 12px; }
+}
+
+/* 4. 桌機（滑鼠＋鍵盤）：虛擬搖桿平常淡化，滑鼠移過去或拖曳時才完整顯示（仍可用滑鼠拖） */
+@media (hover: hover) and (pointer: fine) {
+  #joystick-zone { opacity: 0.18; transition: opacity 0.2s ease; }
+  #joystick-zone:hover, #joystick-zone:active { opacity: 1; }
+}
+
+/* 5. 直向手機：技能鈕往上移，避開右下小地圖的圖例 */
+@media (max-width: 619px) and (orientation: portrait) {
+  .skill-bar { bottom: calc(118px + env(safe-area-inset-bottom)); }
+}
