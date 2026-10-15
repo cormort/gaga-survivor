@@ -856,19 +856,20 @@ export const LEVEL_ORDER = ['street', 'lab', 'frost', 'core', 'subway', 'swamp',
 // 無盡模式輪播的 Boss 池 (全關卡 Boss 全收錄)
 // 魔化十二生肖：無盡模式專屬 Boss，每關三隻首領之後插一隻（外觀用 assets/zodiac/*_evil.png，BossCutscene 依名字對到同一張）。
 // 血量逐隻遞增，約為同一輪那關終極首領的 0.75～0.9 倍；動作與技能依生肖個性挑。
+// 每隻有自己的屬性（攻擊附帶持續傷害）與招牌技（js/systems/ZodiacSkills.js），招牌技在 behaviors 放兩份，約一半機率出。
 const ZODIAC_BOSSES = [
-  { hp: 32000, name: '魔化子鼠', skin: 'rat_evil', speed: 95, damage: 24, moveStyle: 'serpentine', behaviors: ['summon'] },             // 鼠群
-  { hp: 42000, name: '魔化丑牛', skin: 'ox_evil', speed: 60, damage: 34, moveStyle: 'rush', behaviors: ['nova'] },                    // 蠻牛衝撞
-  { hp: 52000, name: '魔化寅虎', skin: 'tiger_evil', speed: 90, damage: 30, moveStyle: 'leap', behaviors: ['barrage'] },
-  { hp: 66000, name: '魔化卯兔', skin: 'rabbit_evil', speed: 100, damage: 24, moveStyle: 'leap', behaviors: ['ground'] },
-  { hp: 80000, name: '魔化辰龍', skin: 'dragon_evil', speed: 70, damage: 32, moveStyle: 'orbit', behaviors: ['barrage', 'nova'] },
-  { hp: 95000, name: '魔化巳蛇', skin: 'snake_evil', speed: 80, damage: 26, moveStyle: 'serpentine', behaviors: ['vortex'] },
-  { hp: 115000, name: '魔化午馬', skin: 'horse_evil', speed: 105, damage: 28, moveStyle: 'rush', behaviors: ['ground'] },
-  { hp: 135000, name: '魔化未羊', skin: 'goat_evil', speed: 70, damage: 28, moveStyle: 'orbit', behaviors: ['summon', 'nova'] },
-  { hp: 160000, name: '魔化申猴', skin: 'monkey_evil', speed: 90, damage: 30, moveStyle: 'blink', behaviors: ['barrage', 'summon'] },
-  { hp: 190000, name: '魔化酉雞', skin: 'rooster_evil', speed: 85, damage: 26, moveStyle: 'blink', behaviors: ['ground', 'barrage'] },
-  { hp: 220000, name: '魔化戌狗', skin: 'dog_evil', speed: 100, damage: 30, moveStyle: 'rush', behaviors: ['summon', 'nova'] },
-  { hp: 250000, name: '魔化亥豬', skin: 'pig_evil', speed: 65, damage: 36, moveStyle: 'rush', behaviors: ['nova', 'vortex', 'ground'] },
+  { hp: 32000, name: '魔化子鼠', element: 'toxic', skin: 'rat_evil', speed: 95, damage: 24, moveStyle: 'serpentine', behaviors: ['summon', 'rat_plague', 'rat_plague'] },             // 鼠群
+  { hp: 42000, name: '魔化丑牛', element: 'physical', skin: 'ox_evil', speed: 60, damage: 34, moveStyle: 'rush', behaviors: ['nova', 'ox_fissure', 'ox_fissure'] },                    // 蠻牛衝撞
+  { hp: 52000, name: '魔化寅虎', element: 'fire', skin: 'tiger_evil', speed: 90, damage: 30, moveStyle: 'leap', behaviors: ['barrage', 'tiger_pounce', 'tiger_pounce'] },
+  { hp: 66000, name: '魔化卯兔', element: 'frost', skin: 'rabbit_evil', speed: 100, damage: 24, moveStyle: 'leap', behaviors: ['ground', 'rabbit_moon', 'rabbit_moon'] },
+  { hp: 80000, name: '魔化辰龍', element: 'fire', skin: 'dragon_evil', speed: 70, damage: 32, moveStyle: 'orbit', behaviors: ['barrage', 'nova', 'dragon_breath', 'dragon_breath'] },
+  { hp: 95000, name: '魔化巳蛇', element: 'toxic', skin: 'snake_evil', speed: 80, damage: 26, moveStyle: 'serpentine', behaviors: ['vortex', 'snake_venom', 'snake_venom'] },
+  { hp: 115000, name: '魔化午馬', element: 'fire', skin: 'horse_evil', speed: 105, damage: 28, moveStyle: 'rush', behaviors: ['ground', 'horse_stampede', 'horse_stampede'] },
+  { hp: 135000, name: '魔化未羊', element: 'frost', skin: 'goat_evil', speed: 70, damage: 28, moveStyle: 'orbit', behaviors: ['summon', 'nova', 'goat_ward', 'goat_ward'] },
+  { hp: 160000, name: '魔化申猴', element: 'shock', skin: 'monkey_evil', speed: 90, damage: 30, moveStyle: 'blink', behaviors: ['barrage', 'summon', 'monkey_blink', 'monkey_blink'] },
+  { hp: 190000, name: '魔化酉雞', element: 'shock', skin: 'rooster_evil', speed: 85, damage: 26, moveStyle: 'blink', behaviors: ['ground', 'barrage', 'rooster_dawn', 'rooster_dawn'] },
+  { hp: 220000, name: '魔化戌狗', element: 'physical', skin: 'dog_evil', speed: 100, damage: 30, moveStyle: 'rush', behaviors: ['summon', 'nova', 'dog_pack', 'dog_pack'] },
+  { hp: 250000, name: '魔化亥豬', element: 'physical', skin: 'pig_evil', speed: 65, damage: 36, moveStyle: 'rush', behaviors: ['nova', 'vortex', 'ground', 'pig_frenzy', 'pig_frenzy'] },
 ].map((b) => ({ ...b, drawScale: 2 }));   // *_evil 圖是雜兵尺寸（高 56~78px），一般 Boss 圖約 120px
 
 const ENDLESS_BOSS_LEVELS = ['street', 'lab', 'frost', 'core', 'subway', 'swamp', 'storm',

@@ -404,6 +404,7 @@ const PRECACHE = [
   './js/systems/Skills.js',
   './js/systems/Twists.js',
   './js/systems/Altar.js',
+  './js/systems/ZodiacSkills.js',
   './js/systems/SwordFormation.js',
   './js/systems/SignatureFX.js',
   './js/systems/ParticleSystem.js',

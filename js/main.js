@@ -64,6 +64,7 @@ import { drawDecor } from './systems/Decor.js';
 import { GroundRenderer } from './systems/Ground.js';
 import { initTwist, updateTwist, drawTwist } from './systems/Twists.js';
 import { initAltar, updateAltar, drawAltar } from './systems/Altar.js';
+import { ZODIAC_ACTS, ZODIAC_ACT_NAMES } from './systems/ZodiacSkills.js';
 import {
   initExplodableProps,
   initDestructibles,
@@ -1537,6 +1538,12 @@ class Game {
   handleBossSkill(boss, act) {
     // Boss 大招紅閃 (Soulstone 風格：施法瞬間畫面邊緣泛紅；召喚較輕)
     this.redFlash = Math.max(this.redFlash, act === 'summon' ? 0.3 : 0.55);
+    if (ZODIAC_ACTS[act]) {   // 魔化十二生肖的招牌技（js/systems/ZodiacSkills.js）
+      boss._zodiacSkill = ZODIAC_ACT_NAMES[act];
+      this.ui.say(`${boss.name}・${boss._zodiacSkill}！`, '#ff4d6d', 1.6);
+      ZODIAC_ACTS[act](this, boss);
+      return;
+    }
     if (act === 'nova') {
       // 範圍震波：光圈內受傷 + 震屏
       const R = boss.radius * 7;
