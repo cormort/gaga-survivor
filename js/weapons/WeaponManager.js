@@ -1713,7 +1713,9 @@ export class WeaponManager {
             if (Math.abs(diff) > arc / 2) continue;
           }
 
-          const died = e.takeDamage(hitDmg, isPower ? 16 : 10, px, py, def.element || 'physical');
+          // 鏈鋸劍只給一點擊退：原本 10 會把怪推出自己 75~120 的攻擊半徑，後面幾段鋸齒全部落空
+          // （tools/weapon-dps.mjs 量到 Lv5 貼身只有 167）；動力神劍有衝擊波補射程，維持 16
+          const died = e.takeDamage(hitDmg, isPower ? 16 : 2, px, py, def.element || 'physical');
           this.recordDamage(def.id, hitDmg);
           if (particleSystem) {
             particleSystem.createDamageText(e.x, e.y, hitDmg, crit || isPower, crit);

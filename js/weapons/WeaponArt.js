@@ -1774,11 +1774,13 @@ HELD_DRAWERS.goddess_bracelet = HELD_DRAWERS.eternal_domain;
 // 改成「一手追瞄 + 背/腰掛載」：主手那一把會轉向敵人，其餘以固定角度背在身上，
 // 位置也刻意留在角色輪廓之外（dx 13~-13、dy -7~16），四把同時出現時仍看得出各自是什麼。
 //   dx 往面向方向為正、dy 往螢幕下方為正、angle 是「面向右」時的角度、layer 決定畫在角色前或後
+// v111：四個掛載點整體往外推（主手 13→20、斜背 -10→-18、腰前 11→20、後腰 -16→-26）——
+// 原本太貼身，verify-art 量到可見比例只有 31% / 49% / 33% / 7%（武器大半被角色剪影吃掉，看不出帶了什麼）
 export const HELD_MOUNTS = [
-  { dx: 13, dy: 7, scale: 1.00, aim: true, layer: 'front' },       // 主手：追瞄敵人
-  { dx: -10, dy: -14, angle: -2.08, scale: 0.85, layer: 'back' },  // 斜背在肩後（露出上半，不壓到頭頂）
-  { dx: 11, dy: 15, angle: 0.70, scale: 0.60, layer: 'front' },    // 腰前：斜插在髖部前外側
-  { dx: -16, dy: 18, angle: 1.50, scale: 0.55, layer: 'back' },    // 後腰：垂在身後下方
+  { dx: 20, dy: 8, scale: 1.00, aim: true, layer: 'front' },       // 主手：追瞄敵人
+  { dx: -18, dy: -16, angle: -2.08, scale: 0.85, layer: 'back' },  // 斜背在肩後（露出上半，不壓到頭頂）
+  { dx: 20, dy: 20, angle: 0.70, scale: 0.60, layer: 'front' },    // 腰前：斜插在髖部前外側
+  { dx: -26, dy: 18, angle: 1.50, scale: 0.55, layer: 'back' },    // 後腰：垂在身後下方
 ];
 const DEFAULT_MOUNT = HELD_MOUNTS[0];
 

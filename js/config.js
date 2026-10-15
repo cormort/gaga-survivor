@@ -221,7 +221,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'rocket',
-    baseDamage: 249,  // 射程定位校準（原 249）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 195）
+    baseDamage: 110,  // tools/weapon-dps.mjs：原 249 群聚 7,525（單發加 220 爆炸），下修到與其他頂級超武同級；  // 射程定位校準（原 249）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 195）
     baseCooldown: 1.2,  // 1.8 時單體 DPS 反而低於滿級火箭
     speed: 460,
     homing: 3.2,                   // 鯊魚轉彎比飛彈鈍，但會一直追
@@ -243,9 +243,9 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'molotov',
-    baseDamage: 46,  // 射程定位校準（原 70）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 52）  // 滿級燃燒瓶每跳就是 24，超武不能原地踏步
+    baseDamage: 14,  // tools/weapon-dps.mjs：原 46 群聚 16,396（其他超武 1,000~2,700），連同持續時間一起下修；  // 射程定位校準（原 70）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 52）  // 滿級燃燒瓶每跳就是 24，超武不能原地踏步
     baseCooldown: 2.0,
-    duration: 5.5,
+    duration: 3.5,                 // 原 5.5：每 2 秒一輪 × 3 灘，場上同時疊 6~8 灘
     radius: 140,
     count: 3,
     spreadFrom: 0.6,               // 火海半徑從 60% 擴散到 130%（2.5 秒內）
@@ -467,7 +467,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'orbit_saw',
-    baseDamage: 52,  // 射程定位校準（原 105）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 91）  // 同上：軌道更貼身、範圍更小，單刀給得比守護力場高
+    baseDamage: 14,  // tools/weapon-dps.mjs：原 52 群聚 11,794／貼身 15,336（奇點把怪拉成一團，刀刃一直打）；  // 射程定位校準（原 105）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 91）  // 同上：軌道更貼身、範圍更小，單刀給得比守護力場高
     baseCooldown: 0,
     duration: 999999,
     spinSpeed: 6.2,
@@ -601,14 +601,14 @@ export const WEAPONS = {
     evoTarget: 'power_sword',
     pairPassive: 'max_hp_vest',    // 防護背心滿級合成
     maxLevel: 5,
-    baseDamage: 34,  // 射程校準曾砍到 17，tools/weapon-dps.mjs 量到 Lv5 貼身只有 107（環鋸 1428、苦無 616），恢復原值
+    baseDamage: 44,  // 射程校準曾砍到 17：tools/weapon-dps.mjs 量到 Lv5 貼身只有 107（苦無 626）；配合擊退 10→2、加寬揮砍弧，調到與苦無同級
     baseCooldown: 1.35,
     cooldownGrowth: -0.15,
     radius: [75, 85, 95, 105, 120],
-    arc: [1.8, 2.0, 2.2, 2.4, 2.8],
+    arc: [2.2, 2.5, 2.8, 3.1, 3.4],   // 加寬：近戰武器打到的怪要夠多才划算（weapon-dps 貼身）
     hits: [3, 3, 4, 4, 5],
     projType: 'chainsword',
-    bleedDps: 12,
+    bleedDps: 18,
     bleedDur: 3.0,
     pierceAll: true,          // 揮砍弧：弧內全部
   },

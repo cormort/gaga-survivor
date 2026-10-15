@@ -24,6 +24,18 @@ function make(w, h, draw) {
   return c;
 }
 
+// 材質層之後才把落地陰影墊到 sprite 底下（destination-over），陰影就不會被當成剪影處理
+function drawGroundShadow(canvas, b, t, ss, w, h, scale) {
+  if (!b.shadow) return;
+  const x = canvas.getContext('2d');
+  x.save();
+  x.setTransform(ss, 0, 0, ss, (w / 2) * ss, (h / 2) * ss);
+  if (scale !== 1) x.scale(scale, scale);
+  x.globalCompositeOperation = 'destination-over';
+  b.shadow(x, t);
+  x.restore();
+}
+
 // 受傷閃白：把整張 sprite 疊上白色
 function whiten(src) {
   const c = document.createElement('canvas');
@@ -164,7 +176,13 @@ const DECOR_SPRITE_KEYS = new Set([
 // verify-art 量到左上外緣亮點只有 3% —— 邊光代表「光」而不是配色，改用同色系的淺色。
 // （兔子與喵喵也沒過門檻，但調亮邊光會連整圈輪廓中位數一起拉高、比例反而不變或變差，
 //   要動的是剪影本身，列在 README「已知技術債」）
-const RIM_ACCENT_OVERRIDE = { techpriest_goose: '#ffe0d8' };
+const RIM_ACCENT_OVERRIDE = { techpriest_goose: '#ffe0d8', rabbit: '#ffffff' };
+
+// 邊光加強：兔子與喵喵的最外圈原本被深色外框佔走（外圈邊光只有 42% 不透明）。
+// >1 時外圈邊光不透明度乘上這個倍率，並在材質層多疊一圈「左上緣亮邊」（見 materialize 3b）。
+const RIM_BOOST = { rabbit: 1.4, cat: 1.4 };
+const baseKey = (key) => { const m = key.match(/^([^:]+)/); return m ? m[1] : key; };
+function rimBoostFor(key) { return RIM_BOOST[baseKey(key)] || 1; }
 
 function accentFor(key, b) {
   // 場景裝飾維持平面：它們本來就是貼在地上的圖，加了邊光反而像浮起來。
@@ -213,7 +231,7 @@ function scratchCanvas(w, h) {
 // canvas 為 make() 烘好的成品；sil / rim 是同一顆 sprite 內重複使用的暫存畫布。
 // mul 是「超取樣再乘幾倍」—— 只有選角放大檢視 (renderSpriteHires) 會給 >1，讓外框與
 // 輪廓光的粗細跟著放大後的角色一起變粗；一般烘焙走預設 1，輸出完全不變。
-function materialize(canvas, accent, sil, rim, mul = 1) {
+function materialize(canvas, accent, sil, rim, mul = 1, boost = 1) {
   const W = canvas.width;
   const H = canvas.height;
   const cx = canvas.getContext('2d');
@@ -267,7 +285,7 @@ function materialize(canvas, accent, sil, rim, mul = 1) {
     rx.globalCompositeOperation = 'destination-out';
     rx.drawImage(canvas, 0, 0);
     rx.globalCompositeOperation = 'source-over';
-    cx.globalAlpha = layer.alpha;
+    cx.globalAlpha = Math.min(1, layer.alpha * boost);
     cx.drawImage(rim, 0, 0);
   }
 
@@ -279,6 +297,21 @@ function materialize(canvas, accent, sil, rim, mul = 1) {
   cx.globalCompositeOperation = 'source-atop';
   cx.globalAlpha = 0.34;
   cx.drawImage(rim, 0, 0);
+
+  // 3b) 左上緣亮邊（只給 RIM_BOOST 的角色）：本體剪影 − 往右下偏移的本體 = 只剩左上方 1~2px 的一圈，
+  //     用 source-atop 疊在本體上。只打亮最外一圈，不會像整片提高內側邊光那樣把角色洗白。
+  if (boost > 1) {
+    rx.setTransform(1, 0, 0, 1, 0, 0);
+    rx.globalCompositeOperation = 'source-over';
+    rx.globalAlpha = 1;
+    rx.clearRect(0, 0, W, H);
+    rx.drawImage(sil, 0, 0);
+    rx.globalCompositeOperation = 'destination-out';
+    rx.drawImage(sil, 1.6 * SS * mul, 1.6 * SS * mul);
+    rx.globalCompositeOperation = 'source-over';
+    cx.globalAlpha = 0.9;
+    cx.drawImage(rim, 0, 0);
+  }
 
   // 4) 頂光 + 底部環境光遮蔽：source-atop 讓漸層只落在剪影內
   const g = cx.createLinearGradient(0, 0, 0, H);
@@ -7328,6 +7361,17 @@ function xianCharacterBuilder(key, img, height) {
   const w = img.width * k;
   return {
     w: w + 16, h: height + 16, image: true,
+    // 落地陰影另外畫、而且在材質層之後才墊到底下（drawGroundShadow）：畫在 fn 裡會被當成剪影，
+    // 拿到深色外框與邊光，橢圓左上緣就變成「沒有邊光的外緣」（verify-art 量到喵喵 17 個暗點裡 13 個是它）
+    shadow: (x, t) => {
+      const p = t * Math.PI * 2;
+      // 0.12（alpha 31）：低於剪影門檻 40，跟光暈疊在一起也不會被算成角色外緣；
+      // 不再吃材質層的深色外框之後，看起來跟原本 0.32 差不多
+      x.fillStyle = 'rgba(0,0,0,0.12)';
+      x.beginPath();
+      x.ellipse(0, height / 2 + 3, (w * 0.34) * (1 - Math.abs(Math.sin(p)) * 0.12), w * 0.09, 0, 0, Math.PI * 2);
+      x.fill();
+    },
     fn: (x, t) => {
       const p = t * Math.PI * 2;
       // 靈動修仙步伐：呼吸、法袍微動與輕功踏步
@@ -7335,11 +7379,6 @@ function xianCharacterBuilder(key, img, height) {
       const tilt = Math.sin(p) * 0.032;
       const foot = height / 2 + 3;
 
-      // 落地陰影隨起伏微調
-      x.fillStyle = 'rgba(0,0,0,0.32)';
-      x.beginPath();
-      x.ellipse(0, foot, (w * 0.34) * (1 - Math.abs(Math.sin(p)) * 0.12), w * 0.09, 0, 0, Math.PI * 2);
-      x.fill();
 
       x.save();
       x.translate(0, foot - 2 + bob);
@@ -7871,7 +7910,8 @@ export function getSprite(key) {
       if (scale !== 1) x.scale(scale, scale);
       b.fn(x, i / FRAMES);
     });
-    if (accent) materialize(frame, accent, sil, rim);
+    if (accent) materialize(frame, accent, sil, rim, 1, rimBoostFor(key));
+    drawGroundShadow(frame, b, i / FRAMES, SS, w, h, scale);
     frames.push(frame);
   }
   s = { frames, flash: b.static ? frames : frames.map(whiten), w, h, faceRight: !!b.faceRight };   // faceRight：Enemy.draw 依移動方向翻轉
@@ -7902,7 +7942,8 @@ export function renderSpriteHires(key, frameIndex = 0, mul = 4) {
   if (scale !== 1) x.scale(scale, scale);
   b.fn(x, (frameIndex % FRAMES) / FRAMES);
   const accent = accentFor(key, b);
-  if (accent) materialize(c, accent, scratchCanvas(c.width, c.height), scratchCanvas(c.width, c.height), mul);
+  if (accent) materialize(c, accent, scratchCanvas(c.width, c.height), scratchCanvas(c.width, c.height), mul, rimBoostFor(key));
+  drawGroundShadow(c, b, (frameIndex % FRAMES) / FRAMES, ss, w, h, scale);
   return c;
 }
 

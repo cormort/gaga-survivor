@@ -81,10 +81,27 @@ try {
       const d = data(canvas);
       const A = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : d[(y * w + x) * 4 + 3];
       const L = (x, y) => { const i = (y * w + x) * 4; return lum(d[i], d[i + 1], d[i + 2]); };
+      // 只量「角色剪影」：連通塊 < 40px 的碎點（喵喵手邊的全息粒子、兔子的速度殘影碎屑）沒有輪廓可言，
+      // 它們的外緣是一兩個像素的深色描邊，邊光打不上去也不該打 —— 算進來會讓「一整圈邊光」的比例被碎點稀釋。
+      const comp = new Int32Array(w * h).fill(-1); const compSize = [];
+      for (let i = 0; i < w * h; i++) {
+        if (comp[i] !== -1 || d[i * 4 + 3] < RIM.mask) continue;
+        const id = compSize.length; let n = 0; const stack = [i]; comp[i] = id;
+        while (stack.length) {
+          const j = stack.pop(); n++;
+          const jx = j % w, jy = (j / w) | 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = jx + dx, ny = jy + dy; if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            const k = ny * w + nx; if (comp[k] === -1 && d[k * 4 + 3] >= RIM.mask) { comp[k] = id; stack.push(k); }
+          }
+        }
+        compSize.push(n);
+      }
       const edge = []; const corner = [];
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           if (A(x, y) < RIM.mask) continue;
+          if (compSize[comp[y * w + x]] < 40) continue;
           const out8 = A(x - 1, y) < RIM.mask || A(x + 1, y) < RIM.mask || A(x, y - 1) < RIM.mask || A(x, y + 1) < RIM.mask
             || A(x - 1, y - 1) < RIM.mask || A(x + 1, y - 1) < RIM.mask
             || A(x - 1, y + 1) < RIM.mask || A(x + 1, y + 1) < RIM.mask;
