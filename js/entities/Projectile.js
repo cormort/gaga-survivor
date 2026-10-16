@@ -176,6 +176,9 @@ export class Projectile {
 
     // 足球專屬
     this.bounces = options.bounces || 6;
+    this.soccerStages = options.soccerStages || this.bounces;   // 足球：一顆球的爆發段數（兩段球的總額度）
+    this.soccerHits = options.soccerHits || 0;                  // 足球：已經命中幾隻敵人
+    this.soccerPaid = options.soccerPaid || 0;                  // 足球：已經結算掉的傷害份額（0~1）
 
     // 傭兵專屬 (擊殺升級 credit)
     this.mercOwner = options.mercOwner || null;
@@ -389,21 +392,15 @@ export class Projectile {
         this.y += this.vy * dt;
         this.tickRehit(dt); // 不重置的話，一顆球對同一隻怪一輩子只能打一次，彈跳次數等於白給
 
-        // 螢幕邊界反彈：先前只撞世界邊界（±2000px），球等於一路飛出畫面不再回來。
-        // 改用「以玩家為中心的視野框」，球會在畫面裡來回彈（世界邊界仍是最外層保險）。
-        // 反彈不再扣 bounces —— 那個數字現在是「命中時一次爆發的段數」（main.js 的
-        // _soccerBurst），扣在牆上等於白白削弱傷害；沒打中敵人的球一律靠 life 收掉。
+        // 邊界反彈只用「世界邊界」（最外層保險），不再用「以玩家為中心的視野框」：
+        // 視野框在手機上只有 ±195px，而開球時最近的敵人常常在 300~600px 外，球會在飛到
+        // 目標前先被看不見的牆彈回來（實測命中率只有 21%）。現在球可以飛出畫面去追目標，
+        // 沒打中的球靠 life（2 秒）收掉，畫面上反而不會累積 —— 球本來就是「命中即消」。
         const bounds = worldBounds();
-        const hw = player ? (window.innerWidth || 1280) / 2 - this.radius : Infinity;
-        const hh = player ? (window.innerHeight || 720) / 2 - this.radius : Infinity;
-        const minX = Math.max(bounds.minX, player ? player.x - hw : -Infinity);
-        const maxX = Math.min(bounds.maxX, player ? player.x + hw : Infinity);
-        const minY = Math.max(bounds.minY, player ? player.y - hh : -Infinity);
-        const maxY = Math.min(bounds.maxY, player ? player.y + hh : Infinity);
-        if ((this.x < minX && this.vx < 0) || (this.x > maxX && this.vx > 0)) {
+        if ((this.x < bounds.minX && this.vx < 0) || (this.x > bounds.maxX && this.vx > 0)) {
           this.vx *= -1;
         }
-        if ((this.y < minY && this.vy < 0) || (this.y > maxY && this.vy > 0)) {
+        if ((this.y < bounds.minY && this.vy < 0) || (this.y > bounds.maxY && this.vy > 0)) {
           this.vy *= -1;
         }
         break;

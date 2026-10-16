@@ -41,15 +41,20 @@ const ENEMY_NAMES = Object.fromEntries(Object.entries(ENEMY_TYPES).map(([k, v]) 
 // 貼著上緣的入口（三門要塞北門）才不會被蓋住。生命改放進資訊列，就是為了不讓這塊再往下長。
 const TD_HUD_PAD = 128;
 
-// ── 量子足球／量子星雲球：命中即爆的參數 ──
-// 球一碰到敵人就消失（不再留在場上彈跳累積），並把「剩下的彈跳段數」一次爆發出去。
-//   SOCCER_BURST_PER_STAGE：主要目標每多一段彈跳，爆發傷害再 +50%（用 tools/weapon-dps.mjs
+// ── 量子足球／量子星雲球：兩段球的參數 ──
+// 球命中第一隻敵人後結算一半的爆發傷害，彈向附近最近的敵人，命中第二隻結清剩下的並消失。
+//   SOCCER_BURST_PER_STAGE：整顆球的總傷害倍率 = 1 + 每多一段彈跳 +k（用 tools/weapon-dps.mjs
 //     的群聚／散開／貼身三欄對舊版彈射制校正，三欄差距 ≤ 10%）。
-//   SOCCER_BURST_RADIUS：爆發波及半徑，讓球撞進怪群時鄰敵也吃一次基本傷害（保留吃群定位）。
+//   SOCCER_HIT_SHARE：每一段結算的份額（兩段各 0.5；第一段找不到第二個目標就一次結清）。
+//   SOCCER_MAX_HITS：一顆球最多命中幾隻敵人（2 = 命中第二隻後消失，不會在場上累積）。
+//   SOCCER_CHAIN_RANGE：第一段命中後，最多再飛多遠去找下一個目標（找不到就原地結束）。
 //   SOCCER_CHILD_LIFE：超武子球的存活時間；一般球的存活時間 SOCCER_LIFE 在
 //     WeaponManager.fireSoccer（舊版 8 秒 → 畫面上會同時累積十幾顆空彈的球）。
 const SOCCER_BURST_PER_STAGE = 1.2;
-const SOCCER_BURST_RADIUS = 34;
+const SOCCER_HIT_SHARE = 0.5;
+const SOCCER_MAX_HITS = 2;
+const SOCCER_CHAIN_RANGE = 320;
+const SOCCER_LAST_BLAST = 34;   // 最後一段命中時的收尾衝擊波半徑（純視覺）
 const SOCCER_CHILD_LIFE = 1.2;
 
 
@@ -2802,8 +2807,8 @@ class Game {
           });
         }
 
-        // 量子足球／量子星雲球：命中即爆（見 _soccerBurst：結算完爆發後球立刻消失）
-        if (p.type === 'soccer') this._soccerBurst(p, enemy, grid);
+        // 量子足球／量子星雲球：兩段球（見 _soccerHit：命中第二隻後結清並消失）
+        if (p.type === 'soccer') this._soccerHit(p, enemy, grid);
         // 幽靈手裏劍：追到第一個目標後改直線穿透（不然會繞回怪群把穿透全部用完）
         if (p.type === 'shuriken') { p.homing = 0; p.target = null; }
 
@@ -2851,28 +2856,28 @@ class Game {
     return best;
   }
 
-  // 量子足球／量子星雲球：命中即爆。
+  // 量子足球／量子星雲球：兩段球（命中兩隻敵人後消失）。
   //
-  // 為什麼改成這樣（使用者回報「後來到處都是足球」）：舊版球命中後只消耗一次彈跳、
-  // 再彈向下一隻敵人，還能在畫面框裡來回彈，最久活到 life = 8 秒；滿級（4 顆／1.8 秒）
-  // 實測同一時間場上有 12~14 顆球，而且大半是「一次都沒打中、只是在畫面上彈來彈去」的球。
-  // 現在球一碰到敵人就把「剩下的彈跳段數」一次爆發掉，然後立刻消失 —— 場上不會再累積球。
+  // 使用者回報「後來到處都是足球」：舊版球命中後只消耗一次彈跳、再彈向下一隻敵人，
+  // 還能在畫面框裡來回彈，最久活到 life = 8 秒；滿級（4 顆／1.8 秒）實測同一時間場上
+  // 有 12~14 顆球，而且大半是「一次都沒打中、只在畫面上彈來彈去」的空彈。
+  // 第一版（v113）改成「命中即爆」把球一次結清後立刻消失，彈射手感整個不見；
+  // 現在折衷成兩段：命中第一隻先結一半，球彈向附近最近的敵人，命中第二隻結清剩下的
+  // 另一半後消失 —— 畫面上看得到「彈一下」，但一顆球最多只存在兩次命中。
   //
   // 傷害怎麼算（保住原本的 DPS，別讓球變成抓癢）：舊版一顆球一生可以打出「彈跳段數」
-  // 次傷害（群聚時打不同隻、散開時靠 rehit 打同一隻），所以爆發 = 把那些段數一次結算：
-  //   * 主要目標：傷害 ×(1 + SOCCER_BURST_PER_STAGE ×(剩餘段數 − 1))
-  //     段數的權重（每段 0.5）是用 tools/weapon-dps.mjs 的三欄（群聚／散開／貼身）
-  //     對舊版校正出來的，三欄差距都在 ±10% 內。
-  //   * 爆發半徑（SOCCER_BURST_RADIUS）內的鄰敵：各吃一次基本傷害，保留「吃群」定位。
-  //   * 塔納托斯：舊版是「每命中一次傷害 +bounceDmgGrowth（最多 implosionAt 次）」，
-  //     這裡把同樣的累積一次套用完，並在爆發當下引發虛空引爆（半徑／傷害照型態資料）。
+  // 次傷害（群聚時打不同隻、散開時靠 rehit 打同一隻），這裡把那些段數換算成一個總倍率
+  // （SOCCER_PAYLOAD_*，用 tools/weapon-dps.mjs 的群聚／散開／貼身三欄對舊版校正），
+  // 兩段各結一半；第一段找不到第二個目標時就一次結清（等於 v113 的行為）。
+  // 塔納托斯：舊版是「每命中一次傷害 +bounceDmgGrowth（最多 implosionAt 次）」，
+  // 這裡把同樣的累積算進總倍率，並在球的**最後一段**引發虛空引爆（半徑／傷害照型態資料）。
   //
-  // 超武版本另外裂變出一顆子球（世代上限 maxSplitGen，場上子球數有上限）。
-  _soccerBurst(p, enemy, grid) {
-    const stages = Math.max(1, Math.round(p.bounces || 1));   // 這一發還剩幾段彈跳可以爆發
+  // 超武版本另外在最後一段裂變出一顆子球（世代上限 maxSplitGen，場上子球數有上限）。
+  _soccerHit(p, enemy, grid) {
+    const stages = Math.max(1, Math.round(p.soccerStages || p.bounces || 1));  // 這一發的爆發段數
     const atkElem = p.element || (p.weaponId && WEAPONS[p.weaponId]?.element) || 'physical';
 
-    // 主要目標：把剩下的段數一次結算（塔納托斯逐段成長，其餘型態每段固定權重）
+    // 總倍率：整顆球一生（含兩段）該打出的傷害 = 傷害 × mult
     let mult = 1;
     if (p.implosionAt > 0) {
       const cap = Math.min(stages, p.implosionAt);
@@ -2880,26 +2885,39 @@ class Game {
     } else {
       mult += SOCCER_BURST_PER_STAGE * (stages - 1);
     }
-    const burst = Math.round(p.damage * mult);
-    const bonus = burst - Math.round(p.damage);
+
+    // 下一段要彈去哪：附近還沒打過的活敵人（找不到就把剩下的份額在同一次結清）
+    const next = (p.soccerHits || 0) + 1 < SOCCER_MAX_HITS
+      ? this._nearestEnemy(grid, p.x, p.y, SOCCER_CHAIN_RANGE, p.hitEnemies)
+      : null;
+    const paid = p.soccerPaid || 0;                                   // 已經結算掉的份額（0~1，佔整顆球的比例）
+    const share = next ? SOCCER_HIT_SHARE : Math.max(0, 1 - paid);    // 兩段各一半；沒下一隻就把剩下的結清
+    const isLast = !next;
+    // 這一段該打出的總傷害 = 傷害 × 總倍率 × 份額；扣掉命中流程已經給過的基本傷害，就是額外的爆發
+    const bonus = Math.round(p.damage * mult * share) - Math.round(p.damage);
+
     if (bonus > 0 && !enemy.isDead) {
       enemy.takeDamage(bonus, p.knockback, p.x, p.y, atkElem);
       this.weaponManager.recordDamage(p.weaponId, bonus);
       this.particles.createDamageText(enemy.x, enemy.y, bonus, true, p.isCrit, enemy.lastElementRelation);
     }
+    p.soccerPaid = Math.min(1, paid + share);
+    p.soccerHits = (p.soccerHits || 0) + 1;
 
-    // 爆發波及：半徑內的鄰敵各吃一次基本傷害（主要目標已經吃過，不重複）
-    this._forEachNearbyEnemy(grid, p.x, p.y, SOCCER_BURST_RADIUS + grid.maxR, (nearE) => {
-      if (nearE.isDead || nearE === enemy) return;
-      const ndx = nearE.x - p.x;
-      const ndy = nearE.y - p.y;
-      if (ndx * ndx + ndy * ndy > (SOCCER_BURST_RADIUS + nearE.radius) ** 2) return;
-      nearE.takeDamage(Math.round(p.damage), p.knockback, p.x, p.y, atkElem);
-      this.weaponManager.recordDamage(p.weaponId, Math.round(p.damage));
-      this.particles.createDamageText(nearE.x, nearE.y, Math.round(p.damage), false, p.isCrit);
-    });
+    // 還有下一段：把球重新瞄向下一個目標（速度不變），不消失
+    if (next && !isLast) {
+      const sp = Math.hypot(p.vx, p.vy) || 500;
+      const d = Math.hypot(next.x - p.x, next.y - p.y) || 1;
+      p.vx = ((next.x - p.x) / d) * sp;
+      p.vy = ((next.y - p.y) / d) * sp;
+      return;
+    }
 
-    // 塔納托斯：爆發即引爆（舊版的第 implosionAt 次命中）
+    // 最後一段：消失（球不會再留在場上）
+    p.isDead = true;
+    const sp = Math.hypot(p.vx, p.vy) || 500;
+
+    // 塔納托斯：最後一段引爆（舊版的第 implosionAt 次命中）
     if (p.implosionAt > 0) {
       this.camera.shake = Math.max(this.camera.shake, 12);
       this.particles.createExplosion(p.x, p.y, p.implosionRadius);
@@ -2917,10 +2935,7 @@ class Game {
       });
     }
 
-    // 命中即消失：球不再留在場上彈跳（這是這次修改的重點）
-    p.isDead = true;
-    const sp = Math.hypot(p.vx, p.vy) || 500;
-
+    let kidsSpawned = false;
     if (p.splitGen < p.maxSplitGen) {
       const W = this.weaponManager;
       let kids = 0;
@@ -2932,16 +2947,17 @@ class Game {
           vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
           damage: Math.round(p.damage * 0.6), radius: p.radius * 0.7,
           bounces: Math.max(2, Math.ceil(stages / 2)), pierce: PIERCE_ALL, life: SOCCER_CHILD_LIFE,
+          soccerStages: Math.max(2, Math.ceil(stages / 2)),
           isEvo: p.isEvo, knockback: p.knockback, rehit: p.rehit, charge: p.charge,
           splitGen: p.splitGen + 1, maxSplitGen: p.maxSplitGen, afterimage: true,
         }, p.isCrit);
         child.hitEnemies.add(enemy);
         W.projectiles.push(child);
+        kidsSpawned = true;
       }
-    } else {
-      // 子球（或沒有裂變的一般球）：原地留一圈小衝擊波，讓玩家看得出球是被爆掉的
-      this.particles.createShockwave(p.x, p.y, SOCCER_BURST_RADIUS, p.isEvo ? '#00f59b' : '#00e5ff');
     }
+    // 沒有裂變的球（以及子球本身）留下最後一圈衝擊波，讓玩家看得出這一顆已經打完收工
+    if (!kidsSpawned) this.particles.createShockwave(p.x, p.y, SOCCER_LAST_BLAST, p.isEvo ? '#00f59b' : '#00e5ff');
   }
 
   // 相位飛刃：從命中點「相位跳躍」到 phaseJump 範圍內下一個沒打過的敵人面前，

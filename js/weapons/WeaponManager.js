@@ -8,7 +8,7 @@ import { sound } from '../audio.js';
 // 同一隻敵人被同一個投射物再次命中的間隔 (秒)
 const ORBIT_REHIT = 0.4;   // 環繞刀刃：每目標 DPS ≈ 單刀傷害 / 0.4
 const SOCCER_REHIT = 0.5;  // 彈跳球：讓「彈跳次數」真的能轉成傷害
-const SOCCER_LIFE = 2.0;   // 球的存活時間：命中即爆（_soccerBurst），這只是「沒打中」的保險
+const SOCCER_LIFE = 2.5;   // 球的存活時間：命中兩次即消（_soccerHit），這只是「沒打中」的保險
                            // （舊版 8 秒 → 空彈的球會在畫面上累積十幾顆）
 
 // 武器 id → 型態家族。8 把超武都掛在自己基礎武器的型態上（型態由出擊選單選擇，
@@ -1221,6 +1221,7 @@ export class WeaponManager {
           damage: damage,
           radius: rad,
           bounces: bounces,
+          soccerStages: bounces,   // 兩段球：這一發的爆發段數（不受牆壁反彈影響）
           pierce: this.declaredPierce(def, item.level),
           life: SOCCER_LIFE,
           isEvo: def.isEvo,

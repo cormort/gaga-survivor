@@ -152,7 +152,7 @@ export const WEAPONS = {
     name: '量子足球',
     icon: '⚽',
     element: 'frost',
-    description: '朝敵人踢出高彈力足球，命中瞬間把剩餘彈跳段數一次爆發（球隨即消失、不會殘留場上）；沒打中的球會撞畫面邊緣反彈。每 3 顆蓄能射出冰凍球。',
+    description: '朝敵人踢出高彈力足球：命中第一隻先結算一半爆發，再彈向附近下一隻，命中第二隻結清剩下的並消失（不會在場上累積）。每 3 顆蓄能射出冰凍球。',
     isEvo: false,
     evoTarget: 'quantum_sphere',
     pairPassive: 'speed_shoes',   // 走位控球/追球 (原 max_hp_vest)
@@ -161,11 +161,11 @@ export const WEAPONS = {
     baseCooldown: 3.2,
     cooldownGrowth: -0.35,         // 升級加快出球 (3.2 → 1.8 秒)
     speed: 520,
-    bounces: [4, 5, 6, 7, 8],      // 爆發段數（命中時一次爆發的段數，越多越痛；沒打中的球靠 life 收尾）
+    bounces: [4, 5, 6, 7, 8],      // 爆發段數（整顆球的傷害倍率來源：兩段各結一半；沒打中的球靠 life 收尾）
     count: [1, 2, 2, 3, 4],
     charge: { every: 3, effect: 'freeze' }, // 每 3 顆射出冰凍球
     range: 520,               // 彈跳球的飛行距離（殺傷靠爆發段數，不靠穿透）
-    pierceAll: true,          // 彈射型：撞到不消耗（吃群靠爆發段數／爆發半徑，不是靠穿透）
+    pierceAll: true,          // 彈射型：撞到不消耗（吃群靠兩段彈射與爆發段數，不是靠穿透）
   },
 
   // 超武 (Evo Weapons)
@@ -278,7 +278,7 @@ export const WEAPONS = {
     name: '量子星雲球 (超武)',
     icon: '⚛️⚽',
     element: 'frost',
-    description: '量子球命中即爆並裂變出一顆子球（子球同樣命中即爆），拖著能量殘影，每 4 顆挾帶冰凍。',
+    description: '量子球兩段彈射（命中即結算、命中第二隻後消失），第二段命中時裂變出一顆子球（子球同樣兩段後消失），拖著能量殘影，每 4 顆挾帶冰凍。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
@@ -1722,7 +1722,7 @@ export const WEAPON_ASPECTS = {
       desc: '足球直徑增大 50%，命中附帶 1.5 秒冰凍定身。',
       stats: { radiusMul: 1.50, freezeDur: 1.5 } },
     { id: 'thanatos', name: '塔納托斯 (湮滅死球)', icon: '💀', tag: '第5擊核爆',
-      desc: '足球爆發傷害逐段提升 25%（最多 5 段），爆發當下引發虛空引爆（半徑 100、200 點終結傷害）。',
+      desc: '足球爆發傷害逐段提升 25%（最多 5 段），球的第二段（最後一段）引發虛空引爆（半徑 100、200 點終結傷害）。',
       stats: { bounceDmgGrowth: 0.25, implosionAt: 5, implosionRadius: 100, implosionDamage: 200 } },
   ],
   frost_nova: [
