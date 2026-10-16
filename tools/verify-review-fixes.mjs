@@ -30,7 +30,7 @@ const results = await page.evaluate(async () => {
   const out = [];
   const ok = (name, pass, detail) => out.push({ name, pass: !!pass, detail: String(detail) });
   const g = window.game;
-  const { WEAPONS, ENEMY_TYPES, SPECIAL_CARDS, MERCHANT_ITEMS, CONSUMABLE_ITEMS } = await import('/js/config.js');
+  const { WEAPONS, WEAPON_ASPECTS, ENEMY_TYPES, SPECIAL_CARDS, MERCHANT_ITEMS, CONSUMABLE_ITEMS } = await import('/js/config.js');
   const { RULE_DEFAULTS, mergeRules, LEVELS, LEVEL_ORDER } = await import('/js/levels.js');
   const { sound } = await import('/js/audio.js');
   const { save } = await import('/js/save.js');
@@ -305,7 +305,10 @@ const results = await page.evaluate(async () => {
   const saw = g.weaponManager.projectiles.filter((p) => p.type === 'saw' && !p.isDead).length;
   ok('混沌型態會發射飛盤', saw > 0, 'saw=' + saw);
 
-  // 足球：塔納托斯傷害成長 + 第 5 次命中引爆；阿基里斯疊跑速；關羽冰凍 1.5 秒
+  // 足球：命中即爆（球碰到敵人就從場上消失）＋ 塔納托斯爆發傷害逐段成長並引爆；
+  // 阿基里斯疊跑速；關羽冰凍 1.5 秒
+  const thStats = (WEAPON_ASPECTS.soccer.find((a) => a.id === 'thanatos') || {}).stats || {};
+  const implosionDamage = thStats.implosionDamage || 200;
   const soccerRun = (aspectId) => {
     setAspect('soccer', aspectId);
     g.weaponManager.weapons.clear();
@@ -313,9 +316,11 @@ const results = await page.evaluate(async () => {
     g.enemies.length = 0;
     // 確定性夾具：把敵人排成一列、強制球往 +x 飛 —— 否則球的初始方向是亂數，
     // 「第 5 次命中引爆」這種累積條件會變成隨機通過。
+    // 用沒有減傷的 brute（chimera 的 damageTakenMul 0.55 會把觀察到的傷害打對折，
+    // 「引爆 200 點」這種數值斷言就驗不出來了）
     const line = [];
     for (let k = 1; k <= 6; k++) {
-      const e = new Enemy('chimera', 40 + k * 55, 0, {});
+      const e = new Enemy('brute', 40 + k * 55, 0, {});
       e.maxHp = e.hp = 1e9;
       e.kbResist = 1;
       g.enemies.push(e);
@@ -338,7 +343,11 @@ const results = await page.evaluate(async () => {
     }
     const seq = [];
     let imploded = false;
-    let maxBounces = 0;
+    let maxDrop = 0;           // 單一敵人單一幀的最大掉血量（爆發＋引爆都算在同一幀）
+    let hitHappened = false;   // 球是否真的打到敵人
+    let aliveAfterHit = -1;    // 命中那一幀之後還在場上的球數（命中即爆 → 0）
+    let prevHp = line.map((e) => e.hp);
+    const hpAll0 = line.reduce((s, e) => s + e.hp, 0);
     let freezeSeen = 0;
     let maxStacks = 0;   // 跑速加成只持續 4 秒：記錄過程中的最大值，不看結束那一刻
     let last = 0;
@@ -350,25 +359,35 @@ const results = await page.evaluate(async () => {
         p.vx = 300;   // 維持 +x，避免撞牆反彈後亂跑
         p.vy = 0;
       }
-      for (const p of g.weaponManager.projectiles) {
-        if (p.type !== 'soccer') continue;
-        maxBounces = Math.max(maxBounces, p.thanatosBounces || 0);
-        if (p.thanatosBounces >= 5) imploded = true;
-      }
       freezeSeen = Math.max(freezeSeen, line.reduce((mx, e) => Math.max(mx, e.freezeTimer || 0), 0));
       maxStacks = Math.max(maxStacks, g.player.achillesSpeedStacks || 0);
       const maxDmg = g.enemies.reduce((mx, e) => Math.max(mx, e.lastDamageTaken || 0), 0);
       if (maxDmg !== last) { seq.push(maxDmg); last = maxDmg; }
+      const hpNow = line.map((e) => e.hp);
+      for (let k = 0; k < line.length; k++) maxDrop = Math.max(maxDrop, prevHp[k] - hpNow[k]);
+      prevHp = hpNow;
+      // 塔納托斯：爆發當下引爆虛空 —— 半徑內的敵人各吃 implosionDamage 點（觀察值）
+      if (line.some((e) => (e.lastDamageTaken || 0) >= implosionDamage)) imploded = true;
+      // 命中即爆：第一次打出傷害的那一幀之後，場上不該還有活的球
+      if (!hitHappened && line.some((e) => (e.lastDamageTaken || 0) > 0)) {
+        hitHappened = true;
+        aliveAfterHit = g.weaponManager.projectiles.filter((p) => p.type === 'soccer' && !p.isDead).length;
+      }
     }
-    return { seq, imploded, maxBounces, freezeSeen, stacks: maxStacks };
+    return { seq, imploded, maxDrop, totalDmg: Math.round(hpAll0 - line.reduce((s, e) => s + e.hp, 0)),
+      hitHappened, aliveAfterHit, freezeSeen, stacks: maxStacks };
   };
   const th = soccerRun('thanatos');
-  ok('塔納托斯每次命中傷害遞增', th.seq.length >= 2 && th.seq[1] > th.seq[0], th.seq.slice(0, 5).join('→'));
-  ok('塔納托斯第 5 次命中引爆', th.imploded && th.maxBounces >= 5, `bounces=${th.maxBounces}`);
+  ok('足球命中即爆：球碰到敵人後立刻從場上消失', th.hitHappened && th.aliveAfterHit === 0,
+    `hit=${th.hitHappened} aliveAfterHit=${th.aliveAfterHit}`);
+  ok(`塔納托斯爆發即引爆虛空（單幀掉血 ≥ ${implosionDamage} 點終結傷害）`,
+    th.imploded && th.maxDrop >= implosionDamage, `maxDrop=${th.maxDrop}`);
   const ach = soccerRun('achilles');
   ok('阿基里斯命中疊跑速', ach.stacks > 0, 'stacks=' + ach.stacks);
   const gy = soccerRun('guanyu');
   ok('關羽冰凍 1.5 秒生效', gy.freezeSeen > 1.2 && gy.freezeSeen <= 1.51, gy.freezeSeen.toFixed(2));
+  ok('塔納托斯（逐段成長＋引爆）對同一排敵人的總傷害高於關羽型態',
+    th.totalDmg > gy.totalDmg, `thanatos=${th.totalDmg} guanyu=${gy.totalDmg}`);
 
   // 時停懷錶：秒數吃資料表，且敵方子彈真的停住
   g.player.invulnerableTimer = 1e9;

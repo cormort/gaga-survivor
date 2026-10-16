@@ -79,7 +79,7 @@ const HUD_HINT_MAX_SECONDS = 2.5;
 // 實測 guardian / orbit_saw / shotgun 的 LV5 卡面本來就只有那四個字。
 const LEVEL_STAT_LABELS = {
   projectiles: '發射數', count: '數量', pierce: '穿透', radius: '範圍', explosionRadius: '爆炸半徑',
-  strikes: '落雷數', bounces: '彈跳', outTime: '飛行時間', width: '光束寬', reload: '換彈秒數',
+  strikes: '落雷數', bounces: '爆發段數', outTime: '飛行時間', width: '光束寬', reload: '換彈秒數',
 };
 
 export function weaponLevelDiff(def, level) {

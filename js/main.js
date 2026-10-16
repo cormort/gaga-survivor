@@ -16,6 +16,7 @@ import {
   VIEW,
   TD_CHAR_SCALE,
   PASSIVES,
+  PIERCE_ALL,
 } from './config.js';
 import { Player, MP_PER_KILL } from './entities/Player.js';
 import { updateSkills } from './systems/Skills.js';
@@ -39,6 +40,17 @@ const ENEMY_NAMES = Object.fromEntries(Object.entries(ENEMY_TYPES).map(([k, v]) 
 // 頂部 HUD 佔的螢幕高度：資訊列＋任務提示＋下一波預告（實測底部約 118px）。地圖排在它下面，
 // 貼著上緣的入口（三門要塞北門）才不會被蓋住。生命改放進資訊列，就是為了不讓這塊再往下長。
 const TD_HUD_PAD = 128;
+
+// ── 量子足球／量子星雲球：命中即爆的參數 ──
+// 球一碰到敵人就消失（不再留在場上彈跳累積），並把「剩下的彈跳段數」一次爆發出去。
+//   SOCCER_BURST_PER_STAGE：主要目標每多一段彈跳，爆發傷害再 +50%（用 tools/weapon-dps.mjs
+//     的群聚／散開／貼身三欄對舊版彈射制校正，三欄差距 ≤ 10%）。
+//   SOCCER_BURST_RADIUS：爆發波及半徑，讓球撞進怪群時鄰敵也吃一次基本傷害（保留吃群定位）。
+//   SOCCER_CHILD_LIFE：超武子球的存活時間；一般球的存活時間 SOCCER_LIFE 在
+//     WeaponManager.fireSoccer（舊版 8 秒 → 畫面上會同時累積十幾顆空彈的球）。
+const SOCCER_BURST_PER_STAGE = 1.2;
+const SOCCER_BURST_RADIUS = 34;
+const SOCCER_CHILD_LIFE = 1.2;
 
 
 import { InputController } from './input.js';
@@ -2750,30 +2762,9 @@ class Game {
         this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
         sound.playHit(enemy.x);
 
-        // 塔納托斯：每次命中傷害 +bounceDmgGrowth，第 implosionAt 次命中引發虛空引爆。
-        // 先前 thanatosBounces 只被寫入一次、從未遞增或讀取，整個型態不存在。
-        if (p.implosionAt > 0) {
-          p.thanatosBounces++;
-          if (p.thanatosBounces >= p.implosionAt) {
-            p.isDead = true;
-            this.camera.shake = Math.max(this.camera.shake, 12);
-            this.particles.createExplosion(p.x, p.y, p.implosionRadius);
-            this.particles.createShockwave(p.x, p.y, p.implosionRadius, '#b388ff');
-            sound.playExplosion();
-            this._forEachNearbyEnemy(grid, p.x, p.y, p.implosionRadius + grid.maxR, (nearE) => {
-              if (nearE.isDead) return;
-              const ndx = nearE.x - p.x;
-              const ndy = nearE.y - p.y;
-              if (ndx * ndx + ndy * ndy <= (p.implosionRadius + nearE.radius) ** 2) {
-                nearE.takeDamage(p.implosionDamage, 8, p.x, p.y);
-                this.weaponManager.recordDamage(p.weaponId, nearE.lastDamageTaken || p.implosionDamage);
-                this.particles.createDamageText(nearE.x, nearE.y, nearE.lastDamageTaken || p.implosionDamage, true, true);
-              }
-            });
-          } else if (p.bounceGrowth > 0) {
-            p.damage = Math.round(p.damage * (1 + p.bounceGrowth));
-          }
-        }
+        // 塔納托斯（足球型態）：舊版是「每顆球每次命中傷害 +bounceDmgGrowth，第
+        // implosionAt 次命中引爆」。改成命中即爆之後，一顆球只有一次命中，這段
+        // 累積與引爆移到 _soccerBurst() 裡一次結算（傷害成長逐段套用、引爆照舊）。
         // 阿基里斯：每次命中為特工充能跑速 (步進值/上限/秒數都來自型態資料)
         if (p.aspect === 'achilles' && this.player) {
           const ach = (WEAPON_ASPECTS.soccer || []).find((a) => a.id === 'achilles');
@@ -2811,8 +2802,8 @@ class Game {
           });
         }
 
-        // 依名稱重新設計的命中後行為：足球彈向下一個敵人、量子星雲球裂變
-        if (p.type === 'soccer') this._soccerRicochet(p, enemy, grid);
+        // 量子足球／量子星雲球：命中即爆（見 _soccerBurst：結算完爆發後球立刻消失）
+        if (p.type === 'soccer') this._soccerBurst(p, enemy, grid);
         // 幽靈手裏劍：追到第一個目標後改直線穿透（不然會繞回怪群把穿透全部用完）
         if (p.type === 'shuriken') { p.homing = 0; p.target = null; }
 
@@ -2860,23 +2851,75 @@ class Game {
     return best;
   }
 
-  // 量子足球：命中後彈向附近下一個敵人（每彈一次消耗一次彈跳），
-  // 超武版本另外裂變出一顆子球（世代上限 maxSplitGen，場上子球數有上限）
-  _soccerRicochet(p, enemy, grid) {
-    const next = this._nearestEnemy(grid, p.x, p.y, 360, p.hitEnemies)
-      || this._nearestEnemy(grid, p.x, p.y, 360, new Set([enemy]));
-    const sp = Math.hypot(p.vx, p.vy) || 500;
-    if (next) {
-      const d = Math.hypot(next.x - p.x, next.y - p.y) || 1;
-      p.vx = ((next.x - p.x) / d) * sp;
-      p.vy = ((next.y - p.y) / d) * sp;
+  // 量子足球／量子星雲球：命中即爆。
+  //
+  // 為什麼改成這樣（使用者回報「後來到處都是足球」）：舊版球命中後只消耗一次彈跳、
+  // 再彈向下一隻敵人，還能在畫面框裡來回彈，最久活到 life = 8 秒；滿級（4 顆／1.8 秒）
+  // 實測同一時間場上有 12~14 顆球，而且大半是「一次都沒打中、只是在畫面上彈來彈去」的球。
+  // 現在球一碰到敵人就把「剩下的彈跳段數」一次爆發掉，然後立刻消失 —— 場上不會再累積球。
+  //
+  // 傷害怎麼算（保住原本的 DPS，別讓球變成抓癢）：舊版一顆球一生可以打出「彈跳段數」
+  // 次傷害（群聚時打不同隻、散開時靠 rehit 打同一隻），所以爆發 = 把那些段數一次結算：
+  //   * 主要目標：傷害 ×(1 + SOCCER_BURST_PER_STAGE ×(剩餘段數 − 1))
+  //     段數的權重（每段 0.5）是用 tools/weapon-dps.mjs 的三欄（群聚／散開／貼身）
+  //     對舊版校正出來的，三欄差距都在 ±10% 內。
+  //   * 爆發半徑（SOCCER_BURST_RADIUS）內的鄰敵：各吃一次基本傷害，保留「吃群」定位。
+  //   * 塔納托斯：舊版是「每命中一次傷害 +bounceDmgGrowth（最多 implosionAt 次）」，
+  //     這裡把同樣的累積一次套用完，並在爆發當下引發虛空引爆（半徑／傷害照型態資料）。
+  //
+  // 超武版本另外裂變出一顆子球（世代上限 maxSplitGen，場上子球數有上限）。
+  _soccerBurst(p, enemy, grid) {
+    const stages = Math.max(1, Math.round(p.bounces || 1));   // 這一發還剩幾段彈跳可以爆發
+    const atkElem = p.element || (p.weaponId && WEAPONS[p.weaponId]?.element) || 'physical';
+
+    // 主要目標：把剩下的段數一次結算（塔納托斯逐段成長，其餘型態每段固定權重）
+    let mult = 1;
+    if (p.implosionAt > 0) {
+      const cap = Math.min(stages, p.implosionAt);
+      for (let i = 1; i < cap; i++) mult += (1 + (p.bounceGrowth || 0)) ** i;
     } else {
-      p.vx = -p.vx;
-      p.vy = -p.vy;
+      mult += SOCCER_BURST_PER_STAGE * (stages - 1);
     }
-    p.bounces--;
-    // 塔納托斯死球要撐到第 implosionAt 次命中引爆（由引爆本身結束），不因彈射次數用完而提早消失
-    if (p.bounces <= 0 && !(p.implosionAt > 0)) p.isDead = true;
+    const burst = Math.round(p.damage * mult);
+    const bonus = burst - Math.round(p.damage);
+    if (bonus > 0 && !enemy.isDead) {
+      enemy.takeDamage(bonus, p.knockback, p.x, p.y, atkElem);
+      this.weaponManager.recordDamage(p.weaponId, bonus);
+      this.particles.createDamageText(enemy.x, enemy.y, bonus, true, p.isCrit, enemy.lastElementRelation);
+    }
+
+    // 爆發波及：半徑內的鄰敵各吃一次基本傷害（主要目標已經吃過，不重複）
+    this._forEachNearbyEnemy(grid, p.x, p.y, SOCCER_BURST_RADIUS + grid.maxR, (nearE) => {
+      if (nearE.isDead || nearE === enemy) return;
+      const ndx = nearE.x - p.x;
+      const ndy = nearE.y - p.y;
+      if (ndx * ndx + ndy * ndy > (SOCCER_BURST_RADIUS + nearE.radius) ** 2) return;
+      nearE.takeDamage(Math.round(p.damage), p.knockback, p.x, p.y, atkElem);
+      this.weaponManager.recordDamage(p.weaponId, Math.round(p.damage));
+      this.particles.createDamageText(nearE.x, nearE.y, Math.round(p.damage), false, p.isCrit);
+    });
+
+    // 塔納托斯：爆發即引爆（舊版的第 implosionAt 次命中）
+    if (p.implosionAt > 0) {
+      this.camera.shake = Math.max(this.camera.shake, 12);
+      this.particles.createExplosion(p.x, p.y, p.implosionRadius);
+      this.particles.createShockwave(p.x, p.y, p.implosionRadius, '#b388ff');
+      sound.playExplosion();
+      this._forEachNearbyEnemy(grid, p.x, p.y, p.implosionRadius + grid.maxR, (nearE) => {
+        if (nearE.isDead) return;
+        const ndx = nearE.x - p.x;
+        const ndy = nearE.y - p.y;
+        if (ndx * ndx + ndy * ndy <= (p.implosionRadius + nearE.radius) ** 2) {
+          nearE.takeDamage(p.implosionDamage, 8, p.x, p.y);
+          this.weaponManager.recordDamage(p.weaponId, nearE.lastDamageTaken || p.implosionDamage);
+          this.particles.createDamageText(nearE.x, nearE.y, nearE.lastDamageTaken || p.implosionDamage, true, true);
+        }
+      });
+    }
+
+    // 命中即消失：球不再留在場上彈跳（這是這次修改的重點）
+    p.isDead = true;
+    const sp = Math.hypot(p.vx, p.vy) || 500;
 
     if (p.splitGen < p.maxSplitGen) {
       const W = this.weaponManager;
@@ -2888,14 +2931,16 @@ class Game {
           type: 'soccer', weaponId: p.weaponId, x: p.x, y: p.y,
           vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
           damage: Math.round(p.damage * 0.6), radius: p.radius * 0.7,
-          bounces: Math.max(2, Math.ceil(p.bounces / 2)), pierce: 9999, life: 3,
+          bounces: Math.max(2, Math.ceil(stages / 2)), pierce: PIERCE_ALL, life: SOCCER_CHILD_LIFE,
           isEvo: p.isEvo, knockback: p.knockback, rehit: p.rehit, charge: p.charge,
           splitGen: p.splitGen + 1, maxSplitGen: p.maxSplitGen, afterimage: true,
         }, p.isCrit);
         child.hitEnemies.add(enemy);
         W.projectiles.push(child);
-        this.particles.createShockwave(p.x, p.y, 26, '#00f59b');
       }
+    } else {
+      // 子球（或沒有裂變的一般球）：原地留一圈小衝擊波，讓玩家看得出球是被爆掉的
+      this.particles.createShockwave(p.x, p.y, SOCCER_BURST_RADIUS, p.isEvo ? '#00f59b' : '#00e5ff');
     }
   }
 

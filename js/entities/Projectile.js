@@ -390,7 +390,9 @@ export class Projectile {
         this.tickRehit(dt); // 不重置的話，一顆球對同一隻怪一輩子只能打一次，彈跳次數等於白給
 
         // 螢幕邊界反彈：先前只撞世界邊界（±2000px），球等於一路飛出畫面不再回來。
-        // 改用「以玩家為中心的視野框」，球會在畫面裡來回彈（世界邊界仍是最外層保險）
+        // 改用「以玩家為中心的視野框」，球會在畫面裡來回彈（世界邊界仍是最外層保險）。
+        // 反彈不再扣 bounces —— 那個數字現在是「命中時一次爆發的段數」（main.js 的
+        // _soccerBurst），扣在牆上等於白白削弱傷害；沒打中敵人的球一律靠 life 收掉。
         const bounds = worldBounds();
         const hw = player ? (window.innerWidth || 1280) / 2 - this.radius : Infinity;
         const hh = player ? (window.innerHeight || 720) / 2 - this.radius : Infinity;
@@ -400,14 +402,9 @@ export class Projectile {
         const maxY = Math.min(bounds.maxY, player ? player.y + hh : Infinity);
         if ((this.x < minX && this.vx < 0) || (this.x > maxX && this.vx > 0)) {
           this.vx *= -1;
-          this.bounces--;
         }
         if ((this.y < minY && this.vy < 0) || (this.y > maxY && this.vy > 0)) {
           this.vy *= -1;
-          this.bounces--;
-        }
-        if (this.bounces <= 0) {
-          this.isDead = true;
         }
         break;
 

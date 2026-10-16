@@ -152,7 +152,7 @@ export const WEAPONS = {
     name: '量子足球',
     icon: '⚽',
     element: 'frost',
-    description: '朝敵人踢出高彈力足球，命中後彈向下一個敵人、撞到畫面邊緣也會反彈。每 3 顆蓄能射出冰凍球。',
+    description: '朝敵人踢出高彈力足球，命中瞬間把剩餘彈跳段數一次爆發（球隨即消失、不會殘留場上）；沒打中的球會撞畫面邊緣反彈。每 3 顆蓄能射出冰凍球。',
     isEvo: false,
     evoTarget: 'quantum_sphere',
     pairPassive: 'speed_shoes',   // 走位控球/追球 (原 max_hp_vest)
@@ -161,11 +161,11 @@ export const WEAPONS = {
     baseCooldown: 3.2,
     cooldownGrowth: -0.35,         // 升級加快出球 (3.2 → 1.8 秒)
     speed: 520,
-    bounces: [4, 5, 6, 7, 8],      // 彈射次數（命中彈向下一個敵人、撞畫面邊緣都算一次）
+    bounces: [4, 5, 6, 7, 8],      // 爆發段數（命中時一次爆發的段數，越多越痛；沒打中的球靠 life 收尾）
     count: [1, 2, 2, 3, 4],
     charge: { every: 3, effect: 'freeze' }, // 每 3 顆射出冰凍球
-    range: 520,               // 彈跳球的飛行距離（殺傷靠彈射次數，不靠穿透）
-    pierceAll: true,          // 彈射型：撞到不消耗（吃群靠 bounces 彈射次數，不是靠穿透）
+    range: 520,               // 彈跳球的飛行距離（殺傷靠爆發段數，不靠穿透）
+    pierceAll: true,          // 彈射型：撞到不消耗（吃群靠爆發段數／爆發半徑，不是靠穿透）
   },
 
   // 超武 (Evo Weapons)
@@ -278,7 +278,7 @@ export const WEAPONS = {
     name: '量子星雲球 (超武)',
     icon: '⚛️⚽',
     element: 'frost',
-    description: '量子球在敵群間彈射，每次命中裂變出一顆子球，拖著能量殘影，每 4 顆挾帶冰凍。',
+    description: '量子球命中即爆並裂變出一顆子球（子球同樣命中即爆），拖著能量殘影，每 4 顆挾帶冰凍。',
     isEvo: true,
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
@@ -286,12 +286,12 @@ export const WEAPONS = {
     baseDamage: 70,  // 射程定位校準（原 70）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 58）                // 命中裂變 + 敵間彈射，命中數遠多於舊版飛出畫面的球
     baseCooldown: 2.2,
     speed: 700,
-    bounces: 10,
+    bounces: 10,                   // 爆發段數（命中時一次爆發的段數）
     count: 4,
     charge: { every: 4, effect: 'freeze' },
     splitGen: 1,                   // 命中裂變的世代上限（子球不再裂變）
-    range: 560,               // 彈射球的飛行距離
-    pierceAll: true,          // 彈射型：撞到就彈向下一隻（吃群靠彈射，不是靠穿透）
+    range: 560,               // 彈跳球的飛行距離
+    pierceAll: true,          // 彈射型：撞到不消耗（吃群靠爆發段數，不是靠穿透）
   },
 
   // 新增武器 (內容擴充批)：開路穿透型 ─ 相位飛刃
@@ -1722,7 +1722,7 @@ export const WEAPON_ASPECTS = {
       desc: '足球直徑增大 50%，命中附帶 1.5 秒冰凍定身。',
       stats: { radiusMul: 1.50, freezeDur: 1.5 } },
     { id: 'thanatos', name: '塔納托斯 (湮滅死球)', icon: '💀', tag: '第5擊核爆',
-      desc: '足球每次命中傷害提升 25%，第 5 次命中時引發虛空引爆（半徑 100、200 點終結傷害）。',
+      desc: '足球爆發傷害逐段提升 25%（最多 5 段），爆發當下引發虛空引爆（半徑 100、200 點終結傷害）。',
       stats: { bounceDmgGrowth: 0.25, implosionAt: 5, implosionRadius: 100, implosionDamage: 200 } },
   ],
   frost_nova: [
