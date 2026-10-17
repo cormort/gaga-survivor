@@ -299,6 +299,69 @@ body.orient-auto,
   transform: scale(1.05);
 }
 
+/* ── 局內音量面板（點喇叭展開；音樂／音效兩條滑桿 + 靜音）────────────
+   .sound-wrap 只是一個貼著按鈕的定位錨點，不改變狀態列原有的排列；
+   面板 width 用 max-content，滑桿固定寬度，所以不會撐開或擠到旁邊的按鈕。 */
+.sound-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sound-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  width: max-content;
+  background: rgba(9, 14, 24, 0.96);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.sound-vol-row {
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.sound-vol-row .vol-slider {
+  width: 108px;
+  min-width: 0;
+}
+
+.vol-val {
+  width: 26px;
+  text-align: right;
+  font-size: 11px;
+  color: #9fb0c8;
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-mute-btn {
+  margin-top: 2px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sound-mute-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--color-primary);
+}
+
 /* 裝備技能欄位 */
 #skills-tray {
   display: flex;
@@ -1846,6 +1909,9 @@ body.orient-auto,
   #exp-text { font-size: 11px; }
   .audio-row { gap: 10px; }
   .vol-slider { width: 84px; }
+  /* 局內音量面板：小螢幕字級與滑桿再收一點，面板本身不變寬 */
+  .sound-vol-row { font-size: 12px; gap: 6px; }
+  .sound-vol-row .vol-slider { width: 82px; }
 
   /* 手機狀態列：單列不換行，整體壓縮到一行內塞得下 */
   #status-bar { gap: 3px; flex-wrap: nowrap; justify-content: space-between; }

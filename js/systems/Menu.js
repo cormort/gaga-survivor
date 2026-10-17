@@ -187,22 +187,44 @@ export function bindEvents(game) {
     });
   });
 
-  // 主選單音量滑桿 (直接寫入存檔)
-  const sfxVol = document.getElementById('sfx-vol');
-  const bgmVol = document.getElementById('bgm-vol');
-  if (sfxVol && bgmVol) {
-    const applyVol = () => {
-      // 合併而不是整份覆寫：settings 裡還有其他開關 (autoPocket)，覆寫會把它們洗掉
-      const settings = { ...save.data.settings, sfx: sfxVol.value / 100, bgm: bgmVol.value / 100 };
-      save.set({ settings });
-      sound.setVolumes(settings.sfx, settings.bgm);
-    };
-    sfxVol.value = Math.round((save.data.settings.sfx || 1) * 100);
-    bgmVol.value = Math.round((save.data.settings.bgm || 0.8) * 100);
-    sfxVol.addEventListener('input', applyVol);
-    bgmVol.addEventListener('input', applyVol);
-    sound.setVolumes(save.data.settings.sfx || 1, save.data.settings.bgm || 0.8);
+  // ── 音量控制（主選單兩條滑桿 + 局內喇叭面板兩條滑桿，共用同一份存檔設定）──
+  // 兩邊是同一組值：在局內拉，回主選單看到的就是同一個數字；反之亦然。
+  const VOL_DEFAULTS = { sfx: 0.7, bgm: 1 };
+  const volInputs = {
+    sfx: [document.getElementById('sfx-vol'), document.getElementById('ingame-sfx-vol')],
+    bgm: [document.getElementById('bgm-vol'), document.getElementById('ingame-bgm-vol')],
+  };
+  const volReadouts = {
+    sfx: document.getElementById('ingame-sfx-val'),
+    bgm: document.getElementById('ingame-bgm-val'),
+  };
+  const volOf = (key) => {
+    const v = save.data.settings[key];
+    return typeof v === 'number' ? v : VOL_DEFAULTS[key];
+  };
+  const syncVolUI = () => {
+    for (const key of ['sfx', 'bgm']) {
+      const pct = Math.round(volOf(key) * 100);
+      for (const el of volInputs[key]) if (el && +el.value !== pct) el.value = pct;
+      const out = volReadouts[key];
+      if (out) out.textContent = pct;
+    }
+  };
+  const applyVol = (key, rawPct) => {
+    // 合併而不是整份覆寫：settings 裡還有其他開關 (autoPocket)，覆寫會把它們洗掉
+    const pct = Math.max(0, Math.min(100, Number(rawPct) || 0));
+    const settings = { ...save.data.settings, [key]: pct / 100 };
+    save.set({ settings });
+    sound.setVolumes(volOf('sfx'), volOf('bgm'));
+    syncVolUI();
+  };
+  for (const key of ['sfx', 'bgm']) {
+    for (const el of volInputs[key]) {
+      if (el) el.addEventListener('input', () => applyVol(key, el.value));
+    }
   }
+  syncVolUI();
+  sound.setVolumes(volOf('sfx'), volOf('bgm'));
 
   // 口袋道具自動使用開關
   const autoPocket = document.getElementById('auto-pocket');
@@ -582,11 +604,41 @@ export function bindEvents(game) {
   // 超武合成圖鑑 (主選單查閱配方)
   game.ui.recipeBtn?.addEventListener('click', () => game.ui.openRecipeModal(save.data));
 
-  // 音效切換按鈕
-  game.ui.soundBtn.addEventListener('click', () => {
-    const enabled = sound.toggleSound();
-    game.ui.soundBtn.textContent = enabled ? '🔊' : '🔇';
+  // 局內喇叭按鈕：點一下展開／收起「音樂／音效」兩條滑桿（面板裡另有靜音鈕）。
+  // 以前這顆是直接切靜音，常常誤觸；而且局內調不到音量，只能退回主選單，
+  // 所以改成「先開面板」，靜音留在面板裡。
+  const soundMenu = document.getElementById('sound-menu');
+  const soundMuteBtn = document.getElementById('btn-sound-mute');
+  const syncSoundIcon = () => {
+    const on = sound.enabled;
+    game.ui.soundBtn.textContent = on ? '🔊' : '🔇';
+    game.ui.soundBtn.setAttribute('aria-expanded', String(!!soundMenu && !soundMenu.classList.contains('hidden')));
+    if (soundMuteBtn) soundMuteBtn.textContent = on ? '🔇 靜音' : '🔊 取消靜音';
+  };
+  const closeSoundMenu = () => {
+    if (!soundMenu || soundMenu.classList.contains('hidden')) return;
+    soundMenu.classList.add('hidden');
+    syncSoundIcon();
+  };
+  game.ui.soundBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sound.ensureContext();          // 這個點擊就是解鎖 AudioContext 的手勢
+    if (!soundMenu) { sound.toggleSound(); syncSoundIcon(); return; }
+    syncVolUI();                    // 開面板前先對齊目前存檔值
+    soundMenu.classList.toggle('hidden');
+    syncSoundIcon();
   });
+  // 面板內的點擊（拉滑桿、按靜音）不要冒泡到 document，否則一拉就收起來
+  soundMenu?.addEventListener('click', (e) => e.stopPropagation());
+  soundMenu?.addEventListener('input', (e) => e.stopPropagation());
+  soundMuteBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sound.toggleSound();
+    syncSoundIcon();
+  });
+  document.addEventListener('click', closeSoundMenu);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSoundMenu(); });
+  syncSoundIcon();
 }
 
 export function refreshCharSelect(game) {

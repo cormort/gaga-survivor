@@ -69,7 +69,22 @@
           <span class="hud-icon">📦</span>
           <span id="pending-gear-count">0</span>
         </div>
-        <button id="btn-sound" class="hud-btn" title="切換音效">🔊</button>
+        <!-- 局內音量：點喇叭展開面板，音樂／音效各一條滑桿分開調（靜音鈕收進面板裡，
+             免得以前誤觸一下就直接沒聲音）。面板貼著按鈕長，任何螢幕寬度都不會跑掉。 -->
+        <div class="sound-wrap">
+          <button id="btn-sound" class="hud-btn" title="音量／靜音" aria-haspopup="true" aria-expanded="false">🔊</button>
+          <div id="sound-menu" class="sound-menu hidden" role="dialog" aria-label="音量調整">
+            <label class="vol-item sound-vol-row">🎵 音樂
+              <input id="ingame-bgm-vol" class="vol-slider" type="range" min="0" max="100" value="100" aria-label="音樂音量">
+              <span id="ingame-bgm-val" class="vol-val">100</span>
+            </label>
+            <label class="vol-item sound-vol-row">🔊 音效
+              <input id="ingame-sfx-vol" class="vol-slider" type="range" min="0" max="100" value="70" aria-label="音效音量">
+              <span id="ingame-sfx-val" class="vol-val">70</span>
+            </label>
+            <button id="btn-sound-mute" class="sound-mute-btn" type="button">🔇 靜音</button>
+          </div>
+        </div>
         <button id="btn-pause" class="hud-btn" title="暫停遊戲">⏸️</button>
         <button id="btn-quit" class="hud-btn quit-btn hidden" title="放棄任務回主選單">🚪</button>
       </div>

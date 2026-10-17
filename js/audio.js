@@ -795,6 +795,14 @@ const BGM_KITS = {
 const SCHEDULE_AHEAD = 0.25;
 const SCHEDULER_MS = 50;
 
+// ── 兩條匯流排的混音基準 (trim) ──────────────────────────────
+// 玩家回報「局內音樂太小、音效太吵」，所以把 BGM 匯流排拉高、SFX 匯流排維持在原本的
+// 上限（要再小由預設音量與局內滑桿處理，見 js/save.js 的 settings 與 v115 遷移）。
+// 這兩個常數是**唯一的混音比例來源**：玩家滑桿 (0~1) 是乘在上面的係數，
+// 改這裡等於整體改比例，不會動到任何單一音效的相對大小。
+const BGM_BASE = 0.45;   // 舊值 0.30
+const SFX_BASE = 0.12;
+
 export class SoundEngine {
   constructor() {
     this.ctx = null;
@@ -871,8 +879,8 @@ export class SoundEngine {
 
   _applyGains() {
     if (!this.ctx) return;
-    if (this.sfxGain) this.sfxGain.gain.value = this.enabled ? 0.12 * this.sfxVol : 0;
-    if (this.bgmGain) this.bgmGain.gain.value = this.enabled && !this.bgmMuted ? 0.3 * this.bgmVol : 0;
+    if (this.sfxGain) this.sfxGain.gain.value = this.enabled ? SFX_BASE * this.sfxVol : 0;
+    if (this.bgmGain) this.bgmGain.gain.value = this.enabled && !this.bgmMuted ? BGM_BASE * this.bgmVol : 0;
   }
 
   setVolumes(sfxVol, bgmVol) {
@@ -922,11 +930,11 @@ export class SoundEngine {
     this.master.connect(this.ctx.destination);
 
     this.sfxGain = this.ctx.createGain();
-    this.sfxGain.gain.value = 0.12 * this.sfxVol;
+    this.sfxGain.gain.value = SFX_BASE * this.sfxVol;
     this.sfxGain.connect(this.master);
 
     this.bgmGain = this.ctx.createGain();
-    this.bgmGain.gain.value = 0.3 * this.bgmVol;
+    this.bgmGain.gain.value = BGM_BASE * this.bgmVol;
     this.bgmGain.connect(this.master);
 
     if (!this._visBound && typeof document !== 'undefined' && document.addEventListener) {

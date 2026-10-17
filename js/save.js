@@ -74,7 +74,8 @@ function blank() {
     character: 'duck',
     mode: 'survivor',       // 上次選的模式
     // 音量 (主選單滑桿)、口袋道具自動使用、顯示設定（傷害數字 all/crit/off、畫面震動、減少閃光、首領過場、螢幕視野）
-    settings: { sfx: 1, bgm: 0.8, autoPocket: true, damageNumbers: 'all', screenShake: true, reduceFlash: false, bossCutscene: true, orientation: 'auto' },
+    // v115 起預設改成「音樂 100 / 音效 70」：局內音樂調大、音效調小（搭配 audio.js 的 BGM_BASE）。
+    settings: { sfx: 0.7, bgm: 1, autoPocket: true, damageNumbers: 'all', screenShake: true, reduceFlash: false, bossCutscene: true, orientation: 'auto' },
     daily: { date: '', bestTime: 0, completed: false },
     evolvedEver: [],            // 歷史上合成過的超武 id (合成圖鑑打勾用)
     weaponAspects: {            // Hades 武器型態配置
@@ -201,7 +202,17 @@ function ensureDefaults(d) {
   if (!Array.isArray(d.boosters)) d.boosters = [];
   if (typeof d.stashCap !== 'number') d.stashCap = STASH_CAP;
   if (!d.settings || typeof d.settings !== 'object') d.settings = {};
-  d.settings = { sfx: 1, bgm: 0.8, autoPocket: true, damageNumbers: 'all', screenShake: true, reduceFlash: false, bossCutscene: true, ...d.settings };
+  d.settings = { sfx: 0.7, bgm: 1, autoPocket: true, damageNumbers: 'all', screenShake: true, reduceFlash: false, bossCutscene: true, ...d.settings };
+  // v115 混音改版：舊版的預設是「音效 100 / 音樂 80」，玩家嫌局內音樂太小、音效太吵，
+  // 新預設是「音樂 100 / 音效 70」。只搬「完全沒動過滑桿」的那一組（值還等於舊預設），
+  // 自己調過的一律尊重；mixV2 記號確保這個搬遷只做一次，之後玩家就算又調回 100/80 也不會被蓋掉。
+  if (!d.settings.mixV2) {
+    if (d.settings.sfx === 1 && d.settings.bgm === 0.8) {
+      d.settings.sfx = 0.7;
+      d.settings.bgm = 1;
+    }
+    d.settings.mixV2 = true;
+  }
 
   if (!d.weaponAspects || typeof d.weaponAspects !== 'object') {    d.weaponAspects = {
       kunai: 'zagreus',
