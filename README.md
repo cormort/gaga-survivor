@@ -1932,10 +1932,9 @@ build 吃 3 DPS 是完全不同的處境，而同一場裡 maxHp 一路在長 �
 
 - 專案沒有測試框架，驗證方式是寫拋棄式 Node 腳本直接 import 模組跑 assert（`config.js` 會讀 `window`，記得先 `globalThis.window = { innerWidth: 1280, innerHeight: 720 }` 再動態 import）。
 - 數值散在 `config.js`、`levels.js`、`Turret.js`、`items.js` 四處；新增系統時優先放進既有的表，不要在邏輯裡硬寫魔術數字。
-- **既有紅燈（v83 基準線就完全一樣，不是 v86/v87 造成的）**：`verify-art` 5 條（4 條輪廓光 + 手持武器可見比例 31/49/33/7%）、
-  `verify-review-fixes` 2 條（淘金狂潮／幸運藥劑的金幣倍率量到 1.5、期望 2）、
-  `verify-char-portraits` 3 條（Fast 3G 冷快取 60 秒只畫出 9/26）、`verify-asset-download` 1 條（離線重載真圖 0/26）、
-  `verify-balance` 1 條（`makaimura` 有 5 波遠程敵人空窗）。要修得動 sprite 剪影、金幣倍率管線與圖片載入策略。
-- `tools/probe-targeted.mjs` 與 `tools/visual-equiv.mjs` 需要一份**repo 裡不存在的前重構版本快照**（寫死 `/tmp/before/*.js`），
-  只在做 refactor 前後逐像素比對時才有意義，平常直接跑一定失敗。
-- `assets/td/tower_sheet.jpeg`（133.3KB）沒有任何程式碼引用，`audit-assets --strict` 因此一直回報 1 個死檔。
+- **既有紅燈已清空**：`verify-art`、`verify-review-fixes`、`verify-char-portraits`、`verify-asset-download`、`verify-balance`
+  在 v115 全數通過（輪廓光、手持武器、金幣倍率、頭像載入、`makaimura` 遠程空窗都已修掉）。
+- `tools/probe-targeted.mjs` 與 `tools/visual-equiv.mjs` 的「舊版」改成從 git 取（`BEFORE_REF=<commit>`，預設 `HEAD`），
+  不再依賴 repo 外的 `/tmp/before` 快照：refactor 前先記下 commit，改完再用 `BEFORE_REF=<那個 commit>` 跑比對。
+- `audit-assets --strict` 現在是綠的：`.gitignore` 掉的本機原始大圖不算死檔、`assets/td/tower_sheet.jpeg` 列為
+  `tools/cut_td_towers.py` 的維護用來源圖，並補抓了 `XIAN_VFX_KEYS`／`TD_SOCKET_KEYS` 兩張表（之前把在用的 14 張圖誤判成死檔）。

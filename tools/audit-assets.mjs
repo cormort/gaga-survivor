@@ -14,7 +14,8 @@
 //   js/weapons/WeaponArt.js  WEAPON_ART 的 key
 //   js/systems/Ground.js     地表貼圖 id 陣列
 //   js/entities/EnemyProjectile.js  ENEMY_BULLET_KEYS
-//   js/entities/Turret.js           FACILITY_IMAGE_KEYS、TD_IMAGE_KEYS（守塔塔種：塔線 × 1/2/3 級＋專精）
+//   js/sprites.js            XIAN_VFX_KEYS（修仙特效 assets/xian/vfx_*.png）
+//   js/entities/Turret.js           FACILITY_IMAGE_KEYS、TD_SOCKET_KEYS、TD_IMAGE_KEYS（守塔塔種：塔線 × 1/2/3 級＋專精）
 //   js/entities/AlliedUnit.js       UNIT_IMAGE_KEYS（守塔小兵逐格動畫）
 //   js/systems/TowerDefense.js      TD_STRUCTURE_KEYS（守塔入口巢穴與主堡）
 //   js/entities/DropItem.js         DROP_ITEM_KEYS（其中兩個放在 decor/）
@@ -24,6 +25,7 @@
 //   --strict：有死檔或預快取缺口時離開碼 1（給 CI／發版前把關用）
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,7 +44,9 @@ const walk = (dir, out = []) => {
   }
   return out;
 };
-const onDisk = [...walk('assets'), ...walk('icons')];
+// .gitignore 掉的檔（.DS_Store、守塔原始生成大圖）只存在作者本機、不會出貨，不算死檔。
+const gitIgnored = new Set(execSync('git ls-files --others --ignored --exclude-standard assets icons', { cwd: ROOT, encoding: 'utf8' }).split('\n'));
+const onDisk = [...walk('assets'), ...walk('icons')].filter((f) => !gitIgnored.has(f));
 
 /* ── 2) 從程式碼收集「被引用」的檔案 ── */
 const used = new Map();      // 相對路徑 -> 引用來源說明
@@ -76,6 +80,7 @@ for (const k of objKeys(spritesSrc, 'ZODIAC_SPRITES')) add(`assets/zodiac/${k}.p
 for (const k of objKeys(spritesSrc, 'BOSS_PNG_SPRITES')) add(`assets/bosses/${k}.png`, 'sprites.js BOSS_PNG_SPRITES');
 for (const k of objKeys(spritesSrc, 'MAKAIMURA_SPRITES')) add(`assets/makaimura/${k}.png`, 'sprites.js MAKAIMURA_SPRITES');
 for (const k of objKeys(spritesSrc, 'TD_ENEMY_SPRITES')) add(`assets/td/enemies/${k}.png`, 'sprites.js TD_ENEMY_SPRITES（守塔主題敵人）');
+for (const k of arrStrings(spritesSrc, 'XIAN_VFX_KEYS')) add(`assets/xian/${k}.png`, 'sprites.js XIAN_VFX_KEYS（修仙六脈戰鬥特效）');
 
 const weaponSrc = read('js/weapons/WeaponArt.js');
 for (const id of objKeysBraced(weaponSrc, 'WEAPON_ART')) add(`assets/weapons/${id}.png`, 'WeaponArt.js WEAPON_ART');
@@ -98,6 +103,7 @@ for (const k of arrStrings(bulletSrc, 'ENEMY_BULLET_KEYS')) add(`assets/bullets/
 
 const turretSrc = read('js/entities/Turret.js');
 for (const k of arrStrings(turretSrc, 'FACILITY_IMAGE_KEYS')) add(`assets/facilities/${k}.png`, 'Turret.js FACILITY_IMAGE_KEYS');
+for (const k of arrStrings(turretSrc, 'TD_SOCKET_KEYS')) add(`assets/td/${k}.png`, 'Turret.js TD_SOCKET_KEYS（守塔基台）');
 // 守塔塔種：{ 塔線: [專精, 專精] } → assets/td/<塔線>_<1|2|3|專精>.png
 const tdBody = (turretSrc.match(/const TD_IMAGE_KEYS\s*=\s*\{([\s\S]*?)\};/) || [])[1] || '';
 for (const [, line, list] of tdBody.matchAll(/([a-z_]+):\s*\[([^\]]*)\]/g)) {
@@ -137,8 +143,11 @@ for (const f of codeFiles) {
 // 開場全抓是 22.6MB 而一場只用到一張（見 Ground.js 的 _ensureGroundPng）。
 const ON_DEMAND = [/^assets\/ground\//];
 
-// 維護用原始檔：不會被程式載入，但要留在 repo 裡（要改圖示時從它產出 PNG）。
-const MAINTENANCE = ['icons/icon-maskable.svg'];
+// 維護用原始檔：不會被程式載入，但要留在 repo 裡（要重產 PNG 時從它切／轉出來）。
+const MAINTENANCE = [
+  'icons/icon-maskable.svg',
+  'assets/td/tower_sheet.jpeg',  // tools/cut_td_towers.py 的來源圖：塔種 PNG 都從它切出來
+];
 
 const swSrc = read('sw.js');
 const precache = new Set(

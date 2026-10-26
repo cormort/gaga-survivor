@@ -1,12 +1,14 @@
-// 視覺等價驗證：把 /tmp/before 的舊模組與現行新模組同時載入頁面，
+// 視覺等價驗證：把 BEFORE_REF（git ref，預設 HEAD）的舊模組與工作區的新模組同時載入頁面，
 // 在相同 CTM (dpr 1.5)、相同亂數、相同時間下各畫一次，逐像素比對。
-const pw = (await import(process.env.PW_MODULE)).default;
-const fs = await import('node:fs');
+const pw = (await import(process.env.PW_MODULE || 'playwright')).default;
+const { execSync } = await import('node:child_process');
+// 舊版直接從 git 取，不再依賴 repo 外的 /tmp/before 快照
+const before = (f) => execSync(`git show ${process.env.BEFORE_REF || 'HEAD'}:js/${f}`, { encoding: 'utf8' });
 
 const OLD = {
-  '/js/entities/__old_ep.js': fs.readFileSync('/tmp/before/EnemyProjectile.js', 'utf8'),
-  '/js/entities/__old_pr.js': fs.readFileSync('/tmp/before/Projectile.js', 'utf8'),
-  '/js/systems/__old_ps.js': fs.readFileSync('/tmp/before/ParticleSystem.js', 'utf8'),
+  '/js/entities/__old_ep.js': before('entities/EnemyProjectile.js'),
+  '/js/entities/__old_pr.js': before('entities/Projectile.js'),
+  '/js/systems/__old_ps.js': before('systems/ParticleSystem.js'),
 };
 
 const browser = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--disable-gpu', '--use-gl=swiftshader', '--disable-gpu-rasterization'] });

@@ -5,18 +5,20 @@
 // 這支探針用同一套計數方式（繪圖指令 / 漸層物件 / 色彩字串 / 塗抹倍率），
 // 但把變因固定成上面的熱點，並且可以切成「舊模組 vs 新模組」跑，作為 before/after。
 //
-//   OLD=1 node /tmp/probe-targeted.mjs    # 用 /tmp/before 的舊模組
-//   node /tmp/probe-targeted.mjs          # 用現行模組
-const pw = (await import(process.env.PW_MODULE)).default;
-const fs = await import('node:fs');
+//   OLD=1 BEFORE_REF=<commit> node tools/probe-targeted.mjs   # 用該 commit 的舊模組（預設 HEAD）
+//   node tools/probe-targeted.mjs                              # 用工作區的現行模組
+const pw = (await import(process.env.PW_MODULE || 'playwright')).default;
+const { execSync } = await import('node:child_process');
+// 舊版直接從 git 取，不再依賴 repo 外的 /tmp/before 快照
+const before = (f) => execSync(`git show ${process.env.BEFORE_REF || 'HEAD'}:js/${f}`, { encoding: 'utf8' });
 const URL = 'http://127.0.0.1:8899/index.html';
 const USE_OLD = !!process.env.OLD;
 const FRAMES = 120, DT = 1 / 60;
 
 const OLD_FILES = {
-  '/js/entities/EnemyProjectile.js': fs.readFileSync('/tmp/before/EnemyProjectile.js', 'utf8'),
-  '/js/entities/Projectile.js': fs.readFileSync('/tmp/before/Projectile.js', 'utf8'),
-  '/js/systems/ParticleSystem.js': fs.readFileSync('/tmp/before/ParticleSystem.js', 'utf8'),
+  '/js/entities/EnemyProjectile.js': before('entities/EnemyProjectile.js'),
+  '/js/entities/Projectile.js': before('entities/Projectile.js'),
+  '/js/systems/ParticleSystem.js': before('systems/ParticleSystem.js'),
 };
 
 const SCENARIOS = [
