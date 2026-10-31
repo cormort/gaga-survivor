@@ -27,8 +27,10 @@ export class Player {
     this.nextExp = GAME_CONFIG.BASE_EXP_REQUIREMENT;
     this.baseSpeed = 190;
 
-    // 基礎拾取範圍
-    this.basePickupRadius = 130;   // 90 → 130：原本得一直繞路去撿水晶，是操作上最持續的摩擦
+    // 基礎拾取範圍（吸取水晶的距離：玩家要走到這麼近，水晶才會飛過來）
+    // 130 → 80：130 的半徑太大，水晶還隔著半個畫面就自己飛來，走位幾乎沒意義。
+    // 80 讓「靠近才吸得到」重新變成操作的一部分，又沒回到最初 90 那種整場繞路撿水晶的摩擦。
+    this.basePickupRadius = 80;
 
     // 角色特質提供的基礎值 (被動重算時會回歸到這組數字，而非寫死的 1.0)
     this.baseSpeedMul = 1.0;
