@@ -3,6 +3,7 @@
 import {
   WEAPONS,
   PASSIVES,
+  evoPairNeed,
   GAME_CONFIG,
   SPECIAL_CARDS,
   ACHIEVEMENTS,
@@ -1536,7 +1537,7 @@ export class UIManager {
       };
       row.appendChild(cell('recipe-item', def.id, def.icon, def.name));
       row.appendChild(cell('recipe-plus', null, null, '＋'));
-      row.appendChild(cell('recipe-item recipe-pair', def.pairPassive, pairDef.icon, `${pairDef.name} LV${pairDef.maxLevel}`));
+      row.appendChild(cell('recipe-item recipe-pair', def.pairPassive, pairDef.icon, `${pairDef.name} LV${evoPairNeed(def.pairPassive)}`));
       row.appendChild(cell('recipe-equals', null, null, '＝'));
       row.appendChild(cell('recipe-item recipe-evo', evoDef.id, evoDef.icon, evoDef.name));
 
@@ -1999,11 +2000,12 @@ export class UIManager {
         const pItem = wm.passives.get(pid) || wm.weapons.get(pid);
         const pLv = pItem ? pItem.level : 0;
         const wOk = item.level >= def.maxLevel;
-        const pOk = pDef && pLv >= pDef.maxLevel;
+        const pNeed = evoPairNeed(pid);
+        const pOk = pDef && pLv >= pNeed;
         const evoD = WEAPONS[def.evoTarget];
         recipe = `<span class="pb-note">→ ${renderWeaponIconHtml(def.evoTarget, evoD.icon, evoD.name)} ${esc(evoD.name)}：`
           + `武器 ${wOk ? '✓' : `${item.level}/${def.maxLevel}`} · `
-          + `${pDef ? `${renderWeaponIconHtml(pid, pDef.icon, pDef.name)} ${esc(pDef.name)} ${pOk ? '✓' : `${pLv}/${pDef.maxLevel}`}` : '—'}`
+          + `${pDef ? `${renderWeaponIconHtml(pid, pDef.icon, pDef.name)} ${esc(pDef.name)} ${pOk ? '✓' : `${pLv}/${pNeed}`}` : '—'}`
           + `${wOk && pOk ? ' <b class="pb-ready">可合成</b>' : ''}</span>`;
       }
       return `<div class="pb-row"><span class="pb-name">${renderWeaponIconHtml(id, def.icon, def.name)} ${esc(def.name)}</span>`
@@ -2219,7 +2221,7 @@ export class UIManager {
   generateUpgradeOptions(weaponManager, excludeKeys = null, banished = null) {
     const candidates = [];
 
-    // ── 超武配方狀態 (VS 精神：武器滿級 + 對應配件也滿級才可合成) ──
+    // ── 超武配方狀態 (武器滿級 + 配件達到 evoPairNeed 的門檻才可合成；pair.maxed = 配件已達門檻) ──
     // pairInfo: 回傳該武器配方配件的持有/滿級狀態；缺件的配方記錄下來做提示
     const pairInfo = (baseId) => {
       const def = WEAPONS[baseId];
@@ -2228,7 +2230,7 @@ export class UIManager {
       const pItem = weaponManager.passives.get(pairId) || weaponManager.weapons.get(pairId);
       const pDef = PASSIVES[pairId] || WEAPONS[pairId];
       if (!pItem || !pDef) return { pairId, owned: false, maxed: false };
-      return { pairId, owned: true, maxed: pItem.level >= pDef.maxLevel };
+      return { pairId, owned: true, maxed: pItem.level >= evoPairNeed(pairId) };
     };
     const recipeHints = new Map(); // pairId -> { weaponName, evoName }：武器滿級但配件還沒滿級
 
@@ -2271,7 +2273,7 @@ export class UIManager {
         if (!recipeReady && !hint && def.evoTarget) {
           const pDef = PASSIVES[def.pairPassive] || WEAPONS[def.pairPassive];
           const pLv = pair && pair.owned ? (weaponManager.passives.get(def.pairPassive) || weaponManager.weapons.get(def.pairPassive)).level : 0;
-          if (pDef) desc += `<br>✨ 超武【${WEAPONS[def.evoTarget].name}】：武器差 ${def.maxLevel - item.level} 級 · ${pDef.icon}${pDef.name} ${pLv ? `LV ${pLv}/${pDef.maxLevel}` : '未持有'}`;
+          if (pDef) desc += `<br>✨ 超武【${WEAPONS[def.evoTarget].name}】：武器差 ${def.maxLevel - item.level} 級 · ${pDef.icon}${pDef.name} ${pLv ? `LV ${pLv}/${evoPairNeed(def.pairPassive)}` : '未持有'}`;
         }
         if (recipeReady) {
           desc = `提升至滿級！配方齊備，可合成【${WEAPONS[def.evoTarget].name}】`;
@@ -2376,7 +2378,7 @@ export class UIManager {
             name: def.name,
             icon: def.icon,
             description: hint
-              ? `${def.description}（缺件：取得並升滿即可合成【${hint.evoName}】）`
+              ? `${def.description}（缺件：取得並升到 LV ${evoPairNeed(id)} 即可合成【${hint.evoName}】）`
               : def.description + pairedWeaponNote(id, weaponManager),
             tag: hint ? '新被動 · 超武缺件' : '新被動',
             isNew: true,
@@ -2449,6 +2451,23 @@ export class UIManager {
         if (hintCard && slot >= 0) {
           result[slot] = hintCard;
         }
+      }
+    }
+
+    // 主力武器引導：已經升過級（LV ≥ 2）的最高等武器，在滿級之前它的升級卡保證在三選一內。
+    // 為什麼：卡池有四十幾種、每次只抽三張，光靠運氣很難把同一把武器連升四級 ——
+    // 量測下來「武器升不到滿級」才是進化達不到的主因，配件門檻是其次。
+    // 只在沒有進化卡、也沒有缺件引導時才介入，而且只佔一格，其餘兩張照常隨機。
+    if (recipeHints.size === 0 && !result.some((o) => o.isEvo)) {
+      let focusId = null, focusLv = 1;
+      for (const [id, item] of weaponManager.weapons.entries()) {
+        const def = WEAPONS[id];
+        if (!item.isEvo && def.evoTarget && item.level < def.maxLevel && item.level > focusLv) { focusId = id; focusLv = item.level; }
+      }
+      const isFocus = (o) => o.type === 'weapon_upgrade' && o.id === focusId;
+      if (focusId && !result.some(isFocus)) {
+        const card = candidates.find(isFocus);
+        if (card && result.length > 0) result[result.length - 1] = card;
       }
     }
     return result;

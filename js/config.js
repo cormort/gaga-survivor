@@ -1011,6 +1011,16 @@ export const PASSIVES = {
   },
 };
 
+// 超武配方的配件門檻：「配件」只要升到這一級就能合成（武器本身仍要滿級）。
+// 原本要求配件也滿級（5 級）—— 一局 8 分鐘只升 14~15 級，量測下來專衝進化的打法
+// 40 場只成功 8 場、而且都在第 5 分鐘之後，超武形同不存在。
+// 雙武合體（配方是另一把武器，例如相位風暴吃掉苦無）不放寬：那把武器會被消耗，仍要滿級。
+export const EVO_PAIR_LEVEL = 3;
+export function evoPairNeed(pairId) {
+  if (PASSIVES[pairId]) return Math.min(EVO_PAIR_LEVEL, PASSIVES[pairId].maxLevel);
+  return WEAPONS[pairId] ? WEAPONS[pairId].maxLevel : Infinity;
+}
+
 // ── 視覺特效參數中心 (Soulstone 風格批 2)：地面殘跡與未來特效共用 ──
 export const FX = {
   decalCap: 60,          // 地面殘跡上限 (血漬/焦痕)，超過丟最舊

@@ -131,7 +131,7 @@ const pause = await page.evaluate(() => {
 });
 ok('暫停開啟面板', pause.state === 'PAUSED' && pause.open, pause.state);
 ok('面板列出武器等級、超武配方進度（可合成／缺件）', /特工苦無/.test(pause.text) && /LV 5\/5/.test(pause.text)
-  && /幽靈手裏劍/.test(pause.text) && /強力卷軸 1\/5/.test(pause.text), pause.text.slice(0, 160));
+  && /幽靈手裏劍/.test(pause.text) && /強力卷軸 1\/3/.test(pause.text), pause.text.slice(0, 160));
 ok('面板列出總數值與封印／跳過剩餘次數', /傷害/.test(pause.text) && /暴擊率/.test(pause.text) && /冷卻/.test(pause.text)
   && /封印剩 3 次/.test(pause.text), '');
 ok('Esc 繼續、P 暫停、「繼續」按鈕關閉面板', pause.escState === 'PLAYING' && pause.escClosed && pause.pState === 'PAUSED'
