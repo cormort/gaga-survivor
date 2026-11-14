@@ -970,7 +970,16 @@ export class Enemy {
 
   // 灼燒／中毒光暈：整批一次畫完。原本每隻怪各自 save/translate/切 'lighter'/restore，
   // 250 隻怪就是 250 次合成模式切換；改成全場只切一次、直接用螢幕座標。
-  static drawStatusGlows(ctx, camera, enemies) {
+  //
+  // 分兩層畫（layer）：'under' 只畫光暈、在怪的本體「之前」呼叫；'over' 只畫火星／毒泡、
+  // 在本體之後呼叫。光暈原本整片加色蓋在怪身上，灼燒＋中毒或怪擠在一起時整隻被洗成
+  // 黃白色剪影，分不出是哪種怪；墊到腳下之後光暈變成地上的一圈光，本體顏色不受影響。
+  // 不給 layer 就兩層一起畫（舊行為，給工具用）。
+  static drawStatusGlows(ctx, camera, enemies, layer) {
+    const under = layer !== 'over', over = layer !== 'under';
+    // 墊在腳下時放大 UNDER_K 倍，才會從本體輪廓外露出一圈（否則整個被本體擋住，看不出狀態）。
+    // 不在本體上再疊一層染色：實測那會讓加色塗抹面積變 2.7 倍、最壞情境慢 20%。
+    const kMul = layer === 'under' ? 1.2 : 1;
     const W = VIEW.w, H = VIEW.h;
     let on = false;
     // 光暈是加色混合，成本在塗抹面積：中狀態的怪越多，光暈越小 (<=40 隻原尺寸，>=160 隻 0.55 倍)
@@ -985,20 +994,26 @@ export class Enemy {
       const r = e.radius;
       if (e.burnTimer > 0) {
         const f = e.animTimer * 6;
-        const glow = statusGlow('burn', r);
-        ctx.globalAlpha = 0.5 + Math.sin(f) * 0.15;
-        ctx.drawImage(glow.cv, sx - glow.rad * k, sy + r * 0.3 - glow.rad * k, glow.rad * 2 * k, glow.rad * 2 * k);
-        for (let i = 0; i < 3; i++) {
+        if (under) {
+          const glow = statusGlow('burn', r);
+          const kk = k * kMul;
+          ctx.globalAlpha = 0.5 + Math.sin(f) * 0.15;
+          ctx.drawImage(glow.cv, sx - glow.rad * kk, sy + r * 0.3 - glow.rad * kk, glow.rad * 2 * kk, glow.rad * 2 * kk);
+        }
+        if (over) for (let i = 0; i < 3; i++) {
           const p = ((f * 0.12 + i * 0.33) % 1);
           blitSpark(ctx, i, sx + Math.sin(f * 0.7 + i * 2.1) * r * 0.6,
             sy + r * 0.3 - p * r * 2, r * 0.14 * (1 - p * 0.5), (1 - p) * 0.9);
         }
       }
       if (e.poisonTimer > 0) {
-        const glow = statusGlow('poison', r);
-        ctx.globalAlpha = 0.2 + (e.poisonStacks / 5) * 0.3;
-        ctx.drawImage(glow.cv, sx - glow.rad * k, sy - glow.rad * k, glow.rad * 2 * k, glow.rad * 2 * k);
-        for (let i = 0; i < e.poisonStacks; i++) {
+        if (under) {
+          const glow = statusGlow('poison', r);
+          const kk = k * kMul;
+          ctx.globalAlpha = 0.2 + (e.poisonStacks / 5) * 0.3;
+          ctx.drawImage(glow.cv, sx - glow.rad * kk, sy - glow.rad * kk, glow.rad * 2 * kk, glow.rad * 2 * kk);
+        }
+        if (over) for (let i = 0; i < e.poisonStacks; i++) {
           const p = ((e.animTimer * 0.35 + i * 0.27) % 1);
           blitSpark(ctx, 3, sx + Math.sin(e.animTimer * 1.4 + i * 2.4) * r * 0.7,
             sy + r * 0.3 - p * r * 1.8, r * 0.11, (1 - p) * 0.85);

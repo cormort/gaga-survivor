@@ -4006,6 +4006,9 @@ class Game {
       if (t.eliteTier > 0 && this.td) drawTurretStars(this.ctx, renderCam, t);
     }
 
+    // 灼燒／中毒光暈墊在怪的腳下（火星與毒泡仍畫在本體之上，見下方）
+    Enemy.drawStatusGlows(this.ctx, renderCam, this.enemies, 'under');
+
     // 繪製怪物（守塔：未被揭露的潛行怪半透明；魔盾怪外面一圈藍色護盾，越薄越淡）
     for (const enemy of this.enemies) {
       const hidden = enemy.stealth && !enemy.revealed;
@@ -4021,7 +4024,7 @@ class Game {
         c.stroke();
       }
     }
-    Enemy.drawStatusGlows(this.ctx, renderCam, this.enemies);
+    Enemy.drawStatusGlows(this.ctx, renderCam, this.enemies, 'over');
     if (this.td) this.td.drawBadges(this.ctx, renderCam);   // 守塔：重甲標記
     this.drawSealChains(renderCam);
 
