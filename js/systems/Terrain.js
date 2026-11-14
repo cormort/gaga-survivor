@@ -644,9 +644,18 @@ function drawLandmarkArt(x, kind) {
       x.fillRect(-46, 20, 10, 72);
       x.fillRect(36, 20, 10, 72);
       x.fillRect(-52, 12, 104, 14);
+      // 亮著的那片：深色面板 + 霓虹外框 + 三條燈管。
+      // 原本是整片實心洋紅，俯視看起來像一塊還沒畫的佔位色塊。
+      x.fillStyle = '#2a1030';
+      x.fillRect(-48, -46, 44, 56);
+      x.strokeStyle = '#ff2d95';
       x.fillStyle = '#ff2d95';
       glow('#ff2d95');
-      x.fillRect(-48, -46, 44, 56);
+      x.lineWidth = 3;
+      x.strokeRect(-46.5, -44.5, 41, 53);
+      x.fillRect(-40, -34, 28, 5);
+      x.fillRect(-40, -21, 18, 5);
+      x.fillRect(-40, -8, 24, 5);
       x.shadowBlur = 0;
       x.fillStyle = 'rgba(120,140,170,0.35)';
       x.fillRect(6, -46, 44, 56);
