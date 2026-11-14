@@ -134,12 +134,23 @@ export class GroundRenderer {
     const theme = (this.level || LEVELS.street).theme;
     const gr = theme && theme.grade;
     if (!gr) return;
-    const g = ctx.createLinearGradient(0, 0, 0, this.vh);
-    g.addColorStop(0, `rgba(${gr.c1},${gr.a1})`);
-    g.addColorStop(0.55, `rgba(${gr.c1},${(gr.a1 * 0.4).toFixed(4)})`);
-    g.addColorStop(1, `rgba(${gr.c2},${gr.a2})`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, this.vw, this.vh);
+    // ponytail: 與暗角同一招 —— 漸層烘進離屏 canvas，每幀只做一次 drawImage
+    // （不必每幀建漸層物件、逐像素跑漸層著色器）
+    const w = Math.max(1, Math.round(this.vw)), h = Math.max(1, Math.round(this.vh));
+    if (!this._gradeCanvas || this._gradeCanvas.width !== w || this._gradeCanvas.height !== h || this._gradeKey !== gr) {
+      const oc = document.createElement('canvas');
+      oc.width = w; oc.height = h;
+      const octx = oc.getContext('2d');
+      const g = octx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, `rgba(${gr.c1},${gr.a1})`);
+      g.addColorStop(0.55, `rgba(${gr.c1},${(gr.a1 * 0.4).toFixed(4)})`);
+      g.addColorStop(1, `rgba(${gr.c2},${gr.a2})`);
+      octx.fillStyle = g;
+      octx.fillRect(0, 0, w, h);
+      this._gradeCanvas = oc;
+      this._gradeKey = gr;
+    }
+    ctx.drawImage(this._gradeCanvas, 0, 0, this.vw, this.vh);
   }
 
   // 把已經畫好的「地板＋裝飾＋地面殘跡」整體壓暗一階，之後才畫實體。
@@ -212,12 +223,14 @@ export class GroundRenderer {
       this._floorGradH = H;
       this._floorTheme = theme;
     }
-    ctx.fillStyle = this._floorGrad;
-    ctx.fillRect(0, 0, W, H);
-
     // Soulstone 風格地面質感層：汙漬色塊 + 每關專屬地表材質 (畫在網格之下)
     // 材質細節每關烘焙成一片世界錨定的無接縫紋理磚，逐幀只做 drawImage 拼貼
     const groundTex = this.getGroundTexture(this.level || LEVELS.street);
+    // 不透明的磚會蓋滿整個畫面，底色漸層畫了也看不到（省一次滿版填色）
+    if (!groundTex._opaque) {
+      ctx.fillStyle = this._floorGrad;
+      ctx.fillRect(0, 0, W, H);
+    }
     const gTile = groundTex.width;
     const gOx = -(((camera.x % gTile) + gTile) % gTile);
     const gOy = -(((camera.y % gTile) + gTile) % gTile);
@@ -405,8 +418,23 @@ export class GroundRenderer {
         tctx.restore();
       }
 
-      this._groundTextures.set(id, tile);
-      return tile;
+      // PNG 磚若整張不透明，底下那層螢幕鎖定的底色漸層完全被蓋住 —— 標記起來讓
+      // drawFloorGrid 跳過那次滿版 fillRect，並改存成不透明畫布（blit 不必逐像素混色）。
+      // 一次性掃描 alpha（烘焙時才跑）：PNG 檔頭有 alpha 通道不代表真的有透明像素。
+      const px = tctx.getImageData(0, 0, T, T).data;
+      let opaque = true;
+      // 門檻 250 而非 255：soft-light 疊色的進位會留下一批 alpha 254 的像素，
+      // 透出來的底色不到 0.4%（≤1/255 階），肉眼與驗證腳本都分不出來。
+      for (let i = 3; i < px.length; i += 4) if (px[i] < 250) { opaque = false; break; }
+      let out = tile;
+      if (opaque) {
+        out = document.createElement('canvas');
+        out.width = out.height = T;
+        out.getContext('2d', { alpha: false }).drawImage(tile, 0, 0);
+        out._opaque = true;
+      }
+      this._groundTextures.set(id, out);
+      return out;
     }
 
     // 世界錨定的接縫消除：先把細節畫在一片比成品大 2×PAD 的畫布上，
