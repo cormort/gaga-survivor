@@ -108,9 +108,16 @@ const out = await page.evaluate(async () => {
   ok('同款疊到自己那一格', p.pockets[1]?.count === 2 && p.pockets[0]?.count === 1, JSON.stringify(p.pockets));
   pick('LUCK_POTION'); pick('MAGIC_TICKET');
   ok('第 3、4 格接著放', p.pockets[2]?.id === 'luck_potion' && p.pockets[3]?.id === 'magic_ticket', JSON.stringify(p.pockets));
+  // 四格都被占滿：放不下的道具留在地上（不吸、不撿），放得下的（同款未疊滿）照常撿
   p.hp = p.maxHp * 0.5; const hpBefore = p.hp;
-  pick('ELIXIR');
-  ok('四格都被占滿時新道具即拾即用', p.hp === p.maxHp && hpBefore < p.maxHp && p.pockets.every((s) => s && s.id !== 'elixir'), `${hpBefore} → ${p.hp}`);
+  const full = new DropItem(p.x + 5, p.y, 'ELIXIR');
+  full.isAttracted = true;                                   // 磁鐵類效果吸過來的也要放下
+  for (let i = 0; i < 30; i++) full.update(1 / 60, p);
+  ok('四格都被占滿時放不下的道具留在地上', !full.collected && !full.isAttracted && p.hp === hpBefore
+    && p.pockets.every((s) => s && s.id !== 'elixir'), `collected=${full.collected} attracted=${full.isAttracted} hp ${hpBefore} → ${p.hp}`);
+  const fits = new DropItem(p.x + 5, p.y, 'POTION');         // 第 1 格是恢復藥水 ×1，還能疊
+  for (let i = 0; i < 30 && !fits.collected; i++) fits.update(1 / 60, p);
+  ok('口袋滿但同款還能疊的道具照常撿', fits.collected, `collected=${fits.collected}`);
   const n1 = p.pockets[1].count;
   playing();
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' }));

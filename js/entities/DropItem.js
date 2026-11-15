@@ -105,6 +105,15 @@ export class DropItem {
     const dy = player.y - this.y;
     const dist = Math.hypot(dx, dy);
 
+    // 口袋放不下的道具留在地上：不吸、不撿（磁鐵類效果吸過來的也放下），
+    // 等口袋有空位再撿。原本是撿到就當場用掉 —— 實測每局約 15 個道具在
+    // 不需要的時機被迫觸發（時停懷錶在血量 82% 時用掉）。沒人撿就照常逾時回收成金幣。
+    if (this.type === 'consumable' && player.canPocket && !player.canPocket(this.subType)) {
+      this.isAttracted = false;
+      this.flySpeed = 0;
+      return;
+    }
+
     // 進入拾取半徑觸發磁吸
     if (dist < player.pickupRadius) {
       this.isAttracted = true;

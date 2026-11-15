@@ -18,7 +18,7 @@ import {
   PASSIVES,
   PIERCE_ALL,
 } from './config.js';
-import { Player, MP_PER_KILL } from './entities/Player.js';
+import { Player, MP_PER_KILL, POCKET_STACK } from './entities/Player.js';
 import { updateSkills } from './systems/Skills.js';
 import { updateSwordFormation, drawSwordFormation, clearSwordFormation } from './systems/SwordFormation.js';
 import { updateSignatureFX, drawSignatureFX, clearSignatureFX } from './systems/SignatureFX.js';
@@ -162,7 +162,6 @@ const ELITE_HITSTOP_GAP = 0.5;
 // 局內待回收裝備的上限，超出的自動分解成金幣 (原本無上限，實測 23 分鐘累積數百件)
 const PENDING_GEAR_CAP = 40;
 
-const POCKET_STACK = 2; // 口袋每格同款道具的堆疊上限
 
 // 道具自動使用的觸發條件 (c = autoUseContext())。說明文字在 config.js 的 CONSUMABLE_ITEMS[].auto
 const AUTO_USE = {

@@ -9,6 +9,8 @@ const MP_REGEN = 8;        // 靈力每秒回復
 const MP_DASH_COST = 50;   // 御劍遁消耗
 export const MP_PER_KILL = 1;
 
+export const POCKET_STACK = 2; // 口袋每格同款道具的堆疊上限
+
 export class Player {
   constructor(x = 0, y = 0, characterId = 'duck') {
     this.character = CHARACTERS[characterId] || CHARACTERS.duck;
@@ -407,6 +409,11 @@ export class Player {
     this.hp = 0;
     this.isDead = true;
     return true;
+  }
+
+  // 這個道具撿得進口袋嗎：有同款且還沒疊滿，或還有空格
+  canPocket(id) {
+    return this.pockets.some((s) => !s || (s.id === id && s.count < POCKET_STACK));
   }
 
   heal(amount) {
