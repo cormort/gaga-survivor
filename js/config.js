@@ -283,7 +283,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'soccer',
-    baseDamage: 70,  // 射程定位校準（原 70）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 58）                // 命中裂變 + 敵間彈射，命中數遠多於舊版飛出畫面的球
+    baseDamage: 140,  // 射程定位校準（原 70）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 58）                // 命中裂變 + 敵間彈射，命中數遠多於舊版飛出畫面的球
     baseCooldown: 2.2,
     speed: 700,
     bounces: 10,                   // 爆發段數（命中時一次爆發的段數）
@@ -354,7 +354,7 @@ export const WEAPONS = {
     evoTarget: null,
     maxLevel: 5,
     evoGrowth: 0.25,             // 覺醒：每級傷害 +25%（見 WeaponManager 的傷害計算）
-    baseDamage: 114,  // 射程定位校準（原 114）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 94）
+    baseDamage: 205,  // 射程定位校準（原 114）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 94）
     baseCooldown: 0.62,
     speed: 610,
     projType: 'boomerang',
@@ -444,7 +444,7 @@ export const WEAPONS = {
     maxLevel: 5,
     evoGrowth: 0.25,   // 覺醒：每級傷害 +25%（超武進化後仍可升級）
     baseWeapon: 'phase_blade',
-    baseDamage: 69,  // 射程定位校準（原 69）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 58）
+    baseDamage: 170,  // 射程定位校準（原 69）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 58）
     baseCooldown: 0.3,             // 裂隙射出 + 相位跳躍，命中率高，射速相應放慢
     speed: 720,
     projectiles: 1,
