@@ -3231,7 +3231,7 @@ class Game {
 
       if (Math.random() < 0.22) {
         this.dropItems.push(new DropItem(enemy.x + 18, enemy.y, 'CHEST'));
-      } else if (Math.random() < 0.35) {
+      } else if (Math.random() < 0.17) {   // 原 0.35：道具太多，v125 減半（見 Hazards.js dropCrateLoot）
         const cKeys = ['POTION', 'ATK_POTION', 'SHIELD_POTION', 'LUCK_POTION', 'STOPWATCH', 'HOLY_WATER', 'MANNA_PRISM', 'MAGIC_TICKET', 'ELIXIR'];
         const pick = cKeys[Math.floor(Math.random() * cKeys.length)];
         this.dropItems.push(new DropItem(enemy.x + 18, enemy.y, pick));
@@ -4499,7 +4499,9 @@ class Game {
 
   // 小地圖圖例：目前小地圖上出現的地形／事件逐項列在小地圖左側（由下往上）
   _drawMinimapLegend(legend, ox, oy, size) {
-    if (!legend.size) return;
+    // 窄螢幕（手機直向，與小地圖縮小同一個門檻）不畫：圖例最多六行、貼在小地圖左邊，
+    // 在 390 寬的畫面上會蓋掉右下角一大塊戰場；小地圖上的色點本身仍然看得到。
+    if (!legend.size || this.vw < 620) return;
     const ctx = this.ctx;
     const small = size < 120;
     const lh = small ? 13 : 15;

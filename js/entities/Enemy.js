@@ -27,6 +27,9 @@ const SPARKS = SPARK_COLORS.map((color) => {
   return cv;
 });
 
+// 雜兵被打之後小血條顯示幾秒（精英常駐、Boss 用頂部 HUD）
+const HP_BAR_SHOW = 1.5;
+
 // 敵人小血條的預烘條圖。
 //
 // 為什麼要烘：小血條是「每隻受傷的怪、每幀」畫一次，滿場 250 隻時就是每幀
@@ -194,6 +197,7 @@ export class Enemy {
 
     // 動畫與受傷閃白
     this.flashTimer = 0;
+    this.hpBarTimer = 0;   // 最近被打的秒數倒數：雜兵的小血條只在這段時間顯示（見 showHpBar）
     this.animTimer = Math.random() * 10;
     this.fuseTimer = 0; // 自爆倒數
     this.slowTimer = 0; // 極寒脈衝減速剩餘秒數 (遊戲時間倒數)
@@ -305,6 +309,7 @@ export class Enemy {
 
     this.animTimer += dt * this.animSpeed;   // 走動畫節奏逐種不同，不再全體同步
     if (this.flashTimer > 0) this.flashTimer -= dt;
+    if (this.hpBarTimer > 0) this.hpBarTimer -= dt;
 
     // 計算朝向目標的向量 (用 sqrt 而非 Math.hypot：hypot 的溢位保護很貴，
     // 而這是每隻每幀都跑的最熱路徑)
@@ -921,6 +926,7 @@ export class Enemy {
     // 減傷；至少造成 1 點，避免高血量時永遠打不動
     const applied = Math.max(1, Math.round(amount * mul));
     this.hp -= applied;
+    this.hpBarTimer = HP_BAR_SHOW;
     this.lastDamageTaken = applied;
     this.flashTimer = 0.08; // 閃白效果
 
@@ -964,6 +970,12 @@ export class Enemy {
 
   // 畫面上的實際半徑：守塔把怪物放大（tdDrawScale）之後，血條與詞綴文字要跟著往上搬，
   // 否則會壓在放大的頭上。戰鬥判定一律仍用 this.radius。
+  // 原本「非滿血就顯示」：怪群被範圍武器掃過一輪之後，每隻頭上都是一條紅槓，
+  // 血條本身變成畫面上最大的雜訊（v125 截圖：冰原第 6 分鐘右側整片紅槓）。
+  get showHpBar() {
+    return !this.isBoss && this.hp < this.maxHp && (this.isElite || this.hpBarTimer > 0);
+  }
+
   get drawRadius() {
     return this.radius * (this.tdDrawScale || 1);
   }
@@ -1130,8 +1142,8 @@ export class Enemy {
     // 撲擊 (lunge) 的扇形預警已移除以節省繪製成本；預警期間的減速仍保留作為提示
     if (this.windupKind && this.windupKind !== 'lunge') this.drawWindup(ctx, screenX, screenY);
 
-    // 非滿血且非 Boss 時顯示小血條 (Boss 有頂部專屬 HUD)
-    if (!this.isBoss && this.hp < this.maxHp) {
+    // 小血條：Boss 有頂部專屬 HUD 不畫；精英受傷就常駐；雜兵只在最近被打的 HP_BAR_SHOW 秒內顯示
+    if (this.showHpBar) {
       ctx.save();
       ctx.translate(screenX, screenY);
       this.drawMiniHpBar(ctx);
@@ -1229,7 +1241,7 @@ export class Enemy {
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        const ty = -this.drawRadius - (this.hp < this.maxHp ? 18 : 10);
+        const ty = -this.drawRadius - (this.showHpBar ? 18 : 10);
         ctx.fillText(this.affixName, 0, ty + 1);
         ctx.fillStyle = this.eliteColor;
         ctx.fillText(this.affixName, 0, ty);

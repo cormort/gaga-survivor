@@ -310,8 +310,9 @@ export function dropCrateLoot(game, x, y, kind = 'crate') {
   // 8% 機率額外開出戰略解除封鎖券（不佔下方常規掉落）
   if (Math.random() < 0.08) game.dropItems.push(new DropItem(x - 12, y - 8, 'UNBAN_TICKET'));
   const r = Math.random();
-  // 55% 掉落惡魔城式戰術消費道具、25% 金幣、10% 烤雞回血、10% 紫色經驗
-  if (r < 0.55) {
+  // 28% 掉落惡魔城式戰術消費道具、52% 金幣、10% 烤雞回血、10% 紫色經驗
+  // （道具原本 55%：連同精英掉落，每局會撿到 30~40 個，多到失去「關鍵時刻」的意義，v125 減半）
+  if (r < 0.28) {
     const keys = ['POTION', 'ATK_POTION', 'SHIELD_POTION', 'LUCK_POTION', 'STOPWATCH', 'HOLY_WATER', 'MANNA_PRISM', 'MAGIC_TICKET', 'ELIXIR'];
     const weights = [22, 16, 16, 14, 10, 8, 7, 7, 3];
     const sum = weights.reduce((a, b) => a + b, 0);
