@@ -98,7 +98,7 @@ export const WEAPONS = {
     evoTarget: 'shark_torpedo',
     pairPassive: 'magnet',        // 爆炸清場 → 自動吸寶 (原 range_fuel)
     maxLevel: 5,
-    baseDamage: 44,  // 射程定位校準（原 44）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準到位
+    baseDamage: 30,  // 射程定位校準（原 44）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準到位
     baseCooldown: 2.5,
     cooldownGrowth: -0.3,
     speed: 380,
@@ -120,7 +120,7 @@ export const WEAPONS = {
     evoTarget: 'napalm_sea',
     pairPassive: 'range_fuel',    // 火海範圍加大 (原 speed_shoes)
     maxLevel: 5,
-    baseDamage: 5,  // 射程定位校準（原 10）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 8） // 每跳傷害
+    baseDamage: 3.5,  // 射程定位校準（原 10）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 8） // 每跳傷害
     baseCooldown: 3.4,
     cooldownGrowth: -0.2,          // 升級加快投擲 (3.4 → 2.6 秒)
     duration: 3.8,
@@ -157,7 +157,7 @@ export const WEAPONS = {
     evoTarget: 'quantum_sphere',
     pairPassive: 'speed_shoes',   // 走位控球/追球 (原 max_hp_vest)
     maxLevel: 5,
-    baseDamage: 33,  // 射程定位校準（原 33）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 28）
+    baseDamage: 46,  // 射程定位校準（原 33）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 28）
     baseCooldown: 3.2,
     cooldownGrowth: -0.35,         // 升級加快出球 (3.2 → 1.8 秒)
     speed: 520,
@@ -310,7 +310,7 @@ export const WEAPONS = {
     evoTarget: 'twin_storm',
     pairPassive: 'guardian',     // 雙武合成：迴力鏢 + 守護輪盤 → 雙刃風暴
     maxLevel: 5,
-    baseDamage: 31,  // 射程定位校準（原 31）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 26）
+    baseDamage: 45,  // 射程定位校準（原 31）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 26）
     baseCooldown: 1.15,
     cooldownGrowth: -0.1,
     speed: 520,
@@ -510,7 +510,7 @@ export const WEAPONS = {
     evoTarget: 'dragon_breath',
     pairPassive: 'max_hp_vest',    // 近戰距離武器 ↔ 生存配件
     maxLevel: 5,
-    baseDamage: 21,  // 射程定位校準（原 21）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 17）                // 單顆彈丸（升級不加傷害，超武才提高攻擊力）；
+    baseDamage: 36,  // 射程定位校準（原 21）：淨效果 = 宣告射程的 tier^0.25  // 射程定位校準（原 17）                // 單顆彈丸（升級不加傷害，超武才提高攻擊力）；
                                    // 實際傷害 = 這個值 × rangeDamageMul（見下方反比規則）。
                                    // 13 → 17：單發換彈讓每分鐘擊發次數掉到約 1/3，
                                    // 拉高單顆威力才不會讓「改成單發」變成純粹的削弱
