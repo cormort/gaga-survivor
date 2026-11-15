@@ -890,7 +890,7 @@ class Game {
           const d = Math.hypot(e.x - this.player.x, e.y - this.player.y);
           if (d <= 240 + e.radius) {
             e.takeDamage(dmg, 12, this.player.x, this.player.y);
-            this.particles.createDamageText(e.x, e.y, dmg, true);
+            this.particles.createEnemyDamageText(e, dmg, true);
           }
         }
         this.ui.say('🍶 聖水淨化：惡靈全數退散！', '#b3ecff', 2.5);
@@ -1468,7 +1468,7 @@ class Game {
     if (enemy.lastElementRelation === 'effective') {
       this._elementCounterHits = (this._elementCounterHits || 0) + 1;
     }
-    this.particles.createDamageText(enemy.x, enemy.y, applied, false, false, enemy.lastElementRelation);
+    this.particles.createEnemyDamageText(enemy, applied, false, false, enemy.lastElementRelation);
   }
 
   onBossSpawned(boss) {
@@ -1770,7 +1770,7 @@ class Game {
       const d = Math.hypot(other.x - boomer.x, other.y - boomer.y);
       if (d <= friendlyFireRadius + other.radius) {
         other.takeDamage(friendlyFireDmg, 16, boomer.x, boomer.y, elem);
-        this.particles.createDamageText(other.x, other.y, Math.round(friendlyFireDmg), true, false, 'effective');
+        this.particles.createEnemyDamageText(other, Math.round(friendlyFireDmg), true, false, 'effective');
         // 波及其他自爆蟲引發殉爆
         if (other.explodes && !other._exploded) {
           other.fuseTimer = Math.max(other.fuseTimer, other.fuseMax * 0.9);
@@ -2770,11 +2770,11 @@ class Game {
           this._elementCounterHits = (this._elementCounterHits || 0) + 1;
         }
         if (!poolTick) {
-          this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
+          this.particles.createEnemyDamageText(enemy, actualDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
         } else {
           enemy._poolDmg = (enemy._poolDmg || 0) + actualDmg;
           if (died || !(this.gameTime - enemy._poolDmgAt < 1)) {
-            this.particles.createDamageText(enemy.x, enemy.y, enemy._poolDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
+            this.particles.createEnemyDamageText(enemy, enemy._poolDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
             enemy._poolDmg = 0;
             enemy._poolDmgAt = this.gameTime;
           }
@@ -2840,7 +2840,7 @@ class Game {
               if (ndx * ndx + ndy * ndy <= (p.explosionRadius + nearE.radius) ** 2) {
                 nearE.takeDamage(splashDmg, 8, p.x, p.y);
                 this.weaponManager.recordDamage(p.weaponId, splashDmg);
-                this.particles.createDamageText(nearE.x, nearE.y, splashDmg, false);
+                this.particles.createEnemyDamageText(nearE, splashDmg, false);
               }
             }
           });
@@ -2913,7 +2913,7 @@ class Game {
     if (bonus > 0 && !enemy.isDead) {
       enemy.takeDamage(bonus, p.knockback, p.x, p.y, atkElem);
       this.weaponManager.recordDamage(p.weaponId, bonus);
-      this.particles.createDamageText(enemy.x, enemy.y, bonus, true, p.isCrit, enemy.lastElementRelation);
+      this.particles.createEnemyDamageText(enemy, bonus, true, p.isCrit, enemy.lastElementRelation);
     }
     p.soccerPaid = Math.min(1, paid + share);
     p.soccerHits = (p.soccerHits || 0) + 1;
@@ -2944,7 +2944,7 @@ class Game {
         if (ndx * ndx + ndy * ndy <= (p.implosionRadius + nearE.radius) ** 2) {
           nearE.takeDamage(p.implosionDamage, 8, p.x, p.y);
           this.weaponManager.recordDamage(p.weaponId, nearE.lastDamageTaken || p.implosionDamage);
-          this.particles.createDamageText(nearE.x, nearE.y, nearE.lastDamageTaken || p.implosionDamage, true, true);
+          this.particles.createEnemyDamageText(nearE, nearE.lastDamageTaken || p.implosionDamage, true, true);
         }
       });
     }
@@ -3149,7 +3149,7 @@ class Game {
       this.particles.createArc(from.x, from.y, next.x, next.y, color);
       next.takeDamage(dmg, 1, from.x, from.y);
       this.weaponManager.recordDamage(weaponId, dmg);
-      this.particles.createDamageText(next.x, next.y, dmg, true);
+      this.particles.createEnemyDamageText(next, dmg, true);
       hit.add(next);
       from = next;
     }

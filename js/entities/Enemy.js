@@ -1022,7 +1022,9 @@ export class Enemy {
         if (under) {
           const glow = statusGlow('poison', r);
           const kk = k * kMul;
-          ctx.globalAlpha = 0.2 + (e.poisonStacks / 5) * 0.3;
+          // 光暈墊在腳下之後（v119）不會再洗白本體，可以亮一點：原本 1 層只有 0.26，
+          // 綠色的怪（喪屍步兵）身上幾乎看不出中毒（v126：1 層 0.42、5 層 0.7）
+          ctx.globalAlpha = 0.35 + (e.poisonStacks / 5) * 0.35;
           ctx.drawImage(glow.cv, sx - glow.rad * kk, sy - glow.rad * kk, glow.rad * 2 * kk, glow.rad * 2 * kk);
         }
         if (over) for (let i = 0; i < e.poisonStacks; i++) {

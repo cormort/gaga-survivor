@@ -4,6 +4,8 @@
 // 跳字用「丟最舊保留最新」；粒子用「容量不足就少生幾顆」。
 export const MAX_PARTICLES = 900;
 const MAX_DAMAGE_TEXTS = 110;
+// 同一隻怪在這段秒數內的多次命中合併成一個數字（見 createEnemyDamageText）
+const DAMAGE_TEXT_MERGE = 0.15;
 const MAX_LIGHTNINGS = 12;
 
 // 跳字字型是固定的三種，原本每幀重新建一個 fonts 陣列 + 三個字串常值；
@@ -115,10 +117,11 @@ export class ParticleSystem {
       suffix = '▼';
     }
 
-    this._pushDamageText({
+    return this._pushDamageText({
       x: x + (Math.random() * 16 - 8),
       y: y - 10 + (Math.random() * 10 - 5),
       text: displayText,
+      value: typeof text === 'number' ? text : null,
       isCrit: isCrit || isEffective,
       life: 0.65,
       maxLife: 0.65,
@@ -129,16 +132,37 @@ export class ParticleSystem {
     });
   }
 
-  // 把新跳字放進環狀緩衝：未滿就 append，滿了就覆寫最舊槽位 (O(1))
+  // 打在敵人身上的跳字：同一隻怪在 DAMAGE_TEXT_MERGE 秒內、同一種字級（普通／暴擊／真暴擊）
+  // 的命中加總成一個數字。多發彈丸、連鎖與濺射同時打到同一隻時，原本會在同一點疊出
+  // 「94! 94! 94!」一整團，讀不出任何一個數字。
+  createEnemyDamageText(enemy, value, isCrit = false, isRealCrit = false, relation = 'neutral') {
+    const bucket = isRealCrit ? 2 : (isCrit || relation === 'effective') ? 1 : 0;
+    const prev = enemy._dmgText;
+    if (typeof value === 'number' && prev && prev.value != null && prev.bucket === bucket
+      && prev.life > prev.maxLife - DAMAGE_TEXT_MERGE
+      && this.damageTexts[prev._slot] === prev) {   // 槽位還沒被新跳字覆寫
+      prev.value += value;
+      prev.text = String(Math.round(prev.value));
+      return prev;
+    }
+    const t = this.createDamageText(enemy.x, enemy.y, value, isCrit, isRealCrit, relation);
+    if (t) enemy._dmgText = t;
+    return t;
+  }
+
+  // 把新跳字放進環狀緩衝：未滿就 append，滿了就覆寫最舊槽位 (O(1))；回傳該物件
   _pushDamageText(obj) {
     const texts = this.damageTexts;
     if (this._dtCount < MAX_DAMAGE_TEXTS) {
+      obj._slot = texts.length;
       texts.push(obj);
       this._dtCount++;
-      return;
+      return obj;
     }
+    obj._slot = this._dtHead;
     texts[this._dtHead] = obj;
     this._dtHead = (this._dtHead + 1) % MAX_DAMAGE_TEXTS;
+    return obj;
   }
 
   // 玩家受傷的跳字：負號 + 紅字，跟自己打出的暴擊 (大紅字加驚嘆號) 區分開。

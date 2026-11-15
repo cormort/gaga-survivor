@@ -127,6 +127,7 @@ export class GroundRenderer {
   // 快取本身已經有容量上限，不清也不會無限成長。
   clearTextureCache() {
     this._groundTextures.clear();
+    this._bigTile = null;
   }
 
   drawColorGrade(ctx, vw, vh, level) {
@@ -237,9 +238,27 @@ export class GroundRenderer {
     // 磚 1024 已大於手機螢幕、在 1280×720 桌面上也只重複 1.25×0.7 次，肉眼幾乎
     // 找不到週期，因此不做逐磚鏡射 —— 鏡射雖然同樣可平鋪，但會在磚界製造
     // 「同一塊汙漬左右對稱」的假影，對有明顯特徵的材質反而更假。
+    // 高 DPR（手機）時磚是 1024 世界單位、畫布卻是 2048 實際像素：每幀放大取樣整面地板。
+    // 預先放大一張 1:1 的版本，實測 390×844@2 每幀繪製 11.6 → 9.7ms。
+    // ponytail: 只保留「目前這一關」一張（約 16MB），不進 LevelCache，換關或縮放改變才重建；
+    // 桌機縮放 1 倍沒有效益，不做。
+    const k = ctx.getTransform().a;
+    let tex = groundTex;
+    if (k > 1.01 && groundTex._opaque) {
+      const big = this._bigTile;
+      if (!big || big.src !== groundTex || big.k !== k) {
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = Math.round(gTile * k);
+        const bx = cv.getContext('2d', { alpha: false });
+        bx.drawImage(groundTex, 0, 0, cv.width, cv.height);
+        this._bigTile = { cv, src: groundTex, k };
+      }
+      tex = this._bigTile.cv;
+    }
     for (let gy = gOy; gy < H; gy += gTile) {
       for (let gx = gOx; gx < W; gx += gTile) {
-        ctx.drawImage(groundTex, gx, gy);
+        if (tex === groundTex) ctx.drawImage(groundTex, gx, gy);
+        else ctx.drawImage(tex, gx, gy, gTile, gTile);
       }
     }
 
