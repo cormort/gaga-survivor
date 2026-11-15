@@ -410,6 +410,10 @@ const results = await page.evaluate(async () => {
       g.enemies.length = 0;
       g.enemyProjectiles.length = 0;
       g.dropItems.length = 0;
+      // 開局會在隨機位置擺木箱與油桶，投射物撞到就被消耗：剛好擺在彈道上時，
+      // C9b（迴力鏢回程命中）會間歇失敗（實測約 1/20）。量武器時把它們清掉。
+      g.destructibles.length = 0;
+      g.explodableProps.length = 0;
       g.pendingLevelUps = 0;
       g.state = 'PLAYING';
       const W = g.weaponManager;
