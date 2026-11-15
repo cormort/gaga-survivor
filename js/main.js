@@ -2758,13 +2758,28 @@ class Game {
         if (p.markOnHit) enemy.applyMark(p.markDur, p.markBonus);
         if (p.shred) enemy.applyMark(p.shred.dur, p.shred.bonus);   // 爆彈槍破甲：沿用印記的「受傷 +X%」
         const atkElem = p.element || (p.weaponId && WEAPONS[p.weaponId]?.element) || 'physical';
+        // 火海每 0.25 秒對範圍內每隻怪跳一次傷害：每跳都閃白、都跳字的話，站在火裡的怪
+        // 會一直是白色剪影，畫面疊滿「40 40 40」。火海的每跳比照灼燒／中毒不閃白，
+        // 跳字則把同一隻怪一秒內的傷害加總成一個數字（死掉時把剩下的一起跳出來）。
+        const poolTick = p.type === 'fire_pool';
+        const flashBefore = enemy.flashTimer;
         const died = enemy.takeDamage(actualDmg, p.knockback, p.x, p.y, atkElem);
+        if (poolTick) enemy.flashTimer = flashBefore;
         if (died && p.mercOwner) p.mercOwner.gainKill(enemy); // 傭兵擊殺 → 全額經驗
         this.weaponManager.recordDamage(p.weaponId, actualDmg);
         if (enemy.lastElementRelation === 'effective') {
           this._elementCounterHits = (this._elementCounterHits || 0) + 1;
         }
-        this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
+        if (!poolTick) {
+          this.particles.createDamageText(enemy.x, enemy.y, actualDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
+        } else {
+          enemy._poolDmg = (enemy._poolDmg || 0) + actualDmg;
+          if (died || !(this.gameTime - enemy._poolDmgAt < 1)) {
+            this.particles.createDamageText(enemy.x, enemy.y, enemy._poolDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
+            enemy._poolDmg = 0;
+            enemy._poolDmgAt = this.gameTime;
+          }
+        }
         sound.playHit(enemy.x);
 
         // 塔納托斯（足球型態）：舊版是「每顆球每次命中傷害 +bounceDmgGrowth，第
