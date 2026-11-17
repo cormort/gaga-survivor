@@ -4304,3 +4304,16 @@ body:has(#start-screen.hidden):not(:has(.overlay:not(.hidden))) .pwa-banner { di
 @media (max-width: 619px) and (orientation: portrait) {
   .skill-bar { bottom: calc(118px + env(safe-area-inset-bottom)); }
 }
+
+/* 6. 首領登場過場期間暫時隱藏局內 HUD 與觸控按鍵，避免遮擋電影分鏡與對白 */
+body.boss-cutscene-active #hud,
+body.boss-cutscene-active #skill-bar,
+body.boss-cutscene-active #action-bar,
+body.boss-cutscene-active #joystick-zone,
+body.boss-cutscene-active #dialogue-bubble,
+body.boss-cutscene-active #td-build-menu,
+body.boss-cutscene-active #td-kingdom-panel {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.14s ease;
+}

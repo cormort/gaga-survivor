@@ -810,6 +810,75 @@ function drawComicStamp(ctx, text, x, y, angle = -0.14, color = '#d90429') {
   ctx.restore();
 }
 
+// ── 過場動畫工具函式 (Easing / Silhouette Cache / Text Wrap) ─────────────
+const _silhouetteCache = new Map();
+
+function clamp01(v) {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function easeOutCubic(t) {
+  const p = clamp01(t);
+  return 1 - Math.pow(1 - p, 3);
+}
+
+function easeOutExpo(t) {
+  const p = clamp01(t);
+  return p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+}
+
+function easeOutBack(t) {
+  const p = clamp01(t);
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
+}
+
+function getBossSilhouette(bossKey, frame) {
+  if (!frame || !frame.width || !frame.height) return null;
+  const cached = _silhouetteCache.get(bossKey);
+  if (cached) return cached;
+
+  const c = document.createElement('canvas');
+  c.width = frame.width;
+  c.height = frame.height;
+  const x = c.getContext('2d');
+  x.drawImage(frame, 0, 0);
+  x.globalCompositeOperation = 'source-in';
+  x.fillStyle = '#060913';
+  x.fillRect(0, 0, c.width, c.height);
+
+  if (_silhouetteCache.size >= 24) {
+    const firstKey = _silhouetteCache.keys().next().value;
+    _silhouetteCache.delete(firstKey);
+  }
+  _silhouetteCache.set(bossKey, c);
+  return c;
+}
+
+function wrapDialogueLines(ctx, text, maxWidth) {
+  if (!text) return [];
+  const lines = [];
+  let current = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\n') {
+      lines.push(current);
+      current = '';
+      continue;
+    }
+    const next = current + ch;
+    if (ctx.measureText(next).width > maxWidth && current.length > 0) {
+      lines.push(current);
+      current = ch;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 export class BossCutscene {
   constructor(game) {
     this.game = game;
@@ -826,7 +895,12 @@ export class BossCutscene {
     this.lastBleepChar = 0;
     this.flash = 0;
     this.barsOffset = 1;
+    this.shake = 0;
+    this.particles = [];
+    this.shockwaves = [];
+    this._phase1Slam = false;
     this._phase2Stab = false;
+    this._phase3Burst = false;
   }
 
   start(boss, level) {
@@ -839,9 +913,18 @@ export class BossCutscene {
     this.phase = 0;
     this.typedChars = 0;
     this.lastBleepChar = 0;
-    this.flash = 0.4;
+    this.flash = 0.42;
     this.barsOffset = 1;
+    this.shake = 10;
+    this.particles = [];
+    this.shockwaves = [];
+    this._phase1Slam = false;
     this._phase2Stab = false;
+    this._phase3Burst = false;
+
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.classList.add('boss-cutscene-active');
+    }
 
     // 播放登場過場音效
     sound.playBossCinematicSting();
@@ -854,45 +937,115 @@ export class BossCutscene {
 
   finish() {
     this.active = false;
+    this.particles = [];
+    this.shockwaves = [];
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.classList.remove('boss-cutscene-active');
+    }
     sound.playSwordSlash();
     if (this.game && this.game.camera) {
       this.game.camera.shake = 18;
     }
   }
 
+  _spawnBurst(count, speedMin, speedMax, colors, horizontalBias = 0) {
+    for (let i = 0; i < count; i++) {
+      const ang = horizontalBias
+        ? (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.45
+        : Math.random() * Math.PI * 2;
+      const spd = speedMin + Math.random() * (speedMax - speedMin);
+      this.particles.push({
+        nx: 0.5,
+        ny: 0.5,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        size: 2.5 + Math.random() * 5,
+        life: 0,
+        maxLife: 0.35 + Math.random() * 0.45,
+        color: colors[i % colors.length],
+      });
+    }
+  }
+
   update(dt) {
     if (!this.active) return;
+
+    const safeDt = Math.min(Math.max(dt || 0.016, 0.001), 0.05);
 
     // 以真即時時間計算 (避免後台或低幀率造成動畫停滯)
     const now = performance.now() / 1000;
     this.timer = now - this.startTime;
 
-    // 閃光快速衰減
+    // 閃光與震動快速衰減
     if (this.flash > 0) {
-      this.flash = Math.max(0, this.flash - dt * 10.0);
+      this.flash = Math.max(0, this.flash - safeDt * 8.5);
+    }
+    if (this.shake > 0) {
+      this.shake = Math.max(0, this.shake - safeDt * 42);
     }
 
-    // 電影黑邊平滑閉合 (前 0.25 秒到位)
-    if (this.timer < 0.25) {
-      const p = this.timer / 0.25;
-      this.barsOffset = 1 - Math.sin(p * Math.PI / 2);
+    // 更新過場粒子與衝擊波
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const pt = this.particles[i];
+      pt.life += safeDt;
+      if (pt.life >= pt.maxLife) {
+        this.particles.splice(i, 1);
+      } else {
+        pt.nx += pt.vx * safeDt;
+        pt.ny += pt.vy * safeDt;
+        pt.vx *= 0.94;
+        pt.vy *= 0.94;
+      }
+    }
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const sw = this.shockwaves[i];
+      sw.life += safeDt;
+      if (sw.life >= sw.maxLife) {
+        this.shockwaves.splice(i, 1);
+      }
+    }
+
+    // 電影黑邊平滑閉合 (前 0.22 秒到位) + 結束前 0.16 秒平滑收起
+    const exitStart = this.duration - 0.16;
+    if (this.timer < 0.22) {
+      this.barsOffset = 1 - easeOutCubic(this.timer / 0.22);
+    } else if (this.timer > exitStart) {
+      this.barsOffset = easeOutCubic((this.timer - exitStart) / 0.16);
     } else {
       this.barsOffset = 0;
     }
 
-    // 階段判定與過渡音效
+    // 階段判定與過渡音效/衝擊
+    const p = this.profile;
     if (this.timer < 0.35) {
       this.phase = 0;
+      if (!this._phase1Slam && this.timer >= 0.16) {
+        this._phase1Slam = true;
+        this.shake = 12;
+      }
     } else if (this.timer < 1.3) {
       this.phase = 1;
     } else if (this.timer < 2.3) {
       if (!this._phase2Stab) {
         this._phase2Stab = true;
         sound.playSwordSlash();
-        this.flash = 0.35;
+        this.flash = 0.36;
+        this.shake = 15;
+        this._spawnBurst(22, 0.9, 2.4, ['#ffffff', '#ffd60a', p.eyeColor || '#ff0038'], true);
       }
       this.phase = 2;
     } else {
+      if (!this._phase3Burst) {
+        this._phase3Burst = true;
+        sound.playSwordSlash();
+        this.flash = 0.42;
+        this.shake = 22;
+        this.shockwaves.push(
+          { life: 0, maxLife: 0.55, color: p.themeColor, width: 6 },
+          { life: 0, maxLife: 0.4, color: '#ffffff', width: 3 },
+        );
+        this._spawnBurst(36, 0.45, 1.6, ['#ffd60a', '#ffffff', p.themeColor, p.accentColor || '#ffffff'], false);
+      }
       this.phase = 3;
     }
 
@@ -900,7 +1053,7 @@ export class BossCutscene {
     if (this.phase === 3) {
       const quote = this.profile.quote || '';
       const typeTime = this.timer - 2.3;
-      const targetChars = Math.min(quote.length, Math.floor(typeTime * 24)); // 每秒 24 字
+      const targetChars = Math.min(quote.length, Math.floor(typeTime * 26)); // 每秒 26 字
       if (targetChars > this.typedChars) {
         this.typedChars = targetChars;
         if (this.typedChars > this.lastBleepChar) {
@@ -923,8 +1076,8 @@ export class BossCutscene {
     ctx.save();
 
     // 1. 寬螢幕劇院黑邊高度
-    const topBarHeight = Math.max(52, vh * 0.14);
-    const bottomBarHeight = Math.max(120, vh * 0.28);
+    const topBarHeight = Math.max(48, Math.min(72, vh * 0.11));
+    const bottomBarHeight = Math.max(132, Math.min(200, vh * 0.28));
     const barAnim = this.barsOffset;
 
     const curTopH = topBarHeight * (1 - barAnim);
@@ -935,26 +1088,34 @@ export class BossCutscene {
     const winBottom = vh - curBottomH;
     const winHeight = winBottom - winTop;
 
+    // 過場畫面微震偏移
+    const shakeX = this.shake > 0.2 ? (Math.random() - 0.5) * this.shake : 0;
+    const shakeY = this.shake > 0.2 ? (Math.random() - 0.5) * this.shake : 0;
+
     if (winHeight > 10) {
       ctx.save();
       ctx.beginPath();
       ctx.rect(0, winTop, vw, winHeight);
       ctx.clip();
+      ctx.translate(shakeX, shakeY);
 
       // 2. 觀景窗背景與動態氛圍 (漫畫風高對比黑底 + 集中線 + 網點)
-      this.drawCinemaBackdrop(ctx, 0, winTop, vw, winHeight);
+      this.drawCinemaBackdrop(ctx, -24, winTop - 24, vw + 48, winHeight + 48);
 
       // 3. 依據分鏡階段繪製主視覺
       if (this.phase === 0 || this.phase === 1) {
-        // 第一分鏡：剪影威壓壓境 + 警報橫幅 + 「ゴゴゴゴ…」
+        // 第一分鏡：黑影剪影壓境 + 警報橫幅 + 「ゴゴゴゴ…」
         this.drawPhaseOne(ctx, vw, winTop, winHeight);
       } else if (this.phase === 2) {
-        // 第二分鏡：【漫畫斜切特寫】極限眼神 + 「ズバッ！！」
+        // 第二分鏡：【漫畫斜切特寫】刀光斬裂 + 極限眼神 + 「ズバッ！！」
         this.drawPhaseTwoEyeSlit(ctx, vw, winTop, winHeight);
       } else {
-        // 第三分鏡：【滿版跨頁】破格半身立繪 + 「ドドンッ！！」
+        // 第三分鏡：【滿版跨頁】衝擊震波 + 破格半身立繪 + 「ドドンッ！！」
         this.drawPhaseThreeBust(ctx, vw, winTop, winHeight);
       }
+
+      // 過場粒子與衝擊波 (繪製於主視覺上層)
+      this.drawCutsceneFX(ctx, vw, winTop, winHeight);
 
       // 復古輕量掃描線效果
       this.drawScanlines(ctx, 0, winTop, vw, winHeight);
@@ -972,11 +1133,47 @@ export class BossCutscene {
 
     // 6. 白光一閃 (Flash)
     if (this.flash > 0) {
-      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.5, this.flash)})`;
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.45, this.flash)})`;
       ctx.fillRect(0, 0, vw, vh);
     }
 
     ctx.restore();
+  }
+
+  // 繪製過場衝擊波與能量粒子
+  drawCutsceneFX(ctx, vw, winTop, winH) {
+    const cx = vw * 0.5;
+    const cy = winTop + winH * 0.52;
+
+    if (this.shockwaves.length > 0) {
+      ctx.save();
+      for (const sw of this.shockwaves) {
+        const prog = easeOutExpo(sw.life / sw.maxLife);
+        const radius = prog * Math.max(vw, winH) * 0.72;
+        ctx.globalAlpha = (1 - prog) * 0.85;
+        ctx.strokeStyle = sw.color;
+        ctx.lineWidth = Math.max(1, sw.width * (1 - prog));
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (this.particles.length > 0) {
+      ctx.save();
+      for (const pt of this.particles) {
+        const prog = pt.life / pt.maxLife;
+        const px = pt.nx * vw;
+        const py = winTop + pt.ny * winH;
+        ctx.globalAlpha = 1 - prog;
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.arc(px, py, pt.size * (1 - prog * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
   }
 
   // 繪製動態漫畫背景 (高對比墨黑底 + 半調網點 + 放射集中線)
@@ -1043,23 +1240,99 @@ export class BossCutscene {
     ctx.restore();
   }
 
-  // 第一階段：漫畫警告分鏡 + 「ゴゴゴゴ…」強者氣場
+  // 第一階段：漫畫警告分鏡 + 黑影剪影逼近 + 「ゴゴゴゴ…」強者氣場
   drawPhaseOne(ctx, vw, winTop, winH) {
     const t = this.timer;
     const cx = vw / 2;
     const cy = winTop + winH / 2;
     const p = this.profile;
 
-    // 1. 兩側「ゴ ゴ ゴ ゴ…」日漫氣場爬升
+    // 1. 遠方黑影剪影逼近 (純黑剪影 + 主題色狂暴光暈 + 殺意紅眼點亮)
+    const bossKey = firstSpriteKey(
+      [
+        this.boss && this.boss.skin,
+        this.boss && this.boss.skin && this.boss.skin.replace(/_final$/, ''),
+        this.profile && this.profile.skin,
+        'boss',
+      ],
+      'boss',
+    );
+    const spr = getSprite(bossKey);
+    if (spr) {
+      const loomProg = easeOutCubic(clamp01((t - 0.08) / 1.15));
+      const baseScale = Math.min(2.35, (winH * 0.72) / (spr.h || 120));
+      const curScale = baseScale * (0.68 + 0.36 * loomProg);
+
+      ctx.save();
+      ctx.translate(cx, cy + winH * 0.08);
+
+      // 背後鋸齒狀暗紅/主題色氣場光環 (非死板圓盤)
+      ctx.save();
+      ctx.rotate(t * 0.6);
+      const auraR = 95 * curScale * 0.5;
+      const spikes = 16;
+      ctx.fillStyle = p.themeColor + '38';
+      ctx.beginPath();
+      for (let i = 0; i < spikes * 2; i++) {
+        const ang = (i / (spikes * 2)) * Math.PI * 2;
+        const r = i % 2 === 0 ? auraR * 1.35 : auraR * 0.75;
+        if (i === 0) ctx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
+        else ctx.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // 剪影本體 (使用離屏純黑剪影，最後 0.2s 閃現原色輪廓)
+      ctx.scale(curScale, curScale);
+      ctx.shadowColor = p.themeColor;
+      ctx.shadowBlur = 24;
+      ctx.globalAlpha = clamp01((t - 0.06) * 4.5);
+
+      const frame = spr.frames[0];
+      if (frame) {
+        const sil = getBossSilhouette(bossKey, frame);
+        if (sil) {
+          ctx.drawImage(sil, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
+        } else {
+          ctx.drawImage(frame, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
+        }
+
+        // 剪影收尾 (t > 0.96s) 雙目殺意紅芒亮起預告 Phase 2
+        if (t > 0.96) {
+          const eyeAlpha = clamp01((t - 0.96) / 0.16);
+          const eyeCol = p.eyeColor || '#ff0038';
+          ctx.save();
+          ctx.globalAlpha = eyeAlpha;
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = eyeCol;
+          ctx.shadowBlur = 14;
+          const eyeY = -spr.h * 0.18;
+          const eyeSep = spr.w * 0.1;
+          for (const side of [-1, 1]) {
+            ctx.beginPath();
+            ctx.ellipse(side * eyeSep, eyeY, 4.5, 2.2, side * -0.22, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    }
+
+    // 2. 兩側「ゴ ゴ ゴ ゴ…」日漫氣場爬升 (避開中央橫幅)
     const gogoTexts = ['ゴ', 'ゴ', 'ゴ', 'ゴ'];
+    const marginX = Math.max(32, vw * 0.08);
     for (let side = -1; side <= 1; side += 2) {
-      const baseX = side === -1 ? 52 : vw - 52;
+      const baseX = side === -1 ? marginX : vw - marginX;
       for (let i = 0; i < gogoTexts.length; i++) {
-        const charY = winTop + winH * 0.22 + i * (winH * 0.16);
-        const charScale = 1.0 + i * 0.28 + Math.sin(t * 12 + i) * 0.08;
+        const rise = easeOutCubic(clamp01((t - 0.12 - i * 0.08) / 0.35));
+        if (rise <= 0.01) continue;
+        const charY = winTop + winH * 0.44 + i * (winH * 0.13);
+        const charScale = (0.85 + i * 0.22 + Math.sin(t * 12 + i) * 0.06) * rise;
         const charAngle = side === -1 ? -0.22 : 0.22;
-        drawComicSFX(ctx, gogoTexts[i], baseX + side * Math.sin(t * 15 + i) * 4, charY, {
-          size: Math.round(28 * charScale),
+        drawComicSFX(ctx, gogoTexts[i], baseX + side * Math.sin(t * 15 + i) * 3, charY, {
+          size: Math.round(Math.min(26, vw * 0.055) * charScale),
           angle: charAngle,
           fill: '#ffd60a',
           stroke: '#020409',
@@ -1069,44 +1342,15 @@ export class BossCutscene {
       }
     }
 
-    // 2. 遠方黑影剪影 (先於橫幅繪製，帶深邃黑霧與狂烈紅芒)
-    const bossKey = firstSpriteKey(
-      [this.boss && this.boss.skin, this.boss && this.boss.skin && this.boss.skin.replace(/_final$/, ''), 'boss'],
-      'boss',
-    );
-    const spr = getSprite(bossKey);
-    if (spr) {
-      ctx.save();
-      ctx.translate(cx, cy + 30);
-      ctx.scale(2.2, 2.2);
-      ctx.shadowColor = p.themeColor;
-      ctx.shadowBlur = 32;
-      ctx.globalAlpha = Math.min(0.95, Math.max(0.1, (t - 0.15) * 4));
-
-      // 剪影背後暗紅狂暴光暈
-      const haloGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 60);
-      haloGrad.addColorStop(0, p.themeColor + '88');
-      haloGrad.addColorStop(0.6, p.themeColor + '33');
-      haloGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = haloGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, 60, 0, Math.PI * 2);
-      ctx.fill();
-
-      const frame = spr.frames[0];
-      if (frame) {
-        ctx.drawImage(frame, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
-      }
-      ctx.restore();
-    }
-
-    // 3. 漫畫傾斜警告標題條 (置於最上層，Slanted Caution Comic Banner)
+    // 3. 漫畫傾斜警告標題條 (從左側疾速撞入 + 流動警示斜紋)
+    const bannerIn = easeOutBack(clamp01((t - 0.12) / 0.26));
+    const slideX = (1 - bannerIn) * -(vw * 0.85);
     ctx.save();
-    ctx.translate(cx, winTop + winH * 0.28);
-    ctx.rotate(-0.05);
+    ctx.translate(cx + slideX, winTop + winH * 0.22);
+    ctx.rotate(-0.045);
 
-    const bannerW = Math.min(vw * 0.88, 560);
-    const bannerH = 64;
+    const bannerW = Math.min(vw * 0.9, 540);
+    const bannerH = Math.max(54, Math.min(66, vw * 0.13));
 
     // 黑底粗邊
     ctx.fillStyle = '#05070d';
@@ -1115,193 +1359,270 @@ export class BossCutscene {
     ctx.lineWidth = 4;
     ctx.strokeRect(-bannerW / 2, -bannerH / 2, bannerW, bannerH);
 
-    // 黃黑警示邊界斜紋 (Hazard Stripes)
+    // 流動黃黑警示邊界斜紋 (Scrolling Hazard Stripes)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-bannerW / 2, -bannerH / 2, bannerW, bannerH);
+    ctx.clip();
     ctx.fillStyle = '#ffd60a';
-    ctx.fillRect(-bannerW / 2, -bannerH / 2, bannerW, 8);
-    ctx.fillRect(-bannerW / 2, bannerH / 2 - 8, bannerW, 8);
+    const stripeShift = (t * 90) % 24;
+    for (let sx = -bannerW / 2 - 24 + stripeShift; sx < bannerW / 2 + 24; sx += 24) {
+      ctx.beginPath();
+      ctx.moveTo(sx, -bannerH / 2);
+      ctx.lineTo(sx + 12, -bannerH / 2);
+      ctx.lineTo(sx + 6, -bannerH / 2 + 8);
+      ctx.lineTo(sx - 6, -bannerH / 2 + 8);
+      ctx.closePath();
+      ctx.fill();
 
-    // 警示大字
-    ctx.font = '900 24px "Noto Sans TC", "Chakra Petch", sans-serif';
+      ctx.beginPath();
+      ctx.moveTo(sx, bannerH / 2 - 8);
+      ctx.lineTo(sx + 12, bannerH / 2 - 8);
+      ctx.lineTo(sx + 6, bannerH / 2);
+      ctx.lineTo(sx - 6, bannerH / 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 警示大字 (依視窗寬度自適應縮放)
+    const warnFontSize = Math.max(17, Math.min(24, Math.floor(bannerW * 0.056)));
+    ctx.font = `900 ${warnFontSize}px "Noto Sans TC", "Chakra Petch", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ff0038';
+    const pulseAlpha = 0.78 + 0.22 * Math.sin(t * 20);
+    ctx.fillStyle = `rgba(255, 0, 56, ${pulseAlpha})`;
     ctx.shadowColor = '#ff0038';
     ctx.shadowBlur = 14;
     ctx.fillText('⚠ 警 告：極 惡 首 領 來 襲 ⚠', 0, -4);
 
-    ctx.font = '800 13px monospace, sans-serif';
+    ctx.font = `800 ${Math.max(10, Math.min(13, Math.floor(bannerW * 0.028)))}px monospace, sans-serif`;
     ctx.fillStyle = '#ffffff';
     ctx.shadowBlur = 0;
-    ctx.fillText('// HIGH-LEVEL TARGET INTERCEPTED //', 0, 18);
+    ctx.fillText('// HIGH-LEVEL TARGET INTERCEPTED //', 0, 17);
     ctx.restore();
   }
 
-  // 第二階段：【漫畫斜切分鏡】殺意眼神橫切 + 「ズバッ！！」斬擊音效
+  // 第二階段：【漫畫斜切分鏡】刀光斬裂展開 + 殺意眼神橫切 + 「ズバッ！！」
   drawPhaseTwoEyeSlit(ctx, vw, winTop, winH) {
     const t = this.timer;
     const p = this.profile;
-    const slitH = Math.min(180, winH * 0.82);
+    const phaseAge = Math.max(0, t - 1.3);
+    const openProg = easeOutExpo(clamp01(phaseAge / 0.14));
+    const fullSlitH = Math.min(184, winH * 0.80);
+    const slitH = Math.max(6, fullSlitH * openProg);
     const slitY = winTop + (winH - slitH) / 2;
 
     ctx.save();
 
     // 1. 傾斜漫畫眼部橫切分鏡框 (Slanted Comic Panel)
     ctx.save();
-    ctx.translate(vw / 2, slitY + slitH / 2);
+    ctx.translate(vw / 2, winTop + winH / 2);
     ctx.rotate(-0.045); // 傾斜約 -2.6 度，強烈美漫分鏡感
 
     const panelW = vw + 80;
     const panelH = slitH;
 
-    // 分鏡背景深黑墨底
-    ctx.fillStyle = '#05070d';
+    // 裁切至分鏡框內，達成刀光斬裂展開效果
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-panelW / 2, -panelH / 2, panelW, panelH);
+    ctx.clip();
+
+    // 分鏡背景深黑墨底 + 主題色微暗漸層
+    const bgGrad = ctx.createLinearGradient(0, -fullSlitH / 2, 0, fullSlitH / 2);
+    bgGrad.addColorStop(0, '#04060c');
+    bgGrad.addColorStop(0.5, '#0b0f1d');
+    bgGrad.addColorStop(1, '#04060c');
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(-panelW / 2, -panelH / 2, panelW, panelH);
 
     // 半調網點
     const halftone = getComicHalftone(ctx);
     if (halftone) {
       ctx.fillStyle = halftone;
-      ctx.globalAlpha = 0.45;
+      ctx.globalAlpha = 0.42;
       ctx.fillRect(-panelW / 2, -panelH / 2, panelW, panelH);
       ctx.globalAlpha = 1.0;
     }
 
     // 速度線狂嘯 (濃烈橫向速度線)
     ctx.strokeStyle = p.themeColor;
-    ctx.lineWidth = 3.0;
-    for (let i = 0; i < 28; i++) {
-      const ly = -panelH / 2 + (i / 28) * panelH;
-      const lx = ((i * 137 + t * 1300) % (panelW + 300)) - panelW / 2 - 150;
-      ctx.globalAlpha = 0.45;
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < 24; i++) {
+      const ly = -fullSlitH / 2 + (i / 24) * fullSlitH;
+      const lx = ((i * 137 + t * 1500) % (panelW + 300)) - panelW / 2 - 150;
+      ctx.globalAlpha = 0.35;
       ctx.beginPath();
       ctx.moveTo(lx, ly);
-      ctx.lineTo(lx + 280, ly);
+      ctx.lineTo(lx + 260, ly);
       ctx.stroke();
     }
+    ctx.globalAlpha = 1.0;
 
-    // 2. 雙目極限特寫 (高對比兇狠日漫怒目)
-    const eyeDist = Math.min(130, vw * 0.20);
+    // 2. 雙目極限特寫 (銳利日漫怒目 + 虹膜精準裁切於眼眶內，絕不凸出眼瞼)
+    const eyeZoom = 1.0 + clamp01(phaseAge) * 0.08;
+    const eyeOpen = easeOutBack(clamp01((phaseAge - 0.04) / 0.16));
+    const eyeDist = Math.min(112, vw * 0.21);
     const eyeCol = p.eyeColor || '#ff0038';
 
-    // 眉宇深邃狂氣黑影與青筋 (Angry Furrow)
-    ctx.fillStyle = '#080c16';
-    ctx.beginPath();
-    ctx.moveTo(-eyeDist * 2.4, -60);
-    ctx.lineTo(0, -22);
-    ctx.lineTo(eyeDist * 2.4, -60);
-    ctx.lineTo(eyeDist * 2.4, -panelH / 2);
-    ctx.lineTo(-eyeDist * 2.4, -panelH / 2);
-    ctx.closePath();
-    ctx.fill();
+    ctx.save();
+    ctx.scale(eyeZoom, eyeZoom);
 
-    // 額頭殺氣符紋/血印
-    ctx.strokeStyle = eyeCol;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = eyeCol;
-    ctx.shadowBlur = 12;
-    ctx.beginPath();
-    ctx.moveTo(0, -50);
-    ctx.lineTo(0, -26);
-    ctx.moveTo(-12, -42);
-    ctx.lineTo(0, -32);
-    ctx.lineTo(12, -42);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+    // 中央眉心陰影與深邃鼻樑輪廓 (取代原本突兀的幾何符號)
+    const browGrad = ctx.createLinearGradient(0, -fullSlitH / 2, 0, 26);
+    browGrad.addColorStop(0, 'rgba(2, 4, 9, 0.96)');
+    browGrad.addColorStop(1, 'rgba(2, 4, 9, 0)');
+    ctx.fillStyle = browGrad;
+    ctx.fillRect(-eyeDist * 2.2, -fullSlitH / 2, eyeDist * 4.4, fullSlitH * 0.55);
+
+    // 鼻樑兩側銳利漫畫陰影斜線 (Hatching)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.lineWidth = 2.5;
+    for (let h = 0; h < 5; h++) {
+      const hy = -6 + h * 7;
+      ctx.beginPath();
+      ctx.moveTo(-14, hy);
+      ctx.lineTo(-4, hy + 4);
+      ctx.moveTo(14, hy);
+      ctx.lineTo(4, hy + 4);
+      ctx.stroke();
+    }
 
     for (const side of [-1, 1]) {
       const ex = side * eyeDist;
       ctx.save();
-      ctx.translate(ex, 6);
+      ctx.translate(ex, 8);
       if (side === -1) ctx.scale(-1, 1);
 
-      // (a) 濃烈怒目劍眉 (Heavy Inked Eyebrow)
+      // (a) 銳利壓低怒目劍眉 (Heavy Inked Brow)
       ctx.fillStyle = '#020409';
       ctx.beginPath();
-      ctx.moveTo(-85, -32);
-      ctx.quadraticCurveTo(-20, -42, 60, -18);
-      ctx.quadraticCurveTo(-10, -22, -85, -32);
-      ctx.fill();
-
-      // (b) 兇猛眼眶輪廓 (高亮眼白/眼窩，破除黑底看不清問題)
-      ctx.fillStyle = '#fff9db';
-      ctx.beginPath();
-      ctx.moveTo(-65, -8);
-      ctx.quadraticCurveTo(-15, -28, 55, -8);
-      ctx.quadraticCurveTo(0, 24, -65, -8);
+      ctx.moveTo(-78, -10);
+      ctx.quadraticCurveTo(-22, -32, 66, -30);
+      ctx.lineTo(72, -20);
+      ctx.quadraticCurveTo(-18, -20, -74, -4);
       ctx.closePath();
       ctx.fill();
 
-      // 眼角血絲/暗影
-      ctx.fillStyle = 'rgba(217, 4, 41, 0.45)';
-      ctx.beginPath();
-      ctx.moveTo(-65, -8);
-      ctx.quadraticCurveTo(-35, -2, -15, 6);
-      ctx.quadraticCurveTo(-45, 12, -65, -8);
+      // 睜眼垂直張開遮罩
+      ctx.save();
+      ctx.scale(1, Math.max(0.08, eyeOpen));
+
+      // 定義銳利杏仁/猛獸眼眶路徑 (用於填色與裁切虹膜)
+      const defineEyePath = () => {
+        ctx.beginPath();
+        // 內眼角 (靠近鼻樑，銳利下壓)
+        ctx.moveTo(-64, 4);
+        // 上眼瞼弧線 (犀利上挑)
+        ctx.quadraticCurveTo(-12, -22, 64, -10);
+        // 下眼瞼弧線 (緊實微弧)
+        ctx.quadraticCurveTo(8, 22, -64, 4);
+        ctx.closePath();
+      };
+
+      // (b) 眼白 / 眼窩 (微帶冷暗陰影，更有立體感)
+      defineEyePath();
+      const scleraGrad = ctx.createLinearGradient(0, -18, 0, 18);
+      scleraGrad.addColorStop(0, '#cbd5e1');
+      scleraGrad.addColorStop(0.35, '#fffbeb');
+      scleraGrad.addColorStop(1, '#e2e8f0');
+      ctx.fillStyle = scleraGrad;
       ctx.fill();
 
-      // (c) 粗重上眼瞼黑框
-      ctx.strokeStyle = '#020409';
-      ctx.lineWidth = 6.5;
-      ctx.beginPath();
-      ctx.moveTo(-70, -8);
-      ctx.quadraticCurveTo(-15, -30, 60, -8);
-      ctx.stroke();
+      // (c) 裁切在眼眶內繪製虹膜、瞳孔與眼角血絲
+      ctx.save();
+      defineEyePath();
+      ctx.clip();
 
-      // (d) 下眼瞼黑框
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(-60, -7);
-      ctx.quadraticCurveTo(0, 26, 52, -7);
-      ctx.stroke();
+      // 上眼瞼投下的深色陰影
+      ctx.fillStyle = 'rgba(2, 4, 9, 0.28)';
+      ctx.fillRect(-70, -24, 140, 11);
 
-      // (e) 巨大魔性虹膜與怒目金/紅瞳 (Menacing Iris & Feline Slit Pupil)
-      const pupilGlow = 1 + Math.sin(t * 22) * 0.12;
-      const eyeRad = ctx.createRadialGradient(0, -3, 2, 0, -3, 30 * pupilGlow);
+      // 內外眼角微暗血絲陰影
+      ctx.fillStyle = 'rgba(185, 28, 28, 0.35)';
+      ctx.beginPath();
+      ctx.arc(-62, 4, 22, 0, Math.PI * 2);
+      ctx.arc(62, -8, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 巨大魔性虹膜 (被眼眶完美裁切，呈現銳利壓迫眼神)
+      const pupilGlow = 1 + Math.sin(t * 24) * 0.08;
+      const irisX = -6; // 略微向內凝視，更有鎖定獵物感
+      const irisY = -2;
+      const irisR = 20 * pupilGlow;
+
+      const eyeRad = ctx.createRadialGradient(irisX, irisY, 2, irisX, irisY, irisR);
       eyeRad.addColorStop(0, '#ffffff');
-      eyeRad.addColorStop(0.25, '#ffd60a');
-      eyeRad.addColorStop(0.65, eyeCol);
-      eyeRad.addColorStop(1, '#05070d');
+      eyeRad.addColorStop(0.28, '#ffd60a');
+      eyeRad.addColorStop(0.68, eyeCol);
+      eyeRad.addColorStop(1, '#3b0712');
 
       ctx.fillStyle = eyeRad;
       ctx.beginPath();
-      ctx.arc(0, -3, 24 * pupilGlow, 0, Math.PI * 2);
+      ctx.arc(irisX, irisY, irisR, 0, Math.PI * 2);
       ctx.fill();
+
+      // 虹膜外圈深色邊線
+      ctx.strokeStyle = '#090205';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
       // 縱向野獸貓瞳 (Feline Slit Pupil)
       ctx.fillStyle = '#020409';
       ctx.beginPath();
-      ctx.ellipse(0, -3, 5, 20 * pupilGlow, 0, 0, Math.PI * 2);
+      ctx.ellipse(irisX, irisY, 3.8, 15 * pupilGlow, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // 瞳孔高光 (Anime Glint)
+      // 銳利瞳孔高光 (Anime Glint)
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(-6, -8, 4, 0, Math.PI * 2);
-      ctx.arc(4, 2, 2, 0, Math.PI * 2);
+      ctx.arc(irisX - 5, irisY - 5, 3.2, 0, Math.PI * 2);
+      ctx.arc(irisX + 4, irisY + 4, 1.6, 0, Math.PI * 2);
       ctx.fill();
 
-      // (f) 殺意雷霆目芒拖尾 (Eye Lightning Stream)
+      ctx.restore(); // 結束眼眶 clip
+
+      // (d) 粗重上眼瞼墨線 + 銳利眼尾挑勾
+      ctx.strokeStyle = '#020409';
+      ctx.lineWidth = 5.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-66, 5);
+      ctx.quadraticCurveTo(-12, -23, 68, -11);
+      ctx.stroke();
+
+      // 下眼瞼墨線
+      ctx.lineWidth = 2.8;
+      ctx.beginPath();
+      ctx.moveTo(-62, 5);
+      ctx.quadraticCurveTo(8, 22, 62, -9);
+      ctx.stroke();
+
+      // (e) 殺意眼尾光焰向外曳出 (Eye Flare Sweeping Outward)
       ctx.strokeStyle = eyeCol;
-      ctx.lineWidth = 4.5;
+      ctx.lineWidth = 3.2;
       ctx.shadowColor = eyeCol;
-      ctx.shadowBlur = 20;
+      ctx.shadowBlur = 16;
       ctx.beginPath();
-      ctx.moveTo(-2, -3);
-      ctx.quadraticCurveTo(-40, -8, -160, -26 + Math.sin(t * 30) * 8);
+      ctx.moveTo(46, -8);
+      ctx.quadraticCurveTo(88, -14, 145, -24 + Math.sin(t * 32) * 4);
       ctx.stroke();
 
-      // 狂雷閃電微弧 (Zigzag Sparks)
-      ctx.lineWidth = 2.0;
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = '#ffd60a';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(-10, -3);
-      ctx.lineTo(-35, 12);
-      ctx.lineTo(-65, -10);
-      ctx.lineTo(-110, 8);
+      ctx.moveTo(54, -9);
+      ctx.lineTo(120, -19 + Math.sin(t * 32) * 3);
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
+      ctx.restore(); // 結束睜眼縮放
       ctx.restore();
     }
+
+    ctx.restore(); // 結束 eyeZoom
+    ctx.restore(); // 結束 clip
 
     // 分鏡框粗黑墨線與金邊
     ctx.strokeStyle = '#020409';
@@ -1311,29 +1632,52 @@ export class BossCutscene {
     ctx.lineWidth = 3.0;
     ctx.strokeRect(-panelW / 2 + 3, -panelH / 2 + 3, panelW - 6, panelH - 6);
 
+    // 刀光斬裂閃痕 (前 0.22 秒橫貫分鏡的白金刀光)
+    if (phaseAge < 0.22) {
+      const slashAlpha = 1 - phaseAge / 0.22;
+      ctx.save();
+      ctx.globalAlpha = slashAlpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#ffd60a';
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.moveTo(-panelW / 2, 0);
+      ctx.lineTo(0, -14 * slashAlpha);
+      ctx.lineTo(panelW / 2, 0);
+      ctx.lineTo(0, 14 * slashAlpha);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.restore(); // 結束傾斜分鏡
 
-    // 3. 右上方爆炸擬聲大字「ズバッ！！」(SLASH!!)
-    drawComicSFX(ctx, 'ズバッ！！', vw - 120, slitY + 32, {
-      size: 46,
-      angle: -0.18,
+    // 3. 右上方爆炸擬聲大字「ズバッ！！」(確保不超出右側視窗邊界)
+    const slashPop = 1 + 0.35 * Math.exp(-phaseAge * 10);
+    const sfxSize = Math.min(42, vw * 0.09);
+    const sfxX = Math.min(vw - Math.max(108, sfxSize * 2.5), vw * 0.72);
+    drawComicSFX(ctx, 'ズバッ！！', sfxX, Math.max(winTop + 34, slitY + 22), {
+      size: sfxSize,
+      angle: -0.16,
       fill: '#ffd60a',
       stroke: '#020409',
       shadow: '#d90429',
+      scale: slashPop,
     });
 
     // 4. 左上方漫畫標籤印章「【殺意鎖定】」
-    drawComicStamp(ctx, '【殺意鎖定】', 95, slitY + 28, -0.08, '#ffd60a');
+    drawComicStamp(ctx, '【殺意鎖定】', Math.max(76, vw * 0.18), Math.max(winTop + 28, slitY + 18), -0.08, '#ffd60a');
 
     ctx.restore();
   }
 
-  // 第三階段：【滿版漫畫跨頁】巨大「ドドンッ！！」擬聲字 + 霸氣破格立繪 + 稱號印章
+  // 第三階段：【滿版漫畫跨頁】震撼砸落 + 巨大「ドドンッ！！」擬聲字 + 霸氣破格立繪
   drawPhaseThreeBust(ctx, vw, winTop, winH) {
     const t = this.timer;
     const p = this.profile;
     const cx = vw * 0.5;
-    const cy = winTop + winH * 0.54;
+    const cy = winTop + winH * 0.53;
+    const sfxAge = Math.max(0, t - 2.3);
 
     ctx.save();
 
@@ -1359,7 +1703,7 @@ export class BossCutscene {
     }
     ctx.restore();
 
-    // 2. 破格立繪 (2.7x 巨大化半身像，帶強烈漫畫描邊與呼吸感)
+    // 2. 破格立繪 (從 1.48x 巨型縮放震撼砸落回基準尺寸 + 殘影衝擊 + 呼吸感)
     const bossKey = firstSpriteKey(
       [
         this.boss && this.boss.skin,
@@ -1371,43 +1715,76 @@ export class BossCutscene {
     );
     const spr = getSprite(bossKey);
     if (spr) {
+      const slamProg = easeOutBack(clamp01(sfxAge / 0.22));
+      const slamMul = 1.48 - 0.48 * slamProg;
       const breath = Math.sin(t * 6) * 4;
-      const scale = Math.min(2.7, (winH * 0.82) / (spr.h || 120));
-
-      ctx.save();
-      ctx.translate(cx, cy + breath);
-      ctx.scale(scale, scale);
-
-      // 漫畫外發光
-      ctx.shadowColor = p.themeColor;
-      ctx.shadowBlur = 32;
+      const baseScale = Math.min(2.7, (winH * 0.80) / (spr.h || 120));
+      const scale = baseScale * slamMul;
 
       const frameIdx = Math.floor(t * 8) % (spr.frames ? spr.frames.length : 1);
       const frame = spr.frames ? spr.frames[frameIdx] : null;
-      if (frame) {
-        ctx.drawImage(frame, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
+
+      // 背後漫畫鋸齒爆氣光環
+      ctx.save();
+      ctx.translate(cx, cy + breath);
+      ctx.rotate(-t * 0.35);
+      const burstR = Math.min(vw, winH) * 0.42;
+      ctx.fillStyle = p.themeColor + '33';
+      ctx.beginPath();
+      for (let i = 0; i < 24; i++) {
+        const ang = (i / 24) * Math.PI * 2;
+        const r = i % 2 === 0 ? burstR : burstR * 0.62;
+        if (i === 0) ctx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
+        else ctx.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
       }
+      ctx.closePath();
+      ctx.fill();
       ctx.restore();
+
+      if (frame) {
+        // 登場瞬間殘影 (前 0.28 秒)
+        if (sfxAge < 0.28) {
+          const ghostAlpha = (1 - sfxAge / 0.28) * 0.35;
+          const ghostScale = scale * (1 + (0.28 - sfxAge) * 0.9);
+          ctx.save();
+          ctx.translate(cx, cy + breath);
+          ctx.scale(ghostScale, ghostScale);
+          ctx.globalAlpha = ghostAlpha;
+          ctx.drawImage(frame, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
+          ctx.restore();
+        }
+
+        // 本體立繪
+        ctx.save();
+        ctx.translate(cx, cy + breath);
+        ctx.scale(scale, scale);
+        ctx.shadowColor = p.themeColor;
+        ctx.shadowBlur = 32;
+        ctx.drawImage(frame, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
+        ctx.restore();
+      }
     }
 
-    // 3. 巨型日漫登場擬聲大字「ドドンッ！！」(DODON!!) 震撼砸落！
-    // 登場前 0.3 秒具備彈簧縮放衝擊
-    const sfxAge = Math.max(0, t - 2.3);
-    const popScale = 1.0 + Math.max(0, 0.45 * Math.exp(-sfxAge * 7)) * Math.sin(sfxAge * 24);
+    // 3. 巨型日漫登場擬聲大字「ドドンッ！！」(依視窗寬度自適應位置與字級，避免互撞或裁切)
+    const popScale = 1.0 + Math.max(0, 0.48 * Math.exp(-sfxAge * 7)) * Math.sin(sfxAge * 24);
+    const dodonSize = Math.max(26, Math.min(56, vw * 0.105));
+    const dodonX = Math.min(vw - dodonSize * 2.55, vw * 0.72);
 
-    drawComicSFX(ctx, 'ドドンッ！！', vw * 0.78, winTop + winH * 0.26, {
-      size: Math.min(68, vw * 0.16),
-      angle: -0.18,
+    drawComicSFX(ctx, 'ドドンッ！！', dodonX, winTop + winH * 0.20, {
+      size: dodonSize,
+      angle: -0.16,
       fill: '#ffd60a',
       stroke: '#05070d',
       shadow: '#d90429',
       scale: popScale,
     });
 
-    // 4. 左側輔助擬聲小字「バァァァン！！」(BAAAANG!!)
-    drawComicSFX(ctx, 'バァァン！', vw * 0.22, winTop + winH * 0.32, {
-      size: Math.min(38, vw * 0.09),
-      angle: 0.16,
+    // 4. 左側輔助擬聲小字「バァァン！」
+    const banSize = Math.max(18, Math.min(34, vw * 0.065));
+    const banX = Math.max(banSize * 2.1, vw * 0.20);
+    drawComicSFX(ctx, 'バァァン！', banX, winTop + winH * 0.26, {
+      size: banSize,
+      angle: 0.14,
       fill: '#ffffff',
       stroke: '#05070d',
       shadow: '#d90429',
@@ -1432,15 +1809,17 @@ export class BossCutscene {
       ctx.lineTo(vw, topH);
       ctx.stroke();
 
-      // 頂部標語
-      ctx.font = '900 13px "Noto Sans TC", monospace, sans-serif';
+      // 頂部標語 (窄螢幕自動精簡左側標題，避免與右側威脅等級重疊)
+      const isNarrow = vw < 560;
+      ctx.font = `900 ${isNarrow ? 11 : 13}px "Noto Sans TC", monospace, sans-serif`;
       ctx.fillStyle = '#ffd60a';
       ctx.textAlign = 'left';
-      ctx.fillText('/// MANGA BOSS SHOWDOWN // 極限激戰 ///', 24, topH - 14);
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(isNarrow ? '/// BOSS SHOWDOWN' : '/// MANGA BOSS SHOWDOWN // 極限激戰 ///', 16, topH - 14);
 
       ctx.textAlign = 'right';
       ctx.fillStyle = (Math.sin(this.timer * 12) > 0) ? '#ff0038' : '#880015';
-      ctx.fillText('● THREAT LEVEL: SSS EXTREME', vw - 24, topH - 14);
+      ctx.fillText(isNarrow ? '● THREAT: SSS' : '● THREAT LEVEL: SSS EXTREME', vw - 16, topH - 14);
     }
 
     // 底部純黑條
@@ -1461,17 +1840,21 @@ export class BossCutscene {
   drawDialogueBox(ctx, vw, vh, boxH) {
     const p = this.profile;
     const boxY = vh - boxH;
-    const pad = Math.min(32, vw * 0.05);
+    const pad = Math.max(14, Math.min(32, vw * 0.04));
+    const phaseAge = Math.max(0, this.timer - 2.3);
+    const boxIn = easeOutCubic(clamp01(phaseAge / 0.16));
 
     ctx.save();
+    ctx.globalAlpha = boxIn;
 
-    // 1. 傾斜漫畫黑色膠帶標題橫幅 (Slanted Nameplate Ribbon)
+    // 1. 傾斜漫畫黑色膠帶標題橫幅 (Slanted Nameplate Ribbon - 依視窗寬度自適應排版)
+    const ribbonW = Math.min(vw - pad * 2, 520);
+    const ribbonH = 44;
+    const ribbonCx = vw < 600 ? vw / 2 : pad + ribbonW / 2;
+
     ctx.save();
-    ctx.translate(pad + 160, boxY + 36);
-    ctx.rotate(-0.035);
-
-    const ribbonW = Math.min(vw - pad * 2, 420);
-    const ribbonH = 46;
+    ctx.translate(ribbonCx, boxY + 30);
+    ctx.rotate(-0.025);
 
     // 黑色墨底
     ctx.fillStyle = '#05070d';
@@ -1482,32 +1865,48 @@ export class BossCutscene {
     ctx.lineWidth = 3.0;
     ctx.strokeRect(-ribbonW / 2, -ribbonH / 2, ribbonW, ribbonH);
 
-    // 首領主名稱 (大字書法 / 粗黑體)
-    ctx.font = '900 28px "Noto Sans TC", "PingFang SC", "Microsoft YaHei", sans-serif';
+    // 首領主名稱 (依可用寬度自動縮放字級，避免撞到副標題)
+    const bossName = this.boss ? this.boss.name : '未知首領';
+    const displayName = `『 ${bossName} 』`;
+    const showInlineCode = ribbonW >= 380;
+    const maxNameW = showInlineCode ? ribbonW * 0.56 : ribbonW - 24;
+
+    let nameFontSize = 26;
+    ctx.font = `900 ${nameFontSize}px "Noto Sans TC", "PingFang SC", "Microsoft YaHei", sans-serif`;
+    while (nameFontSize > 16 && ctx.measureText(displayName).width > maxNameW) {
+      nameFontSize -= 2;
+      ctx.font = `900 ${nameFontSize}px "Noto Sans TC", "PingFang SC", "Microsoft YaHei", sans-serif`;
+    }
+
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = '#000000';
     ctx.shadowBlur = 6;
-    const bossName = this.boss ? this.boss.name : '未知首領';
-    ctx.fillText(`『 ${bossName} 』`, -ribbonW / 2 + 16, 0);
+    ctx.fillText(displayName, -ribbonW / 2 + 12, 0);
 
-    // 稱號副標題
-    ctx.font = '800 11px monospace, sans-serif';
-    ctx.fillStyle = '#ffd60a';
-    ctx.fillText(p.code || 'THREAT SSS', ribbonW / 2 - 130, 0);
+    // 稱號副標題 (僅在寬度充裕時並排，右對齊避免重疊)
+    if (showInlineCode) {
+      ctx.font = '800 11px monospace, sans-serif';
+      ctx.fillStyle = '#ffd60a';
+      ctx.textAlign = 'right';
+      ctx.shadowBlur = 0;
+      const codeText = p.code || 'THREAT SSS';
+      const maxCodeW = ribbonW * 0.36;
+      let clippedCode = codeText;
+      while (clippedCode.length > 6 && ctx.measureText(clippedCode).width > maxCodeW) {
+        clippedCode = clippedCode.slice(0, -1);
+      }
+      ctx.fillText(clippedCode, ribbonW / 2 - 12, 0);
+    }
 
     ctx.restore();
 
-    // 2. 漫畫紅色印章 (Red Seal Stamp)
-    const stampText = p.title?.includes('終末') ? '【滅世災厄】' : '【極惡凶煞】';
-    drawComicStamp(ctx, stampText, vw - pad - 60, boxY + 35, -0.12, '#ff0038');
-
-    // 3. 漫畫對白泡泡 (Comic Dialogue Bubble Panel)
+    // 2. 漫畫對白泡泡 (Comic Dialogue Bubble Panel)
     const bubbleX = pad;
-    const bubbleY = boxY + 68;
+    const bubbleY = boxY + 60;
     const bubbleW = vw - pad * 2;
-    const bubbleH = boxH - 96;
+    const bubbleH = Math.max(54, boxH - 84);
 
     // 漫畫象牙白紙面底色
     ctx.fillStyle = '#f8fafc';
@@ -1520,42 +1919,59 @@ export class BossCutscene {
 
     // 漫畫對白角標 (Sharp corner ticks)
     ctx.fillStyle = '#ffd60a';
-    ctx.fillRect(bubbleX, bubbleY, 12, 12);
-    ctx.fillRect(bubbleX + bubbleW - 12, bubbleY, 12, 12);
+    ctx.fillRect(bubbleX, bubbleY, 10, 10);
+    ctx.fillRect(bubbleX + bubbleW - 10, bubbleY, 10, 10);
 
     // 對白向上指向首領的尖角尾巴 (Speech Tail)
+    const tailX = Math.min(bubbleX + 75, bubbleX + bubbleW * 0.25);
     ctx.fillStyle = '#f8fafc';
     ctx.beginPath();
-    ctx.moveTo(bubbleX + 60, bubbleY);
-    ctx.lineTo(bubbleX + 75, bubbleY - 14);
-    ctx.lineTo(bubbleX + 90, bubbleY);
+    ctx.moveTo(tailX - 14, bubbleY);
+    ctx.lineTo(tailX, bubbleY - 12);
+    ctx.lineTo(tailX + 14, bubbleY);
     ctx.closePath();
     ctx.fill();
 
     ctx.strokeStyle = '#05070d';
     ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.moveTo(bubbleX + 60, bubbleY);
-    ctx.lineTo(bubbleX + 75, bubbleY - 14);
-    ctx.lineTo(bubbleX + 90, bubbleY);
+    ctx.moveTo(tailX - 14, bubbleY);
+    ctx.lineTo(tailX, bubbleY - 12);
+    ctx.lineTo(tailX + 14, bubbleY);
     ctx.stroke();
 
-    // 4. 打字機對白 (Typewriter text in crisp ink black)
+    // 3. 漫畫紅色印章 (蓋在對白框右上角，與名牌完全錯開不重疊)
+    const stampText = p.title?.includes('終末') ? '【滅世災厄】' : '【極惡凶煞】';
+    drawComicStamp(ctx, stampText, bubbleX + bubbleW - 56, bubbleY + 18, -0.10, '#ff0038');
+
+    // 4. 打字機對白 (支援自動換行，預留右側印章安全區)
     const quote = p.quote || '「……」';
     const currentText = quote.slice(0, this.typedChars);
+    const textSize = vw < 480 ? 15 : 17;
+    const lineH = textSize + 6;
+    const textMaxW = Math.max(120, bubbleW - 130);
 
-    ctx.font = '700 17px "Noto Sans TC", "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.font = `700 ${textSize}px "Noto Sans TC", "PingFang SC", "Microsoft YaHei", sans-serif`;
     ctx.fillStyle = '#0f172a';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.shadowBlur = 0;
-    ctx.fillText(currentText, bubbleX + 22, bubbleY + 16);
 
-    // 漫畫光標閃爍
+    const lines = wrapDialogueLines(ctx, currentText, textMaxW);
+    const maxLines = Math.max(1, Math.floor((bubbleH - 22) / lineH));
+    const visibleLines = lines.slice(0, maxLines);
+
+    for (let i = 0; i < visibleLines.length; i++) {
+      ctx.fillText(visibleLines[i], bubbleX + 18, bubbleY + 14 + i * lineH);
+    }
+
+    // 漫畫光標閃爍 (跟隨最後一行文字尾端)
     if (this.typedChars < quote.length && Math.floor(this.timer * 6) % 2 === 0) {
-      const textWidth = ctx.measureText(currentText).width;
+      const lastLineIdx = Math.max(0, visibleLines.length - 1);
+      const lastLine = visibleLines[lastLineIdx] || '';
+      const textWidth = ctx.measureText(lastLine).width;
       ctx.fillStyle = '#d90429';
-      ctx.fillRect(bubbleX + 22 + textWidth + 4, bubbleY + 16, 9, 20);
+      ctx.fillRect(bubbleX + 18 + textWidth + 4, bubbleY + 14 + lastLineIdx * lineH, 8, textSize + 2);
     }
 
     // 5. 翻頁/跳過提示 (Manga Page Turn / Skip Prompt)
@@ -1563,7 +1979,8 @@ export class BossCutscene {
     const blink = Math.sin(this.timer * 8) > 0;
     ctx.fillStyle = blink ? '#ffd60a' : 'rgba(255, 214, 10, 0.55)';
     ctx.textAlign = 'right';
-    ctx.fillText('▶ 按 [SPACE] 或 點擊 翻頁跳過 (SKIP)', vw - pad - 12, vh - 14);
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('▶ 按 [SPACE] 或 點擊 翻頁跳過 (SKIP)', vw - pad, vh - 8);
 
     ctx.restore();
   }
