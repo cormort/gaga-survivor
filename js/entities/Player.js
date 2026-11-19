@@ -155,16 +155,20 @@ export class Player {
     this.magnetMultiplier = this.baseMagnet;
   }
 
+  get isDashing() {
+    return this.dashTimeLeft > 0;
+  }
+
   get pickupRadius() {
-    return this.basePickupRadius * this.magnetMultiplier;
+    return this.basePickupRadius * this.magnetMultiplier * (this.traitMagnetMul || 1);
   }
 
   get speed() {
     const achillesBonus = 1 + (this.achillesSpeedStacks || 0) * 0.06;
     // terrainSpeedMul：焦油泥沼減速／疾風帶加速，由 Hazards.js 每幀寫入
     // elementSpeedMul：冰凍／電擊的減速，由屬性狀態推導（見 update）
-    return this.baseSpeed * this.speedMultiplier * achillesBonus * (this.terrainSpeedMul || 1)
-      * (this.elementSpeedMul || 1);
+    return this.baseSpeed * this.speedMultiplier * achillesBonus * (this.traitSpeedMul || 1)
+      * (this.terrainSpeedMul || 1) * (this.elementSpeedMul || 1);
   }
 
   // 觸發戰術閃避翻滾
@@ -180,12 +184,18 @@ export class Player {
     const len = Math.hypot(dirX, dirY);
     if (len > 0.1) {
       this.dashDir = { x: dirX / len, y: dirY / len };
+      if (this.dashDir.x > 0.1) this.facing = 1;
+      else if (this.dashDir.x < -0.1) this.facing = -1;
     } else {
       this.dashDir = { x: this.facing, y: 0 };
     }
 
     this.dashTimeLeft = this.dashDuration;
     this.invulnerableTimer = Math.max(this.invulnerableTimer, this.dashDuration + 0.1);
+    // 武器型態：涅墨西斯裁決 (翻滾後 3.5 秒內苦無必暴，含御劍遁)
+    if (this.weaponAspects?.kunai === 'nemesis') {
+      this.nemesisCritTimer = 3.5;
+    }
     if (spiritDash) {
       this.mp -= MP_DASH_COST;
       sound.playDash();
@@ -195,12 +205,6 @@ export class Player {
     const cdrMod = Math.max(0.4, (1 - (this.metaCdr || 0) * 0.5) * (this.blessingDashCdr || 1));
     this.dashMaxTimer = this.dashCooldown * cdrMod * (this.dashCooldownMul || 1);
     this.dashTimer = this.dashCooldown * cdrMod * (this.dashCooldownMul || 1);
-    this.invulnerableTimer = Math.max(this.invulnerableTimer, this.dashDuration + 0.1);
-
-    // 武器型態：涅墨西斯裁決 (翻滾後 3.5 秒內苦無必暴)
-    if (this.weaponAspects?.kunai === 'nemesis') {
-      this.nemesisCritTimer = 3.5;
-    }
 
     sound.playDash();
     return true;
@@ -242,11 +246,12 @@ export class Player {
       this.walkCycle += dt * 25;
     } else if (inputVector.x !== 0 || inputVector.y !== 0) {
       if (this.iceFriction > 0) {
-        // 冰面慣性：向目標速度漸進 (lerp 0.12)，鬆手後速度指數衰減
+        // 冰面慣性：向目標速度漸進 (60fps 下 lerp 0.12，高刷新率以 dt*60 指數補償)
+        const iceLerp = 1 - Math.pow(0.88, dt * 60);
         const tx = inputVector.x * this.speed;
         const ty = inputVector.y * this.speed;
-        this.velocity.x += (tx - this.velocity.x) * 0.12;
-        this.velocity.y += (ty - this.velocity.y) * 0.12;
+        this.velocity.x += (tx - this.velocity.x) * iceLerp;
+        this.velocity.y += (ty - this.velocity.y) * iceLerp;
         this.x += this.velocity.x * dt;
         this.y += this.velocity.y * dt;
       } else {
@@ -260,9 +265,10 @@ export class Player {
       this.walkCycle += dt * 14;
     } else {
       if (this.iceFriction > 0 && (Math.abs(this.velocity.x) > 1 || Math.abs(this.velocity.y) > 1)) {
-        // 冰面：鬆手時速度指數衰減
-        this.velocity.x *= this.iceFriction;
-        this.velocity.y *= this.iceFriction;
+        // 冰面：鬆手時速度指數衰減 (依 dt*60 補償幀率)
+        const iceDecay = Math.pow(this.iceFriction, dt * 60);
+        this.velocity.x *= iceDecay;
+        this.velocity.y *= iceDecay;
         this.x += this.velocity.x * dt;
         this.y += this.velocity.y * dt;
         this.walkCycle += dt * 8;
@@ -394,6 +400,10 @@ export class Player {
       this.clearElements();
       sound.playEvoFanfare();
       if (this.game?.ui) this.game.ui.say('🌈 虹光護佑觸發！以 1 HP 存活！', '#00f59b', 3);
+      return true;
+    }
+    if (this.character?.onLethal?.(this, this.game)) {
+      this.clearElements();
       return true;
     }
     // 緊急復甦天賦（每局一次）：Lv1 回 50%、Lv2 回滿並由遊戲層震退周圍

@@ -976,6 +976,7 @@ export class SoundEngine {
   // ── 即時 Oscillator 音效發聲器 ──────────────────────────────
   _sfxVoice(o) {
     const ctx = this.ctx;
+    if (!ctx) return null;
     const t = o.at != null ? o.at : ctx.currentTime;
     const dur = o.dur || 0.1;
     const osc = ctx.createOscillator();
@@ -1254,6 +1255,7 @@ export class SoundEngine {
   playBossCinematicSting() {
     if (!this.enabled) return;
     this.ensureContext();
+    if (!this.ctx) return;
     const t = this.ctx.currentTime;
     // 震撼低音打擊
     this._sfxVoice({ type: 'sawtooth', f0: 95, f1: 28, dur: 0.65, level: 0.55, attack: 0.005 });
@@ -1272,6 +1274,7 @@ export class SoundEngine {
   playSwordSlash() {
     if (!this.enabled || this._throttle('slash', 60)) return;
     this.ensureContext();
+    if (!this.ctx) return;
     this._sfxVoice({ type: 'sawtooth', f0: 1100, f1: 180, dur: 0.16, level: 0.35, attack: 0.002, jitter: 0.08 });
     this._noiseVoice(this.ctx.currentTime, 0.12, 0.25, 'bandpass', 2800, null, 0, 0.12);
   }
@@ -1299,6 +1302,7 @@ export class SoundEngine {
   playExplosion(worldX = null) {
     if (!this.enabled || this._throttle('explosion', 90)) return;
     this.ensureContext();
+    if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const pan = this._panFor(worldX);
     this._sfxVoice({
@@ -1319,6 +1323,7 @@ export class SoundEngine {
   playLevelUp() {
     if (!this.enabled) return;
     this.ensureContext();
+    if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const notes = [440, 554.37, 659.25, 880];
     notes.forEach((freq, idx) => {
@@ -1330,6 +1335,7 @@ export class SoundEngine {
   playEvoFanfare() {
     if (!this.enabled) return;
     this.ensureContext();
+    if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const chords = [523.25, 659.25, 783.99, 1046.50, 1318.51];
     chords.forEach((freq, idx) => {
@@ -1348,6 +1354,7 @@ export class SoundEngine {
   playGameOver() {
     if (!this.enabled) return;
     this.ensureContext();
+    if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const freqs = [330, 311, 293, 277];
     freqs.forEach((f, idx) => {

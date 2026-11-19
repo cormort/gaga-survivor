@@ -935,6 +935,19 @@ export class BossCutscene {
     this.finish();
   }
 
+  // 靜默重置（開新局或放棄任務回主選單時呼叫，不播音效也不震動）
+  reset() {
+    this.active = false;
+    this.timer = 0;
+    this.boss = null;
+    this.profile = null;
+    this.particles = [];
+    this.shockwaves = [];
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.classList.remove('boss-cutscene-active');
+    }
+  }
+
   finish() {
     this.active = false;
     this.particles = [];
@@ -943,7 +956,7 @@ export class BossCutscene {
       document.body.classList.remove('boss-cutscene-active');
     }
     sound.playSwordSlash();
-    if (this.game && this.game.camera) {
+    if (this.game && this.game.camera && this.game._shakeOn !== false) {
       this.game.camera.shake = 18;
     }
   }
@@ -972,9 +985,8 @@ export class BossCutscene {
 
     const safeDt = Math.min(Math.max(dt || 0.016, 0.001), 0.05);
 
-    // 以真即時時間計算 (避免後台或低幀率造成動畫停滯)
-    const now = performance.now() / 1000;
-    this.timer = now - this.startTime;
+    // 以遊戲活躍幀的 safeDt 累加（切換分頁或暫停時不會直接跳過過場分鏡）
+    this.timer += safeDt;
 
     // 閃光與震動快速衰減
     if (this.flash > 0) {
@@ -984,7 +996,8 @@ export class BossCutscene {
       this.shake = Math.max(0, this.shake - safeDt * 42);
     }
 
-    // 更新過場粒子與衝擊波
+    // 更新過場粒子與衝擊波（空氣阻力依 dt*60 指數補償，60Hz/120Hz 位移一致）
+    const drag = Math.pow(0.94, safeDt * 60);
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const pt = this.particles[i];
       pt.life += safeDt;
@@ -993,8 +1006,8 @@ export class BossCutscene {
       } else {
         pt.nx += pt.vx * safeDt;
         pt.ny += pt.vy * safeDt;
-        pt.vx *= 0.94;
-        pt.vy *= 0.94;
+        pt.vx *= drag;
+        pt.vy *= drag;
       }
     }
     for (let i = this.shockwaves.length - 1; i >= 0; i--) {
@@ -1088,9 +1101,11 @@ export class BossCutscene {
     const winBottom = vh - curBottomH;
     const winHeight = winBottom - winTop;
 
-    // 過場畫面微震偏移
-    const shakeX = this.shake > 0.2 ? (Math.random() - 0.5) * this.shake : 0;
-    const shakeY = this.shake > 0.2 ? (Math.random() - 0.5) * this.shake : 0;
+    // 過場畫面微震偏移（尊重顯示設定的「畫面震動」開關）
+    const shakeOn = !this.game || this.game._shakeOn !== false;
+    const effShake = shakeOn ? this.shake : 0;
+    const shakeX = effShake > 0.2 ? (Math.random() - 0.5) * effShake : 0;
+    const shakeY = effShake > 0.2 ? (Math.random() - 0.5) * effShake : 0;
 
     if (winHeight > 10) {
       ctx.save();
@@ -1131,9 +1146,10 @@ export class BossCutscene {
       this.drawDialogueBox(ctx, vw, vh, curBottomH);
     }
 
-    // 6. 白光一閃 (Flash)
+    // 6. 白光一閃 (Flash，尊重顯示設定的「減少閃光」倍率)
     if (this.flash > 0) {
-      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.45, this.flash)})`;
+      const flashMul = (this.game && this.game._flashMul != null) ? this.game._flashMul : 1;
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.45, this.flash) * flashMul})`;
       ctx.fillRect(0, 0, vw, vh);
     }
 
@@ -1819,7 +1835,9 @@ export class BossCutscene {
 
       ctx.textAlign = 'right';
       ctx.fillStyle = (Math.sin(this.timer * 12) > 0) ? '#ff0038' : '#880015';
-      ctx.fillText(isNarrow ? '● THREAT: SSS' : '● THREAT LEVEL: SSS EXTREME', vw - 16, topH - 14);
+      const threatMatch = this.profile?.code?.match(/THREAT:\s*(SSS|SS|S|A)/);
+      const threatRank = threatMatch ? threatMatch[1] : 'SSS';
+      ctx.fillText(isNarrow ? `● THREAT: ${threatRank}` : `● THREAT LEVEL: ${threatRank} EXTREME`, vw - 16, topH - 14);
     }
 
     // 底部純黑條
@@ -1985,11 +2003,20 @@ export class BossCutscene {
     ctx.restore();
   }
 
-  // 輕量復古 CRT 掃描線
+  // 輕量復古 CRT 掃描線（快取 1×4 pattern，一次 fillRect 完成，取代逐行數百次 fillRect）
   drawScanlines(ctx, x, y, w, h) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
-    for (let i = 0; i < h; i += 4) {
-      ctx.fillRect(x, y + i, w, 1.2);
+    if (!this._scanlinePat && typeof document !== 'undefined') {
+      const c = document.createElement('canvas');
+      c.width = 4;
+      c.height = 4;
+      const sx = c.getContext('2d');
+      sx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+      sx.fillRect(0, 0, 4, 1);
+      this._scanlinePat = ctx.createPattern(c, 'repeat');
+    }
+    if (this._scanlinePat) {
+      ctx.fillStyle = this._scanlinePat;
+      ctx.fillRect(x, y, w, h);
     }
   }
 }

@@ -351,6 +351,7 @@ export const WEAPONS = {
     element: 'fire',
     description: '兩道反向旋轉的巨型迴力鏢持續颳掃，去回都追擊並附帶燃燒。',
     isEvo: true,
+    baseWeapon: 'boomerang',
     evoTarget: null,
     maxLevel: 5,
     evoGrowth: 0.25,             // 覺醒：每級傷害 +25%（見 WeaponManager 的傷害計算）
@@ -373,6 +374,7 @@ export const WEAPONS = {
     element: 'fire',
     description: '三道加寬的湮滅射線掃過全場，命中即點燃，冷卻大幅縮短。',
     isEvo: true,
+    baseWeapon: 'railgun',
     evoTarget: null,
     maxLevel: 5,
     evoGrowth: 0.25,
@@ -1853,8 +1855,8 @@ export const MINI_EVENTS = [
     desc: '天降大量經驗水晶，快收集！', duration: 8 },
 ];
 
-// ── 武器協同效果 (Synergies)：持有特定武器組合產生額外被動 ──
-// weapons: 需要同時持有的武器 id 陣列 (包含超武)
+// ── 武器協同效果 (Synergies)：持有特定武器組合產生額外被動與雙超武共鳴 ──
+// weapons: 需要同時持有的武器 id 陣列 (包含超武或雙超武配對)
 // 一把武器可參與多組協同，但同組只生效一次
 export const SYNERGIES = [
   { id: 'steam_blast',    weapons: ['molotov', 'soccer'],    name: '蒸汽爆破',    icon: '💨',
@@ -1875,6 +1877,48 @@ export const SYNERGIES = [
   { id: 'elemental_fusion', weapons: ['lightning', 'molotov'], name: '元素融合',  icon: '🔮',
     desc: '蓄能彈觸發間隔 -1 發', color: '#b388ff',
     effect: { chargeReduction: 1 } },
+  { id: 'cryo_shatter',   weapons: ['frost_nova', 'shotgun'], name: '碎冰霰彈',   icon: '❄️',
+    desc: '全傷害 +18%，對減速或冰凍目標爆擊率 +12%', color: '#90e0ef',
+    effect: { synDmgMul: 1.18, synCrit: 0.12 } },
+  { id: 'hyper_rail',     weapons: ['railgun', 'boomerang'],  name: '電磁迴旋',   icon: '⚡',
+    desc: '技能範圍 +20%、全冷卻 -12%', color: '#48cae4',
+    effect: { synRangeMul: 1.20, synCdrMul: 0.88 } },
+  { id: 'imperium_arsenal', weapons: ['bolter', 'chainsword'], name: '星際武庫',  icon: '🦅',
+    desc: '全傷害 +22%、受到傷害 -15%', color: '#ffd166',
+    effect: { synDmgMul: 1.22, synDmgTakenMul: 0.85 } },
+  { id: 'holy_crusade',   weapons: ['lance', 'guardian'],     name: '聖堂騎士',   icon: '🔱',
+    desc: '全傷害 +18%、每秒自動回復 2.5 HP', color: '#4cc9f0',
+    effect: { synDmgMul: 1.18, synRegen: 2.5 } },
+
+  // ── 雙超武覺醒共鳴 (Dual-Evolution Resonance Perks) ──
+  { id: 'evo_thermal_shock', weapons: ['napalm_sea', 'absolute_zero'], isEvoSynergy: true,
+    name: '冰火兩極共鳴', icon: '🔥🧊', color: '#ff6b6b',
+    desc: '雙超武共鳴：全傷害 +25%，每 4 秒爆發冰火熱震波並破甲',
+    effect: { synDmgMul: 1.25, pulseThermal: true } },
+  { id: 'evo_superconductor', weapons: ['plasma_storm', 'annihilation_beam'], isEvoSynergy: true,
+    name: '超導磁暴共鳴', icon: '🌩️☄️', color: '#00f5d4',
+    desc: '雙超武共鳴：冷卻 -18%，每 3.5 秒對強敵降下超導連鎖雷',
+    effect: { synCdrMul: 0.82, pulseSuperconduct: true } },
+  { id: 'evo_event_horizon', weapons: ['eternal_domain', 'singularity_ring'], isEvoSynergy: true,
+    name: '事件視界共鳴', icon: '🌌🛡️', color: '#c77dff',
+    desc: '雙超武共鳴：減傷 20%、範圍 +20%，每 3 秒引力坍縮震暈敵群',
+    effect: { synDmgTakenMul: 0.80, synRangeMul: 1.20, pulseHorizon: true } },
+  { id: 'evo_blade_tempest', weapons: ['ghost_shuriken', 'phase_storm'], isEvoSynergy: true,
+    name: '次元裂刃共鳴', icon: '✨🌀', color: '#7df8ff',
+    desc: '雙超武共鳴：暴擊率 +15%、冷卻 -15%，每 3 秒釋放次元斬波',
+    effect: { synCrit: 0.15, synCdrMul: 0.85, pulseBlade: true } },
+  { id: 'evo_abyssal_nuke', weapons: ['shark_torpedo', 'quantum_sphere'], isEvoSynergy: true,
+    name: '深海量子核爆', icon: '🦈⚛️', color: '#00e5ff',
+    desc: '雙超武共鳴：爆炸範圍 +35%、全傷害 +25%，每 4.5 秒引爆量子劇毒新星',
+    effect: { explosionRangeMul: 1.35, synDmgMul: 1.25, pulseAbyss: true } },
+  { id: 'evo_dragon_gale', weapons: ['twin_storm', 'dragon_breath'], isEvoSynergy: true,
+    name: '烈風龍息共鳴', icon: '🌪️🐲', color: '#ff9e00',
+    desc: '雙超武共鳴：移速 +20%、全傷害 +25%，每 3 秒噴發烈風火環點燃四周',
+    effect: { synSpeedMul: 1.20, synDmgMul: 1.25, pulseDragon: true } },
+  { id: 'evo_imperium_wrath', weapons: ['storm_bolter', 'power_sword'], isEvoSynergy: true,
+    name: '帝皇聖戰共鳴', icon: '⚡⚔️', color: '#ffd166',
+    desc: '雙超武共鳴：全傷害 +30%、每秒回血 3，每 4 秒激發黃金聖盾與破甲震波',
+    effect: { synDmgMul: 1.30, synRegen: 3.0, pulseImperium: true } },
 ];
 
 // ── 炸彈類效果調校（單一真相）──

@@ -206,6 +206,142 @@ export function tickBlessingEffects(game, dt) {
       game.weaponManager.applyPassives();
     }
   }
+  // 雙超武覺醒共鳴主動脈衝
+  tickSynergyPulses(game, dt);
+}
+
+function tickSynergyPulses(game, dt) {
+  const p = game.player;
+  const syn = p && p.synergies;
+  if (!syn) return;
+  const timers = (p._synTimers ||= {});
+
+  // 1. 冰火兩極共鳴：每 4 秒爆發冰火熱震波並破甲
+  if (syn.pulseThermal) {
+    timers.thermal = (timers.thermal || 0) + dt;
+    if (timers.thermal >= 4.0) {
+      timers.thermal = 0;
+      const r = 240 * (p.rangeMultiplier || 1);
+      game.particles.createShockwave(p.x, p.y, r, '#ff6b6b');
+      const dmg = Math.round((45 + (p.level || 1) * 8) * (p.damageMultiplier || 1));
+      for (const e of game.enemies) {
+        if (!e.isDead && Math.hypot(e.x - p.x, e.y - p.y) <= r) {
+          e.applyMark?.(4.0, 0.25);
+          e.applySlow?.(2.5);
+          game.damageEnemy(e, dmg, 14, p.x, p.y, 'napalm_sea', 'fire');
+        }
+      }
+    }
+  }
+
+  // 2. 超導磁暴共鳴：每 3.5 秒對場上最多 3 名強敵降下超導連鎖雷
+  if (syn.pulseSuperconduct) {
+    timers.superconduct = (timers.superconduct || 0) + dt;
+    if (timers.superconduct >= 3.5) {
+      timers.superconduct = 0;
+      const targets = game.enemies
+        .filter((e) => !e.isDead && Math.hypot(e.x - p.x, e.y - p.y) <= 520)
+        .sort((a, b) => b.hp - a.hp)
+        .slice(0, 3);
+      const dmg = Math.round((70 + (p.level || 1) * 12) * (p.damageMultiplier || 1));
+      for (const t of targets) {
+        game.particles.createArc(p.x, p.y, t.x, t.y, '#00f5d4');
+        game.particles.createShockwave(t.x, t.y, 70, '#00f5d4');
+        game.damageEnemy(t, dmg, 12, p.x, p.y, 'plasma_storm', 'shock');
+      }
+    }
+  }
+
+  // 3. 事件視界共鳴：每 3 秒引力坍縮震暈周圍敵群
+  if (syn.pulseHorizon) {
+    timers.horizon = (timers.horizon || 0) + dt;
+    if (timers.horizon >= 3.0) {
+      timers.horizon = 0;
+      const r = 220 * (p.rangeMultiplier || 1);
+      game.particles.createShockwave(p.x, p.y, r, '#c77dff');
+      const dmg = Math.round((38 + (p.level || 1) * 6) * (p.damageMultiplier || 1));
+      for (const e of game.enemies) {
+        if (!e.isDead && Math.hypot(e.x - p.x, e.y - p.y) <= r) {
+          e.applyStun?.(0.75);
+          game.damageEnemy(e, dmg, 18, p.x, p.y, 'singularity_ring', 'physical');
+        }
+      }
+    }
+  }
+
+  // 4. 次元裂刃共鳴：每 3 秒向最近 4 名敵人釋放次元斬波
+  if (syn.pulseBlade) {
+    timers.blade = (timers.blade || 0) + dt;
+    if (timers.blade >= 3.0) {
+      timers.blade = 0;
+      const targets = game.enemies
+        .filter((e) => !e.isDead && Math.hypot(e.x - p.x, e.y - p.y) <= 420)
+        .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))
+        .slice(0, 4);
+      const dmg = Math.round((55 + (p.level || 1) * 10) * (p.damageMultiplier || 1));
+      for (const t of targets) {
+        game.particles.createArc(p.x, p.y, t.x, t.y, '#7df8ff');
+        game.damageEnemy(t, dmg, 10, p.x, p.y, 'phase_storm', 'shock');
+      }
+    }
+  }
+
+  // 5. 深海量子核爆：每 4.5 秒在最密集目標處引爆量子劇毒新星
+  if (syn.pulseAbyss) {
+    timers.abyss = (timers.abyss || 0) + dt;
+    if (timers.abyss >= 4.5) {
+      timers.abyss = 0;
+      const target = game.enemies.find((e) => !e.isDead && Math.hypot(e.x - p.x, e.y - p.y) <= 480);
+      if (target) {
+        const r = 210 * (p.rangeMultiplier || 1);
+        game.particles.createShockwave(target.x, target.y, r, '#00e5ff');
+        const dmg = Math.round((65 + (p.level || 1) * 11) * (p.damageMultiplier || 1));
+        for (const e of game.enemies) {
+          if (!e.isDead && Math.hypot(e.x - target.x, e.y - target.y) <= r) {
+            e.applyPoison?.(5, 'shark_torpedo');
+            e.applySlow?.(2.5);
+            game.damageEnemy(e, dmg, 16, target.x, target.y, 'shark_torpedo', 'toxic');
+          }
+        }
+      }
+    }
+  }
+
+  // 6. 烈風龍息共鳴：每 3 秒噴發烈風火環點燃四周
+  if (syn.pulseDragon) {
+    timers.dragon = (timers.dragon || 0) + dt;
+    if (timers.dragon >= 3.0) {
+      timers.dragon = 0;
+      const r = 190 * (p.rangeMultiplier || 1);
+      game.particles.createShockwave(p.x, p.y, r, '#ff9e00');
+      const dmg = Math.round((48 + (p.level || 1) * 8) * (p.damageMultiplier || 1));
+      for (const e of game.enemies) {
+        if (!e.isDead && Math.hypot(e.x - p.x, e.y - p.y) <= r) {
+          e.applyBurn?.(16, 3.0, 'dragon_breath');
+          game.damageEnemy(e, dmg, 15, p.x, p.y, 'dragon_breath', 'fire');
+        }
+      }
+    }
+  }
+
+  // 7. 帝皇聖戰共鳴：每 4 秒激發黃金聖盾與破甲震波
+  if (syn.pulseImperium) {
+    timers.imperium = (timers.imperium || 0) + dt;
+    if (timers.imperium >= 4.0) {
+      timers.imperium = 0;
+      p.shield = Math.min((p.maxShield || 0) + 25, (p.shield || 0) + 15);
+      p.maxShield = Math.max(p.maxShield || 0, p.shield);
+      const r = 210 * (p.rangeMultiplier || 1);
+      game.particles.createShockwave(p.x, p.y, r, '#ffd166');
+      const dmg = Math.round((52 + (p.level || 1) * 9) * (p.damageMultiplier || 1));
+      for (const e of game.enemies) {
+        if (!e.isDead && Math.hypot(e.x - p.x, e.y - p.y) <= r) {
+          e.applyMark?.(4.5, 0.25);
+          game.damageEnemy(e, dmg, 18, p.x, p.y, 'power_sword', 'shock');
+        }
+      }
+    }
+  }
 }
 
 export function checkEventSchedule(game, dt) {
@@ -331,10 +467,17 @@ export function endMiniEvent(game) {
 
 export function checkSynergies(game) {
   const ownedWeapons = new Set(game.weaponManager.weapons.keys());
-  // 超武也算它的基底武器
-  for (const [id] of game.weaponManager.weapons.entries()) {
+  let evoCount = 0;
+  // 超武也算它的基底武器；雙武合體吃掉的武器（absorbedByEvo）也保留協同資格
+  for (const [id, item] of game.weaponManager.weapons.entries()) {
     const def = WEAPONS[id];
     if (def && def.baseWeapon) ownedWeapons.add(def.baseWeapon);
+    if ((def && def.isEvo) || (item && item.isEvo)) evoCount++;
+  }
+  if (game.weaponManager.absorbedByEvo) {
+    for (const absId of game.weaponManager.absorbedByEvo) {
+      if (WEAPONS[absId]) ownedWeapons.add(absId);
+    }
   }
   const newSynergies = [];
   for (const syn of SYNERGIES) {
@@ -342,21 +485,45 @@ export function checkSynergies(game) {
       newSynergies.push(syn);
     }
   }
+  // 泛用雙超武覺醒：只要同一局合成任意 2 把以上超武即啟動「雙超武覺醒」
+  if (evoCount >= 2) {
+    newSynergies.push({
+      id: 'dual_evo_awakening',
+      name: '雙超武覺醒',
+      icon: '🌟',
+      color: '#ffd166',
+      desc: '持有 2 把以上超武：全傷害 +15%、全冷卻 -10%',
+      isEvoSynergy: true,
+      effect: { synDmgMul: 1.15, synCdrMul: 0.90 },
+    });
+  }
   // 檢查新觸發的協同
   const oldIds = new Set(game.activeSynergies.map((s) => s.id));
   for (const syn of newSynergies) {
     if (!oldIds.has(syn.id)) {
-      game.particles.createShockwave(game.player.x, game.player.y, 200, syn.color);
+      game.particles.createShockwave(game.player.x, game.player.y, syn.isEvoSynergy ? 260 : 200, syn.color);
       sound.playEvoFanfare();
-      game.ui.say(`🌀 協同觸發：${syn.icon} ${syn.name} — ${syn.desc}`, syn.color, 3.5);
+      const prefix = syn.isEvoSynergy ? '🌟 雙超武共鳴覺醒' : '🌀 協同觸發';
+      game.ui.say(`${prefix}：${syn.icon} ${syn.name} — ${syn.desc}`, syn.color, 3.8);
     }
   }
   game.activeSynergies = newSynergies;
-  // 把協同效果注入 player
-  game.player.synergies = {};
+  // 把協同效果注入 player（乘法欄位累乘、加法欄位累加，避免多組協同互相覆蓋）
+  const merged = {};
   for (const syn of newSynergies) {
-    Object.assign(game.player.synergies, syn.effect);
+    const eff = syn.effect || {};
+    for (const [k, v] of Object.entries(eff)) {
+      if (typeof v === 'number' && k.endsWith('Mul')) {
+        merged[k] = (merged[k] ?? 1) * v;
+      } else if (typeof v === 'number') {
+        merged[k] = (merged[k] ?? 0) + v;
+      } else {
+        merged[k] = v;
+      }
+    }
   }
+  game.player.synergies = merged;
+  game.weaponManager.applyPassives();
   game.ui.updateSynergies(game.activeSynergies);
 }
 

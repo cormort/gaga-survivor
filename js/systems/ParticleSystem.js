@@ -471,8 +471,9 @@ export class ParticleSystem {
         const alpha = Math.max(0, dt.life / dt.maxLife);
         ctx.globalAlpha = alpha;
         ctx.fillStyle = dt.color;
-        ctx.strokeText(dt.text, screenX, screenY);
-        ctx.fillText(dt.text + (dt.suffix || ''), screenX, screenY);
+        const fullText = dt.text + (dt.suffix || '');
+        ctx.strokeText(fullText, screenX, screenY);
+        ctx.fillText(fullText, screenX, screenY);
       }
       ctx.restore();
     }

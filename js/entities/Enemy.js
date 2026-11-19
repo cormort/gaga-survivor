@@ -284,10 +284,14 @@ export class Enemy {
     }
     if (this.poisonTimer > 0) {
       this.poisonTimer -= dt;
-      const tick = CHARGE.poison.dps * this.poisonStacks * dt;
+      const tick = CHARGE.poison.dps * (this.poisonMul || 1) * this.poisonStacks * dt;
       dot += tick;
+      this._poisoned = true;
       cb.onBurn?.(this, tick, this.poisonSource);
-      if (this.poisonTimer <= 0) this.poisonStacks = 0;
+      if (this.poisonTimer <= 0) {
+        this.poisonStacks = 0;
+        this._poisoned = false;
+      }
     }
     if (this.bleedTimer > 0) {
       this.bleedTimer -= dt;
@@ -632,8 +636,13 @@ export class Enemy {
       this._bossStageSeen = stage;
       this._enrageFlash = 1.0;          // 進階瞬間的視覺提示
       this.skillTimer = Math.min(this.skillTimer, 0.6);  // 立刻接一招
+      if (stage >= 1 && !this._phase2ShieldTriggered) {
+        this._phase2ShieldTriggered = true;
+        cb.onBossPhase2?.(this);
+      }
     }
     if (this._enrageFlash > 0) this._enrageFlash -= dt;
+    if (this.phaseShieldTimer > 0) this.phaseShieldTimer = Math.max(0, this.phaseShieldTimer - dt);
 
     const rage = 1 + stage * 0.35;      // 階段 0/1/2 → 1.0 / 1.35 / 1.7
     const spdFactor = this.speedFactor();
@@ -888,6 +897,7 @@ export class Enemy {
     this.poisonStacks = Math.min(CHARGE.poison.maxStacks, this.poisonStacks + 1);
     this.poisonTimer = Math.max(this.poisonTimer, duration);
     this.poisonSource = weaponId || this.poisonSource;
+    this._poisoned = true;
   }
 
   // 流血 (鏈鋸劍)：高頻撕裂物理持續傷害
@@ -922,6 +932,8 @@ export class Enemy {
     }
     // 標記中的目標受到額外傷害 (基隆型態；倍率來自 stats.markDamageBonus)
     if (this.markTimer > 0) mul *= 1 + (this.markBonus != null ? this.markBonus : 0.25);
+    // 首領二階段超載護盾：靈脈陣眼尚未全部踩破前減傷 55%
+    if (this.phaseShieldTimer > 0) mul *= 0.45;
 
     // 減傷；至少造成 1 點，避免高血量時永遠打不動
     const applied = Math.max(1, Math.round(amount * mul));
@@ -1164,6 +1176,25 @@ export class Enemy {
       ctx.stroke();
       ctx.restore();
       ctx.globalAlpha = 1;
+    }
+
+    // 首領二階段超載護盾（需踩破周圍靈脈陣眼解除）
+    if (this.phaseShieldTimer > 0) {
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      const pulse = 0.5 + 0.5 * Math.sin(this.animTimer * 6);
+      const sr = this.drawRadius + 16 + pulse * 4;
+      ctx.fillStyle = `rgba(0, 245, 212, ${(0.12 + 0.08 * pulse).toFixed(2)})`;
+      ctx.strokeStyle = '#00f5d4';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 6]);
+      ctx.lineDashOffset = -this.animTimer * 18;
+      ctx.beginPath();
+      ctx.arc(0, 0, sr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
     }
 
     // 冰凍中：冰藍結晶包覆 + 外圈實線

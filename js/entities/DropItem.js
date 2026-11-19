@@ -239,6 +239,7 @@ export class DropItem {
       ctx.font = `${this.radius * 1.8}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      ctx.fillText(this.icon || '💎', 0, 0);
     } else if (this.type === 'unban_ticket' || this.kind === 'UNBAN_TICKET') {
       // 解除封鎖券：紫粉金邊流光發光光暈 + 旋轉八角星芒環繞
       const g = ctx.createRadialGradient(0, 0, 2, 0, 0, this.radius * 2.8);

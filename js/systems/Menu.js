@@ -276,9 +276,13 @@ export function bindEvents(game) {
   };
   game.ui.pauseBtn.addEventListener('click', togglePause);
   document.getElementById('btn-resume')?.addEventListener('click', togglePause);
-  // Esc / P 快捷鍵（只在戰鬥中或暫停中有效；選卡、開箱時不搶按鍵）
+  // Esc / P 快捷鍵（只在戰鬥中或暫停中有效；選卡、開箱、首領過場時不搶按鍵）
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' && e.key !== 'p' && e.key !== 'P') return;
+    if (game.bossCutscene && game.bossCutscene.active) {
+      if (e.key === 'Escape') game.bossCutscene.skip();
+      return;
+    }
     if (game.state === 'PLAYING' || game.state === 'PAUSED') togglePause();
   });
 
@@ -843,6 +847,7 @@ export function levelUpCharacter(game, id, times) {
 
 export function returnToMenu(game) {
   game.state = 'START';
+  game.bossCutscene?.reset?.();
   // 每日挑戰會強制切成生存者，回選單要把玩家自己選的模式還原回來
   game.modeId = MODES[save.data.mode] ? save.data.mode : 'survivor';
   game.mode = getMode(game.modeId);

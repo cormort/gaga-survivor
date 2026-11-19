@@ -10,6 +10,7 @@ import {
   CONSUMABLE_ITEMS,
   WEAPON_ASPECTS,
   ENEMY_TYPES,
+  SYNERGIES,
 } from '../config.js';
 import { TALENTS, TALENT_ORDER, talentCost, talentInvested, talentTreeCost, talentValueAt, upgradeKeyOf, isBanishable, CHAR_LEVEL, charLevelBonuses, charLevelCost } from '../meta.js';
 import { CHARACTERS, CHARACTER_ORDER } from '../characters.js';
@@ -1465,6 +1466,11 @@ export class UIManager {
   // 幸運物資箱抽獎彈窗
   // opts：{ title, subtitle } —— 首領寶藏箱用不同標題；一般補給箱沿用預設
   showLuckyChest(count, rewards, onClaim, opts = {}) {
+    if (this._chestTimers) {
+      for (const id of this._chestTimers) clearTimeout(id);
+    }
+    this._chestTimers = [];
+
     // 自動跳過開箱動畫：直接套用獎勵並回遊戲
     if (this.skipChestChk && this.skipChestChk.checked) {
       if (onClaim) onClaim();
@@ -1482,7 +1488,7 @@ export class UIManager {
     sound.playGem();
 
     rewards.forEach((r, idx) => {
-      setTimeout(() => {
+      const t1 = setTimeout(() => {
         const card = document.createElement('div');
         card.className = 'chest-card' + (r.isGold ? ' gold-tier' : '');
         const title = r.title || r.name || '神秘獎勵';
@@ -1495,15 +1501,21 @@ export class UIManager {
         sound.playHit();
 
         if (idx === rewards.length - 1) {
-          setTimeout(() => {
+          const t2 = setTimeout(() => {
             this.chestClaimBtn.classList.remove('hidden');
             sound.playLevelUp();
           }, 300);
+          this._chestTimers.push(t2);
         }
       }, (idx + 1) * 350);
+      this._chestTimers.push(t1);
     });
 
     this.chestClaimBtn.onclick = () => {
+      if (this._chestTimers) {
+        for (const id of this._chestTimers) clearTimeout(id);
+        this._chestTimers = [];
+      }
       this.luckyChestModal.classList.add('hidden');
       if (onClaim) onClaim();
     };
@@ -1766,8 +1778,9 @@ export class UIManager {
       const slot = document.getElementById(`weapon-slot-${wIndex}`);
       if (!slot) continue;
       const def = WEAPONS[id];
-      const aspectId = weaponManager.player?.weaponAspects?.[id];
-      const aspectList = WEAPON_ASPECTS[id];
+      const fam = def?.baseWeapon || id;
+      const aspectId = weaponManager.player?.weaponAspects?.[fam];
+      const aspectList = WEAPON_ASPECTS[fam];
       const asp = aspectList?.find((a) => a.id === aspectId);
       const aspectBadge = asp ? `<span class="slot-aspect-badge" title="${asp.name}: ${asp.desc}">${asp.icon}</span>` : '';
 
@@ -2233,6 +2246,28 @@ export class UIManager {
       return { pairId, owned: true, maxed: pItem.level >= evoPairNeed(pairId) };
     };
     const recipeHints = new Map(); // pairId -> { weaponName, evoName }：武器滿級但配件還沒滿級
+    const ownedAndBase = new Set(weaponManager.weapons.keys());
+    for (const [id] of weaponManager.weapons.entries()) {
+      const d = WEAPONS[id];
+      if (d && d.baseWeapon) ownedAndBase.add(d.baseWeapon);
+    }
+    if (weaponManager.absorbedByEvo) {
+      for (const absId of weaponManager.absorbedByEvo) {
+        if (WEAPONS[absId]) ownedAndBase.add(absId);
+      }
+    }
+    const synergyNoteFor = (candWeaponId) => {
+      const notes = [];
+      for (const syn of SYNERGIES || []) {
+        if (!syn.weapons.includes(candWeaponId)) continue;
+        const others = syn.weapons.filter((w) => w !== candWeaponId);
+        if (others.length > 0 && others.every((w) => ownedAndBase.has(w))) {
+          const prefix = syn.isEvoSynergy ? '🌟 雙超武共鳴' : '🌀 協同共鳴';
+          notes.push(`<br>${prefix}【${syn.icon}${syn.name}】：${syn.desc}`);
+        }
+      }
+      return notes.join('');
+    };
 
     // 1. 檢查是否有滿足條件的超武 (武器滿級 + 配件滿級)
     for (const [id, item] of weaponManager.weapons.entries()) {
@@ -2241,6 +2276,7 @@ export class UIManager {
         const pair = pairInfo(id);
         if (pair && pair.owned && pair.maxed) {
           const evoDef = WEAPONS[def.evoTarget];
+          const synNote = synergyNoteFor(def.evoTarget);
           candidates.push({
             type: 'evo',
             baseId: id,
@@ -2248,8 +2284,8 @@ export class UIManager {
             name: evoDef.name,
             icon: evoDef.icon,
             element: evoDef.element || 'physical',
-            description: evoDef.description,
-            tag: '超武 EVO',
+            description: evoDef.description + synNote,
+            tag: synNote ? '超武 EVO · 共鳴就緒' : '超武 EVO',
             isEvo: true,
           });
         } else if (pair && !pair.maxed) {
@@ -2348,16 +2384,17 @@ export class UIManager {
           && (!weaponManager.weaponPool || weaponManager.weaponPool.has(id))
           && (!def.exclusiveTo || def.exclusiveTo === weaponManager.player?.character?.id)) {   // 專屬武器：每日挑戰（全開放）也只給本人
           const hint = recipeHints.get(id);
+          const synNote = synergyNoteFor(id);
           candidates.push({
             type: 'weapon_new',
             id: id,
             name: def.name,
             icon: def.icon,
             element: def.element || 'physical',
-            description: hint
+            description: (hint
               ? `${def.description}（缺件：取得並升滿即可與【${hint.weaponName}】合成【${hint.evoName}】）`
-              : def.description,
-            tag: hint ? '新武器 · 超武缺件' : '新武器',
+              : def.description) + synNote,
+            tag: hint ? '新武器 · 超武缺件' : (synNote ? '新武器 · 協同共鳴' : '新武器'),
             isNew: true,
             nextLevel: 1,
             maxLevel: def.maxLevel,

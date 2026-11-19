@@ -38,6 +38,7 @@ export class InputController {
       if (window.game && window.game.bossCutscene && window.game.bossCutscene.active) {
         if (e.code === 'Space' || key === ' ' || key === 'enter' || key === 'escape') {
           e.preventDefault();
+          e.stopImmediatePropagation();
           window.game.bossCutscene.skip();
           return;
         }

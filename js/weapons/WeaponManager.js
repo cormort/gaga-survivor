@@ -72,8 +72,9 @@ export class WeaponManager {
     this._sawEjectCd = 0;
     this._stormCd = 0;   // 永恆守護力場的擊退風暴冷卻（同樣以遊戲時間倒數）
 
-    // 初始武器由角色決定
-    this.addWeapon(player.character.startWeapon || 'kunai');
+    // 初始武器由角色決定（若無效則退回 kunai，避免角色開局無武器）
+    const startW = player.character.startWeapon;
+    this.addWeapon(WEAPONS[startW] ? startW : 'kunai');
   }
 
   addWeapon(weaponId) {
@@ -270,6 +271,9 @@ export class WeaponManager {
     if (this.player.blessingAreaMul) {
       this.player.rangeMultiplier *= this.player.blessingAreaMul;
     }
+    if (this.player.traitRangeMul) {
+      this.player.rangeMultiplier *= this.player.traitRangeMul;
+    }
     if (this.player.blessingMagnetMul) {
       this.player.magnetMultiplier *= this.player.blessingMagnetMul;
     }
@@ -286,8 +290,35 @@ export class WeaponManager {
       }
     }
 
-    if (this.player.synergies?.projCdrMul) {
-      this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * this.player.synergies.projCdrMul);
+    const syn = this.player.synergies;
+    if (syn) {
+      if (syn.projCdrMul) {
+        this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * syn.projCdrMul);
+      }
+      if (syn.synCdrMul) {
+        this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * syn.synCdrMul);
+      }
+      if (syn.synDmgMul) {
+        this.player.damageMultiplier *= syn.synDmgMul;
+      }
+      if (syn.synRangeMul) {
+        this.player.rangeMultiplier *= syn.synRangeMul;
+      }
+      if (syn.synSpeedMul) {
+        this.player.speedMultiplier *= syn.synSpeedMul;
+      }
+      if (syn.synCrit) {
+        this.player.metaCrit = (this.player.metaCrit || 0) + syn.synCrit;
+      }
+      if (syn.synRegen) {
+        this.player.hpRegen = (this.player.hpRegen || 0) + syn.synRegen;
+      }
+    }
+    if (this.player._altarCdrMul) {
+      this.player.cdrMultiplier = Math.max(0.25, this.player.cdrMultiplier * this.player._altarCdrMul);
+    }
+    if (this.player._altarSpeedMul) {
+      this.player.speedMultiplier *= this.player._altarSpeedMul;
     }
 
     // 局外裝備的冷卻縮減：被動算完後再乘 (被動是直接指派，不能相加)。
@@ -297,11 +328,16 @@ export class WeaponManager {
       this.player.cdrMultiplier = Math.max(0.3, this.player.cdrMultiplier * (1 - totalCdr));
     }
 
-    // 承受傷害 = 基礎層（角色特質 × 每日詞綴 × 關卡／難度規則）× 祝福的風險懲罰。
+    // 承受傷害 = 基礎層（角色特質 × 每日詞綴 × 關卡／難度規則）× 祝福的風險懲罰 × 協同減傷 × 祭壇契約。
     // 風險懲罰在這裡重算而不是在 applyBlessing 裡寫死：祝福是每局重新拿的，
     // 但這條公式會被升級、買被動、換祝福反覆重跑，寫死就會被沖掉或疊兩次。
     if (p.baseDamageTaken !== undefined) {
-      p.damageTakenMul = p.baseDamageTaken * (p.blessingDamageRisk || 1);
+      p.damageTakenMul = p.baseDamageTaken
+        * (p.blessingDamageRisk || 1)
+        * (syn?.synDmgTakenMul || 1)
+        * (p._altarDmgTakenMul || 1);
+    } else if (syn?.synDmgTakenMul || p._altarDmgTakenMul) {
+      p.damageTakenMul = p.damageTakenMul * (syn?.synDmgTakenMul || 1) * (p._altarDmgTakenMul || 1);
     }
 
     // 角色特質的常駐加成 (例如兔兔「跑得越快打越痛」)
@@ -409,13 +445,14 @@ export class WeaponManager {
       if (item.cooldownTimer <= 0) {
         const fired = this.fireWeapon(id, item, def, enemies, particleSystem);
 
-        // 重置冷卻時間 (套用玩家冷卻縮減 cdrMultiplier 與型態的 cdMul)
+        // 重置冷卻時間 (套用玩家冷卻縮減 cdrMultiplier、角色特質 traitCdrMul 與型態的 cdMul)
         const baseCd = def.baseCooldown + (def.cooldownGrowth ? def.cooldownGrowth * (item.level - 1) : 0);
         const overload = this.player.overloadTimer > 0 ? 0.5 : 1;
+        const traitCdr = this.player.traitCdrMul || 1;
         // 型態冷卻倍率：札格苦無 0.70 (射速 +30%)、赫斯提亞火箭 1.15 (冷卻 +15%)。
         // 這兩個數字先前都沒有任何讀者。
         const aspectCd = this.aspectOf(id).stats.cdMul || 1;
-        item.cooldownTimer = Math.max(0.08, baseCd * this.player.cdrMultiplier * overload * aspectCd);
+        item.cooldownTimer = Math.max(0.08, baseCd * this.player.cdrMultiplier * overload * traitCdr * aspectCd);
         // 苦無（冷卻 0.7）≈ 0.25 秒、鏈鋸劍（1.35）封頂 0.35 秒、快槍下限 0.12 秒
         item.recoilDur = Math.min(0.35, Math.max(0.12, item.cooldownTimer * 0.35));
 
@@ -480,6 +517,13 @@ export class WeaponManager {
     } else if (this.player.bonusPierce && options.pierce !== undefined && options.pierce < 900) {
       options.pierce += this.player.bonusPierce;
     }
+    if (this.player.projSpeedMul && this.player.projSpeedMul !== 1) {
+      if (options.vx) options.vx *= this.player.projSpeedMul;
+      if (options.vy) options.vy *= this.player.projSpeedMul;
+    }
+    if (this.player.traitKnockbackMul && options.knockback) {
+      options.knockback *= this.player.traitKnockbackMul;
+    }
     const p = new Projectile(options);
     p.isCrit = crit;
     return p;
@@ -505,6 +549,9 @@ export class WeaponManager {
     // 兩者原本都只被倒數與畫光環，沒有任何傷害路徑讀取 —— 撿到等於沒撿。
     const crit = Math.random() < (this.player.critChance || 0) + (this.player.metaCrit || 0) +
       (this.player.luckPotionTimer > 0 ? 0.25 : 0) + (def.critBonus || 0);
+    if (crit && this.player.ratSpeedTimer !== undefined) {
+      this.player.ratSpeedTimer = 2.0;
+    }
     const critMul = 2 + (this.player.metaCritDmg || 0);
     const potionDmgMul = this.player.atkPotionTimer > 0 ? 1.4 : 1;
 

@@ -241,17 +241,19 @@ export class GroundRenderer {
     // 高 DPR（手機）時磚是 1024 世界單位、畫布卻是 2048 實際像素：每幀放大取樣整面地板。
     // 預先放大一張 1:1 的版本，實測 390×844@2 每幀繪製 11.6 → 9.7ms。
     // ponytail: 只保留「目前這一關」一張（約 16MB），不進 LevelCache，換關或縮放改變才重建；
-    // 桌機縮放 1 倍沒有效益，不做。
+    // 桌機縮放 1 倍沒有效益，不做。守塔關（level.td）會做開場導覽與滾輪／雙指平滑縮放，
+    // k 每幀連續變化，若跟著重建會每幀配置 ~30MB 離屏畫布造成卡頓，因此僅在固定縮放時啟用。
     const k = ctx.getTransform().a;
     let tex = groundTex;
-    if (k > 1.01 && groundTex._opaque) {
+    if (k > 1.01 && groundTex._opaque && !(this.level && this.level.td)) {
+      const qk = Math.round(k * 100) / 100;
       const big = this._bigTile;
-      if (!big || big.src !== groundTex || big.k !== k) {
+      if (!big || big.src !== groundTex || big.k !== qk) {
         const cv = document.createElement('canvas');
-        cv.width = cv.height = Math.round(gTile * k);
+        cv.width = cv.height = Math.round(gTile * qk);
         const bx = cv.getContext('2d', { alpha: false });
         bx.drawImage(groundTex, 0, 0, cv.width, cv.height);
-        this._bigTile = { cv, src: groundTex, k };
+        this._bigTile = { cv, src: groundTex, k: qk };
       }
       tex = this._bigTile.cv;
     }

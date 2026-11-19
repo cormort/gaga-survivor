@@ -264,7 +264,7 @@ export const CHARACTERS = {
       death: '我的職責……至死方休……為了帝皇……',
     },
     init(player) {
-      player.damageReduction = 0.2;
+      player.damageTakenMul = 0.8;
       player.standTimer = 0;
       player.maxHp = Math.round(player.maxHp * 1.25);
       player.hp = player.maxHp;
@@ -278,8 +278,8 @@ export const CHARACTERS = {
       }
       const isHolyFury = (p.standTimer >= 0.5) || (p.hp / p.maxHp < 0.5);
       p.holyFury = isHolyFury;
-      p.cooldownMultiplier = isHolyFury ? 0.65 : 1.0;
-      p.knockbackMultiplier = isHolyFury ? 1.5 : 1.0;
+      p.traitCdrMul = isHolyFury ? 0.65 : 1.0;
+      p.traitKnockbackMul = isHolyFury ? 1.5 : 1.0;
     },
   },
 
@@ -539,11 +539,11 @@ export const CHARACTERS = {
       const p = game.player;
       if (p.ratSpeedTimer > 0) {
         p.ratSpeedTimer -= dt;
-        p.speedMul = 1.45;
-        p.magnetMul = 1.5;
+        p.traitSpeedMul = 1.3;
+        p.traitMagnetMul = 1.5;
       } else {
-        p.speedMul = 1.15;
-        p.magnetMul = 1.0;
+        p.traitSpeedMul = 1.0;
+        p.traitMagnetMul = 1.0;
       }
     },
   },
@@ -571,7 +571,7 @@ export const CHARACTERS = {
       player.damageTakenMul = 0.75;
       player.oxShockCd = 0;
     },
-    tick(dt) {
+    tick(dt, game) {
       const p = game.player;
       if (p.oxShockCd > 0) p.oxShockCd -= dt;
     },
@@ -597,7 +597,7 @@ export const CHARACTERS = {
     heroClass: '格鬥', classColor: '#7fd8ff', classTitle: '虎嘯生風 / 破甲拳罡',
     traitName: '寅虎嘯天',
     traitDesc: '全傷害 +25%；每擊殺 20 隻敵人發出白虎震天吼，震退並重創全螢幕敵人',
-    startWeapon: 'katana', unlockCost: 240, accent: '#7fd8ff',
+    startWeapon: 'chainsword', unlockCost: 240, accent: '#7fd8ff',
     lines: {
       start: '風從虎，雲從龍！白虎門弟子，在此領教群魔！',
       levelup: '拳罡入微，爪風如刀！',
@@ -609,7 +609,24 @@ export const CHARACTERS = {
     },
     init(player) {
       player.tigerKillCount = 0;
-      player.baseDmgMul = (player.baseDmgMul || 1) * 1.25;
+      player.traitDmgMul = 1.25;
+    },
+    tick(dt, game) {
+      game.player.traitDmgMul = 1.25;
+    },
+    onKill(enemy, game) {
+      const p = game.player;
+      p.tigerKillCount = (p.tigerKillCount || 0) + 1;
+      if (p.tigerKillCount < 20) return;
+      p.tigerKillCount = 0;
+      game.particles.createShockwave(p.x, p.y, 280, '#7fd8ff');
+      game.camera.shake = Math.max(game.camera.shake, 10);
+      const dmg = Math.round(45 + p.maxHp * 0.25);
+      for (const e of game.enemies) {
+        if (!e.isDead && Math.hypot(e.x - p.x, e.y - p.y) < 320) {
+          game.damageEnemy(e, dmg, 24, p.x, p.y, 'chainsword');
+        }
+      }
     },
   },
 
@@ -633,6 +650,7 @@ export const CHARACTERS = {
     init(player) {
       player.projSpeedMul = 1.35;
       player.dashCooldownMul = 0.6;
+      player.traitRangeMul = 1.25;
     },
   },
 
@@ -654,7 +672,8 @@ export const CHARACTERS = {
       death: '龍魂歸墟……九霄……終將再臨……',
     },
     init(player) {
-      player.cooldownReduction = 0.20;
+      player.traitCdrMul = 0.80;
+      player.traitRangeMul = 1.30;
       player.dragonThunderTimer = 0;
     },
     tick(dt, game) {
@@ -671,7 +690,7 @@ export const CHARACTERS = {
           }
         }
         if (target) {
-          game.particles.createLightningLink(target.x, target.y - 120, target.x, target.y, '#00f59b');
+          game.particles.createArc(target.x, target.y - 120, target.x, target.y, '#00f59b');
           game.particles.createShockwave(target.x, target.y, 100, '#00f59b');
           game.damageEnemy(target, Math.round(90 + (p.level || 1) * 15), 20, target.x, target.y, 'lightning');
         }
@@ -699,6 +718,16 @@ export const CHARACTERS = {
     init(player) {
       player.poisonDmgMul = 1.6;
     },
+    onKill(enemy, game) {
+      if (!(enemy.poisonStacks > 0 || enemy.poisonTimer > 0 || enemy._poisoned)) return;
+      game.particles.createShockwave(enemy.x, enemy.y, 90, '#52b788');
+      for (const e of game.enemies) {
+        if (!e.isDead && e !== enemy && Math.hypot(e.x - enemy.x, e.y - enemy.y) < 110) {
+          e.applyPoison(5, 'molotov');
+          e.poisonMul = 1.6;
+        }
+      }
+    },
   },
 
   horse_hero: {
@@ -708,7 +737,7 @@ export const CHARACTERS = {
     heroClass: '騎兵', classColor: '#ffd166', classTitle: '奔雷極速 / 聖光踐踏',
     traitName: '午馬破軍',
     traitDesc: '基礎移速 +25%；奔馳時前方帶有聖芒衝撞力場，直接碾壓路徑上的敵人',
-    startWeapon: 'drone', unlockCost: 260, accent: '#ffd166',
+    startWeapon: 'orbit_saw', unlockCost: 260, accent: '#ffd166',
     lines: {
       start: '蹄聲雷動，破陣前鋒！天駟騎士，衝鋒！',
       levelup: '馬踏飛燕，長槍貫日！',
@@ -729,8 +758,8 @@ export const CHARACTERS = {
         if (p.horseStompTimer >= 0.4) {
           p.horseStompTimer = 0;
           for (const e of game.enemies) {
-            if (!e.isDead && Math.hypot(e.x - p.x, e.y - p.y) < 48) {
-              game.damageEnemy(e, 20, 15, p.x, p.y, 'drone');
+            if (!e.isDead && Math.hypot(e.x - p.x, e.y - p.y) < 56) {
+              game.damageEnemy(e, 24, 15, p.x, p.y, 'orbit_saw');
             }
           }
         }
@@ -745,7 +774,7 @@ export const CHARACTERS = {
     heroClass: '神官', classColor: '#b8c0ff', classTitle: '祥雲瑞氣 / 萬物回生',
     traitName: '未羊吉瑞',
     traitDesc: '每 2.5 秒自動回復 2% 最大生命；受到傷害時 30% 機率召喚祥雲護體免傷',
-    startWeapon: 'frost_orb', unlockCost: 280, accent: '#b8c0ff',
+    startWeapon: 'frost_nova', unlockCost: 280, accent: '#b8c0ff',
     lines: {
       start: '祥雲飄渺，吉瑞呈祥。願靈泉甘霖洗去世間污濁。',
       levelup: '藥香入骨，神魂寧靜。',
@@ -766,6 +795,14 @@ export const CHARACTERS = {
         if (p.hp < p.maxHp) p.heal(Math.round(p.maxHp * 0.02));
       }
     },
+    onHit(game) {
+      const p = game.player;
+      if (Math.random() < 0.30) {
+        p.shield = Math.max(p.shield || 0, Math.round(p.maxHp * 0.15));
+        p.invulnerableTimer = Math.max(p.invulnerableTimer, 1.5);
+        game.particles.createShockwave(p.x, p.y, 120, '#b8c0ff');
+      }
+    },
   },
 
   monkey_hero: {
@@ -775,7 +812,7 @@ export const CHARACTERS = {
     heroClass: '神將', classColor: '#ff9e00', classTitle: '如意金箍 / 法相天地',
     traitName: '申猴齊天',
     traitDesc: '全武器攻擊範圍 +35%，擊退力 +100%；生命低於 30% 時大聖金身 5 秒無敵且暴擊 100%',
-    startWeapon: 'flame_orbit', unlockCost: 350, accent: '#ff9e00',
+    startWeapon: 'guardian', unlockCost: 350, accent: '#ff9e00',
     lines: {
       start: '俺老孫來也！吃俺老孫一棒！',
       levelup: '金箍棒再重三千斤！痛快痛快！',
@@ -788,17 +825,25 @@ export const CHARACTERS = {
     init(player) {
       player.monkeyGoldUsed = false;
       player.monkeyGoldTimer = 0;
+      player.traitRangeMul = 1.35;
+      player.traitKnockbackMul = 2.0;
     },
     tick(dt, game) {
       const p = game.player;
       if (p.monkeyGoldTimer > 0) {
         p.monkeyGoldTimer -= dt;
-        p.invincible = true;
+        p.invulnerableTimer = Math.max(p.invulnerableTimer, 0.1);
         p.critChance = 1.0;
+        if (p.monkeyGoldTimer <= 0) {
+          p.critChance = 0;
+        }
       } else if (!p.monkeyGoldUsed && p.hp < p.maxHp * 0.3) {
         p.monkeyGoldUsed = true;
         p.monkeyGoldTimer = 5.0;
+        p.invulnerableTimer = Math.max(p.invulnerableTimer, 5.0);
+        p.critChance = 1.0;
         game.particles.createShockwave(p.x, p.y, 200, '#ff9e00');
+        game.ui?.say?.('🐒 大聖金身！5 秒無敵＋100% 暴擊！', '#ff9e00', 2.5);
       }
     },
   },
@@ -821,7 +866,23 @@ export const CHARACTERS = {
       death: '夕陽西下……待到明朝……再鳴破曉……',
     },
     init(player) {
-      player.critDmgMul = (player.critDmgMul || 1.5) + 0.5;
+      if (!player.blessing) player.blessing = { crit: 0, critDmg: 0, exp: 0 };
+      player.blessing.critDmg = (player.blessing.critDmg || 0) + 0.5;
+      player.roosterKills = 0;
+    },
+    onKill(enemy, game) {
+      const p = game.player;
+      p.roosterKills = (p.roosterKills || 0) + 1;
+      if (p.roosterKills < 50) return;
+      p.roosterKills = 0;
+      game.particles.createShockwave(p.x, p.y, 340, '#e63946');
+      const dmg = Math.round(70 + p.maxHp * 0.35);
+      for (const e of game.enemies) {
+        if (!e.isDead && Math.hypot(e.x - p.x, e.y - p.y) < 380) {
+          game.damageEnemy(e, dmg, 16, p.x, p.y, 'annihilation_beam', 'fire');
+          e.applyBurn?.(18, 3, 'annihilation_beam');
+        }
+      }
     },
   },
 
@@ -844,7 +905,8 @@ export const CHARACTERS = {
     },
     init(player) {
       player.baseMagnet = 1.5;
-      player.expMul = 1.25;
+      if (!player.blessing) player.blessing = { crit: 0, critDmg: 0, exp: 0 };
+      player.blessing.exp = (player.blessing.exp || 0) + 0.25;
     },
   },
 
@@ -868,6 +930,7 @@ export const CHARACTERS = {
     init(player) {
       player.maxHp = 140;
       player.hp = 140;
+      player.pigPickupHeal = true;
     },
     tick(dt, game) {
       const p = game.player;
@@ -899,38 +962,39 @@ export const CHARACTERS = {
       death: '我的鎧甲……我的草莓四角褲……不甘心啊……',
     },
     init(player) {
-      player.armor = (player.armor || 0) + 4;
+      player.damageTakenMul = 0.75;
       player.arthurRevives = 2;
       player.arthurInvulnTimer = 0;
-    },
-    passive(player) {
-      player.damageReduction = (player.damageReduction || 0) + 0.25;
     },
     tick(dt, game) {
       const p = game.player;
       if (p.arthurInvulnTimer > 0) {
         p.arthurInvulnTimer -= dt;
-        p.invulnerable = true;
+        p.traitSpeedMul = 1.5;
         if (p.arthurInvulnTimer <= 0) {
-          p.speedMultiplier /= 1.5;
+          p.traitSpeedMul = 1.0;
         }
       }
-      // 爆衣不屈機制：當 HP 歸零且還有次數時爆發聖光脫困
-      if (p.hp <= 0 && p.arthurRevives > 0) {
-        p.arthurRevives--;
-        p.hp = Math.round(p.maxHp * 0.45);
-        p.arthurInvulnTimer = 2.5;
-        p.speedMultiplier *= 1.5;
-        game.floatingText?.(p.x, p.y - 40, '💥 鎧甲爆裂！草莓四角褲出擊！', '#ffd166');
-        game.sound?.playLevelUp?.();
-        for (const e of game.enemies) {
+    },
+    onLethal(p, game) {
+      if (!(p.arthurRevives > 0)) return false;
+      p.arthurRevives--;
+      p.hp = Math.round(p.maxHp * 0.45);
+      p.invulnerableTimer = Math.max(p.invulnerableTimer, 2.5);
+      p.arthurInvulnTimer = 2.5;
+      p.traitSpeedMul = 1.5;
+      if (game) {
+        game.particles?.createDamageText(p.x, p.y - 40, '💥 鎧甲爆裂！草莓四角褲出擊！', true);
+        game.particles?.createShockwave(p.x, p.y, 350, '#ffd166');
+        game.ui?.say?.('💥 鎧甲爆裂！草莓四角褲出擊！（2.5 秒無敵＋疾走）', '#ffd166', 2.8);
+        for (const e of game.enemies || []) {
           if (e.isDead) continue;
-          const d = Math.hypot(e.x - p.x, e.y - p.y);
-          if (d < 350) {
-            game.damageEnemy(e, Math.round(180 * p.damageMultiplier), 18, p.x, p.y, 'holy');
+          if (Math.hypot(e.x - p.x, e.y - p.y) < 350) {
+            game.damageEnemy(e, Math.round(180 * (p.damageMultiplier || 1)), 18, p.x, p.y, 'lance');
           }
         }
       }
+      return true;
     },
   },
 };

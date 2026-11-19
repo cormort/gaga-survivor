@@ -1000,20 +1000,31 @@ class Game {
     ];
 
     // 可升級的既有武器 (不含超武；level 已滿的也排除)
-    const upgradeable = [];
-    for (const [id, item] of this.weaponManager.weapons) {
-      const def = WEAPONS[id];
-      if (def && !item.isEvo && item.level < def.maxLevel) upgradeable.push(id);
-    }
-    if (upgradeable.length > 0) {
+    const hasUpgradeable = () => {
+      for (const [id, item] of this.weaponManager.weapons) {
+        const def = WEAPONS[id];
+        if (def && !item.isEvo && item.level < def.maxLevel) return true;
+      }
+      return false;
+    };
+    if (hasUpgradeable()) {
       rewardPool.push({
         name: '武器突變',
         desc: '隨機在場武器立即升級 +1',
         icon: '⚡',
         apply: () => {
-          const wid = upgradeable[Math.floor(Math.random() * upgradeable.length)];
-          this.weaponManager.upgradeWeapon(wid);
-          this.ui.updateSkillSlots(this.weaponManager);
+          const list = [];
+          for (const [id, item] of this.weaponManager.weapons) {
+            const def = WEAPONS[id];
+            if (def && !item.isEvo && item.level < def.maxLevel) list.push(id);
+          }
+          if (list.length > 0) {
+            const wid = list[Math.floor(Math.random() * list.length)];
+            this.weaponManager.upgradeWeapon(wid);
+            this.ui.updateSkillSlots(this.weaponManager);
+          } else {
+            this.gold += Math.round(120 * facilityGoldMul(this));
+          }
         }
       });
     }
@@ -1028,11 +1039,11 @@ class Game {
       for (const r of pickedRewards) {
         r.apply();
       }
-      this.state = 'PLAYING';
       sound.resumeBGM();
       this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
       this.ui.updateBuildBtn(this.gold, this.turretCost);
       this.particles.createShockwave(this.player.x, this.player.y, 160, '#ffd60a');
+      this.continueAfterLevelUp();
     });
   }
 
@@ -1334,6 +1345,8 @@ class Game {
     // 工兵阿鴨的開局砲台就這樣消失無蹤）。
     this.player.character.startBonus?.(this);
     this.boss = null;
+    this.bossPylons = [];
+    this.bossCutscene?.reset?.();
     this.hitstopTimer = 0;
     this.redFlash = 0; // Boss 大招紅閃
     this.combo = 0;
@@ -1347,6 +1360,7 @@ class Game {
     this.hazards = [];
     this._mechTimers = {};       // 每種 mech 各自計時
     this._shrinkCircle = null;   // 深淵縮圈狀態
+    this._extractionWindows = new Set(); // 已觸發過的撤離井時段
     this.player.iceFriction = 0; // 重設冰面慣性
     this.killMilestoneAt = 100;
     this.timeMilestoneAt = 120;
@@ -2008,6 +2022,7 @@ class Game {
     updateSignatureFX(this, dt);
     tickBlessingEffects(this, dt);
     updateMerchant(this, dt);
+    this.updateBossPylons(dt);
 
     // 檢查特工是否身亡（守塔的英雄會復活，不結束遊戲）
     if (this.player.isDead) {
@@ -2023,15 +2038,16 @@ class Game {
     if (this.td) {
       this.clampCamera();
     } else {
+      const camLerp = 1 - Math.pow(0.88, dt * 60);
       const targetCamX = this.player.x - this.vw / 2;
       const targetCamY = this.player.y - this.vh / 2;
-      this.camera.x += (targetCamX - this.camera.x) * 0.12;
-      this.camera.y += (targetCamY - this.camera.y) * 0.12;
+      this.camera.x += (targetCamX - this.camera.x) * camLerp;
+      this.camera.y += (targetCamY - this.camera.y) * camLerp;
     }
 
-    // 螢幕震動衰減
+    // 螢幕震動衰減（依 dt*60 指數補償，避免高刷新率瞬間衰減完畢）
     if (this.camera.shake > 0) {
-      this.camera.shake *= 0.9;
+      this.camera.shake *= Math.pow(0.9, dt * 60);
       if (this.camera.shake < 0.1) this.camera.shake = 0;
     }
 
@@ -2045,67 +2061,69 @@ class Game {
       document.getElementById('btn-next-wave')?.classList.toggle('hidden', !showNext);
     }
 
-    // 4. 更新怪物行動、遠程射擊與自爆回呼
+    // 4. 更新怪物行動、遠程射擊與自爆回呼（回呼表重用，避免每幀 × 250 隻怪配置數千個閉包）
+    const enemyCbs = this._enemyCallbacks || (this._enemyCallbacks = {
+      onExplode: (boomer) => {
+        this.triggerBoomerExplosion(boomer, false);
+      },
+      onBossSkill: (boss, act) => this.handleBossSkill(boss, act),
+      onBossPhase2: (boss) => this.spawnBossPhasePylons(boss),
+      onShoot: (shooter, projData) => this.spawnEnemyProjectile(shooter, projData),
+      onHatch: (e) => this.spawnHatchling(e),
+      onHeal: (e) => {
+        // ponytail: O(n) 掃全場，巫醫數量少可接受；變多再改用碰撞網格
+        const r2 = e.healAura.radius ** 2;
+        for (const o of this.enemies) {
+          if (o.isDead || o.isBoss || o.hp >= o.maxHp) continue;
+          if ((o.x - e.x) ** 2 + (o.y - e.y) ** 2 > r2) continue;
+          o.hp = Math.min(o.maxHp, o.hp + o.maxHp * e.healAura.pct);
+        }
+        this.particles.createDeathParticles(e.x, e.y, '#9d4edd', 10);
+      },
+      onBlink: (e) => this.particles.createDeathParticles(e.x, e.y, '#2ec4b6', 8),
+      onMortar: (e) => {
+        // 瞄準特工「此刻」的位置；落點用既有的地雷預警圈畫法，fuse 秒後才爆
+        const m = e.mortar;
+        const p = this.player;
+        if ((p.x - e.x) ** 2 + (p.y - e.y) ** 2 > m.range ** 2) return;
+        placeHazard(this, { type: 'mine', radius: m.radius, fuse: m.fuse, dmg: m.dmg, color: m.color, source: `${e.name}・砲擊` }, p.x, p.y);
+        this.particles.createDeathParticles(e.x, e.y, m.color, 6);
+      },
+      onTrail: (e) => {
+        const t = e.trail;
+        placeHazard(this, { type: 'tar', radius: t.radius, dur: t.dur, color: t.color }, e.x, e.y);
+      },
+      onSlam: (e, slam) => {
+        // 攻城巨像踏地：範圍震波對特工造成傷害，也把周圍雜兵震開
+        this.particles.createShockwave(e.x, e.y, slam.radius, '#ffb703');
+        this.particles.createExplosion(e.x, e.y, slam.radius * 0.6);
+        this.camera.shake = Math.max(this.camera.shake, 10);
+        const sdx = this.player.x - e.x;
+        const sdy = this.player.y - e.y;
+        if (Math.sqrt(sdx * sdx + sdy * sdy) <= slam.radius + this.player.radius) {
+          if (this.player.takeDamage(slam.dmg, `${e.name}・重擊`, e.element, e.elementPotency)) {
+            this.particles.createHurtText(this.player.x, this.player.y, slam.dmg);
+          }
+        }
+        for (const other of this.enemies) {
+          if (other === e || other.isDead || other.isBoss) continue;
+          const odx = other.x - e.x;
+          const ody = other.y - e.y;
+          if (odx * odx + ody * ody <= slam.radius * slam.radius) {
+            other.takeDamage(0, 5, e.x, e.y);
+          }
+        }
+      },
+      onBurn: (e, dmg, src) => this.weaponManager.recordDamage(src, dmg),
+    });
+
     // 守塔模式：雜兵朝基地核心進攻；Boss 仍鎖玩家 (技能全以玩家為原點，且核心撐不住 Boss)
     const mobTarget = this.core && this.mode.enemyTarget === 'core' ? this.core : this.player;
     for (const enemy of this.enemies) {
       if (enemy.isDead) continue;
       const tdTarget = this.td && enemy.path ? this.td.targetFor(enemy, mobTarget, dt) : null;
       // 守塔關的首領也沿路線走（tdTarget）；其餘模式的首領照舊追玩家
-      enemy.update(dt, tdTarget || (enemy.isBoss ? this.player : mobTarget), {
-        onExplode: (boomer) => {
-          this.triggerBoomerExplosion(boomer, false);
-        },
-        onBossSkill: (boss, act) => this.handleBossSkill(boss, act),
-        onShoot: (shooter, projData) => this.spawnEnemyProjectile(shooter, projData),
-        onHatch: (e) => this.spawnHatchling(e),
-        onHeal: (e) => {
-          // ponytail: O(n) 掃全場，巫醫數量少可接受；變多再改用碰撞網格
-          const r2 = e.healAura.radius ** 2;
-          for (const o of this.enemies) {
-            if (o.isDead || o.isBoss || o.hp >= o.maxHp) continue;
-            if ((o.x - e.x) ** 2 + (o.y - e.y) ** 2 > r2) continue;
-            o.hp = Math.min(o.maxHp, o.hp + o.maxHp * e.healAura.pct);
-          }
-          this.particles.createDeathParticles(e.x, e.y, '#9d4edd', 10);
-        },
-        onBlink: (e) => this.particles.createDeathParticles(e.x, e.y, '#2ec4b6', 8),
-        onMortar: (e) => {
-          // 瞄準特工「此刻」的位置；落點用既有的地雷預警圈畫法，fuse 秒後才爆
-          const m = e.mortar;
-          const p = this.player;
-          if ((p.x - e.x) ** 2 + (p.y - e.y) ** 2 > m.range ** 2) return;
-          placeHazard(this, { type: 'mine', radius: m.radius, fuse: m.fuse, dmg: m.dmg, color: m.color, source: `${e.name}・砲擊` }, p.x, p.y);
-          this.particles.createDeathParticles(e.x, e.y, m.color, 6);
-        },
-        onTrail: (e) => {
-          const t = e.trail;
-          placeHazard(this, { type: 'tar', radius: t.radius, dur: t.dur, color: t.color }, e.x, e.y);
-        },
-        onSlam: (e, slam) => {
-          // 攻城巨像踏地：範圍震波對特工造成傷害，也把周圍雜兵震開
-          // (原本巨像只有「走得慢、血很厚」，沒有任何自己的節奏)
-          this.particles.createShockwave(e.x, e.y, slam.radius, '#ffb703');
-          this.particles.createExplosion(e.x, e.y, slam.radius * 0.6);
-          this.camera.shake = Math.max(this.camera.shake, 10);
-          const sdx = this.player.x - e.x;
-          const sdy = this.player.y - e.y;
-          if (Math.sqrt(sdx * sdx + sdy * sdy) <= slam.radius + this.player.radius) {
-            if (this.player.takeDamage(slam.dmg, `${e.name}・重擊`, e.element, e.elementPotency)) {
-              this.particles.createHurtText(this.player.x, this.player.y, slam.dmg);
-            }
-          }
-          for (const other of this.enemies) {
-            if (other === e || other.isDead || other.isBoss) continue;
-            const odx = other.x - e.x;
-            const ody = other.y - e.y;
-            if (odx * odx + ody * ody <= slam.radius * slam.radius) {
-              other.takeDamage(0, 5, e.x, e.y);
-            }
-          }
-        },
-        onBurn: (e, dmg, src) => this.weaponManager.recordDamage(src, dmg),
-      });
+      enemy.update(dt, tdTarget || (enemy.isBoss ? this.player : mobTarget), enemyCbs);
 
       // Boss 引力漩渦吸附判定
       if (enemy.isBoss && enemy.vortexTimer > 0) {
@@ -2262,9 +2280,9 @@ class Game {
         : '🪙 金幣足夠了 — 走到空地按建造鈕，多一座砲台就多一道防線', '#ffb703', 4);
     }
 
-    // 檢測是否在標準砲塔附近 (顯示進化按鈕)
+    // 檢測是否在標準砲塔附近 (顯示進化按鈕；需同時確認 facilityType === 'turret')
     const nearStandardTurret = !this.td && this.turrets.find(   // 守塔關改點擊塔來升級
-      (t) => t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125
+      (t) => t.facilityType === 'turret' && t.variant === 'standard' && Math.hypot(t.x - this.player.x, t.y - this.player.y) <= 125
     );
     if (nearStandardTurret && this.gold >= 50) {
       // 第二參數才是點擊回呼 (UI 簽名 showTurretUpgrade(show, onUpgrade)) — 別把砲塔物件當回呼傳
@@ -2306,7 +2324,9 @@ class Game {
     // 守塔模式不開這口井（v94）：它是生存者的「帶著戰利品提前離場」機制（把 pendingGear 全部
     // 安全入庫、給 180 DNA／150 金幣、再半徑 500 清場），但守塔沒有待回收裝備、也沒有離開戰場
     // 這回事，擺一口井只會讓玩家白跑一趟。兩個條件都掛上 !this.td，井就不會在守塔誕生。
-    if (!this.td && !this.extractionWell && ((this.gameTime >= 150 && this.gameTime < 155) || (this.gameTime >= 330 && this.gameTime < 335))) {
+    const extWin = (this.gameTime >= 150 && this.gameTime < 155) ? 150 : ((this.gameTime >= 330 && this.gameTime < 335) ? 330 : 0);
+    if (!this.td && !this.extractionWell && extWin && !(this._extractionWindows && this._extractionWindows.has(extWin))) {
+      if (this._extractionWindows) this._extractionWindows.add(extWin);
       const ang = Math.random() * Math.PI * 2;
       const d = 360 + Math.random() * 120;
       const b = worldBounds();
@@ -2765,14 +2785,15 @@ class Game {
         const died = enemy.takeDamage(actualDmg, p.knockback, p.x, p.y, atkElem);
         if (poolTick) enemy.flashTimer = flashBefore;
         if (died && p.mercOwner) p.mercOwner.gainKill(enemy); // 傭兵擊殺 → 全額經驗
-        this.weaponManager.recordDamage(p.weaponId, actualDmg);
+        const appliedDmg = enemy.lastDamageTaken || actualDmg;
+        this.weaponManager.recordDamage(p.weaponId, appliedDmg);
         if (enemy.lastElementRelation === 'effective') {
           this._elementCounterHits = (this._elementCounterHits || 0) + 1;
         }
         if (!poolTick) {
-          this.particles.createEnemyDamageText(enemy, actualDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
+          this.particles.createEnemyDamageText(enemy, appliedDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
         } else {
-          enemy._poolDmg = (enemy._poolDmg || 0) + actualDmg;
+          enemy._poolDmg = (enemy._poolDmg || 0) + appliedDmg;
           if (died || !(this.gameTime - enemy._poolDmgAt < 1)) {
             this.particles.createEnemyDamageText(enemy, enemy._poolDmg, p.isCrit || p.isEvo, p.isCrit, enemy.lastElementRelation);
             enemy._poolDmg = 0;
@@ -2803,6 +2824,7 @@ class Game {
           enemy.applyFreeze(p.freezeDur || CHARGE.freeze.duration);
         } else if (p.charge === 'poison') {
           enemy.applyPoison(CHARGE.poison.duration, p.weaponId);
+          if (this.player?.poisonDmgMul) enemy.poisonMul = Math.max(enemy.poisonMul || 1, this.player.poisonDmgMul);
         }
 
         // 傳奇特效：暴擊衝擊波
@@ -2815,7 +2837,10 @@ class Game {
               const bdx = nearE.x - enemy.x;
               const bdy = nearE.y - enemy.y;
               if (bdx * bdx + bdy * bdy < 55 * 55) {
-                nearE.takeDamage(Math.round(p.damage * 0.4), 3, enemy.x, enemy.y);
+                nearE.takeDamage(Math.round(p.damage * 0.4), 3, enemy.x, enemy.y, atkElem);
+                const blastDealt = nearE.lastDamageTaken || Math.round(p.damage * 0.4);
+                this.weaponManager.recordDamage(p.weaponId, blastDealt);
+                this.particles.createEnemyDamageText(nearE, blastDealt, false, false, nearE.lastElementRelation);
               }
             }
           });
@@ -2838,9 +2863,10 @@ class Game {
               const ndx = nearE.x - p.x;
               const ndy = nearE.y - p.y;
               if (ndx * ndx + ndy * ndy <= (p.explosionRadius + nearE.radius) ** 2) {
-                nearE.takeDamage(splashDmg, 8, p.x, p.y);
-                this.weaponManager.recordDamage(p.weaponId, splashDmg);
-                this.particles.createEnemyDamageText(nearE, splashDmg, false);
+                nearE.takeDamage(splashDmg, 8, p.x, p.y, atkElem);
+                const splashDealt = nearE.lastDamageTaken || splashDmg;
+                this.weaponManager.recordDamage(p.weaponId, splashDealt);
+                this.particles.createEnemyDamageText(nearE, splashDealt, false, false, nearE.lastElementRelation);
               }
             }
           });
@@ -2912,8 +2938,9 @@ class Game {
 
     if (bonus > 0 && !enemy.isDead) {
       enemy.takeDamage(bonus, p.knockback, p.x, p.y, atkElem);
-      this.weaponManager.recordDamage(p.weaponId, bonus);
-      this.particles.createEnemyDamageText(enemy, bonus, true, p.isCrit, enemy.lastElementRelation);
+      const dealtBonus = enemy.lastDamageTaken || bonus;
+      this.weaponManager.recordDamage(p.weaponId, dealtBonus);
+      this.particles.createEnemyDamageText(enemy, dealtBonus, true, p.isCrit, enemy.lastElementRelation);
     }
     p.soccerPaid = Math.min(1, paid + share);
     p.soccerHits = (p.soccerHits || 0) + 1;
@@ -3147,9 +3174,10 @@ class Game {
       dmg = Math.round(dmg * falloff);
       if (dmg < 1) break;
       this.particles.createArc(from.x, from.y, next.x, next.y, color);
-      next.takeDamage(dmg, 1, from.x, from.y);
-      this.weaponManager.recordDamage(weaponId, dmg);
-      this.particles.createEnemyDamageText(next, dmg, true);
+      next.takeDamage(dmg, 1, from.x, from.y, 'shock');
+      const dealt = next.lastDamageTaken || dmg;
+      this.weaponManager.recordDamage(weaponId, dealt);
+      this.particles.createEnemyDamageText(next, dealt, true, false, next.lastElementRelation);
       hit.add(next);
       from = next;
     }
@@ -3373,6 +3401,7 @@ class Game {
       const val = Math.max(1, Math.round(item.value * (1 + (this.player.metaExp || 0)) * this.rules.expMul));
       // 只累積待處理的升級數，彈窗留到整批掉落物都吸完才觸發 (見 updateDropItems)
       this.pendingLevelUps += this.player.gainExp(val);
+      if (this.player.pigPickupHeal && Math.random() < 0.20) this.player.heal(3);
     } else if (item.type === 'magnet') {
       sound.playPowerup();
       // 全場經驗水晶瞬間全部吸向玩家
@@ -3399,6 +3428,7 @@ class Game {
     } else if (item.type === 'gold') {
       sound.playCoin(item.x);
       this.gold += Math.round(item.value * facilityGoldMul(this));
+      if (this.player.pigPickupHeal && Math.random() < 0.20) this.player.heal(3);
     } else if (item.type === 'chest') {
       if (item.item === 'boss') this.openBossChest();
       else this.openLuckyChest();
@@ -3458,7 +3488,7 @@ class Game {
         pockets[empty] = { id: item.subType, count: 1 };
         this.ui.updatePockets(pockets);
         showHint(this, 'pocket');
-        const key = empty === 0 ? 'E' : 'F';
+        const key = 'EFCV'[empty] || 'E';
         this.ui.say(save.data.settings.autoPocket === false
           ? `獲得道具【${cDef.name}】！[${key}] 鍵使用`
           : `獲得道具【${cDef.name}】！自動使用：${cDef.auto}`, cDef.color, 2.2);
@@ -3575,7 +3605,9 @@ class Game {
   }
 
   // 選完（或跳過）一張升級卡之後：還有待處理的升級就接著開下一輪，否則回到戰鬥
+  // （若剛才選的是「命運轉盤」開啟了 CHEST_MODAL，先留在開箱畫面，等領完才繼續）
   continueAfterLevelUp() {
+    if (this.state === 'CHEST_MODAL') return;
     if (this.pendingLevelUps > 0) {
       this.triggerLevelUp();
     } else {
@@ -3685,11 +3717,11 @@ class Game {
     }
 
     this.ui.showLuckyChest(count, shown, () => {
-      this.state = 'PLAYING';
       sound.resumeBGM();
       this.ui.updateHUD(this.player, this.gameTime, this.kills, this.gold);
       this.ui.updateBuildBtn(this.gold, this.turretCost);
       this.particles.createShockwave(this.player.x, this.player.y, 200, '#ffd60a');
+      this.continueAfterLevelUp();
     }, { title: '👑 首領寶藏箱 👑', subtitle: `開出 ${count} 次升級！` });
   }
 
@@ -4041,6 +4073,7 @@ class Game {
     Enemy.drawStatusGlows(this.ctx, renderCam, this.enemies, 'over');
     if (this.td) this.td.drawBadges(this.ctx, renderCam);   // 守塔：重甲標記
     this.drawSealChains(renderCam);
+    this.drawBossPylons(renderCam);
 
     // 繪製敵方投射物
     for (const ep of this.enemyProjectiles) {
@@ -4098,6 +4131,8 @@ class Game {
 
     // 守塔模式的專屬指示 (威脅來向箭頭 + 核心危急的畫面回饋)
     this.drawDefenseIndicators(renderCam);
+    // 生存者模式的畫面外戰術事件導引浮標 (祭壇／商人／撤離井／首領寶箱)
+    if (!this.td) this.drawTacticalWaypoints(renderCam);
 
     // 繪製滑鼠/觸控建造預覽幽靈與射程範圍 (Placement Ghost)
     if (this.placement) {
@@ -4106,6 +4141,245 @@ class Game {
 
     // 小地圖（守塔關整張圖都在畫面上，不需要）
     if (!this.td) this.drawMinimap();
+  }
+
+  // 首領進入 50% HP 狂暴二階段：展開 16 秒超載護盾（減傷 55%），並在戰場周圍生成 3 座靈脈破盾陣眼。
+  // 玩家踩破全部 3 座陣眼即可直接炸碎護盾、重創首領 12% 最大生命並附加 6 秒 +35% 易傷。
+  spawnBossPhasePylons(boss) {
+    if (!boss || boss.isDead || this.td) return;
+    boss.phaseShieldTimer = 16.0;
+    const p = this.player;
+    const cx = (boss.x + p.x) * 0.5;
+    const cy = (boss.y + p.y) * 0.5;
+    const b = worldBounds();
+    const baseAng = Math.random() * Math.PI * 2;
+    const dist = 210;
+    this.bossPylons = [];
+    for (let i = 0; i < 3; i++) {
+      const ang = baseAng + (i / 3) * Math.PI * 2;
+      const px = Math.max(b.minX + 60, Math.min(b.maxX - 60, cx + Math.cos(ang) * dist));
+      const py = Math.max(b.minY + 60, Math.min(b.maxY - 60, cy + Math.sin(ang) * dist));
+      this.bossPylons.push({
+        x: px,
+        y: py,
+        radius: 44,
+        charge: 0,
+        maxCharge: 0.55,
+        broken: false,
+        boss,
+      });
+    }
+    this.particles.createShockwave(boss.x, boss.y, 260, '#00f5d4');
+    this.ui.say(
+      `🛡️ ${boss.name} 展開二階段【超載護盾】！踩破周圍 3 座靈脈陣眼即可破盾重創！`,
+      '#00f5d4',
+      4.0
+    );
+  }
+
+  updateBossPylons(dt) {
+    if (!this.bossPylons || this.bossPylons.length === 0) return;
+    const boss = this.bossPylons[0].boss;
+    if (!boss || boss.isDead || !(boss.phaseShieldTimer > 0)) {
+      this.bossPylons = [];
+      return;
+    }
+    const p = this.player;
+    if (!p || p.isDead) return;
+
+    let brokenCount = 0;
+    for (const py of this.bossPylons) {
+      if (py.broken) {
+        brokenCount++;
+        continue;
+      }
+      const d = Math.hypot(p.x - py.x, p.y - py.y);
+      if (d <= py.radius + p.radius) {
+        // 翻滾衝刺經過陣眼直接瞬間踩破；一般走入約 0.55 秒踩破
+        py.charge = p.isDashing ? py.maxCharge : py.charge + dt;
+        if (py.charge >= py.maxCharge) {
+          py.broken = true;
+          brokenCount++;
+          sound.playLightning();
+          this.particles.createShockwave(py.x, py.y, 120, '#00f5d4');
+          this.particles.createArc(py.x, py.y, boss.x, boss.y, '#00f5d4');
+        }
+      } else if (py.charge > 0) {
+        py.charge = Math.max(0, py.charge - dt * 0.5);
+      }
+    }
+
+    if (brokenCount >= this.bossPylons.length) {
+      boss.phaseShieldTimer = 0;
+      this.bossPylons = [];
+      const shatterDmg = Math.max(150, Math.round(boss.maxHp * 0.12));
+      boss.slowTimer = Math.max(boss.slowTimer || 0, 4.0);
+      boss.applyMark?.(6.0, 0.35);
+      this.damageEnemy(boss, shatterDmg, 0, p.x, p.y, null, 'shock');
+      this.particles.createExplosion(boss.x, boss.y, 240, true);
+      this.camera.shake = Math.max(this.camera.shake, 16);
+      sound.playExplosion(boss.x);
+      this.ui.say('💥 靈脈陣眼全破！首領超載護盾崩解，承受巨量破盾傷害並陷入易傷！', '#ffd166', 3.8);
+    }
+  }
+
+  drawBossPylons(cam) {
+    if (!this.bossPylons || this.bossPylons.length === 0) return;
+    const ctx = this.ctx;
+    const pulse = 0.5 + 0.5 * Math.sin((this.gameTime || 0) * 6);
+    for (const py of this.bossPylons) {
+      if (py.broken) continue;
+      const sx = py.x - cam.x;
+      const sy = py.y - cam.y;
+      const bx = py.boss.x - cam.x;
+      const by = py.boss.y - cam.y;
+
+      ctx.save();
+      // 與首領相連的能量鎖鏈
+      ctx.strokeStyle = `rgba(0, 245, 212, ${(0.28 + 0.22 * pulse).toFixed(2)})`;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([8, 6]);
+      ctx.lineDashOffset = -(this.gameTime || 0) * 40;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 陣眼底圈
+      ctx.fillStyle = `rgba(0, 245, 212, ${(0.16 + 0.12 * pulse).toFixed(2)})`;
+      ctx.strokeStyle = '#00f5d4';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(sx, sy, py.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // 踩破進度環
+      if (py.charge > 0) {
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(sx, sy, py.radius + 6, -Math.PI / 2, -Math.PI / 2 + (py.charge / py.maxCharge) * Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.font = '22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⚡', sx, sy);
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillStyle = '#00f5d4';
+      ctx.fillText('破盾陣眼', sx, sy + py.radius + 13);
+      ctx.restore();
+    }
+  }
+
+  // 生存者模式：當挑戰祭壇、流浪商人、戰術撤離井、首領破盾陣眼或首領王冠寶箱位於畫面外時，
+  // 在螢幕邊緣繪製帶距離與倒數的脈動戰術浮標，不必低頭在 96px 小地圖上找方向。
+  drawTacticalWaypoints(camera) {
+    const targets = [];
+    if (this.altar) {
+      const limit = this.altar.timeLimit || 25;
+      const rem = this.altar.state === 'idle' ? Math.ceil(30 - this.altar.t) : Math.ceil(limit - this.altar.t);
+      const cName = this.altar.contractName || '祭壇';
+      targets.push({
+        x: this.altar.x,
+        y: this.altar.y,
+        icon: this.altar.icon || '⚔️',
+        label: `${cName} ${Math.max(1, rem)}s`,
+        color: this.altar.color || '#c77dff',
+      });
+    }
+    if (this.bossPylons && this.bossPylons.length > 0) {
+      for (const py of this.bossPylons) {
+        if (!py.broken) {
+          targets.push({ x: py.x, y: py.y, icon: '⚡', label: '破盾陣眼', color: '#00f5d4' });
+        }
+      }
+    }
+    if (this.merchant) {
+      targets.push({ x: this.merchant.x, y: this.merchant.y, icon: '🏪', label: `商人 ${Math.max(1, Math.ceil(this.merchant.timer))}s`, color: '#ffd166' });
+    }
+    if (this.extractionWell && this.extractionWell.active) {
+      targets.push({ x: this.extractionWell.x, y: this.extractionWell.y, icon: '🚁', label: `撤離 ${Math.max(1, Math.ceil(this.extractionWell.life))}s`, color: '#00e5ff' });
+    }
+    for (const d of this.dropItems) {
+      if (d.type === 'chest' && (d.item === 'boss' || d.icon === '👑')) {
+        targets.push({ x: d.x, y: d.y, icon: '👑', label: '首領寶箱', color: '#ff4d6d' });
+        break;
+      }
+    }
+    if (targets.length === 0) return;
+
+    const ctx = this.ctx;
+    const cx = this.vw / 2;
+    const cy = this.vh / 2;
+    const mTop = 74;
+    const mBottom = 78;
+    const mLeft = 58;
+    const mRight = Math.max(64, Math.min(this.vw * 0.2, 168));
+    const pulse = 0.78 + 0.22 * Math.sin((this.gameTime || 0) * 6);
+
+    for (const t of targets) {
+      const sx = t.x - camera.x;
+      const sy = t.y - camera.y;
+      if (sx >= 24 && sx <= this.vw - 24 && sy >= 24 && sy <= this.vh - 24) continue;
+
+      const dx = sx - cx;
+      const dy = sy - cy;
+      const distPx = Math.hypot(dx, dy) || 1;
+      const ux = dx / distPx;
+      const uy = dy / distPx;
+      const halfW = ux >= 0 ? (cx - mRight) : (cx - mLeft);
+      const halfH = uy >= 0 ? (cy - mBottom) : (cy - mTop);
+      const k = Math.min(halfW / Math.abs(ux || 1e-6), halfH / Math.abs(uy || 1e-6));
+      const ax = cx + ux * k;
+      const ay = cy + uy * k;
+      const ang = Math.atan2(uy, ux);
+      const meters = Math.max(1, Math.round(Math.hypot(t.x - this.player.x, t.y - this.player.y) / 10));
+
+      ctx.save();
+      ctx.translate(ax, ay);
+      ctx.globalAlpha = pulse;
+
+      // 方向外箭頭
+      ctx.save();
+      ctx.rotate(ang);
+      ctx.fillStyle = t.color;
+      ctx.beginPath();
+      ctx.moveTo(24, 0);
+      ctx.lineTo(12, -8);
+      ctx.lineTo(15, 0);
+      ctx.lineTo(12, 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // 圓角膠囊底板
+      ctx.fillStyle = 'rgba(6, 10, 18, 0.86)';
+      ctx.strokeStyle = t.color;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.roundRect(-34, -18, 68, 36, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t.icon, -18, -3);
+
+      ctx.font = '800 10px "Chakra Petch", system-ui, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(`${meters}m`, 11, -4);
+
+      ctx.font = '700 9px "Noto Sans TC", sans-serif';
+      ctx.fillStyle = t.color;
+      ctx.fillText(t.label, 0, 10);
+
+      ctx.restore();
+    }
   }
 
 
